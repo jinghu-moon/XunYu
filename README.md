@@ -1,6 +1,9 @@
 # XunYu
 
-`XunYu` 是一个面向 Windows 开发与运维工作流的 Rust CLI 工具箱，覆盖路径跳转、代理管理、端口查询与终止、备份、文件搜索、删除、Env 治理、ACL 维护、Redirect 规则引擎、Diff 对比以及本地 Web Dashboard。
+> A Windows-first Rust CLI and local dashboard for paths, proxies, envs, and file workflows.  
+> 一个面向 Windows 的 Rust CLI 与本地 Dashboard，覆盖路径、代理、环境变量和文件工作流。
+
+`XunYu` 进一步覆盖路径跳转、书签管理、端口查询与终止、备份、文件搜索、删除、Env 治理、ACL 维护、Redirect 规则引擎、Diff 对比等本地开发与运维能力。
 
 > 当前命令约定：正式命令是 `xun`；`xyu` 是已提供的兼容命令；`xy` 是推荐快捷别名，并会由 `xun init powershell|bash|zsh` 自动注入。
 >
@@ -119,5 +122,6 @@ xun delete --any --on-reboot <path>
 - 很多能力通过 Cargo feature 按需启用，请优先参考 `intro/Features.md`。
 - 当前命名策略已落地：默认继续使用 `xun`；同时提供 `xyu` 兼容入口，并在 `xun init powershell|bash|zsh` 中注入 `xy` 快捷别名。
 - 如果你想从“理解项目”角度入手，最推荐的顺序是：`intro/README.md` → `docs/README.md` → 相应子目录 `README.md`。
+
 
 
