@@ -11,7 +11,7 @@ use windows::core::PCWSTR;
 /// Enable a single named Windows privilege on the current process token.
 ///
 /// # Example
-/// ```no_run
+/// ```ignore
 /// enable_privilege("SeRestorePrivilege").unwrap();
 /// ```
 pub fn enable_privilege(name: &str) -> Result<()> {

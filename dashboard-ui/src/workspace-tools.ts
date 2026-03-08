@@ -119,6 +119,11 @@ const aclInheritOptions: TaskFieldOption[] = [
   { label: 'None', value: 'None' },
 ]
 
+const aclInheritModeOptions: TaskFieldOption[] = [
+  { label: '启用继承', value: 'enable' },
+  { label: '禁用继承', value: 'disable' },
+]
+
 function readText(values: TaskFormState, key: string): string {
   const value = values[key]
   return typeof value === 'string' ? value.trim() : ''
@@ -863,7 +868,7 @@ export const filesSecurityTaskGroups: WorkspaceTaskGroup[] = [
   {
     id: 'acl-crypto',
     title: 'ACL 与加解密',
-    description: 'ACL / Encrypt / Decrypt 全部纳入统一 guard 流。',
+    description: 'ACL 运维、修复与加解密统一纳入任务流。',
     tasks: [
       runTask({
         id: 'acl-view',
@@ -881,6 +886,58 @@ export const filesSecurityTaskGroups: WorkspaceTaskGroup[] = [
           const args = ['acl', 'view', '-p', readText(values, 'path')]
           if (readBool(values, 'detail')) args.push('--detail')
           pushOption(args, '--export', readText(values, 'export'))
+          return args
+        },
+      }),
+      runTask({
+        id: 'acl-diff',
+        workspace: 'files-security',
+        title: 'ACL 差异对比',
+        description: '比较目标路径与参考路径的 ACL 差异统计。',
+        action: 'acl:diff',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'reference', label: '参考路径', type: 'text', required: true },
+          { key: 'output', label: '导出 CSV', type: 'text', placeholder: '可选' },
+        ],
+        target: (values) => pathTarget(values),
+        buildRunArgs: (values) => {
+          const args = ['acl', 'diff', '-p', readText(values, 'path'), '-r', readText(values, 'reference')]
+          pushOption(args, '-o', readText(values, 'output'))
+          return args
+        },
+      }),
+      runTask({
+        id: 'acl-effective',
+        workspace: 'files-security',
+        title: '有效权限',
+        description: '查看指定用户在目标路径上的有效权限。',
+        action: 'acl:effective',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'user', label: '用户', type: 'text', placeholder: '留空则使用当前用户' },
+        ],
+        target: (values) => pathTarget(values),
+        buildRunArgs: (values) => {
+          const args = ['acl', 'effective', '-p', readText(values, 'path')]
+          pushOption(args, '-u', readText(values, 'user'))
+          return args
+        },
+      }),
+      runTask({
+        id: 'acl-backup',
+        workspace: 'files-security',
+        title: '备份 ACL',
+        description: '将当前 ACL 导出为 JSON 备份文件。',
+        action: 'acl:backup',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'output', label: '输出文件', type: 'text', placeholder: '可选' },
+        ],
+        target: (values) => pathTarget(values),
+        buildRunArgs: (values) => {
+          const args = ['acl', 'backup', '-p', readText(values, 'path')]
+          pushOption(args, '-o', readText(values, 'output'))
           return args
         },
       }),
@@ -904,6 +961,116 @@ export const filesSecurityTaskGroups: WorkspaceTaskGroup[] = [
           'acl', 'add', '-p', readText(values, 'path'), '--principal', readText(values, 'principal'), '--rights', readText(values, 'rights') || 'Read', '--ace-type', readText(values, 'aceType') || 'Allow', '--inherit', readText(values, 'inherit') || 'BothInherit', '-y',
         ],
         previewSummary: (values) => `为 ${pathTarget(values)} 添加 ACL`,
+      }),
+      guardedTask({
+        id: 'acl-copy',
+        workspace: 'files-security',
+        title: '复制 ACL',
+        description: '先比较差异，再用参考路径 ACL 覆盖目标。',
+        action: 'acl:copy',
+        tone: 'danger',
+        fields: [
+          { key: 'path', label: '目标路径', type: 'text', required: true },
+          { key: 'reference', label: '参考路径', type: 'text', required: true },
+        ],
+        target: (values) => pathTarget(values),
+        buildPreviewArgs: (values) => ['acl', 'diff', '-p', readText(values, 'path'), '-r', readText(values, 'reference')],
+        buildExecuteArgs: (values) => ['acl', 'copy', '-p', readText(values, 'path'), '-r', readText(values, 'reference'), '-y'],
+        previewSummary: (values) => `用 ${readText(values, 'reference')} 覆盖 ${pathTarget(values)} 的 ACL`,
+      }),
+      guardedTask({
+        id: 'acl-restore',
+        workspace: 'files-security',
+        title: '恢复 ACL',
+        description: '先验证备份文件，再恢复目标 ACL。',
+        action: 'acl:restore',
+        tone: 'danger',
+        fields: [
+          { key: 'path', label: '目标路径', type: 'text', required: true },
+          { key: 'from', label: '备份文件', type: 'text', required: true },
+        ],
+        target: (values) => pathTarget(values),
+        buildPreviewArgs: (values) => previewPath(values, 'from'),
+        buildExecuteArgs: (values) => ['acl', 'restore', '-p', readText(values, 'path'), '--from', readText(values, 'from'), '-y'],
+        previewSummary: (values) => `从 ${readText(values, 'from')} 恢复 ${pathTarget(values)} 的 ACL`,
+      }),
+      guardedTask({
+        id: 'acl-purge',
+        workspace: 'files-security',
+        title: '清理 ACL 主体',
+        description: '先查看显式 ACE，再按主体清理全部显式规则。',
+        action: 'acl:purge',
+        tone: 'danger',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'principal', label: '主体', type: 'text', required: true, placeholder: 'BUILTIN\\Users' },
+        ],
+        target: (values) => pathTarget(values),
+        buildPreviewArgs: (values) => ['acl', 'view', '-p', readText(values, 'path'), '--detail'],
+        buildExecuteArgs: (values) => ['acl', 'purge', '-p', readText(values, 'path'), '--principal', readText(values, 'principal'), '-y'],
+        previewSummary: (values) => `清理 ${pathTarget(values)} 上 ${readText(values, 'principal')} 的显式 ACL`,
+      }),
+      guardedTask({
+        id: 'acl-inherit',
+        workspace: 'files-security',
+        title: '切换 ACL 继承',
+        description: '先查看当前继承状态，再启用或禁用继承。',
+        action: 'acl:inherit',
+        tone: 'danger',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'mode', label: '目标状态', type: 'select', defaultValue: 'enable', options: aclInheritModeOptions },
+          { key: 'preserve', label: '禁用时保留继承 ACE', type: 'checkbox', defaultValue: true },
+        ],
+        target: (values) => pathTarget(values),
+        buildPreviewArgs: (values) => ['acl', 'view', '-p', readText(values, 'path')],
+        buildExecuteArgs: (values) => {
+          const args = ['acl', 'inherit', '-p', readText(values, 'path')]
+          if ((readText(values, 'mode') || 'enable') === 'enable') {
+            args.push('--enable')
+          } else {
+            args.push('--disable', '--preserve', readBool(values, 'preserve') ? 'true' : 'false')
+          }
+          return args
+        },
+        previewSummary: (values) => `将 ${pathTarget(values)} 的 ACL 继承切换为 ${(readText(values, 'mode') || 'enable') === 'enable' ? '启用' : '禁用'}`,
+      }),
+      guardedTask({
+        id: 'acl-owner',
+        workspace: 'files-security',
+        title: '修改 ACL Owner',
+        description: '先查看当前 Owner，再修改为指定主体。',
+        action: 'acl:owner',
+        tone: 'danger',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'set', label: '新 Owner', type: 'text', required: true, placeholder: 'BUILTIN\\Administrators' },
+        ],
+        target: (values) => pathTarget(values),
+        buildPreviewArgs: (values) => ['acl', 'view', '-p', readText(values, 'path')],
+        buildExecuteArgs: (values) => ['acl', 'owner', '-p', readText(values, 'path'), '--set', readText(values, 'set'), '-y'],
+        previewSummary: (values) => `将 ${pathTarget(values)} 的 Owner 修改为 ${readText(values, 'set')}`,
+      }),
+      guardedTask({
+        id: 'acl-repair',
+        workspace: 'files-security',
+        title: 'ACL 强制修复',
+        description: '先查看现状，再执行 take ownership + grant FullControl。',
+        action: 'acl:repair',
+        tone: 'danger',
+        fields: [
+          { key: 'path', label: '路径', type: 'text', required: true },
+          { key: 'exportErrors', label: '导出失败明细', type: 'checkbox', defaultValue: false },
+        ],
+        target: (values) => pathTarget(values),
+        buildPreviewArgs: (values) => ['acl', 'view', '-p', readText(values, 'path'), '--detail'],
+        buildExecuteArgs: (values) => {
+          const args = ['acl', 'repair', '-p', readText(values, 'path')]
+          if (readBool(values, 'exportErrors')) args.push('--export-errors')
+          args.push('-y')
+          return args
+        },
+        previewSummary: (values) => `强制修复 ${pathTarget(values)} 的 ACL`,
       }),
       guardedTask({
         id: 'encrypt',
@@ -1264,3 +1431,20 @@ export const statisticsDiagnosticsTaskGroups: WorkspaceTaskGroup[] = [
     ],
   },
 ]
+
+const workspaceTaskGroupCatalog: Partial<Record<WorkspaceKey, WorkspaceTaskGroup[]>> = {
+  overview: [],
+  'paths-context': pathsContextTaskGroups,
+  'network-proxy': networkProxyTaskGroups,
+  'environment-config': [],
+  'files-security': filesSecurityTaskGroups,
+  'integration-automation': integrationAutomationTaskGroups,
+  'media-conversion': mediaConversionTaskGroups,
+  'statistics-diagnostics': statisticsDiagnosticsTaskGroups,
+}
+
+const workspaceTaskCatalog = Object.values(workspaceTaskGroupCatalog).flatMap((groups) => groups?.flatMap((group) => group.tasks) ?? [])
+
+export function findWorkspaceTaskDefinition(workspace: string, action: string): WorkspaceTaskDefinition | null {
+  return workspaceTaskCatalog.find((task) => task.workspace === workspace && task.action === action) ?? null
+}

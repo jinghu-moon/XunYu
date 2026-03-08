@@ -1,19 +1,11 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import CapsuleTabs from './components/CapsuleTabs.vue'
 import type { CapsuleTabItem } from './components/CapsuleTabs.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import DensityToggle from './components/DensityToggle.vue'
 import GlobalFeedback from './components/GlobalFeedback.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
-import OverviewWorkspace from './components/workspaces/OverviewWorkspace.vue'
-import PathsContextWorkspace from './components/workspaces/PathsContextWorkspace.vue'
-import NetworkProxyWorkspace from './components/workspaces/NetworkProxyWorkspace.vue'
-import EnvironmentConfigWorkspace from './components/workspaces/EnvironmentConfigWorkspace.vue'
-import FilesSecurityWorkspace from './components/workspaces/FilesSecurityWorkspace.vue'
-import IntegrationAutomationWorkspace from './components/workspaces/IntegrationAutomationWorkspace.vue'
-import MediaConversionWorkspace from './components/workspaces/MediaConversionWorkspace.vue'
-import StatisticsDiagnosticsWorkspace from './components/workspaces/StatisticsDiagnosticsWorkspace.vue'
 import { fetchWorkspaceCapabilities } from './api'
 import type { WorkspaceCapabilities, WorkspaceKey } from './types'
 import { workspaceTabs } from './workspace-tools'
@@ -22,6 +14,10 @@ import { isToastMarked, notifyError } from './ui/feedback'
 const workspace = ref<WorkspaceKey>('overview')
 const paletteOpen = ref(false)
 const capabilities = ref<WorkspaceCapabilities | null>(null)
+
+function loadWorkspaceComponent(loader: Parameters<typeof defineAsyncComponent>[0]): Component {
+  return defineAsyncComponent(loader)
+}
 
 type CommandItem = {
   id: string
@@ -33,14 +29,14 @@ type CommandItem = {
 }
 
 const workspaceComponentMap: Record<WorkspaceKey, Component> = {
-  overview: OverviewWorkspace,
-  'paths-context': PathsContextWorkspace,
-  'network-proxy': NetworkProxyWorkspace,
-  'environment-config': EnvironmentConfigWorkspace,
-  'files-security': FilesSecurityWorkspace,
-  'integration-automation': IntegrationAutomationWorkspace,
-  'media-conversion': MediaConversionWorkspace,
-  'statistics-diagnostics': StatisticsDiagnosticsWorkspace,
+  overview: loadWorkspaceComponent(() => import('./components/workspaces/OverviewWorkspace.vue')),
+  'paths-context': loadWorkspaceComponent(() => import('./components/workspaces/PathsContextWorkspace.vue')),
+  'network-proxy': loadWorkspaceComponent(() => import('./components/workspaces/NetworkProxyWorkspace.vue')),
+  'environment-config': loadWorkspaceComponent(() => import('./components/workspaces/EnvironmentConfigWorkspace.vue')),
+  'files-security': loadWorkspaceComponent(() => import('./components/workspaces/FilesSecurityWorkspace.vue')),
+  'integration-automation': loadWorkspaceComponent(() => import('./components/workspaces/IntegrationAutomationWorkspace.vue')),
+  'media-conversion': loadWorkspaceComponent(() => import('./components/workspaces/MediaConversionWorkspace.vue')),
+  'statistics-diagnostics': loadWorkspaceComponent(() => import('./components/workspaces/StatisticsDiagnosticsWorkspace.vue')),
 }
 
 const tabItems: CapsuleTabItem[] = workspaceTabs.map((item) => ({ value: item.value, label: item.label }))

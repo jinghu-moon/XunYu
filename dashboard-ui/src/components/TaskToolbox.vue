@@ -9,10 +9,14 @@ const props = withDefaults(
     description?: string
     tasks: WorkspaceTaskDefinition[]
     capabilities?: WorkspaceCapabilities | null
+    taskPresets?: Record<string, Partial<Record<string, string | boolean>>> | null
+    presetVersion?: number
   }>(),
   {
     description: '',
     capabilities: null,
+    taskPresets: null,
+    presetVersion: 0,
   },
 )
 </script>
@@ -31,6 +35,8 @@ const props = withDefaults(
         :key="task.id"
         :task="task"
         :capabilities="props.capabilities"
+        :initial-values="props.taskPresets?.[task.id] ?? null"
+        :preset-version="props.presetVersion"
       />
     </div>
   </section>

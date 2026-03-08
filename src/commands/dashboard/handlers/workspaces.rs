@@ -205,6 +205,7 @@ pub(in crate::commands::dashboard) struct RecentTaskListResponse {
 #[derive(Deserialize, Clone, Debug, Default)]
 pub(in crate::commands::dashboard) struct RecentTaskQuery {
     limit: Option<usize>,
+    workspace: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -531,13 +532,21 @@ impl GuardedTaskService {
     pub(in crate::commands::dashboard) fn recent_tasks(
         &self,
         limit: usize,
+        workspace: Option<&str>,
     ) -> RecentTaskListResponse {
-        let mut history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
-        let stats = history_stats(history.make_contiguous());
-        let entries = history
+        let history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        let workspace = workspace
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let filtered = history
             .iter()
-            .take(limit.max(1).min(100))
+            .filter(|entry| workspace.is_none_or(|value| entry.workspace == value))
             .cloned()
+            .collect::<Vec<_>>();
+        let stats = history_stats(&filtered);
+        let entries = filtered
+            .into_iter()
+            .take(limit.max(1).min(100))
             .collect::<Vec<_>>();
         RecentTaskListResponse { stats, entries }
     }
@@ -816,7 +825,7 @@ pub(in crate::commands::dashboard) async fn workspace_recent_tasks(
     Json(
         state
             .guarded_tasks()
-            .recent_tasks(query.limit.unwrap_or(20)),
+            .recent_tasks(query.limit.unwrap_or(20), query.workspace.as_deref()),
     )
 }
 
@@ -1302,6 +1311,72 @@ mod tests {
         assert_eq!(entries[0]["replay"]["kind"], "guarded_preview");
         assert_eq!(entries[2]["replay"]["kind"], "run");
     }
+
+    #[tokio::test]
+    async fn recent_tasks_endpoint_supports_workspace_filter() {
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("tree"), ok_output("recent")]))
+            as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+
+        let files_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "tree",
+            "target": "C:/tmp",
+            "args": ["tree", "C:/tmp"]
+        });
+        let files_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/run")
+                    .header("content-type", "application/json")
+                    .body(Body::from(files_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(files_resp.status(), StatusCode::OK);
+
+        let paths_body = serde_json::json!({
+            "workspace": "paths-context",
+            "action": "recent",
+            "target": "",
+            "args": ["recent"]
+        });
+        let paths_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/run")
+                    .header("content-type", "application/json")
+                    .body(Body::from(paths_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(paths_resp.status(), StatusCode::OK);
+
+        let recent_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/workspaces/tasks/recent?workspace=files-security&limit=10")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(recent_resp.status(), StatusCode::OK);
+        let recent_json: serde_json::Value =
+            serde_json::from_slice(&to_bytes(recent_resp.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(recent_json["stats"]["total"], 1);
+        assert_eq!(recent_json["entries"].as_array().unwrap().len(), 1);
+        assert_eq!(recent_json["entries"][0]["workspace"], "files-security");
+    }
+
 
     #[tokio::test]
     async fn recent_tasks_endpoint_captures_failed_run_status() {

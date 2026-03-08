@@ -14,19 +14,23 @@ import type {
   WorkspaceTaskRunResponse,
 } from '../types'
 import { Button } from './button'
+import FileGovernanceSummary from './FileGovernanceSummary.vue'
 import TaskReceiptComponent from './TaskReceiptComponent.vue'
 import UnifiedConfirmDialog from './UnifiedConfirmDialog.vue'
+import { resolveRecentTaskGovernanceContext } from './recent-task-governance'
 
 const props = withDefaults(
   defineProps<{
     title?: string
     description?: string
     limit?: number
+    workspace?: string
   }>(),
   {
     title: '最近任务',
     description: '跨工作台查看最近执行结果，并支持安全重放。',
     limit: 20,
+    workspace: '',
   },
 )
 
@@ -41,6 +45,7 @@ const requestError = ref('')
 const preview = ref<GuardedTaskPreviewResponse | null>(null)
 const receipt = ref<GuardedTaskReceipt | null>(null)
 const runResult = ref<WorkspaceTaskRunResponse | null>(null)
+const replaySource = ref<RecentTaskRecord | null>(null)
 const dialogOpen = ref(false)
 
 function formatTime(ts: number) {
@@ -74,11 +79,27 @@ const replayLabel = computed(() => {
   return selectedRecord.value.replay.kind === 'run' ? '重新执行' : '重新预演'
 })
 
+const selectedGovernanceContext = computed(() =>
+  selectedRecord.value ? resolveRecentTaskGovernanceContext(selectedRecord.value) : null,
+)
+
+const replayResultGovernanceContext = computed(() =>
+  replaySource.value && runResult.value
+    ? resolveRecentTaskGovernanceContext(replaySource.value, runResult.value.process, 'execute')
+    : null,
+)
+
+const receiptGovernanceContext = computed(() =>
+  replaySource.value && receipt.value
+    ? resolveRecentTaskGovernanceContext(replaySource.value, receipt.value.process, 'execute')
+    : null,
+)
+
 async function loadRecentTasks() {
   loading.value = true
   requestError.value = ''
   try {
-    const response = await fetchRecentWorkspaceTasks(props.limit)
+    const response = await fetchRecentWorkspaceTasks(props.limit, props.workspace || undefined)
     entries.value = response.entries
     stats.value = response.stats
     if (!entries.value.some((entry) => entry.id === selectedId.value)) {
@@ -95,10 +116,12 @@ function selectRecord(id: string) {
   selectedId.value = id
   receipt.value = null
   runResult.value = null
+  replaySource.value = null
 }
 
 async function replaySelectedRecord() {
   if (!selectedRecord.value?.replay) return
+  replaySource.value = selectedRecord.value
   busy.value = true
   requestError.value = ''
   receipt.value = null
@@ -239,6 +262,14 @@ onMounted(() => {
           </Button>
         </div>
 
+        <FileGovernanceSummary
+          v-if="selectedGovernanceContext"
+          :task="selectedGovernanceContext.task"
+          :form="selectedGovernanceContext.form"
+          :phase="selectedGovernanceContext.phase"
+          :process="selectedGovernanceContext.process"
+        />
+
         <pre class="recent-tasks__output">{{ selectedRecord.process.command_line }}
 
 {{ selectedRecord.process.stdout || selectedRecord.process.stderr || 'No command output' }}</pre>
@@ -253,10 +284,26 @@ onMounted(() => {
           {{ runResult.process.success ? 'succeeded' : 'failed' }}
         </span>
       </div>
+      <FileGovernanceSummary
+        v-if="replayResultGovernanceContext"
+        :task="replayResultGovernanceContext.task"
+        :form="replayResultGovernanceContext.form"
+        :phase="replayResultGovernanceContext.phase"
+        :process="replayResultGovernanceContext.process"
+      />
+
       <pre class="recent-tasks__output">{{ runResult.process.command_line }}
 
 {{ runResult.process.stdout || runResult.process.stderr || 'No command output' }}</pre>
     </div>
+
+    <FileGovernanceSummary
+      v-if="receiptGovernanceContext"
+      :task="receiptGovernanceContext.task"
+      :form="receiptGovernanceContext.form"
+      :phase="receiptGovernanceContext.phase"
+      :process="receiptGovernanceContext.process"
+    />
 
     <TaskReceiptComponent v-if="receipt" :receipt="receipt" />
 

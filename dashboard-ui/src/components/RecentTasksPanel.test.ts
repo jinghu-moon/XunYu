@@ -25,6 +25,18 @@ describe('RecentTasksPanel', () => {
     document.body.innerHTML = ''
   })
 
+  it('passes workspace filter to recent-task api', async () => {
+    apiMocks.fetchRecentWorkspaceTasks.mockResolvedValue({
+      stats: { total: 0, succeeded: 0, failed: 0, dry_run: 0 },
+      entries: [],
+    })
+
+    mount(RecentTasksPanel, { props: { workspace: 'files-security', limit: 12 } })
+    await flushPromises()
+
+    expect(apiMocks.fetchRecentWorkspaceTasks).toHaveBeenCalledWith(12, 'files-security')
+  })
+
   it('loads and filters recent tasks', async () => {
     apiMocks.fetchRecentWorkspaceTasks.mockResolvedValue({
       stats: { total: 3, succeeded: 1, failed: 1, dry_run: 1 },
@@ -182,4 +194,120 @@ describe('RecentTasksPanel', () => {
     expect(apiMocks.executeGuardedTask).toHaveBeenCalledWith({ token: 'token-1', confirm: true })
     expect(wrapper.text()).toContain('执行回执')
   })
+
+
+  it('renders governance summary for selected ACL task details', async () => {
+    apiMocks.fetchRecentWorkspaceTasks.mockResolvedValue({
+      stats: { total: 1, succeeded: 0, failed: 0, dry_run: 1 },
+      entries: [
+        {
+          id: 'task-1',
+          workspace: 'files-security',
+          action: 'acl:owner',
+          target: 'D:/repo/demo.txt',
+          mode: 'guarded',
+          phase: 'preview',
+          status: 'previewed',
+          guarded: true,
+          dry_run: true,
+          summary: '修改 D:/repo/demo.txt 的 Owner',
+          created_at: 1700000000,
+          audit_action: 'dashboard.task.preview',
+          process: {
+            command_line: 'xun acl view -p D:/repo/demo.txt',
+            exit_code: 0,
+            success: true,
+            stdout: ['Path: D:/repo/demo.txt', 'Owner: NT AUTHORITY\\SYSTEM | Inherit: enabled', 'Total: 4 (Allow 4 / Deny 0)  Explicit 1  Inherited 3  Orphan 0'].join('\n'),
+            stderr: '',
+            duration_ms: 10,
+          },
+          replay: {
+            kind: 'guarded_preview',
+            request: {
+              workspace: 'files-security',
+              action: 'acl:owner',
+              target: 'D:/repo/demo.txt',
+              preview_args: ['acl', 'view', '-p', 'D:/repo/demo.txt'],
+              execute_args: ['acl', 'owner', '-p', 'D:/repo/demo.txt', '--set', 'BUILTIN\\Administrators', '-y'],
+              preview_summary: '修改 D:/repo/demo.txt 的 Owner',
+            },
+          },
+        },
+      ],
+    })
+
+    const wrapper = mount(RecentTasksPanel)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ACL Owner 预演摘要')
+    expect(wrapper.text()).toContain('NT AUTHORITY\\SYSTEM')
+    expect(wrapper.text()).toContain('BUILTIN\\Administrators')
+  })
+
+  it('renders governance summary for replayed run results', async () => {
+    apiMocks.fetchRecentWorkspaceTasks
+      .mockResolvedValueOnce({
+        stats: { total: 1, succeeded: 1, failed: 0, dry_run: 0 },
+        entries: [
+          {
+            id: 'task-1',
+            workspace: 'files-security',
+            action: 'acl:backup',
+            target: 'D:/repo/demo.txt',
+            mode: 'run',
+            phase: 'run',
+            status: 'succeeded',
+            guarded: false,
+            dry_run: false,
+            summary: '备份 D:/repo/demo.txt 的 ACL',
+            created_at: 1700000000,
+            audit_action: null,
+            process: {
+              command_line: 'xun acl backup -p D:/repo/demo.txt -o D:/repo/demo.acl.json',
+              exit_code: 0,
+              success: true,
+              stdout: 'Backed up 6 entries -> D:/repo/demo.acl.json',
+              stderr: '',
+              duration_ms: 9,
+            },
+            replay: {
+              kind: 'run',
+              request: {
+                workspace: 'files-security',
+                action: 'acl:backup',
+                target: 'D:/repo/demo.txt',
+                args: ['acl', 'backup', '-p', 'D:/repo/demo.txt', '-o', 'D:/repo/demo.acl.json'],
+              },
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        stats: { total: 2, succeeded: 2, failed: 0, dry_run: 0 },
+        entries: [],
+      })
+    apiMocks.runWorkspaceTask.mockResolvedValue({
+      workspace: 'files-security',
+      action: 'acl:backup',
+      target: 'D:/repo/demo.txt',
+      process: {
+        command_line: 'xun acl backup -p D:/repo/demo.txt -o D:/repo/demo.acl.json',
+        exit_code: 0,
+        success: true,
+        stdout: 'Backed up 6 entries -> D:/repo/demo.acl.json',
+        stderr: '',
+        duration_ms: 9,
+      },
+    })
+
+    const wrapper = mount(RecentTasksPanel)
+    await flushPromises()
+    await wrapper.get('[data-testid="replay-button"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ACL 备份摘要')
+    expect(wrapper.text()).toContain('D:/repo/demo.acl.json')
+    expect(wrapper.text()).toContain('6 条')
+  })
+
 })

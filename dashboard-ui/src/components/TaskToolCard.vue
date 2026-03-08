@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   executeGuardedTask,
   previewGuardedTask,
@@ -15,6 +15,7 @@ import type { TaskFieldDefinition, TaskFieldValue, TaskFormState, WorkspaceTaskD
 import { Button } from './button'
 import TaskReceiptComponent from './TaskReceiptComponent.vue'
 import UnifiedConfirmDialog from './UnifiedConfirmDialog.vue'
+import FileGovernanceSummary from './FileGovernanceSummary.vue'
 
 type TaskExecutionState =
   | 'idle'
@@ -24,10 +25,19 @@ type TaskExecutionState =
   | 'succeeded'
   | 'failed'
 
-const props = defineProps<{
-  task: WorkspaceTaskDefinition
-  capabilities?: WorkspaceCapabilities | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    task: WorkspaceTaskDefinition
+    capabilities?: WorkspaceCapabilities | null
+    initialValues?: Partial<TaskFormState> | null
+    presetVersion?: number
+  }>(),
+  {
+    capabilities: null,
+    initialValues: null,
+    presetVersion: 0,
+  },
+)
 
 function createInitialState(fields: TaskFieldDefinition[]): TaskFormState {
   return fields.reduce<TaskFormState>((state, field) => {
@@ -42,6 +52,19 @@ function errorMessage(err: unknown): string {
 }
 
 const form = reactive(createInitialState(props.task.fields))
+
+function applyInitialValues() {
+  if (!props.initialValues) return
+  for (const field of props.task.fields) {
+    if (!Object.prototype.hasOwnProperty.call(props.initialValues, field.key)) continue
+    const nextValue = props.initialValues[field.key]
+    if (nextValue !== undefined) {
+      form[field.key] = nextValue
+    }
+  }
+  validationError.value = ''
+}
+
 const runBusy = ref(false)
 const previewBusy = ref(false)
 const executeBusy = ref(false)
@@ -82,6 +105,14 @@ const stateTone = computed(() => {
   if (state.value === 'failed') return 'is-error'
   return ''
 })
+
+watch(
+  () => props.presetVersion,
+  () => {
+    applyInitialValues()
+  },
+  { immediate: true },
+)
 
 function isFieldEmpty(field: TaskFieldDefinition): boolean {
   const value = form[field.key] as TaskFieldValue
@@ -242,6 +273,8 @@ async function confirmTask() {
         </span>
         <span>{{ preview.summary }}</span>
       </div>
+      <FileGovernanceSummary :task="props.task" :form="form" phase="preview" :process="previewOutput" />
+
       <pre class="task-card__output">{{ previewOutput.command_line }}
 
 {{ previewOutput.stdout || previewOutput.stderr || 'No preview output' }}</pre>
@@ -254,6 +287,8 @@ async function confirmTask() {
         </span>
         <span>{{ processOutput.duration_ms }} ms</span>
       </div>
+      <FileGovernanceSummary :task="props.task" :form="form" phase="execute" :process="processOutput" />
+
       <pre class="task-card__output">{{ processOutput.command_line }}
 
 {{ processOutput.stdout || processOutput.stderr || 'No command output' }}</pre>

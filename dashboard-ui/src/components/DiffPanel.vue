@@ -10,6 +10,11 @@ import ConfigDiffTree from './diff/ConfigDiffTree.vue'
 import CodeDiffPanel from './diff/CodeDiffPanel.vue'
 import LineDiffPanel from './diff/LineDiffPanel.vue'
 
+const emit = defineEmits<{
+  (event: 'selectionChange', value: string): void
+  (event: 'directoryChange', value: string): void
+}>()
+
 const oldPath = ref('')
 const newPath = ref('')
 const viewMode = ref<'unified' | 'split'>('unified')
@@ -34,6 +39,11 @@ const options = reactive({
 })
 
 const CONFIG_EXTS = new Set(['toml', 'yaml', 'yml', 'json', 'json5'])
+
+function updateOptions(next: typeof options) {
+  Object.assign(options, next)
+}
+
 
 async function runDiff() {
   const oldTrimmed = oldPath.value.trim()
@@ -239,6 +249,14 @@ function openConvert(path: string) {
   convertPath.value = path
   showConvert.value = true
 }
+
+function forwardSelectionChange(path: string) {
+  emit('selectionChange', path)
+}
+
+function forwardDirectoryChange(path: string) {
+  emit('directoryChange', path)
+}
 </script>
 
 <template>
@@ -252,6 +270,8 @@ function openConvert(path: string) {
           @update:new-path="updateNewPath"
           @run-diff="runDiff"
           @open-convert="openConvert"
+          @selection-change="forwardSelectionChange"
+          @directory-change="forwardDirectoryChange"
         />
       </aside>
 
@@ -308,7 +328,7 @@ function openConvert(path: string) {
 
         <!-- Options panel -->
         <div v-if="showOptions" class="options-area">
-          <DiffOptions v-model="options" />
+          <DiffOptions :model-value="options" @update:model-value="updateOptions" />
         </div>
         <div v-if="showConvert" class="options-area">
           <DiffConvertPanel :path="convertPath" />

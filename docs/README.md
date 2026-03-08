@@ -15,6 +15,9 @@
 - Dashboard 扩展路线图：`./project/Dashboard-Expansion-Roadmap.md`
 - P0 实施方案：`./project/P0-Execution-Plan.md`
 - P0 完成说明：`./project/P0-Completion-Notes.md`
+- P1 实施方案：`./project/P1-Execution-Plan.md`
+- P1 完成说明：`./project/P1-Completion-Notes.md`
+- P2 进展说明：`./project/P2-Progress-Notes.md`
 - 命名与命令策略：`./project/Naming-Strategy.md`
 - 构建矩阵：`./project/Build-Matrix.md`
 - 性能 / 定制优化：`./project/Performance-Optimization-Customization.md`
@@ -64,3 +67,5 @@
 4. 如果你当前在看功能实施，进入 `./implementation/README.md`，再按专题跳 `Find`、`Completion`、`Context Switch`、`Redirect`、`Diff`。
 5. 如果你准备落地或验证实现，再看 `./implementation/Dev-Test.md`、`./implementation/Test-Env.md`、`./implementation/Tests-List.md`。
 6. 最后按需查 `./implementation/Review.txt`、`./envmgr-release-notes.md`、`./envmgr-known-limitations.md` 和 `./envmgr-smoke-report.md`。
+
+

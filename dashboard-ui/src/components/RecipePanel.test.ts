@@ -57,6 +57,27 @@ describe('RecipePanel', () => {
     apiMocks.executeWorkspaceRecipe.mockReset()
   })
 
+  it('filters recipes by category', async () => {
+    apiMocks.fetchWorkspaceRecipes.mockResolvedValue({
+      recipes: [
+        builtinRecipe,
+        {
+          ...builtinRecipe,
+          id: 'proxy-check',
+          name: '代理巡检',
+          category: 'network-proxy',
+        },
+      ],
+    })
+
+    const wrapper = mount(RecipePanel, { props: { category: 'files-security' } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('单目标清理')
+    expect(wrapper.text()).not.toContain('代理巡检')
+    expect(wrapper.text()).toContain('总数 1')
+  })
+
   it('loads recipes and saves builtin copy to local store', async () => {
     apiMocks.fetchWorkspaceRecipes
       .mockResolvedValueOnce({ recipes: [builtinRecipe] })

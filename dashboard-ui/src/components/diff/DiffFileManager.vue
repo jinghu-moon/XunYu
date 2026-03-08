@@ -15,6 +15,8 @@ const emit = defineEmits<{
   (event: 'update:newPath', value: string): void
   (event: 'runDiff'): void
   (event: 'openConvert', value: string): void
+  (event: 'selectionChange', value: string): void
+  (event: 'directoryChange', value: string): void
 }>()
 
 type ContextAction =
@@ -726,6 +728,22 @@ watch(
     if (enabled) startAutoRefresh()
     else stopAutoRefresh()
   },
+)
+
+watch(
+  () => currentPath.value,
+  (value) => {
+    emit('directoryChange', value)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => selectedPath.value,
+  (value) => {
+    emit('selectionChange', value)
+  },
+  { immediate: true },
 )
 
 watch(

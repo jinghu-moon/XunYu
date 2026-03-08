@@ -800,8 +800,12 @@ export async function fetchWorkspaceDiagnosticsSummary(
   return r.json()
 }
 
-export async function fetchRecentWorkspaceTasks(limit = 20): Promise<RecentTaskListResponse> {
+export async function fetchRecentWorkspaceTasks(
+  limit = 20,
+  workspace?: string,
+): Promise<RecentTaskListResponse> {
   const qs = new URLSearchParams({ limit: String(limit) })
+  if (workspace?.trim()) qs.set('workspace', workspace.trim())
   const r = await request(`${BASE}/workspaces/tasks/recent?${qs.toString()}`)
   return r.json()
 }

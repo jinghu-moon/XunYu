@@ -13,10 +13,12 @@ const props = withDefaults(
   defineProps<{
     title?: string
     description?: string
+    category?: string
   }>(),
   {
     title: 'Recipe MVP',
     description: '把高频本地流程沉淀成可预演、可确认、可复用的顺序工作流。',
+    category: '',
   },
 )
 
@@ -37,14 +39,20 @@ function errorMessage(err: unknown): string {
   return '请求失败，请检查全局错误提示。'
 }
 
+function matchesCategory(recipe: RecipeDefinition): boolean {
+  return !props.category || recipe.category === props.category
+}
+
+const visibleRecipes = computed(() => recipes.value.filter(matchesCategory))
+
 const selectedRecipe = computed(
-  () => recipes.value.find((recipe) => recipe.id === selectedId.value) ?? recipes.value[0] ?? null,
+  () => visibleRecipes.value.find((recipe) => recipe.id === selectedId.value) ?? visibleRecipes.value[0] ?? null,
 )
 
 const recipeCounts = computed(() => ({
-  total: recipes.value.length,
-  builtin: recipes.value.filter((recipe) => recipe.source === 'builtin').length,
-  custom: recipes.value.filter((recipe) => recipe.source === 'custom').length,
+  total: visibleRecipes.value.length,
+  builtin: visibleRecipes.value.filter((recipe) => recipe.source === 'builtin').length,
+  custom: visibleRecipes.value.filter((recipe) => recipe.source === 'custom').length,
 }))
 
 const validationError = computed(() => {
@@ -85,9 +93,10 @@ async function loadRecipes(preferredId?: string) {
     const response = await fetchWorkspaceRecipes()
     recipes.value = response.recipes
     const nextId = preferredId || selectedId.value
-    selectedId.value = recipes.value.some((recipe) => recipe.id === nextId)
+    const visible = response.recipes.filter(matchesCategory)
+    selectedId.value = visible.some((recipe) => recipe.id === nextId)
       ? nextId
-      : recipes.value[0]?.id || ''
+      : visible[0]?.id || ''
   } catch (err) {
     requestError.value = errorMessage(err)
   } finally {
@@ -193,7 +202,7 @@ onMounted(() => {
     <div class="recipe-panel__layout">
       <section class="recipe-panel__list">
         <button
-          v-for="recipe in recipes"
+          v-for="recipe in visibleRecipes"
           :key="recipe.id"
           type="button"
           class="recipe-panel__item"
