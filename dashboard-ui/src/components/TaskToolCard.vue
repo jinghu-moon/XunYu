@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import {
   executeGuardedTask,
@@ -16,6 +16,14 @@ import { Button } from './button'
 import TaskReceiptComponent from './TaskReceiptComponent.vue'
 import UnifiedConfirmDialog from './UnifiedConfirmDialog.vue'
 
+type TaskExecutionState =
+  | 'idle'
+  | 'previewing'
+  | 'awaiting_confirm'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+
 const props = defineProps<{
   task: WorkspaceTaskDefinition
   capabilities?: WorkspaceCapabilities | null
@@ -28,15 +36,22 @@ function createInitialState(fields: TaskFieldDefinition[]): TaskFormState {
   }, {})
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message
+  return '请求失败，请检查全局错误提示。'
+}
+
 const form = reactive(createInitialState(props.task.fields))
 const runBusy = ref(false)
 const previewBusy = ref(false)
 const executeBusy = ref(false)
 const dialogOpen = ref(false)
+const state = ref<TaskExecutionState>('idle')
 const preview = ref<GuardedTaskPreviewResponse | null>(null)
 const receipt = ref<GuardedTaskReceipt | null>(null)
 const result = ref<WorkspaceTaskRunResponse | null>(null)
 const validationError = ref('')
+const requestError = ref('')
 
 const isSupported = computed(() => {
   if (!props.task.feature || !props.capabilities) return true
@@ -44,8 +59,29 @@ const isSupported = computed(() => {
 })
 
 const actionLabel = computed(() => (props.task.mode === 'guarded' ? '预览并确认' : '运行'))
-
 const processOutput = computed(() => result.value?.process ?? null)
+const previewOutput = computed(() => preview.value?.process ?? null)
+const stateLabel = computed(() => {
+  switch (state.value) {
+    case 'previewing':
+      return '预演中'
+    case 'awaiting_confirm':
+      return '待确认'
+    case 'running':
+      return '执行中'
+    case 'succeeded':
+      return '成功'
+    case 'failed':
+      return '失败'
+    default:
+      return '待执行'
+  }
+})
+const stateTone = computed(() => {
+  if (state.value === 'succeeded') return 'is-ok'
+  if (state.value === 'failed') return 'is-error'
+  return ''
+})
 
 function isFieldEmpty(field: TaskFieldDefinition): boolean {
   const value = form[field.key] as TaskFieldValue
@@ -62,6 +98,8 @@ function validate() {
 async function runTask() {
   if (!validate() || !props.task.buildRunArgs) return
   runBusy.value = true
+  state.value = 'running'
+  requestError.value = ''
   receipt.value = null
   preview.value = null
   try {
@@ -71,6 +109,10 @@ async function runTask() {
       target: props.task.target?.(form) ?? '',
       args: props.task.buildRunArgs(form),
     })
+    state.value = result.value.process.success ? 'succeeded' : 'failed'
+  } catch (err) {
+    state.value = 'failed'
+    requestError.value = errorMessage(err)
   } finally {
     runBusy.value = false
   }
@@ -79,6 +121,8 @@ async function runTask() {
 async function previewTask() {
   if (!validate() || !props.task.buildPreviewArgs || !props.task.buildExecuteArgs) return
   previewBusy.value = true
+  state.value = 'previewing'
+  requestError.value = ''
   result.value = null
   receipt.value = null
   try {
@@ -90,7 +134,13 @@ async function previewTask() {
       execute_args: props.task.buildExecuteArgs(form),
       preview_summary: props.task.previewSummary?.(form) ?? '',
     })
+    state.value = 'awaiting_confirm'
     dialogOpen.value = true
+  } catch (err) {
+    preview.value = null
+    dialogOpen.value = false
+    state.value = 'failed'
+    requestError.value = errorMessage(err)
   } finally {
     previewBusy.value = false
   }
@@ -99,9 +149,18 @@ async function previewTask() {
 async function confirmTask() {
   if (!preview.value) return
   executeBusy.value = true
+  state.value = 'running'
+  requestError.value = ''
   try {
     receipt.value = await executeGuardedTask({ token: preview.value.token, confirm: true })
     dialogOpen.value = false
+    preview.value = null
+    state.value = receipt.value.process.success ? 'succeeded' : 'failed'
+  } catch (err) {
+    preview.value = null
+    dialogOpen.value = false
+    state.value = 'failed'
+    requestError.value = errorMessage(err)
   } finally {
     executeBusy.value = false
   }
@@ -115,7 +174,10 @@ async function confirmTask() {
         <h4 class="task-card__title">{{ props.task.title }}</h4>
         <p class="task-card__desc">{{ props.task.description }}</p>
       </div>
-      <span v-if="props.task.feature" class="task-card__feature">{{ props.task.feature }}</span>
+      <div class="task-card__header-side">
+        <span :class="['task-card__badge', stateTone]">{{ stateLabel }}</span>
+        <span v-if="props.task.feature" class="task-card__feature">{{ props.task.feature }}</span>
+      </div>
     </header>
 
     <div v-if="props.task.fields.length" class="task-card__form">
@@ -170,12 +232,25 @@ async function confirmTask() {
       </Button>
       <span v-if="!isSupported" class="task-card__hint">当前构建未启用该 feature。</span>
       <span v-else-if="validationError" class="task-card__hint task-card__hint--error">{{ validationError }}</span>
+      <span v-else-if="requestError" class="task-card__hint task-card__hint--error">{{ requestError }}</span>
+    </div>
+
+    <div v-if="preview && previewOutput" class="task-card__result">
+      <div class="task-card__result-meta">
+        <span :class="['task-card__badge', preview.ready_to_execute ? 'is-ok' : 'is-error']">
+          {{ preview.ready_to_execute ? '预演通过' : '预演失败' }}
+        </span>
+        <span>{{ preview.summary }}</span>
+      </div>
+      <pre class="task-card__output">{{ previewOutput.command_line }}
+
+{{ previewOutput.stdout || previewOutput.stderr || 'No preview output' }}</pre>
     </div>
 
     <div v-if="processOutput" class="task-card__result">
       <div class="task-card__result-meta">
         <span :class="['task-card__badge', processOutput.success ? 'is-ok' : 'is-error']">
-          {{ processOutput.success ? 'Success' : 'Failed' }}
+          {{ processOutput.success ? '成功' : '失败' }}
         </span>
         <span>{{ processOutput.duration_ms }} ms</span>
       </div>
@@ -191,6 +266,7 @@ async function confirmTask() {
       :title="props.task.title"
       :preview="preview"
       :busy="executeBusy"
+      :confirm-disabled="!preview?.ready_to_execute"
       @confirm="confirmTask"
     />
   </article>
@@ -216,6 +292,14 @@ async function confirmTask() {
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.task-card__header-side {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .task-card__title {
@@ -314,6 +398,8 @@ async function confirmTask() {
   padding: 2px var(--space-3);
   border-radius: var(--radius-full);
   font-weight: var(--weight-semibold);
+  background: var(--ds-background-2);
+  color: var(--text-secondary);
 }
 
 .task-card__badge.is-ok {

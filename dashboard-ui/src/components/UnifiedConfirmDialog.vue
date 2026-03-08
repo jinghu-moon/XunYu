@@ -1,4 +1,5 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import { computed } from 'vue'
 import type { GuardedTaskPreviewResponse } from '../types'
 import { Button } from './button'
 
@@ -9,11 +10,13 @@ const props = withDefaults(
     warning?: string
     preview?: GuardedTaskPreviewResponse | null
     busy?: boolean
+    confirmDisabled?: boolean
   }>(),
   {
     warning: '此操作具有破坏性，请先核对 preview 输出。',
     preview: null,
     busy: false,
+    confirmDisabled: false,
   },
 )
 
@@ -29,6 +32,9 @@ function close() {
 function confirm() {
   emit('confirm')
 }
+
+const previewSummary = computed(() => props.preview?.summary || props.preview?.preview_summary || '-')
+const previewReadyLabel = computed(() => (props.preview?.ready_to_execute ? '可执行' : '不可执行'))
 </script>
 
 <template>
@@ -43,8 +49,12 @@ function confirm() {
         </div>
         <div class="confirm-dialog__body">
           <div v-if="props.preview" class="confirm-dialog__meta">
+            <div><strong>阶段</strong> {{ props.preview.phase }}</div>
             <div><strong>目标</strong> {{ props.preview.target || '-' }}</div>
-            <div><strong>摘要</strong> {{ props.preview.preview_summary || '-' }}</div>
+            <div><strong>摘要</strong> {{ previewSummary }}</div>
+            <div><strong>状态</strong> {{ previewReadyLabel }}</div>
+            <div><strong>保护链路</strong> {{ props.preview.guarded ? '已启用' : '未启用' }}</div>
+            <div><strong>Dry Run</strong> {{ props.preview.dry_run ? '是' : '否' }}</div>
             <div><strong>过期</strong> {{ props.preview.expires_in_secs }}s</div>
           </div>
           <pre v-if="props.preview" class="confirm-dialog__output">{{ props.preview.process.command_line }}
@@ -53,7 +63,7 @@ function confirm() {
         </div>
         <footer class="confirm-dialog__footer">
           <Button preset="secondary" @click="close">取消</Button>
-          <Button preset="danger" :loading="props.busy" @click="confirm">确认执行</Button>
+          <Button preset="danger" :loading="props.busy" :disabled="props.confirmDisabled" @click="confirm">确认执行</Button>
         </footer>
       </div>
     </div>

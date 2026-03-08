@@ -1,4 +1,4 @@
-﻿import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceTaskDefinition } from '../workspace-tools'
 import TaskToolCard from './TaskToolCard.vue'
@@ -20,6 +20,7 @@ describe('TaskToolCard', () => {
     apiMocks.runWorkspaceTask.mockReset()
     apiMocks.previewGuardedTask.mockReset()
     apiMocks.executeGuardedTask.mockReset()
+    document.body.innerHTML = ''
   })
 
   it('runs non-guarded tasks directly and renders output', async () => {
@@ -48,12 +49,13 @@ describe('TaskToolCard', () => {
       },
     })
 
-    const wrapper = mount(TaskToolCard, { props: { task } })
+    const wrapper = mount(TaskToolCard, { props: { task }, attachTo: document.body })
     await wrapper.get('button').trigger('click')
     await flushPromises()
 
     expect(apiMocks.runWorkspaceTask).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('[1,2,3]')
+    expect(wrapper.text()).toContain('成功')
   })
 
   it('enforces preview before guarded execution and shows receipt after confirm', async () => {
@@ -77,6 +79,12 @@ describe('TaskToolCard', () => {
       workspace: 'files-security',
       action: 'rm',
       target: 'D:/tmp/demo.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: '删除 D:/tmp/demo.txt',
       preview_summary: '删除 D:/tmp/demo.txt',
       expires_in_secs: 300,
       process: {
@@ -93,6 +101,11 @@ describe('TaskToolCard', () => {
       workspace: 'files-security',
       action: 'rm',
       target: 'D:/tmp/demo.txt',
+      phase: 'execute',
+      status: 'succeeded',
+      guarded: true,
+      dry_run: false,
+      summary: '删除 D:/tmp/demo.txt',
       audit_action: 'workspace.rm.execute',
       audited_at: 1700000000,
       process: {
@@ -105,21 +118,130 @@ describe('TaskToolCard', () => {
       },
     })
 
-    const wrapper = mount(TaskToolCard, { props: { task } })
+    const wrapper = mount(TaskToolCard, { props: { task }, attachTo: document.body })
     await wrapper.get('button').trigger('click')
     await flushPromises()
 
     expect(apiMocks.previewGuardedTask).toHaveBeenCalledTimes(1)
     expect(apiMocks.executeGuardedTask).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('preview ok')
+    expect(wrapper.text()).toContain('待确认')
+    expect(document.body.textContent || '').toContain('确认执行')
 
-    const confirmButton = wrapper.findAll('button').find((button) => button.text().includes('确认执行'))
+    const confirmButton = [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('确认执行'),
+    )
     expect(confirmButton).toBeTruthy()
-    await confirmButton!.trigger('click')
+    ;(confirmButton as HTMLButtonElement).click()
     await flushPromises()
 
     expect(apiMocks.executeGuardedTask).toHaveBeenCalledWith({ token: 'token-1', confirm: true })
     expect(wrapper.text()).toContain('执行回执')
     expect(wrapper.text()).toContain('deleted')
+    expect(wrapper.text()).toContain('成功')
+  })
+
+  it('stays out of confirm state when preview fails', async () => {
+    const task: WorkspaceTaskDefinition = {
+      id: 'rm',
+      workspace: 'files-security',
+      title: '删除文件',
+      description: '危险动作',
+      action: 'rm',
+      mode: 'guarded',
+      tone: 'danger',
+      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      target: () => 'D:/tmp/demo.txt',
+      buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
+      buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
+    }
+
+    apiMocks.previewGuardedTask.mockRejectedValue(new Error('400 Bad Request: preview failed'))
+
+    const wrapper = mount(TaskToolCard, { props: { task }, attachTo: document.body })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    expect(apiMocks.previewGuardedTask).toHaveBeenCalledTimes(1)
+    expect(apiMocks.executeGuardedTask).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('400 Bad Request: preview failed')
+    expect(wrapper.text()).toContain('失败')
+    expect(document.body.textContent || '').not.toContain('确认执行')
+  })
+
+  it('renders failed receipt when guarded execution returns failed process', async () => {
+    const task: WorkspaceTaskDefinition = {
+      id: 'rm',
+      workspace: 'files-security',
+      title: '删除文件',
+      description: '危险动作',
+      action: 'rm',
+      mode: 'guarded',
+      tone: 'danger',
+      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      target: () => 'D:/tmp/demo.txt',
+      buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
+      buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
+      previewSummary: () => '删除 D:/tmp/demo.txt',
+    }
+
+    apiMocks.previewGuardedTask.mockResolvedValue({
+      token: 'token-1',
+      workspace: 'files-security',
+      action: 'rm',
+      target: 'D:/tmp/demo.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: '删除 D:/tmp/demo.txt',
+      preview_summary: '删除 D:/tmp/demo.txt',
+      expires_in_secs: 300,
+      process: {
+        command_line: 'xun rm --dry-run D:/tmp/demo.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'preview ok',
+        stderr: '',
+        duration_ms: 10,
+      },
+    })
+    apiMocks.executeGuardedTask.mockResolvedValue({
+      token: 'token-1',
+      workspace: 'files-security',
+      action: 'rm',
+      target: 'D:/tmp/demo.txt',
+      phase: 'execute',
+      status: 'failed',
+      guarded: true,
+      dry_run: false,
+      summary: '删除 D:/tmp/demo.txt',
+      audit_action: 'workspace.rm.execute',
+      audited_at: 1700000000,
+      process: {
+        command_line: 'xun rm -y D:/tmp/demo.txt',
+        exit_code: 1,
+        success: false,
+        stdout: '',
+        stderr: 'access denied',
+        duration_ms: 15,
+      },
+    })
+
+    const wrapper = mount(TaskToolCard, { props: { task }, attachTo: document.body })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('确认执行'),
+    )
+    expect(confirmButton).toBeTruthy()
+    ;(confirmButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('执行回执')
+    expect(wrapper.text()).toContain('access denied')
+    expect(wrapper.text()).toContain('失败')
   })
 })

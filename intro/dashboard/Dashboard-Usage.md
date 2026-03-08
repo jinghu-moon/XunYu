@@ -107,7 +107,7 @@ pnpm -C dashboard-ui dev
 | 文件与安全 | 文件浏览、规则、保护、安全治理 | Diff、Redirect、`tree`、`find`、`bak`、`rm`、`protect`、`acl`、`encrypt` |
 | 集成与自动化 | shell 集成与工具化动作 | `init`、`completion`、`__complete`、`alias`、`brn` |
 | 媒体与转换 | 图片和视频处理 | `img`、`video probe`、`video compress`、`video remux` |
-| 统计与诊断 | 审计与统计分析 | Audit、`cstat` |
+| 统计与诊断 | 诊断、任务复盘与统计分析 | Diagnostics Center、Recent Tasks、Recipe、Audit、`cstat` |
 
 ## 5. 顶层交互约定
 
@@ -303,14 +303,20 @@ Dashboard 中的高风险动作统一遵循 **Triple-Guard**：
 
 适合做什么：
 
-- 查看审计记录
+- 先看诊断中心里的 doctor 总览、最近失败任务、高风险动作回执和审计时间线
+- 在任务中心里回看最近成功 / 失败 / Dry Run，并按安全规则重放任务
+- 用 Recipe 固化高频顺序工作流，并继续遵循 Preview -> Confirm -> Receipt
 - 做代码 / 目录统计
 - 扫描空文件、大文件、重复文件、临时文件
 
 推荐用法：
 
-- 先用 `AuditPanel` 看发生过什么
-- 再用 `cstat` 任务卡扫代码库或目标目录
+1. 先打开 `DiagnosticsCenterPanel`，判断当前最值得处理的问题。
+2. 再看 `RecentTasksPanel`，复盘失败任务或重放最近操作。
+3. 如果某个流程会重复出现，就在 `RecipePanel` 中预演、确认执行并保存本地副本。
+4. 最后再配合 `AuditPanel` 和 `cstat` 任务卡做更细的审计与统计分析。
+
+这个工作台现在不只是“审计页”，而是 P0 收口后的全局诊断与任务复盘入口。
 
 ## 8. feature 可见性说明
 
@@ -394,10 +400,12 @@ cargo run --features "dashboard,diff" -- serve
 
 1. 先完成前端构建并启动 `serve`
 2. 打开总览，确认 feature 能力可见
-3. 进入“路径与上下文”，熟悉书签与 `ctx`
-4. 进入“环境与配置”，熟悉 Env 工作台
-5. 进入“文件与安全”，练习 preview / confirm / receipt 流程
-6. 最后再用“集成与自动化”“媒体与转换”“统计与诊断”补齐外围能力
+3. 进入“统计与诊断”，先看诊断中心、最近任务和 Recipe 工作流入口
+4. 进入“路径与上下文”，熟悉书签与 `ctx`
+5. 进入“环境与配置”，熟悉 Env 工作台
+6. 进入“文件与安全”，练习 preview / confirm / receipt 流程
+7. 高频流程再回到“统计与诊断”，把它固化成 Recipe
+8. 最后再用“集成与自动化”“媒体与转换”补齐外围能力
 
 ## 11. 相关文档
 

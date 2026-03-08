@@ -5,26 +5,30 @@ mod bookmarks;
 mod common;
 #[path = "config.rs"]
 mod config_handlers;
+mod diagnostics;
 #[cfg(feature = "diff")]
 mod files;
 #[path = "ports.rs"]
 mod ports_handlers;
 #[path = "proxy.rs"]
 mod proxy_handlers;
+mod recipes;
+mod workspaces;
 #[cfg(feature = "diff")]
 mod ws;
-mod workspaces;
 
 pub(in crate::commands::dashboard) use audit::*;
 pub(in crate::commands::dashboard) use bookmarks::*;
 pub(in crate::commands::dashboard) use config_handlers::*;
+pub(in crate::commands::dashboard) use diagnostics::*;
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) use files::*;
 pub(in crate::commands::dashboard) use ports_handlers::*;
 pub(in crate::commands::dashboard) use proxy_handlers::*;
+pub(in crate::commands::dashboard) use recipes::*;
+pub(in crate::commands::dashboard) use workspaces::*;
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) use ws::*;
-pub(in crate::commands::dashboard) use workspaces::*;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};

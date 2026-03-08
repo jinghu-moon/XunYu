@@ -1,4 +1,4 @@
-﻿import { mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TaskReceiptComponent from './TaskReceiptComponent.vue'
 
@@ -11,6 +11,11 @@ describe('TaskReceiptComponent', () => {
           workspace: 'files-security',
           action: 'rm',
           target: 'D:/tmp/demo.txt',
+          phase: 'execute',
+          status: 'succeeded',
+          guarded: true,
+          dry_run: false,
+          summary: '删除 D:/tmp/demo.txt',
           audit_action: 'workspace.rm.execute',
           audited_at: 1700000000,
           process: {
@@ -26,8 +31,10 @@ describe('TaskReceiptComponent', () => {
     })
 
     expect(wrapper.text()).toContain('执行回执')
+    expect(wrapper.text()).toContain('删除 D:/tmp/demo.txt')
     expect(wrapper.text()).toContain('workspace.rm.execute')
     expect(wrapper.text()).toContain('D:/tmp/demo.txt')
     expect(wrapper.text()).toContain('deleted')
+    expect(wrapper.text()).toContain('已启用')
   })
 })

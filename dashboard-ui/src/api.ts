@@ -8,6 +8,7 @@ import type {
   RedirectProfile,
   RedirectDryRunResponse,
   AuditResponse,
+  DiagnosticsSummaryResponse,
   GlobalConfig,
   DiffApiRequest,
   DiffResult,
@@ -43,6 +44,13 @@ import type {
   GuardedTaskPreviewRequest,
   GuardedTaskPreviewResponse,
   GuardedTaskReceipt,
+  RecipeDefinition,
+  RecipeExecutionReceipt,
+  RecipeExecuteRequest,
+  RecipeListResponse,
+  RecipePreviewRequest,
+  RecipePreviewResponse,
+  RecentTaskListResponse,
   WorkspaceCapabilities,
   WorkspaceOverviewSummary,
   WorkspaceTaskRunRequest,
@@ -781,6 +789,56 @@ export async function fetchWorkspaceCapabilities(): Promise<WorkspaceCapabilitie
 
 export async function fetchWorkspaceOverviewSummary(): Promise<WorkspaceOverviewSummary> {
   const r = await request(`${BASE}/workspaces/overview/summary`)
+  return r.json()
+}
+
+export async function fetchWorkspaceDiagnosticsSummary(
+  scope: EnvScope = 'all',
+): Promise<DiagnosticsSummaryResponse> {
+  const qs = new URLSearchParams({ scope })
+  const r = await request(`${BASE}/workspaces/diagnostics/summary?${qs.toString()}`)
+  return r.json()
+}
+
+export async function fetchRecentWorkspaceTasks(limit = 20): Promise<RecentTaskListResponse> {
+  const qs = new URLSearchParams({ limit: String(limit) })
+  const r = await request(`${BASE}/workspaces/tasks/recent?${qs.toString()}`)
+  return r.json()
+}
+
+export async function fetchWorkspaceRecipes(): Promise<RecipeListResponse> {
+  const r = await request(`${BASE}/workspaces/recipes`)
+  return r.json()
+}
+
+export async function saveWorkspaceRecipe(recipe: RecipeDefinition): Promise<RecipeDefinition> {
+  const r = await request(`${BASE}/workspaces/recipes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipe }),
+  })
+  return r.json()
+}
+
+export async function previewWorkspaceRecipe(
+  payload: RecipePreviewRequest,
+): Promise<RecipePreviewResponse> {
+  const r = await request(`${BASE}/workspaces/recipes/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  return r.json()
+}
+
+export async function executeWorkspaceRecipe(
+  payload: RecipeExecuteRequest,
+): Promise<RecipeExecutionReceipt> {
+  const r = await request(`${BASE}/workspaces/recipes/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
   return r.json()
 }
 

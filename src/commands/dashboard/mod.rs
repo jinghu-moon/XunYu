@@ -29,6 +29,7 @@ struct Assets;
 #[derive(Clone)]
 pub(super) struct DashboardState {
     guarded_tasks: handlers::GuardedTaskService,
+    recipes: handlers::RecipeService,
     #[cfg(feature = "diff")]
     event_tx: tokio::sync::broadcast::Sender<String>,
     #[cfg(feature = "diff")]
@@ -38,12 +39,14 @@ pub(super) struct DashboardState {
 impl DashboardState {
     fn new() -> Self {
         let guarded_tasks = handlers::GuardedTaskService::new();
+        let recipes = handlers::RecipeService::new();
         #[cfg(feature = "diff")]
         {
             let (event_tx, _) = tokio::sync::broadcast::channel::<String>(256);
             let watch_cmd_tx = spawn_watch_thread(event_tx.clone());
             return Self {
                 guarded_tasks,
+                recipes,
                 event_tx,
                 watch_cmd_tx,
             };
@@ -51,7 +54,10 @@ impl DashboardState {
 
         #[cfg(not(feature = "diff"))]
         {
-            Self { guarded_tasks }
+            Self {
+                guarded_tasks,
+                recipes,
+            }
         }
     }
 
@@ -59,15 +65,23 @@ impl DashboardState {
         self.guarded_tasks.clone()
     }
 
+    pub(in crate::commands::dashboard) fn recipes(&self) -> handlers::RecipeService {
+        self.recipes.clone()
+    }
+
     #[cfg(test)]
-    pub(in crate::commands::dashboard) fn for_tests(runner: std::sync::Arc<dyn handlers::TaskRunner>) -> Self {
+    pub(in crate::commands::dashboard) fn for_tests(
+        runner: std::sync::Arc<dyn handlers::TaskRunner>,
+    ) -> Self {
         let guarded_tasks = handlers::GuardedTaskService::with_runner(runner);
+        let recipes = handlers::RecipeService::for_tests();
         #[cfg(feature = "diff")]
         {
             let (event_tx, _) = tokio::sync::broadcast::channel::<String>(64);
             let watch_cmd_tx = spawn_watch_thread(event_tx.clone());
             return Self {
                 guarded_tasks,
+                recipes,
                 event_tx,
                 watch_cmd_tx,
             };
@@ -75,7 +89,10 @@ impl DashboardState {
 
         #[cfg(not(feature = "diff"))]
         {
-            Self { guarded_tasks }
+            Self {
+                guarded_tasks,
+                recipes,
+            }
         }
     }
 
@@ -263,11 +280,47 @@ where
 
 fn build_router(state: DashboardState) -> Router {
     let r = base_router::<DashboardState>()
-        .route("/api/workspaces/capabilities", get(handlers::workspace_capabilities))
-        .route("/api/workspaces/overview/summary", get(handlers::workspace_overview_summary))
+        .route(
+            "/api/workspaces/capabilities",
+            get(handlers::workspace_capabilities),
+        )
+        .route(
+            "/api/workspaces/overview/summary",
+            get(handlers::workspace_overview_summary),
+        )
+        .route(
+            "/api/workspaces/diagnostics/summary",
+            get(handlers::workspace_diagnostics_summary),
+        )
+        .route(
+            "/api/workspaces/tasks/recent",
+            get(handlers::workspace_recent_tasks),
+        )
+        .route(
+            "/api/workspaces/recipes",
+            get(handlers::list_workspace_recipes),
+        )
+        .route(
+            "/api/workspaces/recipes",
+            post(handlers::upsert_workspace_recipe),
+        )
+        .route(
+            "/api/workspaces/recipes/preview",
+            post(handlers::preview_workspace_recipe),
+        )
+        .route(
+            "/api/workspaces/recipes/execute",
+            post(handlers::execute_workspace_recipe),
+        )
         .route("/api/workspaces/run", post(handlers::workspace_run_task))
-        .route("/api/workspaces/guarded/preview", post(handlers::workspace_preview_guarded_task))
-        .route("/api/workspaces/guarded/execute", post(handlers::workspace_execute_guarded_task));
+        .route(
+            "/api/workspaces/guarded/preview",
+            post(handlers::workspace_preview_guarded_task),
+        )
+        .route(
+            "/api/workspaces/guarded/execute",
+            post(handlers::workspace_execute_guarded_task),
+        );
 
     #[cfg(feature = "diff")]
     let r = r

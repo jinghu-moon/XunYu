@@ -507,6 +507,12 @@ export interface GuardedTaskPreviewResponse {
   workspace: string
   action: string
   target: string
+  phase: 'preview'
+  status: 'previewed'
+  guarded: boolean
+  dry_run: boolean
+  ready_to_execute: boolean
+  summary: string
   preview_summary: string
   process: TaskProcessOutput
   expires_in_secs: number
@@ -522,9 +528,47 @@ export interface GuardedTaskReceipt {
   workspace: string
   action: string
   target: string
+  phase: 'execute'
+  status: 'succeeded' | 'failed'
+  guarded: boolean
+  dry_run: boolean
+  summary: string
   audit_action: string
   audited_at: number
   process: TaskProcessOutput
+}
+
+export type RecentTaskReplay =
+  | { kind: 'run'; request: WorkspaceTaskRunRequest }
+  | { kind: 'guarded_preview'; request: GuardedTaskPreviewRequest }
+
+export interface RecentTaskRecord {
+  id: string
+  workspace: string
+  action: string
+  target: string
+  mode: 'run' | 'guarded'
+  phase: 'run' | 'preview' | 'execute'
+  status: 'previewed' | 'succeeded' | 'failed'
+  guarded: boolean
+  dry_run: boolean
+  summary: string
+  created_at: number
+  audit_action?: string | null
+  process: TaskProcessOutput
+  replay?: RecentTaskReplay | null
+}
+
+export interface RecentTaskStats {
+  total: number
+  succeeded: number
+  failed: number
+  dry_run: number
+}
+
+export interface RecentTaskListResponse {
+  entries: RecentTaskRecord[]
+  stats: RecentTaskStats
 }
 
 export interface WorkspaceCapabilities {
@@ -549,6 +593,155 @@ export interface WorkspaceOverviewSummary {
   env_total_vars: number
   env_snapshots: number
   audit_entries: number
+  recent_tasks: number
+  failed_tasks: number
+  dry_run_tasks: number
   workspaces: string[]
   capabilities: WorkspaceCapabilities
+}
+
+export type RecipeSource = 'builtin' | 'custom'
+
+export interface RecipeParamDefinition {
+  key: string
+  label: string
+  description: string
+  default_value: string
+  required: boolean
+  placeholder: string
+}
+
+export type RecipeStepDefinition =
+  | {
+      kind: 'run'
+      id: string
+      title: string
+      workspace: string
+      action: string
+      target: string
+      summary: string
+      run_args: string[]
+      dry_run_args: string[]
+    }
+  | {
+      kind: 'guarded'
+      id: string
+      title: string
+      workspace: string
+      action: string
+      target: string
+      summary: string
+      preview_args: string[]
+      execute_args: string[]
+      preview_summary: string
+    }
+
+export interface RecipeDefinition {
+  id: string
+  name: string
+  description: string
+  category: string
+  source: RecipeSource
+  supports_dry_run: boolean
+  params: RecipeParamDefinition[]
+  steps: RecipeStepDefinition[]
+}
+
+export interface RecipeListResponse {
+  recipes: RecipeDefinition[]
+}
+
+export interface RecipePreviewRequest {
+  recipe_id: string
+  values: Record<string, string>
+}
+
+export interface RecipePreviewStepResult {
+  id: string
+  title: string
+  workspace: string
+  action: string
+  target: string
+  status: 'previewed' | 'failed'
+  guarded: boolean
+  dry_run: boolean
+  summary: string
+  process: TaskProcessOutput
+}
+
+export interface RecipePreviewResponse {
+  token: string
+  recipe_id: string
+  recipe_name: string
+  status: 'previewed'
+  guarded: boolean
+  dry_run: boolean
+  ready_to_execute: boolean
+  summary: string
+  total_steps: number
+  expires_in_secs: number
+  steps: RecipePreviewStepResult[]
+}
+
+export interface RecipeExecuteRequest {
+  token: string
+  confirm: boolean
+}
+
+export interface RecipeExecutionStepReceipt {
+  id: string
+  title: string
+  workspace: string
+  action: string
+  target: string
+  status: 'succeeded' | 'failed'
+  guarded: boolean
+  dry_run: boolean
+  summary: string
+  audit_action?: string | null
+  process: TaskProcessOutput
+}
+
+export interface RecipeExecutionReceipt {
+  token: string
+  recipe_id: string
+  recipe_name: string
+  status: 'succeeded' | 'failed'
+  guarded: boolean
+  dry_run: boolean
+  summary: string
+  total_steps: number
+  completed_steps: number
+  failed_step_id?: string | null
+  audited_at: number
+  steps: RecipeExecutionStepReceipt[]
+}
+
+export interface DiagnosticsDoctorSummary {
+  scope: EnvScope
+  issues: EnvDoctorIssue[]
+  errors: number
+  warnings: number
+  fixable: number
+  load_error?: string | null
+}
+
+export interface DiagnosticsOverview {
+  doctor_issues: number
+  doctor_errors: number
+  doctor_warnings: number
+  doctor_fixable: number
+  recent_failed_tasks: number
+  recent_guarded_receipts: number
+  audit_entries: number
+  urgent_items: number
+}
+
+export interface DiagnosticsSummaryResponse {
+  generated_at: number
+  overview: DiagnosticsOverview
+  doctor: DiagnosticsDoctorSummary
+  audit_timeline: AuditEntry[]
+  failed_tasks: RecentTaskRecord[]
+  guarded_receipts: RecentTaskRecord[]
 }

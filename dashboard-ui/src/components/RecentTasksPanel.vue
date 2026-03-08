@@ -1,0 +1,411 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import {
+  executeGuardedTask,
+  fetchRecentWorkspaceTasks,
+  previewGuardedTask,
+  runWorkspaceTask,
+} from '../api'
+import type {
+  GuardedTaskPreviewResponse,
+  GuardedTaskReceipt,
+  RecentTaskListResponse,
+  RecentTaskRecord,
+  WorkspaceTaskRunResponse,
+} from '../types'
+import { Button } from './button'
+import TaskReceiptComponent from './TaskReceiptComponent.vue'
+import UnifiedConfirmDialog from './UnifiedConfirmDialog.vue'
+
+const props = withDefaults(
+  defineProps<{
+    title?: string
+    description?: string
+    limit?: number
+  }>(),
+  {
+    title: '最近任务',
+    description: '跨工作台查看最近执行结果，并支持安全重放。',
+    limit: 20,
+  },
+)
+
+const entries = ref<RecentTaskRecord[]>([])
+const stats = ref<RecentTaskListResponse['stats'] | null>(null)
+const selectedId = ref('')
+const statusFilter = ref<'all' | 'succeeded' | 'failed' | 'previewed'>('all')
+const dryRunFilter = ref<'all' | 'dry-run' | 'executed'>('all')
+const loading = ref(false)
+const busy = ref(false)
+const requestError = ref('')
+const preview = ref<GuardedTaskPreviewResponse | null>(null)
+const receipt = ref<GuardedTaskReceipt | null>(null)
+const runResult = ref<WorkspaceTaskRunResponse | null>(null)
+const dialogOpen = ref(false)
+
+function formatTime(ts: number) {
+  return new Date(ts * 1000).toLocaleString()
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message
+  return '请求失败，请检查全局错误提示。'
+}
+
+const filteredEntries = computed(() =>
+  entries.value.filter((entry) => {
+    const matchesStatus = statusFilter.value === 'all' || entry.status === statusFilter.value
+    const matchesDryRun =
+      dryRunFilter.value === 'all'
+        ? true
+        : dryRunFilter.value === 'dry-run'
+          ? entry.dry_run
+          : !entry.dry_run
+    return matchesStatus && matchesDryRun
+  }),
+)
+
+const selectedRecord = computed(
+  () => filteredEntries.value.find((entry) => entry.id === selectedId.value) ?? filteredEntries.value[0] ?? null,
+)
+
+const replayLabel = computed(() => {
+  if (!selectedRecord.value?.replay) return '不可重放'
+  return selectedRecord.value.replay.kind === 'run' ? '重新执行' : '重新预演'
+})
+
+async function loadRecentTasks() {
+  loading.value = true
+  requestError.value = ''
+  try {
+    const response = await fetchRecentWorkspaceTasks(props.limit)
+    entries.value = response.entries
+    stats.value = response.stats
+    if (!entries.value.some((entry) => entry.id === selectedId.value)) {
+      selectedId.value = entries.value[0]?.id ?? ''
+    }
+  } catch (err) {
+    requestError.value = errorMessage(err)
+  } finally {
+    loading.value = false
+  }
+}
+
+function selectRecord(id: string) {
+  selectedId.value = id
+  receipt.value = null
+  runResult.value = null
+}
+
+async function replaySelectedRecord() {
+  if (!selectedRecord.value?.replay) return
+  busy.value = true
+  requestError.value = ''
+  receipt.value = null
+  runResult.value = null
+  try {
+    if (selectedRecord.value.replay.kind === 'run') {
+      runResult.value = await runWorkspaceTask(selectedRecord.value.replay.request)
+      selectedId.value = ''
+      await loadRecentTasks()
+      return
+    }
+    preview.value = await previewGuardedTask(selectedRecord.value.replay.request)
+    dialogOpen.value = true
+  } catch (err) {
+    requestError.value = errorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function confirmGuardedReplay() {
+  if (!preview.value) return
+  busy.value = true
+  requestError.value = ''
+  try {
+    receipt.value = await executeGuardedTask({ token: preview.value.token, confirm: true })
+    dialogOpen.value = false
+    preview.value = null
+    selectedId.value = ''
+    await loadRecentTasks()
+  } catch (err) {
+    requestError.value = errorMessage(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+onMounted(() => {
+  void loadRecentTasks()
+})
+</script>
+
+<template>
+  <section class="recent-tasks">
+    <header class="recent-tasks__header">
+      <div>
+        <h3 class="recent-tasks__title">{{ props.title }}</h3>
+        <p class="recent-tasks__desc">{{ props.description }}</p>
+      </div>
+      <div class="recent-tasks__actions">
+        <Button data-testid="refresh-button" preset="secondary" :loading="loading" @click="loadRecentTasks">
+          刷新
+        </Button>
+      </div>
+    </header>
+
+    <div class="recent-tasks__summary">
+      <span class="recent-tasks__chip">总数 {{ stats?.total ?? 0 }}</span>
+      <span class="recent-tasks__chip recent-tasks__chip--ok">成功 {{ stats?.succeeded ?? 0 }}</span>
+      <span class="recent-tasks__chip recent-tasks__chip--error">失败 {{ stats?.failed ?? 0 }}</span>
+      <span class="recent-tasks__chip">Dry Run {{ stats?.dry_run ?? 0 }}</span>
+    </div>
+
+    <div class="recent-tasks__filters">
+      <label class="recent-tasks__filter">
+        <span>状态</span>
+        <select v-model="statusFilter" data-testid="status-filter">
+          <option value="all">全部</option>
+          <option value="succeeded">成功</option>
+          <option value="failed">失败</option>
+          <option value="previewed">预演</option>
+        </select>
+      </label>
+      <label class="recent-tasks__filter">
+        <span>Dry Run</span>
+        <select v-model="dryRunFilter" data-testid="dryrun-filter">
+          <option value="all">全部</option>
+          <option value="dry-run">仅 Dry Run</option>
+          <option value="executed">仅已执行</option>
+        </select>
+      </label>
+    </div>
+
+    <p v-if="requestError" class="recent-tasks__error">{{ requestError }}</p>
+
+    <div class="recent-tasks__layout">
+      <div class="recent-tasks__list">
+        <button
+          v-for="entry in filteredEntries"
+          :key="entry.id"
+          :data-testid="`task-item-${entry.id}`"
+          :class="['recent-tasks__item', selectedRecord?.id === entry.id ? 'is-active' : '']"
+          type="button"
+          @click="selectRecord(entry.id)"
+        >
+          <div class="recent-tasks__item-top">
+            <strong>{{ entry.summary }}</strong>
+            <span :class="['recent-tasks__badge', `is-${entry.status}`]">{{ entry.status }}</span>
+          </div>
+          <div class="recent-tasks__item-meta">
+            <span>{{ entry.workspace }}</span>
+            <span>{{ entry.phase }}</span>
+            <span>{{ formatTime(entry.created_at) }}</span>
+          </div>
+        </button>
+        <div v-if="!filteredEntries.length" class="recent-tasks__empty">暂无匹配任务。</div>
+      </div>
+
+      <section v-if="selectedRecord" class="recent-tasks__detail">
+        <div class="recent-tasks__detail-header">
+          <div>
+            <h4 class="recent-tasks__detail-title">{{ selectedRecord.summary }}</h4>
+            <p class="recent-tasks__detail-subtitle">
+              {{ selectedRecord.workspace }} / {{ selectedRecord.action }} / {{ selectedRecord.target || '-' }}
+            </p>
+          </div>
+          <span :class="['recent-tasks__badge', `is-${selectedRecord.status}`]">{{ selectedRecord.status }}</span>
+        </div>
+
+        <div class="recent-tasks__detail-meta">
+          <div><strong>模式</strong> {{ selectedRecord.mode }}</div>
+          <div><strong>阶段</strong> {{ selectedRecord.phase }}</div>
+          <div><strong>Dry Run</strong> {{ selectedRecord.dry_run ? '是' : '否' }}</div>
+          <div><strong>时间</strong> {{ formatTime(selectedRecord.created_at) }}</div>
+          <div><strong>审计</strong> {{ selectedRecord.audit_action || '-' }}</div>
+          <div><strong>耗时</strong> {{ selectedRecord.process.duration_ms }} ms</div>
+        </div>
+
+        <div class="recent-tasks__detail-actions">
+          <Button
+            data-testid="replay-button"
+            preset="primary"
+            :disabled="!selectedRecord.replay"
+            :loading="busy"
+            @click="replaySelectedRecord"
+          >
+            {{ replayLabel }}
+          </Button>
+        </div>
+
+        <pre class="recent-tasks__output">{{ selectedRecord.process.command_line }}
+
+{{ selectedRecord.process.stdout || selectedRecord.process.stderr || 'No command output' }}</pre>
+      </section>
+      <section v-else class="recent-tasks__detail recent-tasks__detail--empty">请选择一条任务查看详情。</section>
+    </div>
+
+    <div v-if="runResult" class="recent-tasks__result">
+      <div class="recent-tasks__detail-header">
+        <h4 class="recent-tasks__detail-title">重放结果</h4>
+        <span :class="['recent-tasks__badge', runResult.process.success ? 'is-succeeded' : 'is-failed']">
+          {{ runResult.process.success ? 'succeeded' : 'failed' }}
+        </span>
+      </div>
+      <pre class="recent-tasks__output">{{ runResult.process.command_line }}
+
+{{ runResult.process.stdout || runResult.process.stderr || 'No command output' }}</pre>
+    </div>
+
+    <TaskReceiptComponent v-if="receipt" :receipt="receipt" />
+
+    <UnifiedConfirmDialog
+      v-model="dialogOpen"
+      title="重放危险任务"
+      :preview="preview"
+      :busy="busy"
+      :confirm-disabled="!preview?.ready_to_execute"
+      @confirm="confirmGuardedReplay"
+    />
+  </section>
+</template>
+
+<style scoped>
+.recent-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.recent-tasks__header,
+.recent-tasks__item-top,
+.recent-tasks__detail-header,
+.recent-tasks__detail-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.recent-tasks__title,
+.recent-tasks__detail-title {
+  font: var(--type-title);
+  color: var(--text-primary);
+}
+
+.recent-tasks__desc,
+.recent-tasks__detail-subtitle,
+.recent-tasks__item-meta,
+.recent-tasks__detail-meta {
+  color: var(--text-secondary);
+  font: var(--type-body-sm);
+}
+
+.recent-tasks__summary,
+.recent-tasks__filters,
+.recent-tasks__detail-meta,
+.recent-tasks__item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.recent-tasks__filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.recent-tasks__layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.recent-tasks__list,
+.recent-tasks__detail,
+.recent-tasks__result {
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  background: var(--surface-card);
+  box-shadow: var(--card-shadow);
+  padding: var(--card-padding);
+}
+
+.recent-tasks__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.recent-tasks__item {
+  text-align: left;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  padding: var(--space-3);
+  color: inherit;
+  cursor: pointer;
+}
+
+.recent-tasks__item.is-active {
+  border-color: var(--text-secondary);
+  background: var(--ds-background-2);
+}
+
+.recent-tasks__badge,
+.recent-tasks__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--ds-background-2);
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+
+.recent-tasks__chip--ok,
+.recent-tasks__badge.is-succeeded {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.recent-tasks__chip--error,
+.recent-tasks__badge.is-failed {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.recent-tasks__badge.is-previewed {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.recent-tasks__detail,
+.recent-tasks__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.recent-tasks__detail--empty,
+.recent-tasks__empty,
+.recent-tasks__error {
+  color: var(--text-secondary);
+}
+
+.recent-tasks__error {
+  color: var(--color-danger);
+}
+
+.recent-tasks__output {
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--ds-background-2);
+  padding: var(--space-4);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-primary);
+}
+</style>

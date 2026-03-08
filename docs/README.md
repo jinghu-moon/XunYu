@@ -13,6 +13,8 @@
 - CLI 输出与交互约定：`./project/CLI-UI.md`
 - Dashboard 设计：`./project/Dashboard-Design.md`
 - Dashboard 扩展路线图：`./project/Dashboard-Expansion-Roadmap.md`
+- P0 实施方案：`./project/P0-Execution-Plan.md`
+- P0 完成说明：`./project/P0-Completion-Notes.md`
 - 命名与命令策略：`./project/Naming-Strategy.md`
 - 构建矩阵：`./project/Build-Matrix.md`
 - 性能 / 定制优化：`./project/Performance-Optimization-Customization.md`

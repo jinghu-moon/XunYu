@@ -8,8 +8,8 @@
 ## 鏂瑰紡 A锛氫粠婧愮爜鏋勫缓
 
 ```bash
-git clone <your-repo-url>
-cd Xun
+git clone https://github.com/jinghu-moon/XunYu.git
+cd XunYu
 
 # 榛樿鑳藉姏
 cargo build --release
@@ -35,7 +35,7 @@ cargo build --release --features "alias,alias-shell-extra"
 ## 鏂瑰紡 B锛氬畨瑁呭埌 Cargo bin
 
 ```bash
-cd Xun
+cd XunYu
 
 # 榛樿鑳藉姏
 cargo install --path . --locked

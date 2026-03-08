@@ -1,13 +1,16 @@
 use super::*;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const GUARDED_TASK_TTL_SECS: u64 = 300;
+const TASK_HISTORY_LIMIT: usize = 64;
 
-pub(in crate::commands::dashboard) trait TaskRunner: Send + Sync {
+pub(in crate::commands::dashboard) trait TaskRunner:
+    Send + Sync
+{
     fn run(&self, args: &[String]) -> TaskProcessOutput;
 }
 
@@ -66,6 +69,7 @@ pub(in crate::commands::dashboard) struct GuardedTaskService {
 struct GuardedTaskServiceInner {
     runner: Arc<dyn TaskRunner>,
     pending: Mutex<HashMap<String, PendingGuardedTask>>,
+    history: Mutex<VecDeque<RecentTaskRecord>>,
     seq: AtomicU64,
     ttl: Duration,
 }
@@ -75,75 +79,132 @@ struct PendingGuardedTask {
     workspace: String,
     action: String,
     target: String,
+    summary: String,
+    preview_args: Vec<String>,
     execute_args: Vec<String>,
     expires_at: Instant,
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct TaskProcessOutput {
-    command_line: String,
-    exit_code: Option<i32>,
-    success: bool,
-    stdout: String,
-    stderr: String,
-    duration_ms: u64,
+    pub(in crate::commands::dashboard) command_line: String,
+    pub(in crate::commands::dashboard) exit_code: Option<i32>,
+    pub(in crate::commands::dashboard) success: bool,
+    pub(in crate::commands::dashboard) stdout: String,
+    pub(in crate::commands::dashboard) stderr: String,
+    pub(in crate::commands::dashboard) duration_ms: u64,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct WorkspaceTaskRunRequest {
-    workspace: String,
-    action: String,
+    pub(in crate::commands::dashboard) workspace: String,
+    pub(in crate::commands::dashboard) action: String,
     #[serde(default)]
-    target: String,
-    args: Vec<String>,
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) args: Vec<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct WorkspaceTaskRunResponse {
-    workspace: String,
-    action: String,
-    target: String,
-    process: TaskProcessOutput,
+    pub(in crate::commands::dashboard) workspace: String,
+    pub(in crate::commands::dashboard) action: String,
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) process: TaskProcessOutput,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct GuardedTaskPreviewRequest {
-    workspace: String,
-    action: String,
-    target: String,
-    preview_args: Vec<String>,
-    execute_args: Vec<String>,
+    pub(in crate::commands::dashboard) workspace: String,
+    pub(in crate::commands::dashboard) action: String,
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) preview_args: Vec<String>,
+    pub(in crate::commands::dashboard) execute_args: Vec<String>,
     #[serde(default)]
-    preview_summary: String,
+    pub(in crate::commands::dashboard) preview_summary: String,
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct GuardedTaskPreviewResponse {
-    token: String,
-    workspace: String,
-    action: String,
-    target: String,
-    preview_summary: String,
-    process: TaskProcessOutput,
-    expires_in_secs: u64,
+    pub(in crate::commands::dashboard) token: String,
+    pub(in crate::commands::dashboard) workspace: String,
+    pub(in crate::commands::dashboard) action: String,
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) phase: String,
+    pub(in crate::commands::dashboard) status: String,
+    pub(in crate::commands::dashboard) guarded: bool,
+    pub(in crate::commands::dashboard) dry_run: bool,
+    pub(in crate::commands::dashboard) ready_to_execute: bool,
+    pub(in crate::commands::dashboard) summary: String,
+    pub(in crate::commands::dashboard) preview_summary: String,
+    pub(in crate::commands::dashboard) process: TaskProcessOutput,
+    pub(in crate::commands::dashboard) expires_in_secs: u64,
 }
 
 #[derive(Deserialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct GuardedTaskExecuteRequest {
-    token: String,
+    pub(in crate::commands::dashboard) token: String,
     #[serde(default)]
-    confirm: bool,
+    pub(in crate::commands::dashboard) confirm: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct GuardedTaskReceipt {
-    token: String,
+    pub(in crate::commands::dashboard) token: String,
+    pub(in crate::commands::dashboard) workspace: String,
+    pub(in crate::commands::dashboard) action: String,
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) phase: String,
+    pub(in crate::commands::dashboard) status: String,
+    pub(in crate::commands::dashboard) guarded: bool,
+    pub(in crate::commands::dashboard) dry_run: bool,
+    pub(in crate::commands::dashboard) summary: String,
+    pub(in crate::commands::dashboard) audit_action: String,
+    pub(in crate::commands::dashboard) audited_at: u64,
+    pub(in crate::commands::dashboard) process: TaskProcessOutput,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(in crate::commands::dashboard) enum RecentTaskReplay {
+    Run { request: WorkspaceTaskRunRequest },
+    GuardedPreview { request: GuardedTaskPreviewRequest },
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(in crate::commands::dashboard) struct RecentTaskRecord {
+    id: String,
     workspace: String,
     action: String,
     target: String,
-    audit_action: String,
-    audited_at: u64,
+    mode: String,
+    phase: String,
+    status: String,
+    guarded: bool,
+    dry_run: bool,
+    summary: String,
+    created_at: u64,
+    audit_action: Option<String>,
     process: TaskProcessOutput,
+    replay: Option<RecentTaskReplay>,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+pub(in crate::commands::dashboard) struct RecentTaskStats {
+    total: usize,
+    succeeded: usize,
+    failed: usize,
+    dry_run: usize,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(in crate::commands::dashboard) struct RecentTaskListResponse {
+    entries: Vec<RecentTaskRecord>,
+    stats: RecentTaskStats,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+pub(in crate::commands::dashboard) struct RecentTaskQuery {
+    limit: Option<usize>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -170,6 +231,9 @@ pub(in crate::commands::dashboard) struct WorkspaceOverviewSummary {
     env_total_vars: usize,
     env_snapshots: usize,
     audit_entries: usize,
+    recent_tasks: usize,
+    failed_tasks: usize,
+    dry_run_tasks: usize,
     workspaces: Vec<String>,
     capabilities: WorkspaceCapabilities,
 }
@@ -184,27 +248,99 @@ impl GuardedTaskService {
             inner: Arc::new(GuardedTaskServiceInner {
                 runner,
                 pending: Mutex::new(HashMap::new()),
+                history: Mutex::new(VecDeque::with_capacity(TASK_HISTORY_LIMIT)),
                 seq: AtomicU64::new(1),
                 ttl: Duration::from_secs(GUARDED_TASK_TTL_SECS),
             }),
         }
     }
 
-    fn run(&self, req: WorkspaceTaskRunRequest) -> Result<WorkspaceTaskRunResponse, (StatusCode, String)> {
+    pub(in crate::commands::dashboard) fn run(
+        &self,
+        req: WorkspaceTaskRunRequest,
+    ) -> Result<WorkspaceTaskRunResponse, (StatusCode, String)> {
         validate_workspace_action(&req.workspace, &req.action)?;
         if req.args.is_empty() {
             return Err((StatusCode::BAD_REQUEST, "args is empty".to_string()));
         }
         let process = self.inner.runner.run(&req.args);
-        Ok(WorkspaceTaskRunResponse {
-            workspace: req.workspace,
-            action: req.action,
-            target: req.target,
+        let response = WorkspaceTaskRunResponse {
+            workspace: req.workspace.clone(),
+            action: req.action.clone(),
+            target: req.target.clone(),
             process,
-        })
+        };
+        self.record_history(RecentTaskRecord {
+            id: self.next_history_id(),
+            workspace: response.workspace.clone(),
+            action: response.action.clone(),
+            target: response.target.clone(),
+            mode: "run".to_string(),
+            phase: "run".to_string(),
+            status: if response.process.success {
+                "succeeded".to_string()
+            } else {
+                "failed".to_string()
+            },
+            guarded: false,
+            dry_run: false,
+            summary: task_summary(&response.workspace, &response.action, &response.target),
+            created_at: now_unix_secs(),
+            audit_action: None,
+            process: response.process.clone(),
+            replay: Some(RecentTaskReplay::Run { request: req }),
+        });
+        Ok(response)
     }
 
-    fn preview(
+    pub(in crate::commands::dashboard) fn preview_run(
+        &self,
+        req: WorkspaceTaskRunRequest,
+        summary: Option<String>,
+    ) -> Result<WorkspaceTaskRunResponse, (StatusCode, String)> {
+        validate_workspace_action(&req.workspace, &req.action)?;
+        if req.args.is_empty() {
+            return Err((StatusCode::BAD_REQUEST, "args is empty".to_string()));
+        }
+        let process = self.inner.runner.run(&req.args);
+        let response = WorkspaceTaskRunResponse {
+            workspace: req.workspace.clone(),
+            action: req.action.clone(),
+            target: req.target.clone(),
+            process,
+        };
+        self.record_history(RecentTaskRecord {
+            id: self.next_history_id(),
+            workspace: response.workspace.clone(),
+            action: response.action.clone(),
+            target: response.target.clone(),
+            mode: "run".to_string(),
+            phase: "preview".to_string(),
+            status: if response.process.success {
+                "previewed".to_string()
+            } else {
+                "failed".to_string()
+            },
+            guarded: false,
+            dry_run: true,
+            summary: summary.unwrap_or_else(|| {
+                task_summary(&response.workspace, &response.action, &response.target)
+            }),
+            created_at: now_unix_secs(),
+            audit_action: Some("dashboard.task.preview.run".to_string()),
+            process: response.process.clone(),
+            replay: None,
+        });
+        if !response.process.success {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                preview_failure_reason(&response.process),
+            ));
+        }
+        Ok(response)
+    }
+
+    pub(in crate::commands::dashboard) fn preview(
         &self,
         req: GuardedTaskPreviewRequest,
     ) -> Result<GuardedTaskPreviewResponse, (StatusCode, String)> {
@@ -241,11 +377,12 @@ impl GuardedTaskService {
         }
 
         let token = self.next_token();
-        let preview_summary = if req.preview_summary.trim().is_empty() {
-            format!("{} / {} / {}", req.workspace, req.action, req.target)
-        } else {
-            req.preview_summary.clone()
-        };
+        let summary = guarded_summary(
+            &req.preview_summary,
+            &req.workspace,
+            &req.action,
+            &req.target,
+        );
 
         {
             let mut pending = self.inner.pending.lock().unwrap_or_else(|e| e.into_inner());
@@ -255,6 +392,8 @@ impl GuardedTaskService {
                     workspace: req.workspace.clone(),
                     action: req.action.clone(),
                     target: req.target.clone(),
+                    summary: summary.clone(),
+                    preview_args: req.preview_args.clone(),
                     execute_args: req.execute_args.clone(),
                     expires_at: Instant::now() + self.inner.ttl,
                 },
@@ -271,18 +410,41 @@ impl GuardedTaskService {
             "",
         );
 
-        Ok(GuardedTaskPreviewResponse {
+        let response = GuardedTaskPreviewResponse {
             token,
-            workspace: req.workspace,
-            action: req.action,
-            target: req.target,
-            preview_summary,
+            workspace: req.workspace.clone(),
+            action: req.action.clone(),
+            target: req.target.clone(),
+            phase: "preview".to_string(),
+            status: "previewed".to_string(),
+            guarded: true,
+            dry_run: true,
+            ready_to_execute: true,
+            summary: summary.clone(),
+            preview_summary: summary,
             process,
             expires_in_secs: self.inner.ttl.as_secs(),
-        })
+        };
+        self.record_history(RecentTaskRecord {
+            id: self.next_history_id(),
+            workspace: response.workspace.clone(),
+            action: response.action.clone(),
+            target: response.target.clone(),
+            mode: "guarded".to_string(),
+            phase: response.phase.clone(),
+            status: response.status.clone(),
+            guarded: response.guarded,
+            dry_run: response.dry_run,
+            summary: response.summary.clone(),
+            created_at: now_unix_secs(),
+            audit_action: Some("dashboard.task.preview".to_string()),
+            process: response.process.clone(),
+            replay: Some(RecentTaskReplay::GuardedPreview { request: req }),
+        });
+        Ok(response)
     }
 
-    fn execute(
+    pub(in crate::commands::dashboard) fn execute(
         &self,
         req: GuardedTaskExecuteRequest,
     ) -> Result<GuardedTaskReceipt, (StatusCode, String)> {
@@ -295,9 +457,20 @@ impl GuardedTaskService {
             map.remove(&req.token)
         };
         let Some(pending) = pending else {
-            return Err((StatusCode::NOT_FOUND, "preview token not found or expired".to_string()));
+            return Err((
+                StatusCode::NOT_FOUND,
+                "preview token not found or expired".to_string(),
+            ));
         };
 
+        let replay_request = GuardedTaskPreviewRequest {
+            workspace: pending.workspace.clone(),
+            action: pending.action.clone(),
+            target: pending.target.clone(),
+            preview_args: pending.preview_args.clone(),
+            execute_args: pending.execute_args.clone(),
+            preview_summary: pending.summary.clone(),
+        };
         let process = self.inner.runner.run(&pending.execute_args);
         let audit_action = format!("dashboard.task.execute.{}", pending.action);
         let result = if process.success { "success" } else { "failed" };
@@ -316,15 +489,96 @@ impl GuardedTaskService {
             &reason,
         );
 
-        Ok(GuardedTaskReceipt {
+        let receipt = GuardedTaskReceipt {
             token: req.token,
             workspace: pending.workspace,
             action: pending.action,
             target: pending.target,
+            phase: "execute".to_string(),
+            status: if process.success {
+                "succeeded".to_string()
+            } else {
+                "failed".to_string()
+            },
+            guarded: true,
+            dry_run: false,
+            summary: pending.summary,
             audit_action,
             audited_at: now_unix_secs(),
             process,
-        })
+        };
+        self.record_history(RecentTaskRecord {
+            id: self.next_history_id(),
+            workspace: receipt.workspace.clone(),
+            action: receipt.action.clone(),
+            target: receipt.target.clone(),
+            mode: "guarded".to_string(),
+            phase: receipt.phase.clone(),
+            status: receipt.status.clone(),
+            guarded: receipt.guarded,
+            dry_run: receipt.dry_run,
+            summary: receipt.summary.clone(),
+            created_at: receipt.audited_at,
+            audit_action: Some(receipt.audit_action.clone()),
+            process: receipt.process.clone(),
+            replay: Some(RecentTaskReplay::GuardedPreview {
+                request: replay_request,
+            }),
+        });
+        Ok(receipt)
+    }
+
+    pub(in crate::commands::dashboard) fn recent_tasks(
+        &self,
+        limit: usize,
+    ) -> RecentTaskListResponse {
+        let mut history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        let stats = history_stats(history.make_contiguous());
+        let entries = history
+            .iter()
+            .take(limit.max(1).min(100))
+            .cloned()
+            .collect::<Vec<_>>();
+        RecentTaskListResponse { stats, entries }
+    }
+
+    pub(in crate::commands::dashboard) fn recent_task_stats(&self) -> RecentTaskStats {
+        let mut history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        history_stats(history.make_contiguous())
+    }
+
+    pub(in crate::commands::dashboard) fn failed_tasks(
+        &self,
+        limit: usize,
+    ) -> Vec<RecentTaskRecord> {
+        let history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        history
+            .iter()
+            .filter(|entry| entry.status == "failed")
+            .take(limit.max(1).min(100))
+            .cloned()
+            .collect()
+    }
+
+    pub(in crate::commands::dashboard) fn guarded_receipts(
+        &self,
+        limit: usize,
+    ) -> Vec<RecentTaskRecord> {
+        let history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        history
+            .iter()
+            .filter(|entry| entry.guarded && entry.phase == "execute")
+            .take(limit.max(1).min(100))
+            .cloned()
+            .collect()
+    }
+
+    fn record_history(&self, record: RecentTaskRecord) {
+        let mut history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        history.push_front(record);
+        while history.len() > TASK_HISTORY_LIMIT {
+            history.pop_back();
+        }
     }
 
     fn evict_expired(&self) {
@@ -336,6 +590,11 @@ impl GuardedTaskService {
     fn next_token(&self) -> String {
         let seq = self.inner.seq.fetch_add(1, Ordering::Relaxed);
         format!("guard-{}-{}", now_unix_secs(), seq)
+    }
+
+    fn next_history_id(&self) -> String {
+        let seq = self.inner.seq.fetch_add(1, Ordering::Relaxed);
+        format!("task-{}-{}", now_unix_secs(), seq)
     }
 }
 
@@ -380,6 +639,38 @@ fn preview_failure_reason(process: &TaskProcessOutput) -> String {
         Some(code) => format!("command exited with code {code}"),
         None => "command failed".to_string(),
     }
+}
+
+fn guarded_summary(preview_summary: &str, workspace: &str, action: &str, target: &str) -> String {
+    let summary = preview_summary.trim();
+    if !summary.is_empty() {
+        return summary.to_string();
+    }
+    task_summary(workspace, action, target)
+}
+
+fn task_summary(workspace: &str, action: &str, target: &str) -> String {
+    if target.trim().is_empty() {
+        return format!("{} / {}", workspace, action);
+    }
+    format!("{} / {} / {}", workspace, action, target)
+}
+
+fn history_stats(entries: &[RecentTaskRecord]) -> RecentTaskStats {
+    let mut stats = RecentTaskStats::default();
+    stats.total = entries.len();
+    for entry in entries {
+        if entry.status == "succeeded" {
+            stats.succeeded += 1;
+        }
+        if entry.status == "failed" {
+            stats.failed += 1;
+        }
+        if entry.dry_run {
+            stats.dry_run += 1;
+        }
+    }
+    stats
 }
 
 fn now_unix_secs() -> u64 {
@@ -448,7 +739,10 @@ fn audit_entry_count() -> usize {
     let Ok(content) = std::fs::read_to_string(path) else {
         return 0;
     };
-    content.lines().filter(|line| !line.trim().is_empty()).count()
+    content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count()
 }
 
 fn proxy_enabled_count() -> usize {
@@ -457,23 +751,32 @@ fn proxy_enabled_count() -> usize {
         count += 1;
     }
     let cfg = config::load_config();
-    if cfg.proxy.default_url.as_deref().is_some_and(|v| !v.trim().is_empty()) {
+    if cfg
+        .proxy
+        .default_url
+        .as_deref()
+        .is_some_and(|v| !v.trim().is_empty())
+    {
         count += 1;
     }
     count
 }
 
-pub(in crate::commands::dashboard) async fn workspace_capabilities() -> Json<WorkspaceCapabilities> {
+pub(in crate::commands::dashboard) async fn workspace_capabilities() -> Json<WorkspaceCapabilities>
+{
     Json(capabilities())
 }
 
-pub(in crate::commands::dashboard) async fn workspace_overview_summary() -> Json<WorkspaceOverviewSummary> {
+pub(in crate::commands::dashboard) async fn workspace_overview_summary(
+    State(state): State<super::super::DashboardState>,
+) -> Json<WorkspaceOverviewSummary> {
     let bookmarks = store::load(&store::db_path()).len();
     let tcp = ports::list_tcp_listeners();
     let udp = ports::list_udp_endpoints();
     let env_status = crate::env_core::EnvManager::new()
         .status_overview(crate::env_core::types::EnvScope::All)
         .ok();
+    let task_stats = state.guarded_tasks().recent_task_stats();
 
     Json(WorkspaceOverviewSummary {
         bookmarks,
@@ -484,8 +787,14 @@ pub(in crate::commands::dashboard) async fn workspace_overview_summary() -> Json
             .as_ref()
             .and_then(|status| status.total_vars)
             .unwrap_or(0),
-        env_snapshots: env_status.as_ref().map(|status| status.snapshots).unwrap_or(0),
+        env_snapshots: env_status
+            .as_ref()
+            .map(|status| status.snapshots)
+            .unwrap_or(0),
         audit_entries: audit_entry_count(),
+        recent_tasks: task_stats.total,
+        failed_tasks: task_stats.failed,
+        dry_run_tasks: task_stats.dry_run,
         workspaces: vec![
             "overview".to_string(),
             "paths-context".to_string(),
@@ -498,6 +807,17 @@ pub(in crate::commands::dashboard) async fn workspace_overview_summary() -> Json
         ],
         capabilities: capabilities(),
     })
+}
+
+pub(in crate::commands::dashboard) async fn workspace_recent_tasks(
+    State(state): State<super::super::DashboardState>,
+    Query(query): Query<RecentTaskQuery>,
+) -> Json<RecentTaskListResponse> {
+    Json(
+        state
+            .guarded_tasks()
+            .recent_tasks(query.limit.unwrap_or(20)),
+    )
 }
 
 pub(in crate::commands::dashboard) async fn workspace_run_task(
@@ -554,7 +874,7 @@ mod tests {
     use axum::Router;
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
-    use axum::routing::post;
+    use axum::routing::{get, post};
     use tower::util::ServiceExt;
 
     #[derive(Clone)]
@@ -608,9 +928,16 @@ mod tests {
     fn test_router(runner: Arc<dyn TaskRunner>) -> Router {
         let state = crate::commands::dashboard::DashboardState::for_tests(runner);
         Router::new()
+            .route("/api/workspaces/tasks/recent", get(workspace_recent_tasks))
             .route("/api/workspaces/run", post(workspace_run_task))
-            .route("/api/workspaces/guarded/preview", post(workspace_preview_guarded_task))
-            .route("/api/workspaces/guarded/execute", post(workspace_execute_guarded_task))
+            .route(
+                "/api/workspaces/guarded/preview",
+                post(workspace_preview_guarded_task),
+            )
+            .route(
+                "/api/workspaces/guarded/execute",
+                post(workspace_execute_guarded_task),
+            )
             .with_state(state)
     }
 
@@ -643,7 +970,10 @@ mod tests {
 
     #[tokio::test]
     async fn guarded_execute_requires_confirm_and_valid_token() {
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]));
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            ok_output("execute"),
+        ]));
         let app = test_router(fake.clone());
         let preview_body = serde_json::json!({
             "workspace": "files-security",
@@ -668,9 +998,18 @@ mod tests {
             .unwrap();
         assert_eq!(preview_resp.status(), StatusCode::OK);
         let preview_json: serde_json::Value = serde_json::from_slice(
-            &to_bytes(preview_resp.into_body(), usize::MAX).await.unwrap(),
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
         )
         .unwrap();
+        assert_eq!(preview_json["phase"], "preview");
+        assert_eq!(preview_json["status"], "previewed");
+        assert_eq!(preview_json["guarded"], true);
+        assert_eq!(preview_json["dry_run"], true);
+        assert_eq!(preview_json["ready_to_execute"], true);
+        assert_eq!(preview_json["summary"], "Delete C:/tmp/demo.txt");
+        assert_eq!(preview_json["preview_summary"], "Delete C:/tmp/demo.txt");
         let token = preview_json
             .get("token")
             .and_then(|value| value.as_str())
@@ -684,7 +1023,9 @@ mod tests {
                     .method("POST")
                     .uri("/api/workspaces/guarded/execute")
                     .header("content-type", "application/json")
-                    .body(Body::from(serde_json::json!({ "token": token }).to_string()))
+                    .body(Body::from(
+                        serde_json::json!({ "token": token }).to_string(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -706,6 +1047,18 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(execute_resp.status(), StatusCode::OK);
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["phase"], "execute");
+        assert_eq!(execute_json["status"], "succeeded");
+        assert_eq!(execute_json["guarded"], true);
+        assert_eq!(execute_json["dry_run"], false);
+        assert_eq!(execute_json["summary"], "Delete C:/tmp/demo.txt");
+        assert_eq!(execute_json["process"]["success"], true);
 
         let second_execute_resp = app
             .oneshot(
@@ -714,7 +1067,8 @@ mod tests {
                     .uri("/api/workspaces/guarded/execute")
                     .header("content-type", "application/json")
                     .body(Body::from(
-                        serde_json::json!({ "token": preview_json["token"], "confirm": true }).to_string(),
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
                     ))
                     .unwrap(),
             )
@@ -722,7 +1076,11 @@ mod tests {
             .unwrap();
         assert_eq!(second_execute_resp.status(), StatusCode::NOT_FOUND);
 
-        assert_eq!(fake.calls().len(), 2, "preview + execute should each run once");
+        assert_eq!(
+            fake.calls().len(),
+            2,
+            "preview + execute should each run once"
+        );
     }
 
     #[tokio::test]
@@ -753,6 +1111,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn guarded_execute_returns_failed_receipt_when_command_fails() {
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            fail_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "rm",
+            "target": "C:/tmp/demo.txt",
+            "preview_args": ["rm", "--what-if", "C:/tmp/demo.txt"],
+            "execute_args": ["rm", "C:/tmp/demo.txt"],
+            "preview_summary": "Delete C:/tmp/demo.txt"
+        });
+
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+
+        let execute_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["status"], "failed");
+        assert_eq!(execute_json["summary"], "Delete C:/tmp/demo.txt");
+        assert_eq!(execute_json["process"]["success"], false);
+    }
+
+    #[tokio::test]
     async fn run_task_returns_process_payload() {
         let fake = Arc::new(FakeRunner::new(vec![ok_output("tree")])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
@@ -776,9 +1197,153 @@ mod tests {
             .unwrap();
 
         assert_eq!(resp.status(), StatusCode::OK);
-        let json: serde_json::Value = serde_json::from_slice(&to_bytes(resp.into_body(), usize::MAX).await.unwrap()).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp.into_body(), usize::MAX).await.unwrap()).unwrap();
         assert_eq!(json["workspace"], "files-security");
         assert_eq!(json["action"], "tree");
         assert_eq!(json["process"]["success"], true);
+    }
+
+    #[tokio::test]
+    async fn recent_tasks_endpoint_returns_latest_entries_and_stats() {
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("tree"),
+            ok_output("preview"),
+            ok_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+
+        let run_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "tree",
+            "target": "C:/tmp",
+            "args": ["tree", "C:/tmp"]
+        });
+        let run_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/run")
+                    .header("content-type", "application/json")
+                    .body(Body::from(run_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(run_resp.status(), StatusCode::OK);
+
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "rm",
+            "target": "C:/tmp/demo.txt",
+            "preview_args": ["rm", "--what-if", "C:/tmp/demo.txt"],
+            "execute_args": ["rm", "C:/tmp/demo.txt"],
+            "preview_summary": "Delete C:/tmp/demo.txt"
+        });
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+
+        let execute_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+
+        let recent_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/workspaces/tasks/recent?limit=10")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(recent_resp.status(), StatusCode::OK);
+        let recent_json: serde_json::Value =
+            serde_json::from_slice(&to_bytes(recent_resp.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        let entries = recent_json["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(recent_json["stats"]["total"], 3);
+        assert_eq!(recent_json["stats"]["dry_run"], 1);
+        assert_eq!(entries[0]["phase"], "execute");
+        assert_eq!(entries[1]["phase"], "preview");
+        assert_eq!(entries[2]["phase"], "run");
+        assert_eq!(entries[0]["replay"]["kind"], "guarded_preview");
+        assert_eq!(entries[2]["replay"]["kind"], "run");
+    }
+
+    #[tokio::test]
+    async fn recent_tasks_endpoint_captures_failed_run_status() {
+        let fake = Arc::new(FakeRunner::new(vec![fail_output("run")])) as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "tree",
+            "target": "C:/tmp",
+            "args": ["tree", "C:/tmp"]
+        });
+
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/run")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let recent_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/workspaces/tasks/recent")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(recent_resp.status(), StatusCode::OK);
+        let recent_json: serde_json::Value =
+            serde_json::from_slice(&to_bytes(recent_resp.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(recent_json["stats"]["failed"], 1);
+        assert_eq!(recent_json["entries"][0]["status"], "failed");
+        assert_eq!(recent_json["entries"][0]["replay"]["kind"], "run");
     }
 }

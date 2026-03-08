@@ -14,7 +14,7 @@ pub(in crate::commands::dashboard) struct AuditQuery {
     format: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct AuditEntry {
     timestamp: u64,
     action: String,
@@ -144,6 +144,21 @@ pub(in crate::commands::dashboard) async fn get_audit(Query(q): Query<AuditQuery
         })
         .into_response()
     }
+}
+
+pub(in crate::commands::dashboard) fn latest_audit_entries(limit: usize) -> Vec<AuditEntry> {
+    read_audit_tail(&audit_file_path(), 2 * 1024 * 1024, limit.max(1).min(500)).unwrap_or_default()
+}
+
+pub(in crate::commands::dashboard) fn audit_entry_count() -> usize {
+    let path = audit_file_path();
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return 0;
+    };
+    content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count()
 }
 
 fn audit_file_path() -> std::path::PathBuf {
