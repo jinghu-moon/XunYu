@@ -7,7 +7,10 @@ autobins = false
 name        = "xun"
 version     = "0.1.0"
 edition     = "2024"
-description = "xun - bookmark + proxy CLI backend (Windows only)"
+description = "A Windows-first Rust CLI and local dashboard for paths, proxies, envs, and file workflows."
+license     = "AGPL-3.0-or-later"
+repository  = "https://github.com/jinghu-moon/XunYu"
+readme      = "README.md"
 
 [[bin]]
 name = "xun"
@@ -137,16 +140,16 @@ win-icon-extractor = { version = "0.1.0", optional = true, default-features = fa
 ratatui = { version = "0.29", optional = true }
 crossterm = { version = "0.28", optional = true }
 
-# ── batch_rename 模块依赖（feature = "batch_rename"） ──
+# ── batch_rename 模块依赖（feature = "batch_rename"�?──
 heck    = { version = "0.5", optional = true }
 walkdir = { version = "2",   optional = true }
 
-# ── cstat 模块依赖（feature = "cstat"） ──
+# ── cstat 模块依赖（feature = "cstat"�?──
 ignore  = { version = "0.4", optional = true }
 blake3  = { version = "1",   optional = true }
 memchr  = { version = "2",   optional = true }
 
-# ── Diff 模块依赖（feature = "diff"） ──
+# ── Diff 模块依赖（feature = "diff"�?──
 imara-diff             = { version = "0.2",  optional = true }
 tree-sitter            = { version = "0.24", optional = true }
 streaming-iterator     = { version = "0.1",  optional = true }
@@ -181,3 +184,5 @@ predicates = "3.1"
 tempfile = "3.10"
 serial_test = "3.0"
 tower = "0.5"
+
+
