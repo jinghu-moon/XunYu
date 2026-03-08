@@ -1,0 +1,491 @@
+/* variables-dark.css */
+/* 暗色模式 (默认主题) - Nord Glassmorphism */
+/* 选择器：:root 作为默认，无需 html.dark 类即生效 */
+
+:root {
+  /* =================================================================
+     0. Nord Primitives (原始色板)
+     优化：仅保留 HEX，移除冗余的 -rgb 变量
+     ================================================================= */
+  --nord: #1f232a;
+  --nord0: #2e3440;
+  --nord1: #3b4252;
+  --nord2: #434c5e;
+  --nord3: #4c566a;
+  --nord4: #d8dee9;
+  --nord5: #e5e9f0;
+  --nord6: #eceff4;
+  --nord7: #8fbcbb;
+  --nord8: #88c0d0;
+  --nord9: #81a1c1;
+  --nord10: #5e81ac;
+  --nord11: #bf616a;
+  --nord12: #d08770;
+  --nord13: #ebcb8b;
+  --nord14: #a3be8c;
+  --nord15: #b48ead;
+
+  /* =================================================================
+     1. 颜色系统 (Colors)
+     优化：使用 CSS Relative Color Syntax 自动处理透明度
+     ================================================================= */
+  /* 品牌色 (蓝色 - Primary) */
+  --color-primary: var(--nord10);
+  --color-primary-hover: var(--nord9);
+  --color-primary-active: #4a6a94;
+  --color-primary-focus: rgb(from var(--nord10) r g b / 0.25);
+  --color-primary-disabled: rgb(from var(--nord10) r g b / 0.4);
+  --color-primary-light: rgb(from var(--nord10) r g b / 0.1);
+  --color-primary-alpha: rgb(from var(--nord10) r g b / 0.2);
+
+  /* 功能色 */
+  --color-success: var(--nord14);
+  --color-success-hover: #8faa75;
+  --color-success-active: #7a9463;
+  --color-success-focus: rgb(from var(--nord14) r g b / 0.25);
+  --color-success-disabled: rgb(from var(--nord14) r g b / 0.4);
+  --color-success-light: rgb(from var(--nord14) r g b / 0.1);
+  --color-success-bg: rgb(from var(--nord14) r g b / 0.15);
+
+  --color-warning: var(--nord13);
+  --color-warning-hover: #d4b574;
+  --color-warning-active: #c9a85e;
+  --color-warning-focus: rgb(from var(--nord13) r g b / 0.25);
+  --color-warning-disabled: rgb(from var(--nord13) r g b / 0.4);
+  --color-warning-light: rgb(from var(--nord13) r g b / 0.1);
+  --color-warning-bg: rgb(from var(--nord13) r g b / 0.15);
+
+  --color-danger: var(--nord11);
+  --color-danger-hover: #a84f57;
+  --color-danger-active: #8f4249;
+  --color-danger-focus: rgb(from var(--nord11) r g b / 0.25);
+  --color-danger-disabled: rgb(from var(--nord11) r g b / 0.4);
+  --color-danger-light: rgb(from var(--nord11) r g b / 0.1);
+  --color-danger-bg: rgb(from var(--nord11) r g b / 0.15);
+
+  --color-info: var(--nord3);
+  --color-info-hover: var(--nord2);
+  --color-info-active: var(--nord1);
+  --color-info-focus: rgb(from var(--nord3) r g b / 0.25);
+  --color-info-disabled: rgb(from var(--nord3) r g b / 0.4);
+  --color-info-light: rgb(from var(--nord3) r g b / 0.1);
+  --color-info-bg: rgb(from var(--nord3) r g b / 0.15);
+
+  --color-relax: var(--nord8);
+  --color-relax-bg: rgb(from var(--nord8) r g b / 0.15);
+
+  /* 按钮/控件前景色 */
+  --btn-text-color: var(--nord6);
+  --control-indicator: var(--nord6);
+
+  /* 扩展功能色 - 紫色 (节日/庆典) */
+  --color-purple: var(--nord15);
+  --color-purple-bg: rgb(from var(--nord15) r g b / 0.2);
+
+  /* 扩展功能色 - 橙色 (调休/补班) */
+  --color-orange: var(--nord12);
+  --color-orange-bg: rgb(from var(--nord12) r g b / 0.2);
+
+  /* 文本颜色 */
+  --text-primary: rgb(from var(--nord6) r g b / 0.95);
+  --text-secondary: rgb(from var(--nord4) r g b / 0.75);
+  --text-tertiary: rgb(from var(--nord4) r g b / 0.45);
+  --text-placeholder: rgb(from var(--nord4) r g b / 0.3);
+
+  /* 编辑器标题色 */
+  --text-heading: var(--nord6);
+  --text-heading-sub: var(--nord5);
+
+  /* 文字语义色 */
+  --text-color-brand: var(--color-primary);
+  --text-color-link: var(--nord9);
+  --text-color-anti: var(--nord6);
+
+  /* =================================================================
+     2. 背景与遮罩 (Backgrounds)
+     ================================================================= */
+  --bg-toast: rgb(from var(--nord0) r g b / 1);
+  --bg-panel: rgb(from var(--nord0) r g b / 0.75);
+  --bg-panel-card: rgb(from var(--nord0) r g b / 0.3);
+  --bg-panel-overlay: rgb(from var(--nord0) r g b / 0.4);
+  --bg-panel-dark: rgb(from var(--nord1) r g b / 0.9);
+  --bg-hover: rgb(from var(--nord) r g b / 0.08);
+  --bg-hover-card: rgb(from var(--nord0) r g b / 0.5);
+  --bg-active: rgb(from var(--nord6) r g b / 0.12);
+  --bg-container-select: rgb(from var(--nord10) r g b / 0.12);
+  --bg-input: rgb(from var(--nord6) r g b / 0.05);
+
+  --bg-page: var(--nord0);
+  --bg-tag: var(--nord);
+
+  --mask-light: rgb(from var(--nord6) r g b / 0.1);
+  --mask-dark: rgb(from var(--nord0) r g b / 0.7);
+  --mask-black: rgba(30, 34, 42, 0.95);
+
+  /* =================================================================
+     3. 边框与圆角 (Borders & Radius)
+     ================================================================= */
+  /* 定义基础边框颜色 */
+  --color-border-glass: rgba(255, 255, 255, 0.08);
+  --color-border-light: rgba(255, 255, 255, 0.04);
+  /* 分隔线颜色 */
+  --color-divider: rgb(from var(--nord6) r g b / 0.15);
+  /* 增强边框 (Toast 等需要更明显边框的场景) */
+  --color-border-strong: rgb(from var(--nord6) r g b / 0.25);
+
+  /* 边框简写变量 (用于 border 属性) */
+  --border-glass: 1px solid var(--color-border-glass);
+  --border-divider: 1px solid var(--color-divider);
+  --border-light: 1px solid var(--color-border-light);
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-ml: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+/* =================================================================
+     4. 模糊与阴影 (Effects)
+     优化：基于 r=2 感知阶梯与 Nord 色调优化的复合材质
+     ================================================================= */
+  
+  /* --- 1. 基础原子模糊 (遵循 r=2 等比级数) --- */
+  --blur-none: 0;
+  --blur-xs:   4px;   /* 极轻微隔离 */
+  --blur-sm:   8px;   /* 柔和隔离 */
+  --blur-md:   16px;  /* 标准材质起点 */
+  --blur-lg:   32px;  /* 显著层级隔离 */
+  --blur-xl:   64px;  /* 深度背景抽象 */
+  --blur-2xl:  128px; /* 极致氛围渲染 */
+
+  /* --- 2. 玻璃材质调节参数 (针对 Nord 深色系优化) --- */
+  /* Nord 色系偏冷灰，150% 饱和度能找回被模糊滤除的色彩生命力 */
+  --glass-saturate:   150%; 
+  /* 110% 亮度能让深色背景（如 nord0）产生更高级的通透感 */
+  --glass-brightness: 110%; 
+
+  /* --- 3. 复合材质 Token (Backdrop Filter 专用) --- */
+  /* 使用方式：backdrop-filter: var(--glass-md); */
+  --glass-xs: blur(var(--blur-xs)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  --glass-sm: blur(var(--blur-sm)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  --glass-md: blur(var(--blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  --glass-lg: blur(var(--blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  --glass-xl: blur(var(--blur-xl)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  --glass-2xl: blur(var(--blur-2xl)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+
+  /* --- 4. 阴影系统 (Shadows) --- */
+  --shadow-color: var(--nord0);
+  --shadow-xs: 0 1px 2px rgb(from var(--shadow-color) r g b / 0.1);
+  --shadow-sm: 0 2px 4px rgb(from var(--shadow-color) r g b / 0.2);
+  --shadow-md: 0 8px 16px rgb(from var(--shadow-color) r g b / 0.3);
+  --shadow-lg: 0 16px 48px rgb(from var(--shadow-color) r g b / 0.5);
+  --shadow-xl: 0 24px 64px rgb(from var(--shadow-color) r g b / 0.6);
+
+  --text-shadow: 0 2px 10px rgb(from var(--shadow-color) r g b / 0.3);
+  --text-shadow-lg: 0 4px 16px rgb(from var(--shadow-color) r g b / 0.2);
+
+  /* --- 5. 滚动条 (Scrollbar) --- */
+  --scrollbar-thumb: var(--nord3);
+  --scrollbar-thumb-hover: var(--nord2);
+
+  /* --- 6. 代码语法高亮色板 (Code Syntax) --- */
+  --code-foreground: var(--nord4);
+  --code-comment: var(--nord3);
+  --code-keyword: var(--nord9);
+  --code-function: var(--nord8);
+  --code-string: var(--nord14);
+  --code-variable: var(--nord11);
+  --code-number: var(--nord12);
+  --code-attribute: var(--nord13);
+  --code-inline: var(--nord8);
+
+  /* =================================================================
+     5. Z-Index 系统 (层级管理)
+     优化：保留兼容性变量(nav, float)，同时引入分层逻辑
+     ================================================================= */
+  --z-back: -1;
+  /* 壁纸 */
+  --z-base: 1;
+  /* 桌面图标网格 */
+
+  /* [兼容性补全]：用于 ShortcutGrid 翻页按钮等 */
+  --z-nav: 20;
+
+  /* [兼容性补全]：用于 SettingsOverlay (背景遮罩必须低于 Panel) */
+  --z-float: 50;
+
+  --z-widget: 100;
+  /* 桌面固定小部件 (Clock, SearchBar) */
+  --z-panel: 200;
+  /* 浮动面板 (TodoList, Pomodoro Mini) */
+  --z-dropdown: 300;
+  /* [提升] 必须盖住 Panel 的下拉菜单 */
+
+  --z-modal: 500;
+  /* 设置面板主体 */
+
+  --z-tooltip: 800;
+  /* 提示信息 */
+  --z-overlay: 900;
+  /* 全屏专注模式遮罩 */
+  --z-max: 9999;
+  /* 拖拽时的镜像元素 */
+
+  /* =================================================================
+     6. 动画变量 (Animation Tokens) - [新增]
+     ================================================================= */
+  --duration-fast: 0.2s;
+  --duration-normal: 0.3s;
+  --duration-slow: 0.5s;
+
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* =================================================================
+     6.1 拖拽动画与样式 Token (Drag Tokens)
+     ================================================================= */
+  --drag-z: var(--z-max);
+  --drag-radius: var(--radius-md);
+  --drag-shadow: 0 20px 50px rgb(from var(--shadow-color) r g b / 0.35);
+  --drag-shadow-active: 0 8px 24px rgb(from var(--color-primary) r g b / 0.3);
+
+  --drag-duration-fast: 0.12s;
+  --drag-duration-base: 0.18s;
+  --drag-duration-pulse: 1s;
+
+  --drag-ease-lift: cubic-bezier(0.22, 1, 0.36, 1);
+  --drag-ease-move: var(--ease-in-out);
+  --drag-ease-fast: cubic-bezier(0.33, 1, 0.68, 1);
+
+  --drag-accent: var(--color-primary);
+  --drag-accent-soft: rgb(from var(--color-primary) r g b / 0.12);
+  --drag-accent-strong: rgb(from var(--color-primary) r g b / 0.85);
+
+  /* =================================================================
+     7. 间距与字体 (Spacing & Typography)
+     优化：转换为 rem 单位 (1rem = 16px)
+     ================================================================= */
+  --space-1: 0.25rem;
+  /* 4px */
+  --space-2: 0.5rem;
+  /* 8px */
+  --space-3: 0.75rem;
+  /* 12px */
+  --space-4: 1rem;
+  /* 16px */
+  --space-5: 1.25rem;
+  /* 20px */
+  --space-6: 1.5rem;
+  /* 24px */
+  --space-8: 2rem;
+  /* 32px */
+  --space-10: 2.5rem;
+  /* 40px */
+  --space-12: 3rem;
+  /* 48px */
+
+  /* 组件高度 */
+  --height-xs: 1.5rem;
+  /* 24px */
+  --height-sm: 2rem;
+  /* 32px */
+  --height-md: 2.25rem;
+  /* 36px */
+  --height-lg: 2.5rem;
+  /* 40px */
+  --height-xl: 3rem;
+  /* 48px */
+
+  /* 组件内边距 - 非对称 (水平 > 垂直，适合按钮/标签) */
+  --comp-padding-xs: var(--space-1) var(--space-2);    /* 4px 8px */
+  --comp-padding-sm: var(--space-2) var(--space-3);    /* 8px 12px */
+  --comp-padding-md: var(--space-2) var(--space-4);    /* 8px 16px */
+  --comp-padding-lg: var(--space-3) var(--space-5);    /* 12px 20px */
+  --comp-padding-xl: var(--space-4) var(--space-6);    /* 16px 24px */
+
+  /* 组件内边距 - 均匀 (四边一致，适合卡片/面板) */
+  --comp-padding-square-xs: var(--space-1);    /* 4px */
+  --comp-padding-square-sm: var(--space-2);    /* 8px */
+  --comp-padding-square-md: var(--space-3);    /* 12px */
+  --comp-padding-square-lg: var(--space-4);    /* 16px */
+  --comp-padding-square-xl: var(--space-6);    /* 24px */
+
+  /* 图标尺寸 */
+  --icon-sm: 0.875rem;
+  /* 14px */
+  --icon-md: 1.125rem;
+  /* 18px */
+  --icon-lg: 1.5rem;
+  /* 24px */
+  --icon-xl: 2rem;
+  /* 32px */
+
+  /* 字体相关 */
+  --font-family-base:
+    'HarmonyOS Sans SC', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
+  --font-family-mono: 'Cascadia Code', 'Menlo', 'Monaco', 'Courier New', monospace;
+
+  --line-tight: 1.2;
+  --line-normal: 1.5;
+  --line-loose: 1.8;
+
+  /* 字距 (Letter Spacing) - [新增] */
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.05em;
+
+  /* 字号 Scale (rem) */
+  --text-xs: 0.75rem;
+  /* 12px */
+  --text-sm: 0.8125rem;
+  /* 13px */
+  --text-base: 0.875rem;
+  /* 14px */
+  --text-md: 1rem;
+  /* 16px */
+  --text-lg: 1.125rem;
+  /* 18px */
+  --text-xl: 1.25rem;
+  /* 20px */
+  --text-2xl: 1.5rem;
+  /* 24px */
+  --text-huge: 4rem;
+  /* 64px */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* 字体组合令牌 (Font Shorthand) - 借鉴 TDesign */
+  --font-body-sm: var(--weight-regular) var(--text-sm) / var(--line-normal) var(--font-family-base);
+  --font-body-md: var(--weight-regular) var(--text-base) / var(--line-normal) var(--font-family-base);
+  --font-body-lg: var(--weight-regular) var(--text-md) / var(--line-normal) var(--font-family-base);
+  --font-title-sm: var(--weight-semibold) var(--text-base) / var(--line-tight) var(--font-family-base);
+  --font-title-md: var(--weight-semibold) var(--text-md) / var(--line-tight) var(--font-family-base);
+  --font-title-lg: var(--weight-semibold) var(--text-xl) / var(--line-tight) var(--font-family-base);
+  --font-headline: var(--weight-bold) var(--text-2xl) / var(--line-tight) var(--font-family-base);
+  --font-display: var(--weight-bold) var(--text-huge) / var(--line-tight) var(--font-family-base);
+
+  /* =================================================================
+     8. 按钮 Hover 增强样式变量
+     ================================================================= */
+  --btn-hover-lift: translateY(-1px);
+  --btn-hover-shadow: 0 4px 8px rgb(from var(--shadow-color) r g b / 0.15);
+  --btn-hover-scale: scale(1.02);
+
+  /* =================================================================
+     9. 语义化间距 (Semantic Spacing) - [新增]
+     来源：TDesign 组件令牌理念
+     用途：语义化命名，提升代码可读性
+     ================================================================= */
+  --spacing-xs: var(--space-1);    /* 4px  - 极小间距 */
+  --spacing-sm: var(--space-2);    /* 8px  - 小间距 */
+  --spacing-md: var(--space-4);    /* 16px - 中等间距 (默认) */
+  --spacing-lg: var(--space-6);    /* 24px - 大间距 */
+  --spacing-xl: var(--space-8);    /* 32px - 超大间距 */
+
+  /* =================================================================
+     10. 过渡组合令牌 (Transition Composites) - [新增]
+     来源：TDesign 动效系统
+     用途：预定义的过渡效果，避免重复书写
+     ================================================================= */
+  --transition-fast: all var(--duration-fast) var(--ease-smooth);
+  --transition-base: all var(--duration-normal) var(--ease-in-out);
+  --transition-slow: all var(--duration-slow) var(--ease-smooth);
+  --transition-color: 
+    color var(--duration-fast) var(--ease-in-out),
+    background-color var(--duration-fast) var(--ease-in-out),
+    border-color var(--duration-fast) var(--ease-in-out);
+
+  /* =================================================================
+     11. 无障碍令牌 (Accessibility) - [新增]
+     来源：TDesign 无障碍规范
+     遵循：WCAG 2.0 AA 标准
+     ================================================================= */
+  /* Focus 可见性 (键盘导航) */
+  --focus-ring-color: var(--color-primary);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+  --focus-ring-offset-shadow: 0 0 0 var(--focus-ring-offset) var(--bg-page);
+
+  /* 禁用态 */
+  --disabled-opacity: 0.5;
+
+  /* 最小触控区域 (iOS 无障碍标准) */
+  --touch-target-min: 44px;
+
+  /* =================================================================
+     12. 标准边框 (Standard Border) - [新增]
+     用途：通用边框样式
+     ================================================================= */
+  --border: 1px solid var(--color-divider);
+}
+
+/* =================================================================
+   9. Button 组件主题变量
+   ================================================================= */
+
+/* Default Theme (灰色 - 信息色) */
+.lime-btn--theme-default {
+  --btn-color: var(--text-primary);
+  --btn-bg: var(--color-info);
+  --btn-bg-hover: var(--color-info-hover);
+  --btn-bg-active: var(--color-info-active);
+  --btn-border: var(--color-info);
+  --btn-border-hover: var(--color-info-hover);
+  --btn-focus-color: var(--color-info);
+}
+
+/* Primary Theme (蓝色) */
+.lime-btn--theme-primary {
+  --btn-color: #fff;
+  --btn-bg: var(--color-primary);
+  --btn-bg-hover: var(--color-primary-hover);
+  --btn-bg-active: var(--color-primary-active);
+  --btn-border: var(--color-primary);
+  --btn-border-hover: var(--color-primary-hover);
+  --btn-focus-color: var(--color-primary);
+}
+
+/* Success Theme (绿色) */
+.lime-btn--theme-success {
+  --btn-color: #fff;
+  --btn-bg: var(--color-success);
+  --btn-bg-hover: var(--color-success-hover);
+  --btn-bg-active: var(--color-success-active);
+  --btn-border: var(--color-success);
+  --btn-border-hover: var(--color-success-hover);
+  --btn-focus-color: var(--color-success);
+}
+
+/* Warning Theme (黄色) */
+.lime-btn--theme-warning {
+  --btn-color: #fff;
+  --btn-bg: var(--color-warning);
+  --btn-bg-hover: var(--color-warning-hover);
+  --btn-bg-active: var(--color-warning-active);
+  --btn-border: var(--color-warning);
+  --btn-border-hover: var(--color-warning-hover);
+  --btn-focus-color: var(--color-warning);
+}
+
+/* Danger Theme (红色) */
+.lime-btn--theme-danger {
+  --btn-color: #fff;
+  --btn-bg: var(--color-danger);
+  --btn-bg-hover: var(--color-danger-hover);
+  --btn-bg-active: var(--color-danger-active);
+  --btn-border: var(--color-danger);
+  --btn-border-hover: var(--color-danger-hover);
+  --btn-focus-color: var(--color-danger);
+}

@@ -1,0 +1,31 @@
+{
+  "storage": {
+    "backupsDir": "A_backups",
+    "compress": true
+  },
+  "naming": {
+    "prefix": "v",
+    "dateFormat": "yyyy-MM-dd_HHmm",
+    "defaultDesc": "backup"
+  },
+  "retention": {
+    "maxBackups": 50,
+    "deleteCount": 10
+  },
+  "include": [
+    "src",
+    "tests",
+    "dashboard-ui"
+  ],
+  "exclude": [
+    "dashboard-ui/node_modules",
+    "node_modules",
+    "dist",
+    "build",
+    ".git",
+    ".DS_Store",
+    ".log",
+    "src/assets/font"
+  ],
+  "useGitignore": false
+}

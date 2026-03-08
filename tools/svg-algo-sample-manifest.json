@@ -1,0 +1,102 @@
+[
+  {
+    "category": "photo_complex",
+    "name": "lena.jpg",
+    "url": "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/lena.jpg"
+  },
+  {
+    "category": "photo_complex",
+    "name": "baboon.jpg",
+    "url": "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/baboon.jpg"
+  },
+  {
+    "category": "photo_complex",
+    "name": "fruits.jpg",
+    "url": "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/fruits.jpg"
+  },
+  {
+    "category": "photo_complex",
+    "name": "coffee.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/coffee.png"
+  },
+  {
+    "category": "photo_complex",
+    "name": "retina.jpg",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/retina.jpg"
+  },
+  {
+    "category": "bw_logo",
+    "name": "horse.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/horse.png"
+  },
+  {
+    "category": "bw_logo",
+    "name": "material_home.png",
+    "url": "https://raw.githubusercontent.com/google/material-design-icons/master/png/action/home/materialicons/48dp/2x/baseline_home_black_48dp.png"
+  },
+  {
+    "category": "bw_logo",
+    "name": "material_menu.png",
+    "url": "https://raw.githubusercontent.com/google/material-design-icons/master/png/navigation/menu/materialicons/48dp/2x/baseline_menu_black_48dp.png"
+  },
+  {
+    "category": "bw_logo",
+    "name": "material_email.png",
+    "url": "https://raw.githubusercontent.com/google/material-design-icons/master/png/communication/email/materialicons/48dp/2x/baseline_email_black_48dp.png"
+  },
+  {
+    "category": "bw_logo",
+    "name": "openmoji_black_house.png",
+    "url": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/black/618x618/1F3E0.png"
+  },
+  {
+    "category": "line_art",
+    "name": "sudoku.png",
+    "url": "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/sudoku.png"
+  },
+  {
+    "category": "line_art",
+    "name": "page.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/page.png"
+  },
+  {
+    "category": "line_art",
+    "name": "text.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/text.png"
+  },
+  {
+    "category": "line_art",
+    "name": "bw_text.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/bw_text.png"
+  },
+  {
+    "category": "line_art",
+    "name": "camera.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/camera.png"
+  },
+  {
+    "category": "flat_color",
+    "name": "logo.png",
+    "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/main/src/skimage/data/logo.png"
+  },
+  {
+    "category": "flat_color",
+    "name": "twemoji_rocket.png",
+    "url": "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f680.png"
+  },
+  {
+    "category": "flat_color",
+    "name": "twemoji_palette.png",
+    "url": "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3a8.png"
+  },
+  {
+    "category": "flat_color",
+    "name": "twemoji_unicorn.png",
+    "url": "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f984.png"
+  },
+  {
+    "category": "flat_color",
+    "name": "openmoji_color_rocket.png",
+    "url": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/1F680.png"
+  }
+]

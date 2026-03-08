@@ -1,0 +1,28 @@
+{
+  "name": "xun-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "cargo build --manifest-path ../Cargo.toml --features dashboard && ../target/debug/xun.exe serve",
+    "build": "vue-tsc -b && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@primeuix/themes": "^2.0.3",
+    "@tabler/icons-vue": "^3.37.1",
+    "@tanstack/vue-virtual": "^3.13.19",
+    "primevue": "^4.5.4",
+    "vue": "^3.5.28"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vue-tsc": "^3.2.4",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.4"
+  }
+}

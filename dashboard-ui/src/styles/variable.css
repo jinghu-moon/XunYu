@@ -1,0 +1,345 @@
+/* ================================================
+ * Design System Variables
+ *
+ * Dark 默认（:root），Light 覆盖（html.light）
+ * 参考：Vercel Geist Design System (2026-02)
+ * ================================================ */
+
+:root {
+
+  /* =================================================================
+     1. Geist 语义 Token（Dark 默认，由主题文件覆盖）
+     仅保留被组件直接引用的 token
+     ================================================================= */
+
+  /* 背景层级 */
+  --ds-background-1: #0a0a0a;
+  --ds-background-2: #171717;
+
+  /* 组件色阶 1-10（Bg → Border → Text） */
+  --ds-color-1: #171717;
+  --ds-color-2: #242424;
+  --ds-color-3: #2e2e2e;
+  --ds-color-4: #333333;
+  --ds-color-5: #3d3d3d;
+  --ds-color-6: #4a4a4a;
+  --ds-color-7: #525252;
+  --ds-color-8: #5f5f5f;
+  --ds-color-9: #a1a1a1;
+  --ds-color-10: #ededed;
+
+  /* Gray Alpha（透明叠加，Dark 用白基） */
+  --gray-alpha-100: hsla(0, 0%, 100%, 0.04);
+  --gray-alpha-200: hsla(0, 0%, 100%, 0.08);
+  --gray-alpha-300: hsla(0, 0%, 100%, 0.12);
+  --gray-alpha-400: hsla(0, 0%, 100%, 0.16);
+  --gray-alpha-500: hsla(0, 0%, 100%, 0.20);
+  --gray-alpha-600: hsla(0, 0%, 100%, 0.28);
+  --gray-alpha-700: hsla(0, 0%, 100%, 0.40);
+  --gray-alpha-800: hsla(0, 0%, 100%, 0.60);
+  --gray-alpha-900: hsla(0, 0%, 100%, 0.80);
+  --gray-alpha-1000: hsla(0, 0%, 100%, 0.95);
+
+  /* 表格密度 */
+  --table-cell-padding-y: var(--space-2);
+  --table-cell-padding-x: var(--space-3);
+
+  /* Red Scale（Button danger 背景） */
+  --red-100: #2a0f0f;
+
+  /* 文本前景色 */
+  --text-primary: #ededed;
+  --text-secondary: #a1a1a1;
+  --text-tertiary: #6b6b6b;
+
+  /* 功能色 */
+  --color-danger: #ef4444;
+  --color-danger-bg: rgba(239, 68, 68, 0.15);
+  --color-success: #22c55e;
+  --color-success-bg: rgba(34, 197, 94, 0.15);
+  --color-info: #3b82f6;
+  --color-info-bg: rgba(59, 130, 246, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgba(245, 158, 11, 0.15);
+
+  /* 品牌与语义色（别名） */
+  --color-brand: var(--text-primary);
+  --color-brand-muted: var(--text-secondary);
+
+  /* 边框 */
+  --color-border-strong: #333333;
+  --border: 1px solid #333333;
+
+  /* Surface / Card / Panel */
+  --surface-page: var(--ds-background-1);
+  --surface-panel: var(--ds-background-1);
+  --surface-card: var(--ds-background-1);
+  --surface-card-muted: var(--ds-background-2);
+
+  --panel-border: var(--border);
+  --panel-radius: var(--radius-lg);
+  --panel-shadow: var(--shadow-sm);
+  --panel-padding: var(--space-6);
+
+  --card-border: var(--border);
+  --card-border-strong: 1px solid var(--color-border-strong);
+  --card-radius: var(--radius-md);
+  --card-shadow: var(--shadow-xs);
+  --card-shadow-hover: var(--shadow-sm);
+  --card-padding: var(--space-4);
+  --card-padding-compact: var(--space-3) var(--space-4);
+
+  /* 阴影（基于 Geist Gray Alpha） */
+  --shadow-xs: 0 1px 2px hsla(0, 0%, 0%, 0.24);
+  --shadow-sm: 0 2px 4px hsla(0, 0%, 0%, 0.24);
+  --shadow-md: 0 8px 16px hsla(0, 0%, 0%, 0.24);
+
+  /* =================================================================
+     2. 排版系统（Typography）
+     基于 Geist 4px 网格 + 项目字体栈
+     ================================================================= */
+
+  --font-family-base: 'Geist Sans', 'Inter', 'HarmonyOS Sans SC', 'PingFang SC',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'Geist Mono', 'Cascadia Code', 'Menlo', 'Monaco',
+    'Courier New', monospace;
+
+  /* 行高 */
+  --line-tight: 1.2;
+  --line-normal: 1.5;
+  --line-loose: 1.8;
+
+  /* 字距 */
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.05em;
+
+  /* 字号 Scale */
+  --text-xs: 0.75rem;     /* 12px */
+  --text-sm: 0.8125rem;   /* 13px */
+  --text-base: 0.875rem;  /* 14px */
+  --text-md: 1rem;        /* 16px */
+  --text-lg: 1.125rem;    /* 18px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.5rem;     /* 24px */
+  --text-huge: 4rem;       /* 64px */
+
+  /* 字重 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* 字体组合令牌（font shorthand） */
+  --font-body-sm: var(--weight-regular) var(--text-sm) / var(--line-normal) var(--font-family-base);
+  --font-body-md: var(--weight-regular) var(--text-base) / var(--line-normal) var(--font-family-base);
+  --font-body-lg: var(--weight-regular) var(--text-md) / var(--line-normal) var(--font-family-base);
+  --font-title-sm: var(--weight-semibold) var(--text-base) / var(--line-tight) var(--font-family-base);
+  --font-title-md: var(--weight-semibold) var(--text-md) / var(--line-tight) var(--font-family-base);
+  --font-title-lg: var(--weight-semibold) var(--text-xl) / var(--line-tight) var(--font-family-base);
+  --font-headline: var(--weight-bold) var(--text-2xl) / var(--line-tight) var(--font-family-base);
+  --font-display: var(--weight-bold) var(--text-huge) / var(--line-tight) var(--font-family-base);
+
+  /* 语义排版（Title / Body / Caption） */
+  --type-title-sm: var(--font-title-sm);
+  --type-title: var(--font-title-md);
+  --type-title-lg: var(--font-title-lg);
+  --type-body: var(--font-body-md);
+  --type-body-sm: var(--font-body-sm);
+  --type-caption: var(--font-body-sm);
+
+  /* =================================================================
+     3. 间距系统（Spacing - 4px 网格）
+     ================================================================= */
+
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-7: 1.75rem;   /* 28px */
+  --space-8: 2rem;      /* 32px */
+  --space-9: 2.25rem;   /* 36px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+  --space-14: 3.5rem;   /* 56px */
+  --space-16: 4rem;     /* 64px */
+  --space-20: 5rem;     /* 80px */
+  --space-24: 6rem;     /* 96px */
+
+  /* 语义间距 */
+  --spacing-xs: var(--space-1);
+  --spacing-sm: var(--space-2);
+  --spacing-md: var(--space-4);
+  --spacing-lg: var(--space-6);
+  --spacing-xl: var(--space-8);
+
+  /* 组件高度 */
+  --height-xs: 1.5rem;   /* 24px */
+  --height-sm: 2rem;     /* 32px */
+  --height-md: 2.25rem;  /* 36px */
+  --height-lg: 2.5rem;   /* 40px */
+  --height-xl: 3rem;     /* 48px */
+
+  /* 组件内边距 - 非对称（水平 > 垂直） */
+  --comp-padding-xs: var(--space-1) var(--space-2);
+  --comp-padding-sm: var(--space-2) var(--space-3);
+  --comp-padding-md: var(--space-2) var(--space-4);
+  --comp-padding-lg: var(--space-3) var(--space-5);
+  --comp-padding-xl: var(--space-4) var(--space-6);
+
+  /* 组件内边距 - 均匀 */
+  --comp-padding-square-xs: var(--space-1);
+  --comp-padding-square-sm: var(--space-2);
+  --comp-padding-square-md: var(--space-3);
+  --comp-padding-square-lg: var(--space-4);
+  --comp-padding-square-xl: var(--space-6);
+
+  /* 图标尺寸 */
+  --icon-sm: 0.875rem;   /* 14px */
+  --icon-md: 1.125rem;   /* 18px */
+  --icon-lg: 1.5rem;     /* 24px */
+  --icon-xl: 2rem;       /* 32px */
+
+  /* =================================================================
+     4. 圆角与边框（Borders & Radius）
+     ================================================================= */
+
+  --radius-xs: 2px;
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-ml: 0.75rem;   /* 12px */
+  --radius-lg: 1rem;      /* 16px */
+  --radius-xl: 1.5rem;    /* 24px */
+  --radius-full: 9999px;
+
+  --border-width: 1px;
+
+  /* =================================================================
+     5. 模糊（Blur Primitives）
+     主题文件组合为 --glass-* 复合 token
+     ================================================================= */
+
+  --blur-none: 0;
+  --blur-xs: 4px;
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 32px;
+  --blur-xl: 64px;
+  --blur-2xl: 128px;
+
+  /* =================================================================
+     6. Z-Index 层级
+     ================================================================= */
+
+  --z-back: -1;
+  --z-base: 1;
+  --z-nav: 20;
+  --z-float: 50;
+  --z-widget: 100;
+  --z-panel: 200;
+  --z-dropdown: 300;
+  --z-modal: 500;
+  --z-tooltip: 800;
+  --z-overlay: 900;
+  --z-max: 9999;
+
+  /* =================================================================
+     7. 动画与过渡（Animation & Transitions）
+     ================================================================= */
+
+  --duration-fast: 0.15s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.3s;
+
+  --ease-linear: linear;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  --transition-fast: all var(--duration-fast) var(--ease-smooth);
+  --transition-base: all var(--duration-normal) var(--ease-in-out);
+  --transition-slow: all var(--duration-slow) var(--ease-smooth);
+  --transition-color:
+    color var(--duration-fast) var(--ease-in-out),
+    background-color var(--duration-fast) var(--ease-in-out),
+    border-color var(--duration-fast) var(--ease-in-out);
+  --transition-popup:
+    opacity var(--duration-fast) var(--ease-in-out),
+    transform var(--duration-fast) var(--ease-in-out);
+
+  /* =================================================================
+     8. 交互与无障碍（Interactive & A11y）
+     ================================================================= */
+
+  --btn-hover-lift: translateY(-1px);
+  --btn-hover-scale: scale(1.02);
+
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  --disabled-opacity: 0.5;
+  --touch-target-min: 44px;
+}
+
+/* ====================== Light Mode ====================== */
+
+html.light {
+  --ds-background-1: #ffffff;
+  --ds-background-2: #f6f6f6;
+
+  --ds-color-1: #ffffff;
+  --ds-color-2: #f0f0f0;
+  --ds-color-3: #e8e8e8;
+  --ds-color-4: #e5e5e5;
+  --ds-color-5: #d4d4d4;
+  --ds-color-6: #c2c2c2;
+  --ds-color-7: #a3a3a3;
+  --ds-color-8: #8f8f8f;
+  --ds-color-9: #525252;
+  --ds-color-10: #171717;
+
+  --gray-alpha-100: hsla(0, 0%, 0%, 0.04);
+  --gray-alpha-200: hsla(0, 0%, 0%, 0.06);
+  --gray-alpha-300: hsla(0, 0%, 0%, 0.08);
+  --gray-alpha-400: hsla(0, 0%, 0%, 0.10);
+  --gray-alpha-500: hsla(0, 0%, 0%, 0.12);
+  --gray-alpha-600: hsla(0, 0%, 0%, 0.16);
+  --gray-alpha-700: hsla(0, 0%, 0%, 0.24);
+  --gray-alpha-800: hsla(0, 0%, 0%, 0.36);
+  --gray-alpha-900: hsla(0, 0%, 0%, 0.60);
+  --gray-alpha-1000: hsla(0, 0%, 0%, 0.90);
+
+  --red-100: #fee2e2;
+
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --text-tertiary: #a3a3a3;
+
+  --color-danger: #dc2626;
+  --color-danger-bg: rgba(220, 38, 38, 0.12);
+  --color-success: #16a34a;
+  --color-success-bg: rgba(22, 163, 74, 0.10);
+  --color-info: #2563eb;
+  --color-info-bg: rgba(37, 99, 235, 0.10);
+  --color-warning: #e37318;
+  --color-warning-bg: rgba(227, 115, 24, 0.12);
+
+  --color-border-strong: #e5e5e5;
+  --border: 1px solid #e5e5e5;
+
+  --shadow-xs: 0 1px 2px hsla(0, 0%, 0%, 0.05);
+  --shadow-sm: 0 2px 4px hsla(0, 0%, 0%, 0.06);
+  --shadow-md: 0 4px 12px hsla(0, 0%, 0%, 0.08);
+}
+
+/* ====================== Density ====================== */
+
+html.density-spacious {
+  --table-cell-padding-y: var(--space-3);
+  --table-cell-padding-x: var(--space-4);
+}
