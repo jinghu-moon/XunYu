@@ -7,6 +7,7 @@
     "server": "cargo build --manifest-path ../Cargo.toml --features dashboard && ../target/debug/xun.exe serve",
     "build": "vue-tsc -b && vite build",
     "test": "vitest run",
+    "test:smoke": "vitest run src/smoke/dashboard-smoke.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard-ui/package-lock.json
+
+      - name: Show tool versions
+        run: |
+          rustc -V
+          cargo -V
+          node -v
+          npm -v
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard-ui
+        run: npm ci
+
+      - name: Run Rust tests
+        run: cargo test --features dashboard
+
+      - name: Run dashboard smoke tests
+        working-directory: dashboard-ui
+        run: npm run test:smoke
+
+      - name: Run dashboard unit tests
+        working-directory: dashboard-ui
+        run: npm run test
+
+      - name: Build dashboard
+        working-directory: dashboard-ui
+        run: npm run build

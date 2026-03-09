@@ -2,6 +2,7 @@
 
 - `CLI-UI.md`：CLI 输出风格与交互约定。
 - `Build-Matrix.md`：常用构建组合、前置条件与验证矩阵。
+- `CLI-Dashboard-API-Matrix.md`：Dashboard 工作台、CLI 命令、共享 API 与 feature flag 的对照矩阵。
 - `Dashboard-Design.md`：Dashboard Web UI 设计与交互规范。
 - `Dashboard-Expansion-Roadmap.md`：Dashboard 全量能力纳入的工作台归并方案与实施顺序。
 - `P0-Execution-Plan.md`：Triple-Guard、最近任务、Recipe MVP 与诊断中心 MVP 的实施状态与验收边界。
