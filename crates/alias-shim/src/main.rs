@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 #![allow(unsafe_op_in_unsafe_fn)]
 
 use core::ffi::c_void;
@@ -53,11 +53,13 @@ const RUNAS_W: [u16; 6] = [
     0,
 ];
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo<'_>) -> ! {
     unsafe { ExitProcess(1) }
 }
 
+#[cfg(not(test))]
 #[unsafe(no_mangle)]
 pub extern "C" fn main() -> i32 {
     unsafe { shim_entry() }
@@ -95,7 +97,7 @@ unsafe fn shim_entry() -> ! {
         None => fatal(1, b".shim parse failed", None),
     };
 
-    // 仅忽略本进程 Ctrl-C，避免可继承的 ConsoleFlags 方案。
+    // Ignore Ctrl-C in the shim process to avoid inheriting console control flags.
     let _ = SetConsoleCtrlHandler(Some(ctrl_handler), TRUE);
 
     let mut argc: i32 = 0;

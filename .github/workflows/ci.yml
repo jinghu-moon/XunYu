@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -7,8 +7,20 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: 1.93.1-x86_64-pc-windows-msvc
+
 jobs:
-  verify:
+  frontend:
+    name: Frontend
     runs-on: windows-latest
 
     steps:
@@ -22,23 +34,14 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard-ui/package-lock.json
 
-      - name: Show tool versions
+      - name: Show Node tool versions
         run: |
-          rustc -V
-          cargo -V
           node -v
           npm -v
 
       - name: Install dashboard dependencies
         working-directory: dashboard-ui
         run: npm ci
-
-      - name: Build dashboard
-        working-directory: dashboard-ui
-        run: npm run build
-
-      - name: Run Rust tests
-        run: cargo test --features dashboard
 
       - name: Run dashboard smoke tests
         working-directory: dashboard-ui
@@ -47,3 +50,174 @@ jobs:
       - name: Run dashboard unit tests
         working-directory: dashboard-ui
         run: npm run test
+
+      - name: Build dashboard
+        working-directory: dashboard-ui
+        run: npm run build
+
+      - name: Verify dashboard dist exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dashboard-ui/dist/index.html")) {
+            throw "dashboard-ui/dist/index.html not found"
+          }
+
+      - name: Upload dashboard dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard-ui/dist/**/*
+          if-no-files-found: error
+          retention-days: 7
+
+  rust-fmt:
+    name: Rust fmt
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          rustup component add --toolchain $env:RUST_TOOLCHAIN rustfmt clippy
+          rustup default $env:RUST_TOOLCHAIN
+          rustc -V
+          cargo -V
+
+      - name: Run cargo fmt check
+        run: cargo fmt --all -- --check
+
+  alias-shim-build:
+    name: Alias shim build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          rustup default $env:RUST_TOOLCHAIN
+          rustc -V
+          cargo -V
+
+      - name: Build alias shim release binary
+        run: cargo build --locked -p alias-shim --release
+
+  rust-clippy:
+    name: Rust clippy (advisory)
+    runs-on: windows-latest
+    needs:
+      - frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          rustup component add --toolchain $env:RUST_TOOLCHAIN rustfmt clippy
+          rustup default $env:RUST_TOOLCHAIN
+          rustc -V
+          cargo -V
+
+      - name: Download dashboard dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard-ui/dist
+
+      - name: Verify dashboard dist exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dashboard-ui/dist/index.html")) {
+            throw "dashboard-ui/dist/index.html not found"
+          }
+
+      - name: Run cargo clippy advisory scan
+        run: cargo clippy --workspace --all-targets --all-features --exclude alias-shim --locked
+
+  rust-tests:
+    name: Rust tests
+    runs-on: windows-latest
+    needs:
+      - frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          rustup component add --toolchain $env:RUST_TOOLCHAIN rustfmt clippy
+          rustup default $env:RUST_TOOLCHAIN
+          rustc -V
+          cargo -V
+
+      - name: Download dashboard dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard-ui/dist
+
+      - name: Verify dashboard dist exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dashboard-ui/dist/index.html")) {
+            throw "dashboard-ui/dist/index.html not found"
+          }
+
+      - name: Run Rust tests
+        run: cargo test --locked --features dashboard
+
+
+
