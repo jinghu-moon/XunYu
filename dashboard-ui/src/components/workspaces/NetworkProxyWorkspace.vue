@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
 import { networkProxyTaskGroups } from '../../workspace-tools'
 import PortsPanel from '../PortsPanel.vue'
@@ -18,19 +18,19 @@ defineProps<{
 </script>
 
 <template>
-  <WorkspaceFrame title="?????" description="????????????????????? kill ????????????">
+  <WorkspaceFrame title="网络与代理" description="统一查看端口、进程、代理状态，并串联 px / kill 等网络排查任务。">
     <PortsPanel disable-kill />
     <ProxyPanel />
     <RecentTasksPanel
-      title="??????"
-      description="????????????????????"
+      title="最近网络任务"
+      description="回看代理切换、端口排查与命令执行结果。"
       workspace="network-proxy"
       :limit="12"
       @link-panel="emit('link-panel', $event)"
     />
     <RecipePanel
-      title="?? Recipes"
-      description="????????????????"
+      title="网络 Recipes"
+      description="把常用代理与端口排查步骤固化为可复用流程。"
       category="network-proxy"
       @link-panel="emit('link-panel', $event)"
     />

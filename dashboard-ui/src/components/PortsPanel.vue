@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import type { PortInfo } from '../types'
 import { fetchPorts, killPid } from '../api'
@@ -144,7 +144,7 @@ function exportPorts(format: 'csv' | 'json') {
     const rows = items.map(p => [p.port, p.pid, p.name, p.protocol, p.exe_path, p.cmdline, p.cwd])
     downloadCsv('ports', ['port', 'pid', 'name', 'protocol', 'exe_path', 'cmdline', 'cwd'], rows)
   }
-  pushToast({ level: 'success', title: 'Exported ports', detail: `${items.length} rows` })
+  pushToast({ level: 'success', title: '已导出端口记录', detail: `${items.length} 条` })
 }
 
 async function load() {
@@ -329,7 +329,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="pid-meta">
                 <div class="pid-title">{{ g.name }}</div>
-                <div class="pid-sub">PID {{ g.pid }} · {{ g.items.length }} ports</div>
+                <div class="pid-sub">PID {{ g.pid }} 路 {{ g.items.length }} ports</div>
               </div>
             </div>
           </summary>

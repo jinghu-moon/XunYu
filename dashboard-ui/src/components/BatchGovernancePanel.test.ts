@@ -134,6 +134,11 @@ describe('BatchGovernancePanel', () => {
     expect(wrapper.text()).toContain('已通过 2 / 2 项')
     expect(wrapper.text()).toContain('保护变更预演摘要')
 
+    const dialogExtra = document.body.querySelector('[data-testid="confirm-dialog-extra"]')
+    expect(dialogExtra?.textContent || '').toContain('保护变更预演摘要')
+    expect(dialogExtra?.textContent || '').toContain('D:/repo/a.txt')
+    expect(dialogExtra?.textContent || '').toContain('D:/repo/b.txt')
+
     const confirmButton = [...document.body.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('确认执行'),
     ) as HTMLButtonElement | undefined
@@ -402,6 +407,416 @@ describe('BatchGovernancePanel', () => {
     }]])
   })
 
+  it('emits audit links from execute receipts', async () => {
+    apiMocks.previewGuardedTask.mockResolvedValueOnce({
+      token: 'token-receipt-audit',
+      workspace: 'files-security',
+      action: 'protect:set',
+      target: 'D:/repo/a.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: 'Protect D:/repo/a.txt',
+      preview_summary: 'Protect D:/repo/a.txt',
+      expires_in_secs: 180,
+      process: {
+        command_line: 'xun protect status -f json D:/repo/a.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'ok-a',
+        stderr: '',
+        duration_ms: 7,
+      },
+    })
+    apiMocks.executeGuardedTask.mockResolvedValueOnce({
+      token: 'token-receipt-audit',
+      workspace: 'files-security',
+      action: 'protect:set',
+      target: 'D:/repo/a.txt',
+      phase: 'execute',
+      status: 'succeeded',
+      guarded: true,
+      dry_run: false,
+      summary: 'Protect D:/repo/a.txt',
+      audit_action: 'workspace.protect.execute',
+      audited_at: 1700000000,
+      process: {
+        command_line: 'xun protect set D:/repo/a.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'done-a',
+        stderr: '',
+        duration_ms: 11,
+      },
+    })
+
+    const wrapper = mount(BatchGovernancePanel, {
+      attachTo: document.body,
+      props: {
+        paths: ['D:/repo/a.txt'],
+        capabilities: { protect: true } as any,
+      },
+    })
+
+    await wrapper.get('[data-testid="batch-governance-preview"]').trigger('click')
+    await flushPromises()
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('确认执行'),
+    ) as HTMLButtonElement | undefined
+
+    expect(confirmButton).toBeTruthy()
+    confirmButton?.click()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="batch-receipt-link-audit"]').trigger('click')
+
+    expect(wrapper.emitted('link-panel')).toEqual([[{
+      panel: 'audit',
+      request: {
+        search: 'D:/repo/a.txt',
+        action: 'workspace.protect.execute',
+        result: 'success',
+      },
+    }]])
+  })
+
+  it('emits diagnostics-center links from execute receipts', async () => {
+    apiMocks.previewGuardedTask.mockResolvedValueOnce({
+      token: 'token-receipt-diagnostics',
+      workspace: 'files-security',
+      action: 'protect:set',
+      target: 'D:/repo/a.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: 'Protect D:/repo/a.txt',
+      preview_summary: 'Protect D:/repo/a.txt',
+      expires_in_secs: 180,
+      process: {
+        command_line: 'xun protect status -f json D:/repo/a.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'ok-a',
+        stderr: '',
+        duration_ms: 7,
+      },
+    })
+    apiMocks.executeGuardedTask.mockResolvedValueOnce({
+      token: 'token-receipt-diagnostics',
+      workspace: 'files-security',
+      action: 'protect:set',
+      target: 'D:/repo/a.txt',
+      phase: 'execute',
+      status: 'succeeded',
+      guarded: true,
+      dry_run: false,
+      summary: 'Protect D:/repo/a.txt',
+      audit_action: 'workspace.protect.execute',
+      audited_at: 1700000000,
+      process: {
+        command_line: 'xun protect set D:/repo/a.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'done-a',
+        stderr: '',
+        duration_ms: 11,
+      },
+    })
+
+    const wrapper = mount(BatchGovernancePanel, {
+      attachTo: document.body,
+      props: {
+        paths: ['D:/repo/a.txt'],
+        capabilities: { protect: true } as any,
+      },
+    })
+
+    await wrapper.get('[data-testid="batch-governance-preview"]').trigger('click')
+    await flushPromises()
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('确认执行'),
+    ) as HTMLButtonElement | undefined
+
+    expect(confirmButton).toBeTruthy()
+    confirmButton?.click()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="batch-receipt-link-diagnostics"]').trigger('click')
+
+    expect(wrapper.emitted('link-panel')).toEqual([[{
+      panel: 'diagnostics-center',
+      request: {
+        panel: 'governance',
+        governance_family: 'protect',
+        governance_status: 'succeeded',
+        target: 'D:/repo/a.txt',
+        audit_action: 'workspace.protect.execute',
+        audit_result: 'success',
+        audit_timestamp: 1700000000,
+      },
+    }]])
+  })
+
+
+  it('renders structured acl restore details across confirm dialog and receipts', async () => {
+    apiMocks.previewGuardedTask.mockResolvedValueOnce({
+      token: 'token-restore',
+      workspace: 'files-security',
+      action: 'acl:restore',
+      target: 'D:/repo/a.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: '使用 D:/repo/demo.acl.json 恢复 D:/repo/a.txt 的 ACL',
+      preview_summary: '使用 D:/repo/demo.acl.json 恢复 D:/repo/a.txt 的 ACL',
+      expires_in_secs: 180,
+      process: {
+        command_line: 'xun find --dry-run -f json --test-path D:/repo/demo.acl.json',
+        exit_code: 0,
+        success: true,
+        stdout: 'path: "D:/repo/demo.acl.json"  (is_dir=false)\n  -> Decision: INCLUDE (source: inherited)',
+        stderr: '',
+        duration_ms: 9,
+      },
+      details: {
+        kind: 'acl_diff',
+        diff: {
+          target: 'D:/repo/a.txt',
+          reference: 'backup D:/fixtures/restore-source.txt',
+          common_count: 1,
+          has_diff: true,
+          owner_diff: {
+            target: 'BUILTIN\Users',
+            reference: 'BUILTIN\Administrators',
+          },
+          inheritance_diff: null,
+          only_in_target: [],
+          only_in_reference: [
+            {
+              principal: 'BUILTIN\Administrators',
+              sid: 'S-1-5-32-544',
+              rights: 'FullControl',
+              ace_type: 'Allow',
+              source: 'explicit',
+              inheritance: 'BothInherit',
+              propagation: 'None',
+              orphan: false,
+            },
+          ],
+        },
+      },
+    })
+    apiMocks.executeGuardedTask.mockResolvedValueOnce({
+      token: 'token-restore',
+      workspace: 'files-security',
+      action: 'acl:restore',
+      target: 'D:/repo/a.txt',
+      phase: 'execute',
+      status: 'succeeded',
+      guarded: true,
+      dry_run: false,
+      summary: '使用 D:/repo/demo.acl.json 恢复 D:/repo/a.txt 的 ACL',
+      audit_action: 'dashboard.task.execute.acl:restore',
+      audited_at: 1700000000,
+      process: {
+        command_line: 'xun acl restore -p D:/repo/a.txt --from D:/repo/demo.acl.json -y',
+        exit_code: 0,
+        success: true,
+        stdout: 'restored',
+        stderr: '',
+        duration_ms: 14,
+      },
+      details: {
+        kind: 'acl_diff_transition',
+        before: {
+          target: 'D:/repo/a.txt',
+          reference: 'backup D:/fixtures/restore-source.txt',
+          common_count: 1,
+          has_diff: true,
+          owner_diff: {
+            target: 'BUILTIN\Users',
+            reference: 'BUILTIN\Administrators',
+          },
+          inheritance_diff: null,
+          only_in_target: [],
+          only_in_reference: [
+            {
+              principal: 'BUILTIN\Administrators',
+              sid: 'S-1-5-32-544',
+              rights: 'FullControl',
+              ace_type: 'Allow',
+              source: 'explicit',
+              inheritance: 'BothInherit',
+              propagation: 'None',
+              orphan: false,
+            },
+          ],
+        },
+        after: {
+          target: 'D:/repo/a.txt',
+          reference: 'backup D:/fixtures/restore-source.txt',
+          common_count: 2,
+          has_diff: false,
+          owner_diff: null,
+          inheritance_diff: null,
+          only_in_target: [],
+          only_in_reference: [],
+        },
+      },
+    })
+
+    const wrapper = mount(BatchGovernancePanel, {
+      attachTo: document.body,
+      props: {
+        paths: ['D:/repo/a.txt'],
+        capabilities: { acl: true } as any,
+      },
+    })
+
+    await wrapper.get('[data-testid="batch-governance-action"]').setValue('acl-restore')
+    await wrapper.get('[data-testid="batch-field-from"]').setValue('D:/repo/demo.acl.json')
+    await wrapper.get('[data-testid="batch-governance-preview"]').trigger('click')
+    await flushPromises()
+
+    const dialogExtra = document.body.querySelector('[data-testid="confirm-dialog-extra"]')
+    expect(dialogExtra?.textContent || '').toContain('ACL 恢复预演摘要')
+    expect(dialogExtra?.textContent || '').toContain('backup D:/fixtures/restore-source.txt')
+    expect(dialogExtra?.textContent || '').toContain('ACL 差异明细')
+
+    const confirmButton = [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('确认执行'),
+    ) as HTMLButtonElement | undefined
+    expect(confirmButton).toBeTruthy()
+    confirmButton?.click()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('ACL 恢复执行摘要')
+    expect(wrapper.find('[data-testid="acl-diff-panel-before"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="acl-diff-panel-after"]').exists()).toBe(true)
+  })
+
+  it('renders encrypt preview and decrypt receipt summaries in batch workflow', async () => {
+    apiMocks.previewGuardedTask.mockResolvedValueOnce({
+      token: 'token-encrypt-batch',
+      workspace: 'files-security',
+      action: 'encrypt',
+      target: 'D:/repo/secret.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: '加密 D:/repo/secret.txt',
+      preview_summary: '加密 D:/repo/secret.txt',
+      expires_in_secs: 180,
+      process: {
+        command_line: 'xun find --dry-run -f json --test-path D:/repo/secret.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'path: "D:/repo/secret.txt"  (is_dir=false)\n  -> Decision: INCLUDE (source: inherited)',
+        stderr: '',
+        duration_ms: 7,
+      },
+    })
+
+    const encryptWrapper = mount(BatchGovernancePanel, {
+      attachTo: document.body,
+      props: {
+        paths: ['D:/repo/secret.txt'],
+        capabilities: { crypt: true } as any,
+      },
+    })
+
+    await encryptWrapper.get('[data-testid="batch-governance-action"]').setValue('encrypt')
+    await encryptWrapper.get('[data-testid="batch-field-to"]').setValue('age1abc\nage1def')
+    await encryptWrapper.get('[data-testid="batch-governance-preview"]').trigger('click')
+    await flushPromises()
+
+    const encryptDialogExtra = document.body.querySelector('[data-testid="confirm-dialog-extra"]')
+    expect(encryptDialogExtra?.textContent || '').toContain('加密预演摘要')
+    expect(encryptDialogExtra?.textContent || '').toContain('当前预演只执行规则测试')
+    encryptWrapper.unmount()
+    document.body.innerHTML = ''
+
+    apiMocks.previewGuardedTask.mockReset()
+    apiMocks.executeGuardedTask.mockReset()
+    apiMocks.previewGuardedTask.mockResolvedValueOnce({
+      token: 'token-decrypt-batch',
+      workspace: 'files-security',
+      action: 'decrypt',
+      target: 'D:/repo/secret.txt.age',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: '解密 D:/repo/secret.txt.age',
+      preview_summary: '解密 D:/repo/secret.txt.age',
+      expires_in_secs: 180,
+      process: {
+        command_line: 'xun find --dry-run -f json --test-path D:/repo/secret.txt.age',
+        exit_code: 0,
+        success: true,
+        stdout: 'path: "D:/repo/secret.txt.age"  (is_dir=false)\n  -> Decision: INCLUDE (source: inherited)',
+        stderr: '',
+        duration_ms: 7,
+      },
+    })
+    apiMocks.executeGuardedTask.mockResolvedValueOnce({
+      token: 'token-decrypt-batch',
+      workspace: 'files-security',
+      action: 'decrypt',
+      target: 'D:/repo/secret.txt.age',
+      phase: 'execute',
+      status: 'succeeded',
+      guarded: true,
+      dry_run: false,
+      summary: '解密 D:/repo/secret.txt.age',
+      audit_action: 'dashboard.task.execute.decrypt',
+      audited_at: 1700000000,
+      process: {
+        command_line: 'xun decrypt -i D:/keys/demo.txt -o D:/repo/secret.txt D:/repo/secret.txt.age',
+        exit_code: 0,
+        success: true,
+        stdout: 'done',
+        stderr: '',
+        duration_ms: 12,
+      },
+    })
+
+    const decryptWrapper = mount(BatchGovernancePanel, {
+      attachTo: document.body,
+      props: {
+        paths: ['D:/repo/secret.txt.age'],
+        capabilities: { crypt: true } as any,
+      },
+    })
+
+    await decryptWrapper.get('[data-testid="batch-governance-action"]').setValue('decrypt')
+    await decryptWrapper.get('[data-testid="batch-field-identity"]').setValue('D:/keys/demo.txt')
+    await decryptWrapper.get('[data-testid="batch-governance-preview"]').trigger('click')
+    await flushPromises()
+
+    const decryptConfirm = [...document.body.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('确认执行'),
+    ) as HTMLButtonElement | undefined
+    expect(decryptConfirm).toBeTruthy()
+    decryptConfirm?.click()
+    await flushPromises()
+
+    expect(decryptWrapper.text()).toContain('解密执行摘要')
+    expect(decryptWrapper.text()).toContain('解密')
+    expect(decryptWrapper.text()).toContain('dashboard.task.execute.decrypt')
+  })
+
   it('keeps confirm disabled when any preview is blocked', async () => {
     apiMocks.previewGuardedTask
       .mockResolvedValueOnce({
@@ -455,3 +870,4 @@ describe('BatchGovernancePanel', () => {
     expect(apiMocks.executeGuardedTask).not.toHaveBeenCalled()
   })
 })
+

@@ -1,9 +1,9 @@
-import { mount } from '@vue/test-utils'
+﻿import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import UnifiedConfirmDialog from './UnifiedConfirmDialog.vue'
 
 describe('UnifiedConfirmDialog', () => {
-  it('renders preview and emits confirm/cancel events', async () => {
+  it('renders preview, extra slot and emits confirm/cancel events', async () => {
     const wrapper = mount(UnifiedConfirmDialog, {
       attachTo: document.body,
       props: {
@@ -32,12 +32,16 @@ describe('UnifiedConfirmDialog', () => {
           },
         },
       },
+      slots: {
+        'preview-extra': '<div data-testid="slot-extra">预演补充摘要</div>',
+      },
     })
 
     expect(wrapper.text()).toContain('删除文件')
     expect(wrapper.text()).toContain('preview ok')
     expect(wrapper.text()).toContain('可执行')
     expect(wrapper.text()).toContain('已启用')
+    expect(wrapper.get('[data-testid="confirm-dialog-extra"]').text()).toContain('预演补充摘要')
 
     const buttons = [...document.body.querySelectorAll('button')]
     buttons[0]?.dispatchEvent(new MouseEvent('click'))

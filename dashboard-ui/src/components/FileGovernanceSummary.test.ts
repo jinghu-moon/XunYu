@@ -277,6 +277,28 @@ describe('FileGovernanceSummary', () => {
     expect(wrapper.text()).toContain('当前预演只执行规则测试')
   })
 
+  it('renders acl:restore preview summary and explains dashboard snapshot forecast', () => {
+    const wrapper = mount(FileGovernanceSummary, {
+      props: {
+        task: createTask('acl:restore'),
+        phase: 'preview',
+        form: {
+          path: 'D:/repo/demo.txt',
+          from: 'D:/repo/demo.acl.json',
+        } satisfies TaskFormState,
+        process: createProcess(
+          'path: "D:/repo/demo.acl.json"  (is_dir=false)\n  -> Decision: INCLUDE (source: inherited)',
+        ),
+        details: createAclDiffDetails(),
+      },
+    })
+
+    expect(wrapper.text()).toContain('ACL 恢复预演摘要')
+    expect(wrapper.text()).toContain('D:/repo/demo.acl.json')
+    expect(wrapper.text()).toContain('Dashboard 会额外读取备份快照推导预期 ACL')
+    expect(wrapper.text()).toContain('ACL 差异明细')
+  })
+
   it('stays hidden for non-governance actions', () => {
     const wrapper = mount(FileGovernanceSummary, {
       props: {

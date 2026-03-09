@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+﻿import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceTaskDetails } from '../types'
 import AclDiffDetails from './AclDiffDetails.vue'
@@ -58,7 +58,12 @@ describe('AclDiffDetails', () => {
     expect(wrapper.find('[data-testid="acl-diff-details"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('S-1-5-32-545')
     expect(wrapper.text()).toContain('S-1-5-21-100')
-    expect(wrapper.text()).toContain('S-1-5-32-545')
+    expect(wrapper.text()).toContain('ACL 差异明细')
+    expect(wrapper.text()).toContain('共同 ACE')
+    expect(wrapper.text()).toContain('仅目标侧 ACE')
+    expect(wrapper.text()).toContain('仅参考侧 ACE')
+    expect(wrapper.text()).toContain('主体')
+    expect(wrapper.text()).toContain('仍有差异')
     expect(wrapper.text()).toContain('Read')
     expect(wrapper.text()).toContain('Modify')
   })
@@ -84,6 +89,9 @@ describe('AclDiffDetails', () => {
 
     expect(wrapper.find('[data-testid="acl-diff-panel-before"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="acl-diff-panel-after"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('执行前差异')
+    expect(wrapper.text()).toContain('执行后差异')
+    expect(wrapper.text()).toContain('已对齐')
     expect(wrapper.text()).toContain('S-1-5-32-545')
     expect(wrapper.get('[data-testid="acl-diff-panel-after"]').text()).toContain('D:/repo/b.txt')
   })

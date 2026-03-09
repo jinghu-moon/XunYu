@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import type { Bookmark } from '../types'
 import {
@@ -309,7 +309,7 @@ function onToggleSelectAll() {
 async function copyPath(path: string, opts?: { title?: string; detail?: string }) {
   const text = path.trim()
   if (!text) return
-  const title = opts?.title || 'Path copied'
+  const title = opts?.title || '路径已复制'
   const detail = opts?.detail
   if (navigator.clipboard?.writeText) {
     try {
@@ -338,7 +338,7 @@ async function onCopyPath(path: string) {
 }
 
 async function onOpenPath(path: string) {
-  await copyPath(path, { title: 'Path copied', detail: 'Paste into Explorer to open.' })
+  await copyPath(path, { title: '路径已复制', detail: '请粘贴到资源管理器打开。' })
 }
 
 function exportBookmarks(format: 'csv' | 'json') {
@@ -349,7 +349,7 @@ function exportBookmarks(format: 'csv' | 'json') {
     visits: b.visits ?? 0,
   }))
   if (!items.length) {
-    pushToast({ level: 'warning', title: 'No bookmarks to export' })
+    pushToast({ level: 'warning', title: '暂无可导出的书签' })
     return
   }
   if (format === 'json') {
@@ -358,7 +358,7 @@ function exportBookmarks(format: 'csv' | 'json') {
     const rows = items.map(b => [b.name, b.path, b.tags.join('|'), b.visits])
     downloadCsv('bookmarks', ['name', 'path', 'tags', 'visits'], rows)
   }
-  pushToast({ level: 'success', title: 'Exported bookmarks', detail: `${items.length} rows` })
+  pushToast({ level: 'success', title: '书签已导出', detail: `${items.length} 条` })
 }
 
 const listColspan = computed(() => {
@@ -547,14 +547,14 @@ onBeforeUnmount(stopConfirmTimer)
             </td>
           </tr>
           <tr v-if="!filtered.length">
-            <td :colspan="listColspan" style="text-align:center;color:var(--text-tertiary)">No bookmarks</td>
+            <td :colspan="listColspan" style="text-align:center;color:var(--text-tertiary)">暂无书签</td>
           </tr>
         </tbody>
       </table>
     </template>
 
     <template v-else>
-      <div v-if="!filtered.length" style="text-align:center;color:var(--text-tertiary)">No bookmarks</div>
+      <div v-if="!filtered.length" style="text-align:center;color:var(--text-tertiary)">暂无书签</div>
       <div v-for="g in grouped" :key="g.dir" class="group">
         <details open>
           <summary class="groupTitle">{{ g.dir }} <span class="groupCount">({{ g.items.length }})</span></summary>

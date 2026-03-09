@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import type { RecentTasksFocusRequest, StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
 import { integrationAutomationTaskGroups } from '../../workspace-tools'
@@ -40,11 +40,11 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
 </script>
 
 <template>
-  <WorkspaceFrame title="??????" description="?? shell ???completion?alias ?????????????">
+  <WorkspaceFrame title="集成与自动化" description="围绕 shell 初始化、completion、alias 与批量重命名组织自动化能力。">
     <div ref="recentTasksAnchor" data-testid="integration-recent-tasks-anchor">
       <RecentTasksPanel
-        title="???????"
-        description="?? init / completion / alias / brn ?????????"
+        title="最近自动化任务"
+        description="回看 init、completion、alias 与 brn 的执行结果。"
         workspace="integration-automation"
         :limit="12"
         :focus-request="recentTasksFocus"
@@ -52,8 +52,8 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
       />
     </div>
     <RecipePanel
-      title="??? Recipes"
-      description="?? shell ?????????????????"
+      title="自动化 Recipes"
+      description="把 shell 集成与自动化流程固化成顺序工作流。"
       category="integration-automation"
       @link-panel="handleWorkspaceLink"
     />

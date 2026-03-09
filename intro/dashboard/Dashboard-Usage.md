@@ -285,8 +285,12 @@ Dashboard 中的高风险动作统一遵循 **Triple-Guard**：
 推荐工作流：
 
 1. 先用 `DiffPanel` / `RedirectPanel` 看结构、规则、差异。
-2. 再用 `tree` / `find` / `bak` 等任务卡进入工作流。
-3. 真正落地的文件变更，一律看 preview 和 receipt。
+2. 如果要对比 ACL，可先把一个文件设为 `ACL 参考`，再切到目标文件同步 `acl:diff / acl:copy`。
+3. 对 `acl:add / acl:purge / acl:owner / acl:inherit` 这类高风险治理，preview 会直接显示“当前 ACL vs 预期状态”的结构化差异，确认前先看这一层。
+4. 再用 `tree` / `find` / `bak` 等任务卡进入工作流。
+5. 真正落地的文件变更，一律看 preview 和 receipt；如果 receipt 仍显示 `ACL 差异明细` 未对齐，优先回到任务参数排查。
+6. 批量治理在确认弹窗里也会逐项显示结构化治理摘要；确认前先核对每条路径的预期变更，再执行。
+7. 批量治理完成后，预演项与执行回执都可直接从批量面板跳到最近任务、审计或诊断中心，不必手工重新筛选。
 
 这是目前最接近“本地运维控制台”的工作台。
 
@@ -437,3 +441,5 @@ cargo run --features "dashboard,diff" -- serve
 - Diff 子系统索引：`./diff/README.md`
 - 业务面板索引：`./panels/README.md`
 - 共享组件索引：`./shared/README.md`
+
+

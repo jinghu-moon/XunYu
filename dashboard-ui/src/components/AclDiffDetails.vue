@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import type { AclDiffDetails, WorkspaceTaskDetails } from '../types'
 
@@ -27,6 +27,7 @@ const panels = computed<DiffPanel[]>(() => {
   if (props.details.kind === 'acl_diff') {
     return [{ id: 'current', title: 'ACL 差异明细', diff: props.details.diff }]
   }
+
   return [
     { id: 'before', title: '执行前差异', diff: props.details.before },
     { id: 'after', title: '执行后差异', diff: props.details.after },

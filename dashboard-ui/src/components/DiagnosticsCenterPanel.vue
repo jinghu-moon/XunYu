@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   type DiagnosticsCenterFocusRequest,
@@ -44,10 +44,10 @@ const emit = defineEmits<{
 const governanceGroupOrder: GovernanceAlertGroupKey[] = ['acl', 'protect', 'crypt', 'other']
 const diagnosticsPanelLinks: ReadonlyArray<{ id: DiagnosticsPanelId; label: string }> = [
   { id: 'doctor', label: 'Doctor' },
-  { id: 'governance', label: '????' },
-  { id: 'failed', label: '????' },
-  { id: 'guarded', label: '?????' },
-  { id: 'audit', label: '?????' },
+  { id: 'governance', label: '治理预警' },
+  { id: 'failed', label: '失败任务' },
+  { id: 'guarded', label: '危险回执' },
+  { id: 'audit', label: '审计时间线' },
 ]
 
 const props = withDefaults(
@@ -57,8 +57,8 @@ const props = withDefaults(
     focusRequest?: DiagnosticsCenterFocusRequest | null
   }>(),
   {
-    title: '????',
-    description: '???? Doctor?????????????????',
+    title: '诊断中心',
+    description: '集中查看 Doctor、治理预警、失败任务与审计时间线。',
     focusRequest: null,
   },
 )
@@ -77,7 +77,7 @@ const focusedAuditKey = ref('')
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error && err.message.trim()) return err.message
-  return '???????????????'
+  return '加载诊断摘要失败，请检查全局错误提示。'
 }
 
 function formatTime(ts: number) {
@@ -85,7 +85,7 @@ function formatTime(ts: number) {
 }
 
 function formatOutput(stdout: string, stderr: string) {
-  return stderr || stdout || '?????'
+  return stderr || stdout || '暂无输出'
 }
 
 function resolveGovernanceAlertFamily(action: string): GovernanceAlertGroupKey {
@@ -99,9 +99,9 @@ function resolveGovernanceAlertFamilyLabel(family: GovernanceAlertGroupKey): str
     case 'protect':
       return 'Protect'
     case 'crypt':
-      return '???'
+      return '加解密'
     default:
-      return '??'
+      return '其他'
   }
 }
 
@@ -226,8 +226,8 @@ const doctorTone = computed(() => {
 
 const doctorBadgeText = computed(() => {
   if (!summary.value) return '-'
-  if (summary.value.doctor.load_error) return 'doctor ??'
-  return `${summary.value.doctor.errors} ?? / ${summary.value.doctor.warnings} ??`
+  if (summary.value.doctor.load_error) return 'Doctor 异常'
+  return `${summary.value.doctor.errors} 错误 / ${summary.value.doctor.warnings} 警告`
 })
 
 const governanceAlerts = computed<GovernanceAlertEntry[]>(() =>
@@ -262,8 +262,8 @@ const governanceAlertGroups = computed<GovernanceAlertGroup[]>(() =>
 
 const governanceAlertSummaryText = computed(() => {
   const total = governanceAlerts.value.length
-  if (!total) return '???????'
-  return `?? ${filteredGovernanceAlerts.value.length} / ${total} ?????`
+  if (!total) return '暂无治理预警'
+  return `已筛选 ${filteredGovernanceAlerts.value.length} / ${total} 条`
 })
 
 watch(scope, () => {
@@ -292,15 +292,15 @@ onMounted(() => {
       </div>
       <div class="diagnostics-center__actions">
         <label class="diagnostics-center__filter">
-          <span>??</span>
+          <span>作用域</span>
           <select v-model="scope" data-testid="diagnostics-scope">
-            <option value="all">all</option>
-            <option value="user">user</option>
-            <option value="system">system</option>
+            <option value="all">全部</option>
+            <option value="user">用户</option>
+            <option value="system">系统</option>
           </select>
         </label>
         <Button data-testid="diagnostics-refresh" preset="secondary" :loading="loading" @click="load">
-          ??
+          刷新
         </Button>
       </div>
     </header>
@@ -309,32 +309,32 @@ onMounted(() => {
 
     <div class="diagnostics-center__summary">
       <div class="diagnostics-center__card">
-        <span>???</span>
+        <span>紧急项</span>
         <strong>{{ summary?.overview.urgent_items ?? '-' }}</strong>
       </div>
       <div class="diagnostics-center__card">
-        <span>Doctor ??</span>
+        <span>Doctor 问题</span>
         <strong>{{ summary?.overview.doctor_issues ?? '-' }}</strong>
       </div>
       <div class="diagnostics-center__card">
-        <span>????</span>
+        <span>最近失败</span>
         <strong>{{ summary?.overview.recent_failed_tasks ?? '-' }}</strong>
       </div>
       <div class="diagnostics-center__card">
-        <span>?????</span>
+        <span>危险回执</span>
         <strong>{{ summary?.overview.recent_guarded_receipts ?? '-' }}</strong>
       </div>
       <div class="diagnostics-center__card">
-        <span>????</span>
+        <span>治理预警</span>
         <strong>{{ summary?.overview.recent_governance_alerts ?? '-' }}</strong>
       </div>
       <div class="diagnostics-center__card">
-        <span>????</span>
+        <span>审计条目</span>
         <strong>{{ summary?.overview.audit_entries ?? '-' }}</strong>
       </div>
     </div>
 
-    <nav v-if="summary" class="diagnostics-center__nav" aria-label="????????">
+    <nav v-if="summary" class="diagnostics-center__nav" aria-label="诊断面板导航">
       <button
         v-for="link in diagnosticsPanelLinks"
         :key="link.id"
@@ -353,7 +353,7 @@ onMounted(() => {
         data-panel-id="doctor"
       >
         <div class="diagnostics-center__panel-header">
-          <h4>?? Doctor</h4>
+          <h4>环境 Doctor</h4>
           <span :class="['diagnostics-center__badge', doctorTone]">
             {{ doctorBadgeText }}
           </span>
@@ -362,7 +362,7 @@ onMounted(() => {
           {{ summary.doctor.load_error }}
         </p>
         <p v-else class="diagnostics-center__muted">
-          ????={{ summary.doctor.scope }} / ???={{ summary.doctor.fixable }}
+          范围={{ summary.doctor.scope }} / 可修复={{ summary.doctor.fixable }}
         </p>
         <div v-if="summary.doctor.issues.length" class="diagnostics-center__list">
           <article
@@ -379,7 +379,7 @@ onMounted(() => {
             <p class="diagnostics-center__muted">{{ issue.message }}</p>
           </article>
         </div>
-        <p v-else class="diagnostics-center__muted">?? Doctor ???</p>
+        <p v-else class="diagnostics-center__muted">暂无 Doctor 问题。</p>
       </section>
 
       <section
@@ -387,27 +387,27 @@ onMounted(() => {
         data-panel-id="governance"
       >
         <div class="diagnostics-center__panel-header">
-          <h4>??????</h4>
+          <h4>治理预警</h4>
           <span class="diagnostics-center__badge is-warn">{{ governanceAlerts.length }}</span>
         </div>
         <div class="diagnostics-center__panel-toolbar">
           <label class="diagnostics-center__filter">
-            <span>???</span>
+            <span>治理族</span>
             <select v-model="governanceFamily" data-testid="diagnostics-governance-family">
-              <option value="all">all</option>
+              <option value="all">全部</option>
               <option value="acl">acl</option>
               <option value="protect">protect</option>
-              <option value="crypt">crypt</option>
-              <option value="other">other</option>
+              <option value="crypt">加解密</option>
+              <option value="other">其他</option>
             </select>
           </label>
           <label class="diagnostics-center__filter">
-            <span>??</span>
+            <span>状态</span>
             <select v-model="governanceStatus" data-testid="diagnostics-governance-status">
-              <option value="all">all</option>
-              <option value="failed">failed</option>
-              <option value="succeeded">succeeded</option>
-              <option value="previewed">previewed</option>
+              <option value="all">全部</option>
+              <option value="failed">失败</option>
+              <option value="succeeded">成功</option>
+              <option value="previewed">预演</option>
             </select>
           </label>
           <p class="diagnostics-center__muted diagnostics-center__summary-text">
@@ -440,7 +440,7 @@ onMounted(() => {
                 <p class="diagnostics-center__muted">
                   {{ entry.record.workspace }} / {{ entry.record.action }} / {{ formatTime(entry.record.created_at) }}
                 </p>
-                <p class="diagnostics-center__muted">????{{ entry.familyLabel }}</p>
+                <p class="diagnostics-center__muted">治理族：{{ entry.familyLabel }}</p>
                 <FileGovernanceSummary
                   v-if="entry.context"
                   :task="entry.context.task"
@@ -449,7 +449,7 @@ onMounted(() => {
                   :process="entry.context.process"
                   :details="entry.context.details"
                 />
-                <p v-else class="diagnostics-center__muted">????????????????????</p>
+                <p v-else class="diagnostics-center__muted">当前记录没有可展示的治理摘要。</p>
                 <div class="diagnostics-center__item-actions">
                   <button
                     :data-testid="`diagnostics-link-recent-governance-${entry.record.id}`"
@@ -457,7 +457,7 @@ onMounted(() => {
                     type="button"
                     @click="openRecentTasks(entry.record)"
                   >
-                    ???????
+                    回到最近任务
                   </button>
                   <button
                     :data-testid="`diagnostics-link-audit-governance-${entry.record.id}`"
@@ -465,7 +465,7 @@ onMounted(() => {
                     type="button"
                     @click="openAuditPanel(entry.record)"
                   >
-                    ??????
+                    查看审计
                   </button>
                 </div>
                 <pre class="diagnostics-center__output">{{ entry.record.process.command_line }}
@@ -475,13 +475,13 @@ onMounted(() => {
             </div>
           </article>
         </div>
-        <p v-else-if="governanceAlerts.length" class="diagnostics-center__muted">??????????????</p>
-        <p v-else class="diagnostics-center__muted">?????????</p>
+        <p v-else-if="governanceAlerts.length" class="diagnostics-center__muted">当前筛选下没有治理预警。</p>
+        <p v-else class="diagnostics-center__muted">暂无治理预警。</p>
       </section>
 
       <section :class="['diagnostics-center__panel', { 'is-active': isActivePanel('failed') }]" data-panel-id="failed">
         <div class="diagnostics-center__panel-header">
-          <h4>??????</h4>
+          <h4>失败任务</h4>
           <span class="diagnostics-center__badge is-danger">{{ summary.failed_tasks.length }}</span>
         </div>
         <div v-if="summary.failed_tasks.length" class="diagnostics-center__list">
@@ -502,7 +502,7 @@ onMounted(() => {
                 type="button"
                 @click="openRecentTasks(task)"
               >
-                ???????
+                回到最近任务
               </button>
               <button
                 :data-testid="`diagnostics-link-audit-failed-${task.id}`"
@@ -510,7 +510,7 @@ onMounted(() => {
                 type="button"
                 @click="openAuditPanel(task)"
               >
-                ??????
+                查看审计
               </button>
             </div>
             <pre class="diagnostics-center__output">{{ task.process.command_line }}
@@ -518,12 +518,12 @@ onMounted(() => {
 {{ formatOutput(task.process.stdout, task.process.stderr) }}</pre>
           </article>
         </div>
-        <p v-else class="diagnostics-center__muted">???????</p>
+        <p v-else class="diagnostics-center__muted">暂无失败任务。</p>
       </section>
 
       <section :class="['diagnostics-center__panel', { 'is-active': isActivePanel('guarded') }]" data-panel-id="guarded">
         <div class="diagnostics-center__panel-header">
-          <h4>???????</h4>
+          <h4>危险回执</h4>
           <span class="diagnostics-center__badge is-ok">{{ summary.guarded_receipts.length }}</span>
         </div>
         <div v-if="summary.guarded_receipts.length" class="diagnostics-center__list">
@@ -546,7 +546,7 @@ onMounted(() => {
                 type="button"
                 @click="openRecentTasks(task)"
               >
-                ???????
+                回到最近任务
               </button>
               <button
                 :data-testid="`diagnostics-link-audit-guarded-${task.id}`"
@@ -554,7 +554,7 @@ onMounted(() => {
                 type="button"
                 @click="openAuditPanel(task)"
               >
-                ??????
+                查看审计
               </button>
             </div>
             <pre class="diagnostics-center__output">{{ task.process.command_line }}
@@ -562,12 +562,12 @@ onMounted(() => {
 {{ formatOutput(task.process.stdout, task.process.stderr) }}</pre>
           </article>
         </div>
-        <p v-else class="diagnostics-center__muted">??????????</p>
+        <p v-else class="diagnostics-center__muted">暂无危险回执。</p>
       </section>
 
       <section :class="['diagnostics-center__panel', { 'is-active': isActivePanel('audit') }]" data-panel-id="audit">
         <div class="diagnostics-center__panel-header">
-          <h4>?????</h4>
+          <h4>审计时间线</h4>
           <span class="diagnostics-center__badge">{{ summary.audit_timeline.length }}</span>
         </div>
         <div v-if="summary.audit_timeline.length" class="diagnostics-center__list">
@@ -583,10 +583,10 @@ onMounted(() => {
               </span>
             </div>
             <p class="diagnostics-center__muted">{{ entry.target || '-' }} / {{ formatTime(entry.timestamp) }}</p>
-            <p class="diagnostics-center__muted">{{ entry.reason || '?????' }}</p>
+            <p class="diagnostics-center__muted">{{ entry.reason || '无原因' }}</p>
           </article>
         </div>
-        <p v-else class="diagnostics-center__muted">???????</p>
+        <p v-else class="diagnostics-center__muted">暂无审计记录。</p>
       </section>
     </div>
   </section>

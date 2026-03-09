@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import type { RecentTasksFocusRequest, StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
 import { mediaConversionTaskGroups } from '../../workspace-tools'
@@ -40,11 +40,11 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
 </script>
 
 <template>
-  <WorkspaceFrame title="?????" description="???????????????????? remux?">
+  <WorkspaceFrame title="媒体与转换" description="统一承载图片转换、视频探测、压缩与 remux 工作流。">
     <div ref="recentTasksAnchor" data-testid="media-recent-tasks-anchor">
       <RecentTasksPanel
-        title="??????"
-        description="?? img / video ???????????????"
+        title="最近媒体任务"
+        description="回看 img 与 video 相关任务的执行结果。"
         workspace="media-conversion"
         :limit="12"
         :focus-request="recentTasksFocus"
@@ -52,8 +52,8 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
       />
     </div>
     <RecipePanel
-      title="?? Recipes"
-      description="????????????????????????"
+      title="媒体 Recipes"
+      description="把常见图片与视频处理流程固化成可复用步骤。"
       category="media-conversion"
       @link-panel="handleWorkspaceLink"
     />

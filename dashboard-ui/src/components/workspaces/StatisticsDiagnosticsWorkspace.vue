@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import type {
   AuditFocusRequest,
@@ -77,22 +77,22 @@ watch(
 </script>
 
 <template>
-  <WorkspaceFrame title="?????" description="??????????????? Recipe / ???????">
+  <WorkspaceFrame title="统计与诊断" description="集中查看诊断、任务复盘、Recipe 与审计时间线。">
     <div ref="diagnosticsAnchor" data-testid="statistics-diagnostics-anchor">
       <DiagnosticsCenterPanel :focus-request="diagnosticsFocus" @link-panel="handleDiagnosticsLink" />
     </div>
     <div ref="recentTasksAnchor" data-testid="statistics-recent-tasks-anchor">
       <RecentTasksPanel
-        title="????"
-        description="????????????????????"
+        title="最近任务"
+        description="按工作流回看最近执行、失败与 dry-run 任务。"
         :limit="20"
         :focus-request="recentTasksFocus"
         @link-panel="handleDiagnosticsLink"
       />
     </div>
     <RecipePanel
-      title="Recipe ???"
-      description="????????????????????????????"
+      title="Recipe 工作流"
+      description="预演、确认并回放高频顺序任务。"
       @link-panel="handleDiagnosticsLink"
     />
     <div ref="auditAnchor" data-testid="statistics-audit-anchor">

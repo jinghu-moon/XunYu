@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import type { GuardedTaskReceipt } from '../types'
 
@@ -37,7 +37,7 @@ const summary = computed(() => props.receipt.summary || `${props.receipt.action}
     </div>
     <pre class="receipt-card__output">{{ props.receipt.process.command_line }}
 
-{{ props.receipt.process.stdout || props.receipt.process.stderr || 'No command output' }}</pre>
+{{ props.receipt.process.stdout || props.receipt.process.stderr || '暂无执行输出' }}</pre>
   </section>
 </template>
 

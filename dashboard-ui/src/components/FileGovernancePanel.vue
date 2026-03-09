@@ -2,6 +2,7 @@
 import { computed, reactive, watch } from 'vue'
 import { runWorkspaceTask } from '../api'
 import type { WorkspaceCapabilities, WorkspaceTaskRunResponse } from '../types'
+import AclDiffDetails from './AclDiffDetails.vue'
 import { Button } from './button'
 
 type ProbeKey = 'lock' | 'protect' | 'acl'
@@ -28,10 +29,12 @@ interface ProbeDefinition {
 const props = withDefaults(
   defineProps<{
     path?: string
+    aclReferencePath?: string
     capabilities?: WorkspaceCapabilities | null
   }>(),
   {
     path: '',
+    aclReferencePath: '',
     capabilities: null,
   },
 )
@@ -40,6 +43,12 @@ const probeStates = reactive<Record<ProbeKey, ProbeState>>({
   lock: { loading: false, error: '', result: null },
   protect: { loading: false, error: '', result: null },
   acl: { loading: false, error: '', result: null },
+})
+
+const aclDiffState = reactive<ProbeState>({
+  loading: false,
+  error: '',
+  result: null,
 })
 
 const probeDefinitions: ProbeDefinition[] = [
@@ -80,7 +89,16 @@ const probeDefinitions: ProbeDefinition[] = [
   },
 ]
 
+function normalizeComparablePath(path: string): string {
+  return path.trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
 const activePath = computed(() => props.path.trim())
+const aclReferencePath = computed(() => props.aclReferencePath.trim())
+const canCompareAcl = computed(() => {
+  if (!activePath.value || !aclReferencePath.value) return false
+  return normalizeComparablePath(activePath.value) !== normalizeComparablePath(aclReferencePath.value)
+})
 
 const cards = computed(() =>
   probeDefinitions.map((definition) => {
@@ -97,13 +115,35 @@ const cards = computed(() =>
 )
 
 const canRefresh = computed(() => Boolean(activePath.value))
+const aclDiffHasDetails = computed(
+  () => aclDiffState.result?.details?.kind === 'acl_diff' || aclDiffState.result?.details?.kind === 'acl_diff_transition',
+)
+const aclDiffBadgeText = computed(() => {
+  if (!aclReferencePath.value) return '未设置参考'
+  if (!canCompareAcl.value) return '需切换目标'
+  if (aclDiffState.loading) return '加载中'
+  if (aclDiffState.error) return '失败'
+  const details = aclDiffState.result?.details
+  if (details?.kind === 'acl_diff') {
+    return details.diff.has_diff ? '仍有差异' : '已对齐'
+  }
+  if (details?.kind === 'acl_diff_transition') {
+    return details.after.has_diff ? '仍有差异' : '已对齐'
+  }
+  return aclDiffState.result ? '已刷新' : '待刷新'
+})
+
+function resetProbeState(state: ProbeState) {
+  state.loading = false
+  state.error = ''
+  state.result = null
+}
 
 function resetStates() {
   for (const key of Object.keys(probeStates) as ProbeKey[]) {
-    probeStates[key].loading = false
-    probeStates[key].error = ''
-    probeStates[key].result = null
+    resetProbeState(probeStates[key])
   }
+  resetProbeState(aclDiffState)
 }
 
 function errorMessage(err: unknown): string {
@@ -113,7 +153,7 @@ function errorMessage(err: unknown): string {
 
 function formatProcessOutput(result: WorkspaceTaskRunResponse | null): string {
   if (!result) return '-'
-  const raw = result.process.stdout || result.process.stderr || 'No command output'
+  const raw = result.process.stdout || result.process.stderr || '暂无执行输出'
   try {
     return JSON.stringify(JSON.parse(raw), null, 2)
   } catch {
@@ -121,9 +161,19 @@ function formatProcessOutput(result: WorkspaceTaskRunResponse | null): string {
   }
 }
 
+function buildAclDiffRequest(path: string, reference: string) {
+  return {
+    workspace: 'files-security',
+    action: 'acl:diff',
+    target: path,
+    args: ['acl', 'diff', '-p', path, '-r', reference],
+  }
+}
+
 async function refreshSnapshot() {
   const path = activePath.value
   if (!path) return
+
   await Promise.all(
     cards.value.map(async (card) => {
       const state = probeStates[card.id]
@@ -140,15 +190,23 @@ async function refreshSnapshot() {
       }
     }),
   )
+
+  resetProbeState(aclDiffState)
+  if (!canCompareAcl.value) return
+
+  aclDiffState.loading = true
+  try {
+    aclDiffState.result = await runWorkspaceTask(buildAclDiffRequest(path, aclReferencePath.value))
+  } catch (err) {
+    aclDiffState.error = errorMessage(err)
+  } finally {
+    aclDiffState.loading = false
+  }
 }
 
-watch(
-  () => activePath.value,
-  () => {
-    resetStates()
-  },
-  { immediate: true },
-)
+watch([activePath, aclReferencePath], () => {
+  resetStates()
+}, { immediate: true })
 </script>
 
 <template>
@@ -157,7 +215,7 @@ watch(
       <div>
         <h3 class="governance-panel__title">治理快照</h3>
         <p class="governance-panel__desc">
-          聚合当前文件的锁占用、保护规则和 ACL 摘要；危险改动仍通过下方任务卡进入 Triple-Guard。
+          聚合当前文件的锁占用、保护规则和 ACL 摘要；如果已设置 ACL 参考路径，还会一并展示结构化 ACL 差异视图。
         </p>
       </div>
       <Button data-testid="refresh-governance" preset="secondary" :disabled="!canRefresh" @click="refreshSnapshot">
@@ -169,9 +227,15 @@ watch(
       先在上方 File Manager 选中文件，再刷新治理快照。
     </div>
     <template v-else>
-      <div class="governance-panel__path">
-        <span class="governance-panel__path-label">治理对象</span>
-        <strong class="governance-panel__path-value">{{ activePath }}</strong>
+      <div class="governance-panel__paths">
+        <div class="governance-panel__path">
+          <span class="governance-panel__path-label">治理对象</span>
+          <strong class="governance-panel__path-value">{{ activePath }}</strong>
+        </div>
+        <div class="governance-panel__path" data-testid="acl-reference-path">
+          <span class="governance-panel__path-label">ACL 参考</span>
+          <strong class="governance-panel__path-value">{{ aclReferencePath || '-' }}</strong>
+        </div>
       </div>
 
       <div class="governance-panel__grid">
@@ -203,6 +267,39 @@ watch(
             <pre class="governance-panel__output">{{ card.result.process.command_line }}
 
 {{ formatProcessOutput(card.result) }}</pre>
+          </template>
+        </article>
+
+        <article class="governance-panel__card governance-panel__card--wide" data-testid="probe-acl-diff">
+          <div class="governance-panel__card-header">
+            <div>
+              <h4 class="governance-panel__card-title">ACL 差异视图</h4>
+              <p class="governance-panel__card-desc">对比治理对象与参考路径的 ACL 差异，辅助决定是否执行 `acl:copy` 等高风险动作。</p>
+            </div>
+            <span
+              :class="[
+                'governance-panel__badge',
+                aclDiffState.error ? 'is-error' : aclDiffHasDetails && aclDiffBadgeText === '已对齐' ? 'is-ok' : '',
+              ]"
+            >
+              {{ aclDiffBadgeText }}
+            </span>
+          </div>
+
+          <p v-if="!aclReferencePath" class="governance-panel__message">先在工作台里设置 ACL 参考路径，再刷新快照即可看到差异视图。</p>
+          <p v-else-if="!canCompareAcl" class="governance-panel__message">当前治理对象与 ACL 参考相同，请切换目标文件后再对比。</p>
+          <p v-else-if="aclDiffState.error" class="governance-panel__message governance-panel__message--error">{{ aclDiffState.error }}</p>
+          <p v-else-if="aclDiffState.loading" class="governance-panel__message">正在对比 ACL...</p>
+          <p v-else-if="!aclDiffState.result" class="governance-panel__message">点击“刷新快照”后展示结构化 ACL 差异视图。</p>
+          <template v-else>
+            <div class="governance-panel__meta">
+              <span>{{ aclDiffState.result.action }}</span>
+              <span>{{ aclDiffState.result.process.duration_ms }} ms</span>
+            </div>
+            <AclDiffDetails v-if="aclDiffState.result.details" :details="aclDiffState.result.details" />
+            <pre v-else class="governance-panel__output">{{ aclDiffState.result.process.command_line }}
+
+{{ formatProcessOutput(aclDiffState.result) }}</pre>
           </template>
         </article>
       </div>
@@ -253,6 +350,12 @@ watch(
   background: var(--surface-panel);
 }
 
+.governance-panel__paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
 .governance-panel__path {
   display: flex;
   flex-direction: column;
@@ -279,6 +382,10 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.governance-panel__card--wide {
+  background: var(--surface-card);
 }
 
 .governance-panel__badge {

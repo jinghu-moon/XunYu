@@ -25,6 +25,7 @@ type TaskPresetMap = Record<string, Partial<TaskFormState>>
 
 const currentDirectory = ref('')
 const selectedPath = ref('')
+const aclReferencePath = ref('')
 const batchPaths = ref<string[]>([])
 const recentTasksFocus = ref<RecentTasksFocusRequest | null>(null)
 const recentTasksFocusKey = ref(0)
@@ -35,10 +36,15 @@ const syncMessage = ref('等待从上方文件管理器同步上下文。')
 
 const hasDirectory = computed(() => Boolean(currentDirectory.value.trim()))
 const hasSelection = computed(() => Boolean(selectedPath.value.trim()))
+const hasAclReference = computed(() => Boolean(aclReferencePath.value.trim()))
 const hasBatch = computed(() => batchPaths.value.length > 0)
 const canQueueSelection = computed(
   () => hasSelection.value && !batchPaths.value.includes(selectedPath.value.trim()),
 )
+const canSyncAclComparison = computed(() => {
+  if (!hasSelection.value || !hasAclReference.value) return false
+  return normalizePath(selectedPath.value) !== normalizePath(aclReferencePath.value)
+})
 const batchPreview = computed(() => batchPaths.value.slice(0, 6))
 const batchOverflow = computed(() => Math.max(batchPaths.value.length - batchPreview.value.length, 0))
 
@@ -147,6 +153,17 @@ function buildBatchBackupPresets(): TaskPresetMap {
   return next
 }
 
+
+function buildAclComparisonPresets(): TaskPresetMap {
+  const path = normalizePath(selectedPath.value)
+  const reference = normalizePath(aclReferencePath.value)
+  if (!path || !reference || path === reference) return {}
+  const next: TaskPresetMap = {}
+  pushTaskPreset(next, 'acl-diff', { path, reference })
+  pushTaskPreset(next, 'acl-copy', { path, reference })
+  return next
+}
+
 function applyTaskPresets(presets: TaskPresetMap, message: string) {
   taskPresets.value = presets
   presetVersion.value += 1
@@ -168,6 +185,20 @@ function syncAllContext() {
   applyTaskPresets(
     mergePresetMaps(buildDirectoryPresets(), buildSelectionPresets()),
     '已将当前目录与当前文件同步到文件任务区。',
+  )
+}
+
+function setAclReference() {
+  const path = normalizePath(selectedPath.value)
+  if (!path) return
+  aclReferencePath.value = path
+  syncMessage.value = `已设置 ACL 参考路径：${path}`
+}
+
+function syncAclComparisonContext() {
+  applyTaskPresets(
+    mergePresetMaps(buildSelectionPresets(), buildAclComparisonPresets()),
+    `已将 ACL 对比 / 复制任务同步为：${selectedPath.value || '-'} <- ${aclReferencePath.value || '-'}`,
   )
 }
 
@@ -232,6 +263,7 @@ function onSelectionChange(path: string) {
       <div class="files-security__summary">
         <span class="files-security__summary-chip">目录 {{ currentDirectory || '-' }}</span>
         <span class="files-security__summary-chip">文件 {{ selectedPath || '-' }}</span>
+        <span class="files-security__summary-chip">ACL 参考 {{ aclReferencePath || '-' }}</span>
         <span class="files-security__summary-chip">批量 {{ batchPaths.length }}</span>
       </div>
     </template>
@@ -265,12 +297,18 @@ function onSelectionChange(path: string) {
               <span class="files-security__context-label">当前文件</span>
               <strong class="files-security__context-value">{{ selectedPath || '-' }}</strong>
             </div>
+            <div class="files-security__context-item">
+              <span class="files-security__context-label">ACL 参考</span>
+              <strong class="files-security__context-value">{{ aclReferencePath || '-' }}</strong>
+            </div>
           </div>
 
           <div class="files-security__actions">
             <Button preset="secondary" :disabled="!hasDirectory" @click="syncDirectoryContext">同步目录任务</Button>
             <Button preset="secondary" :disabled="!hasSelection" @click="syncSelectionContext">同步文件任务</Button>
             <Button preset="primary" :disabled="!hasDirectory && !hasSelection" @click="syncAllContext">同步全部</Button>
+            <Button preset="secondary" :disabled="!hasSelection" @click="setAclReference">设为 ACL 参考</Button>
+            <Button preset="secondary" :disabled="!canSyncAclComparison" @click="syncAclComparisonContext">同步 ACL 对比</Button>
             <Button preset="secondary" :disabled="!canQueueSelection" @click="addSelectionToBatch">加入批量队列</Button>
           </div>
 
@@ -280,7 +318,7 @@ function onSelectionChange(path: string) {
             <div class="files-security__batch-header">
               <div>
                 <h4 class="files-security__batch-title">批量队列与治理</h4>
-                <p class="files-security__batch-desc">??????????? protect / encrypt / decrypt / ACL ???????????????????????????</p>
+                <p class="files-security__batch-desc">批量收口 protect / encrypt / decrypt / ACL 等高风险治理动作，统一走逐项预演、确认与回执。</p>
               </div>
               <Button preset="secondary" :disabled="!hasBatch" @click="clearBatch">清空</Button>
             </div>
@@ -304,10 +342,11 @@ function onSelectionChange(path: string) {
             :paths="batchPaths"
             :capabilities="capabilities"
             @focus-recent-tasks="focusRecentTasks"
+            @link-panel="handleWorkspaceLink"
           />
         </section>
 
-        <FileGovernancePanel :path="selectedPath" :capabilities="capabilities" />
+        <FileGovernancePanel :path="selectedPath" :acl-reference-path="aclReferencePath" :capabilities="capabilities" />
 
         <RecentTasksPanel
           title="文件任务中心"

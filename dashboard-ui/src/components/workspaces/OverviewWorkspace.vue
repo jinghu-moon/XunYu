@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { fetchWorkspaceOverviewSummary } from '../../api'
 import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities, WorkspaceOverviewSummary } from '../../types'
@@ -26,51 +26,51 @@ onMounted(() => {
 </script>
 
 <template>
-  <WorkspaceFrame title="??" description="?????????????????????? Home ?????">
+  <WorkspaceFrame title="总览" description="集中查看工作台摘要、最近任务与全局能力入口。">
     <template #summary>
       <div class="overview-kpis">
         <div class="overview-kpi">
-          <span>Bookmarks</span>
+          <span>书签数</span>
           <strong>{{ summary?.bookmarks ?? '-' }}</strong>
         </div>
         <div class="overview-kpi">
-          <span>Ports</span>
+          <span>活跃端口</span>
           <strong>{{ summary ? summary.tcp_ports + summary.udp_ports : '-' }}</strong>
         </div>
         <div class="overview-kpi">
-          <span>Env Vars</span>
+          <span>环境变量</span>
           <strong>{{ summary?.env_total_vars ?? '-' }}</strong>
         </div>
         <div class="overview-kpi">
-          <span>Recent Tasks</span>
+          <span>最近任务</span>
           <strong>{{ summary?.recent_tasks ?? '-' }}</strong>
         </div>
         <div class="overview-kpi">
-          <span>Failed Tasks</span>
+          <span>失败任务</span>
           <strong>{{ summary?.failed_tasks ?? '-' }}</strong>
         </div>
         <div class="overview-kpi">
-          <span>Dry Runs</span>
+          <span>预演任务</span>
           <strong>{{ summary?.dry_run_tasks ?? '-' }}</strong>
         </div>
       </div>
     </template>
 
     <RecentTasksPanel
-      title="????"
-      description="???????????????????"
+      title="最近任务"
+      description="快速回看最近执行、失败与 dry-run 任务。"
       :limit="12"
       @link-panel="emit('link-panel', $event)"
     />
 
     <section class="overview-section">
-      <h3 class="overview-section__title">?????</h3>
+      <h3 class="overview-section__title">工作台能力</h3>
       <div class="overview-capabilities">
         <span v-for="name in summary?.workspaces || []" :key="name" class="overview-chip">{{ name }}</span>
       </div>
       <div v-if="props.capabilities" class="overview-capabilities overview-capabilities--feature">
         <span v-for="(enabled, key) in props.capabilities" :key="key" :class="['overview-chip', enabled ? 'is-enabled' : 'is-disabled']">
-          {{ key }}: {{ enabled ? 'on' : 'off' }}
+          {{ key }}：{{ enabled ? '已启用' : '未启用' }}
         </span>
       </div>
     </section>

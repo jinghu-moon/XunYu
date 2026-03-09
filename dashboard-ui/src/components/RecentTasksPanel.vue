@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 
 import { computed, onMounted, ref, watch } from 'vue'
 
@@ -180,23 +180,23 @@ const activeFilterItems = computed(() => {
   const items: Array<{ key: string; label: string; value: string }> = []
 
   if (statusFilter.value !== 'all') {
-    items.push({ key: 'status', label: '??', value: statusFilter.value })
+    items.push({ key: 'status', label: '状态', value: statusFilter.value })
   }
 
   const searchKeyword = searchFilter.value.trim()
   if (searchKeyword) {
-    items.push({ key: 'search', label: '??', value: searchKeyword })
+    items.push({ key: 'search', label: '关键词', value: searchKeyword })
   }
 
   if (actionFilter.value) {
-    items.push({ key: 'action', label: '??', value: actionFilter.value })
+    items.push({ key: 'action', label: '动作', value: actionFilter.value })
   }
 
   if (dryRunFilter.value !== 'all') {
     items.push({
       key: 'dry_run',
       label: 'Dry Run',
-      value: dryRunFilter.value === 'dry-run' ? '? Dry Run' : '????',
+      value: dryRunFilter.value === 'dry-run' ? '仅 Dry Run' : '仅实执行',
     })
   }
 
@@ -258,6 +258,28 @@ const replayLabel = computed(() => {
 const selectedGovernanceContext = computed(() =>
 
   selectedRecord.value ? resolveRecentTaskGovernanceContext(selectedRecord.value) : null,
+
+)
+
+
+
+const replayPreviewGovernanceContext = computed(() =>
+
+  replaySource.value && preview.value
+
+    ? resolveRecentTaskGovernanceContext(
+
+        replaySource.value,
+
+        preview.value.process,
+
+        'preview',
+
+        preview.value.details ?? null,
+
+      )
+
+    : null,
 
 )
 
@@ -531,7 +553,7 @@ onMounted(() => {
 
         <Button data-testid="refresh-button" preset="secondary" :loading="loading" @click="loadRecentTasks">
 
-          刷新
+          鍒锋柊
 
         </Button>
 
@@ -543,11 +565,11 @@ onMounted(() => {
 
     <div class="recent-tasks__summary">
 
-      <span class="recent-tasks__chip">总数 {{ stats?.total ?? 0 }}</span>
+      <span class="recent-tasks__chip">鎬绘暟 {{ stats?.total ?? 0 }}</span>
 
-      <span class="recent-tasks__chip recent-tasks__chip--ok">成功 {{ stats?.succeeded ?? 0 }}</span>
+      <span class="recent-tasks__chip recent-tasks__chip--ok">鎴愬姛 {{ stats?.succeeded ?? 0 }}</span>
 
-      <span class="recent-tasks__chip recent-tasks__chip--error">失败 {{ stats?.failed ?? 0 }}</span>
+      <span class="recent-tasks__chip recent-tasks__chip--error">澶辫触 {{ stats?.failed ?? 0 }}</span>
 
       <span class="recent-tasks__chip">Dry Run {{ stats?.dry_run ?? 0 }}</span>
 
@@ -557,51 +579,51 @@ onMounted(() => {
 
     <div class="recent-tasks__filters">
       <label class="recent-tasks__filter">
-        <span>??</span>
+        <span>状态</span>
         <select v-model="statusFilter" data-testid="status-filter">
-          <option value="all">??</option>
-          <option value="succeeded">??</option>
-          <option value="failed">??</option>
-          <option value="previewed">??</option>
+          <option value="all">全部</option>
+          <option value="succeeded">成功</option>
+          <option value="failed">失败</option>
+          <option value="previewed">预演</option>
         </select>
       </label>
       <label class="recent-tasks__filter recent-tasks__filter--wide">
-        <span>??</span>
+        <span>搜索</span>
         <input
           v-model="searchFilter"
           data-testid="recent-search-filter"
           type="text"
-          placeholder="??? / ?? / ????"
+          placeholder="摘要 / 目标 / 命令"
         />
       </label>
       <label class="recent-tasks__filter">
-        <span>??</span>
+        <span>动作</span>
         <select v-model="actionFilter" data-testid="recent-action-filter">
-          <option value="">??</option>
+          <option value="">全部</option>
           <option v-for="action in actionItems" :key="action" :value="action">{{ action }}</option>
         </select>
       </label>
       <label class="recent-tasks__filter">
-        <span>Dry Run</span>
+        <span>执行类型</span>
         <select v-model="dryRunFilter" data-testid="dryrun-filter">
-          <option value="all">??</option>
-          <option value="dry-run">? Dry Run</option>
-          <option value="executed">????</option>
+          <option value="all">全部</option>
+          <option value="dry-run">仅 Dry Run</option>
+          <option value="executed">仅实执行</option>
         </select>
       </label>
     </div>
 
     <div v-if="activeFilterItems.length" class="recent-tasks__focus" data-testid="recent-active-filters">
-      <span class="recent-tasks__focus-label">????</span>
+      <span class="recent-tasks__focus-label">当前筛选</span>
       <span
         v-for="item in activeFilterItems"
         :key="item.key"
         class="recent-tasks__chip recent-tasks__chip--focus"
       >
-        {{ item.label }}?{{ item.value }}
+        {{ item.label }}：{{ item.value }}
       </span>
       <Button data-testid="clear-recent-filters" size="sm" preset="secondary" @click="clearActiveFilters">
-        ????
+        清空筛选
       </Button>
     </div>
 
@@ -678,18 +700,18 @@ onMounted(() => {
 
 
         <div class="recent-tasks__detail-meta">
-
           <div><strong>模式</strong> {{ selectedRecord.mode }}</div>
+          <div><strong>妯″紡</strong> {{ selectedRecord.mode }}</div>
 
           <div><strong>阶段</strong> {{ selectedRecord.phase }}</div>
 
           <div><strong>Dry Run</strong> {{ selectedRecord.dry_run ? '是' : '否' }}</div>
-
           <div><strong>时间</strong> {{ formatTime(selectedRecord.created_at) }}</div>
-
+          <div><strong>鏃堕棿</strong> {{ formatTime(selectedRecord.created_at) }}</div>
           <div><strong>审计</strong> {{ selectedRecord.audit_action || '-' }}</div>
-
+          <div><strong>瀹¤</strong> {{ selectedRecord.audit_action || '-' }}</div>
           <div><strong>耗时</strong> {{ selectedRecord.process.duration_ms }} ms</div>
+          <div><strong>鑰楁椂</strong> {{ selectedRecord.process.duration_ms }} ms</div>
 
         </div>
 
@@ -727,7 +749,7 @@ onMounted(() => {
 
           >
 
-            ??????
+            查看诊断
 
           </Button>
 
@@ -757,7 +779,7 @@ onMounted(() => {
 
 
 
-{{ selectedRecord.process.stdout || selectedRecord.process.stderr || 'No command output' }}</pre>
+{{ selectedRecord.process.stdout || selectedRecord.process.stderr || '暂无输出' }}</pre>
 
       </section>
 
@@ -775,7 +797,7 @@ onMounted(() => {
 
         <span :class="['recent-tasks__badge', runResult.process.success ? 'is-succeeded' : 'is-failed']">
 
-          {{ runResult.process.success ? 'succeeded' : 'failed' }}
+          {{ runResult.process.success ? '成功' : '失败' }}
 
         </span>
 
@@ -803,7 +825,7 @@ onMounted(() => {
 
 
 
-{{ runResult.process.stdout || runResult.process.stderr || 'No command output' }}</pre>
+{{ runResult.process.stdout || runResult.process.stderr || '暂无输出' }}</pre>
 
     </div>
 
@@ -845,7 +867,29 @@ onMounted(() => {
 
       @confirm="confirmGuardedReplay"
 
-    />
+    >
+
+      <template #preview-extra>
+
+        <FileGovernanceSummary
+
+          v-if="replayPreviewGovernanceContext"
+
+          :task="replayPreviewGovernanceContext.task"
+
+          :form="replayPreviewGovernanceContext.form"
+
+          :phase="replayPreviewGovernanceContext.phase"
+
+          :process="replayPreviewGovernanceContext.process"
+
+          :details="replayPreviewGovernanceContext.details"
+
+        />
+
+      </template>
+
+    </UnifiedConfirmDialog>
 
   </section>
 

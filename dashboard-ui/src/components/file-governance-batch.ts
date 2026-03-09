@@ -3,10 +3,12 @@
   GuardedTaskPreviewResponse,
   GuardedTaskReceipt,
   RecentTasksFocusRequest,
+  StatisticsWorkspaceLinkPayload,
   TaskProcessOutput,
 } from '../types'
 import type { TaskFieldDefinition, TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
 import { filesSecurityTaskGroups } from '../workspace-tools'
+import { resolveDiagnosticsGovernanceFamilyFromAction } from './statistics-diagnostics-focus'
 
 export type BatchGovernanceActionId =
   | 'protect-set'
@@ -341,6 +343,93 @@ export function createRecentTasksFocusFromBatchReceipt(
     dry_run: 'executed',
     action: resolveRecentTasksAction(actionId, item.receipt?.action),
     search: item.path,
+  }
+}
+
+function resolveBatchGovernanceDiagnosticsStatus(payload: {
+  previewStatus?: string | null
+  receiptStatus?: string | null
+  hasPreview?: boolean
+}): 'previewed' | 'succeeded' | 'failed' {
+  if (payload.receiptStatus === 'succeeded') return 'succeeded'
+  if (payload.receiptStatus === 'failed') return 'failed'
+  if (payload.previewStatus === 'previewed' || payload.hasPreview) return 'previewed'
+  return 'failed'
+}
+
+export function createDiagnosticsLinkFromBatchPreview(
+  actionId: BatchGovernanceActionId,
+  item: BatchGovernancePreviewItem,
+): StatisticsWorkspaceLinkPayload {
+  const action = resolveRecentTasksAction(actionId, item.preview?.action)
+  const governanceFamily = resolveDiagnosticsGovernanceFamilyFromAction(action)
+
+  return {
+    panel: 'diagnostics-center',
+    request: governanceFamily
+      ? {
+          panel: 'governance',
+          governance_family: governanceFamily,
+          governance_status: resolveBatchGovernanceDiagnosticsStatus({
+            previewStatus: item.preview?.status,
+            hasPreview: Boolean(item.preview),
+          }),
+          target: item.preview?.target || item.path,
+        }
+      : {
+          panel: 'failed',
+          target: item.preview?.target || item.path,
+        },
+  }
+}
+
+export function createAuditLinkFromBatchReceipt(
+  actionId: BatchGovernanceActionId,
+  item: BatchGovernanceReceiptItem,
+): StatisticsWorkspaceLinkPayload {
+  const receipt = item.receipt
+  const action = String(receipt?.audit_action || resolveRecentTasksAction(actionId, receipt?.action)).trim()
+  const result = receipt?.status === 'succeeded' ? 'success' : 'failed'
+
+  return {
+    panel: 'audit',
+    request: {
+      search: item.path,
+      action,
+      result,
+    },
+  }
+}
+
+export function createDiagnosticsLinkFromBatchReceipt(
+  actionId: BatchGovernanceActionId,
+  item: BatchGovernanceReceiptItem,
+): StatisticsWorkspaceLinkPayload {
+  const receipt = item.receipt
+  const action = resolveRecentTasksAction(actionId, receipt?.action)
+  const governanceFamily = resolveDiagnosticsGovernanceFamilyFromAction(action)
+
+  return {
+    panel: 'diagnostics-center',
+    request: governanceFamily
+      ? {
+          panel: 'governance',
+          governance_family: governanceFamily,
+          governance_status: resolveBatchGovernanceDiagnosticsStatus({
+            receiptStatus: receipt?.status,
+          }),
+          target: receipt?.target || item.path,
+          audit_action: receipt?.audit_action || undefined,
+          audit_result: receipt?.status === 'succeeded' ? 'success' : 'failed',
+          audit_timestamp: receipt?.audited_at,
+        }
+      : {
+          panel: 'audit',
+          target: receipt?.target || item.path,
+          audit_action: receipt?.audit_action || undefined,
+          audit_result: receipt?.status === 'succeeded' ? 'success' : 'failed',
+          audit_timestamp: receipt?.audited_at,
+        },
   }
 }
 

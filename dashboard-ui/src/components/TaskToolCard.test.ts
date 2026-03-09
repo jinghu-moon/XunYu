@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+﻿import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceTaskDefinition } from '../workspace-tools'
 import TaskToolCard from './TaskToolCard.vue'
@@ -31,7 +31,7 @@ describe('TaskToolCard', () => {
       description: '查看最近书签',
       action: 'recent',
       mode: 'run',
-      fields: [{ key: 'limit', label: '数量', type: 'number', defaultValue: '10' }],
+      fields: [{ key: 'limit', label: '鏁伴噺', type: 'number', defaultValue: '10' }],
       buildRunArgs: () => ['recent', '-n', '10', '-f', 'json'],
     }
 
@@ -55,7 +55,7 @@ describe('TaskToolCard', () => {
 
     expect(apiMocks.runWorkspaceTask).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('[1,2,3]')
-    expect(wrapper.text()).toContain('成功')
+    expect(wrapper.text()).toContain('鎴愬姛')
   })
 
   it('renders governance execute summary for acl:diff run tasks', async () => {
@@ -63,13 +63,13 @@ describe('TaskToolCard', () => {
       id: 'acl-diff',
       workspace: 'files-security',
       title: 'ACL 差异摘要',
-      description: '??????',
+      description: '比较 ACL 差异并输出摘要。',
       action: 'acl:diff',
       mode: 'run',
       fields: [
-        { key: 'path', label: '??', type: 'text', required: true, defaultValue: 'D:/tmp/a.txt' },
-        { key: 'reference', label: '????', type: 'text', required: true, defaultValue: 'D:/tmp/b.txt' },
-        { key: 'output', label: '?? CSV', type: 'text', defaultValue: 'D:/tmp/acl-diff.csv' },
+        { key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/a.txt' },
+        { key: 'reference', label: '参考路径', type: 'text', required: true, defaultValue: 'D:/tmp/b.txt' },
+        { key: 'output', label: '输出 CSV', type: 'text', defaultValue: 'D:/tmp/acl-diff.csv' },
       ],
       target: () => 'D:/tmp/a.txt',
       buildRunArgs: () => ['acl', 'diff', '-p', 'D:/tmp/a.txt', '-r', 'D:/tmp/b.txt', '-o', 'D:/tmp/acl-diff.csv'],
@@ -112,11 +112,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '危险动作',
+      description: '鍗遍櫓鍔ㄤ綔',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
@@ -194,22 +194,22 @@ describe('TaskToolCard', () => {
     const task: WorkspaceTaskDefinition = {
       id: 'protect-set',
       workspace: 'files-security',
-      title: '????',
-      description: '????',
+      title: '设置保护规则',
+      description: '预演后确认写入保护规则。',
       action: 'protect:set',
       mode: 'guarded',
       tone: 'danger',
       feature: 'protect',
       fields: [
-        { key: 'path', label: '??', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' },
-        { key: 'deny', label: '????', type: 'text', defaultValue: 'delete,move,rename' },
-        { key: 'require', label: '????', type: 'text', defaultValue: 'force,reason' },
-        { key: 'systemAcl', label: '???? ACL', type: 'checkbox', defaultValue: true },
+        { key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' },
+        { key: 'deny', label: '拒绝权限', type: 'text', defaultValue: 'delete,move,rename' },
+        { key: 'require', label: '必需条件', type: 'text', defaultValue: 'force,reason' },
+        { key: 'systemAcl', label: '写入系统 ACL', type: 'checkbox', defaultValue: true },
       ],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['protect', 'status', '-f', 'json', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['protect', 'set', 'D:/tmp/demo.txt', '--deny', 'delete,move,rename', '--require', 'force,reason', '--system-acl'],
-      previewSummary: () => '???? D:/tmp/demo.txt',
+      previewSummary: () => '保护 D:/tmp/demo.txt',
     }
 
     apiMocks.previewGuardedTask.mockResolvedValue({
@@ -222,8 +222,8 @@ describe('TaskToolCard', () => {
       guarded: true,
       dry_run: true,
       ready_to_execute: true,
-      summary: '???? D:/tmp/demo.txt',
-      preview_summary: '???? D:/tmp/demo.txt',
+      summary: '保护 D:/tmp/demo.txt',
+      preview_summary: '保护 D:/tmp/demo.txt',
       expires_in_secs: 300,
       process: {
         command_line: 'xun protect status -f json D:/tmp/demo.txt',
@@ -242,6 +242,7 @@ describe('TaskToolCard', () => {
     expect(wrapper.get('[data-testid="governance-summary-preview"]').text()).toContain('保护变更预演摘要')
     expect(wrapper.text()).toContain('更新现有保护规则')
     expect(wrapper.text()).toContain('delete / move / rename')
+    expect(document.body.querySelector('[data-testid="confirm-dialog-extra"]')?.textContent || '').toContain('保护变更预演摘要')
   })
 
   it('stays out of confirm state when preview fails', async () => {
@@ -249,11 +250,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '危险动作',
+      description: '鍗遍櫓鍔ㄤ綔',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
@@ -277,11 +278,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '危险动作',
+      description: '鍗遍櫓鍔ㄤ綔',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
@@ -353,11 +354,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '危险动作',
+      description: '鍗遍櫓鍔ㄤ綔',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '路径', type: 'text', required: true }],
+      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true }],
       target: () => '',
       buildPreviewArgs: () => ['rm', '--dry-run'],
       buildExecuteArgs: () => ['rm', '-y'],
@@ -524,11 +525,11 @@ describe('TaskToolCard', () => {
     const task: WorkspaceTaskDefinition = {
       id: 'recent-focus',
       workspace: 'paths-context',
-      title: '????',
-      description: '??????',
+      title: '最近访问',
+      description: '查看最近访问记录。',
       action: 'recent',
       mode: 'run',
-      fields: [{ key: 'limit', label: '??', type: 'number', defaultValue: '10' }],
+      fields: [{ key: 'limit', label: '数量', type: 'number', defaultValue: '10' }],
       buildRunArgs: () => ['recent', '-n', '10', '-f', 'json'],
     }
 

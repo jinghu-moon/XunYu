@@ -20,7 +20,7 @@ const props = withDefaults(
     category?: string
   }>(),
   {
-    title: 'Recipe MVP',
+    title: 'Recipe 工作流',
     description: '把高频本地流程沉淀成可预演、可确认、可复用的顺序工作流。',
     category: '',
   },
@@ -328,9 +328,9 @@ onMounted(() => {
             </span>
           </div>
           <div class="recipe-panel__item-meta">
-            <span>steps {{ preview.total_steps }}</span>
-            <span>guarded {{ preview.guarded ? 'yes' : 'no' }}</span>
-            <span>expires {{ preview.expires_in_secs }}s</span>
+            <span>步骤 {{ preview.total_steps }}</span>
+            <span>保护链路 {{ preview.guarded ? '已启用' : '未启用' }}</span>
+            <span>过期 {{ preview.expires_in_secs }}s</span>
           </div>
           <article v-for="step in preview.steps" :key="step.id" class="recipe-panel__output-card">
             <div class="recipe-panel__item-top">
@@ -340,7 +340,7 @@ onMounted(() => {
             <p class="recipe-panel__item-desc">{{ step.summary }}</p>
             <pre class="recipe-panel__output">{{ step.process.command_line }}
 
-{{ step.process.stdout || step.process.stderr || 'No preview output' }}</pre>
+{{ step.process.stdout || step.process.stderr || '暂无输出' }}</pre>
           </article>
           <div class="recipe-panel__actions">
             <Button
@@ -366,8 +366,8 @@ onMounted(() => {
             </span>
           </div>
           <div class="recipe-panel__item-meta">
-            <span>completed {{ receipt.completed_steps }}/{{ receipt.total_steps }}</span>
-            <span>guarded {{ receipt.guarded ? 'yes' : 'no' }}</span>
+            <span>已完成 {{ receipt.completed_steps }}/{{ receipt.total_steps }}</span>
+            <span>保护链路 {{ receipt.guarded ? '已启用' : '未启用' }}</span>
             <span>{{ formatTime(receipt.audited_at) }}</span>
           </div>
           <article v-for="step in receipt.steps" :key="step.id" class="recipe-panel__output-card">
@@ -380,15 +380,15 @@ onMounted(() => {
             <p class="recipe-panel__item-desc">{{ step.summary }}</p>
             <div class="recipe-panel__result-links">
               <button :data-testid="`recipe-link-recent-${step.id}`" class="recipe-panel__link" type="button" @click="focusRecentTasksForStep(step)">
-                ???????
+                回到最近任务
               </button>
               <button :data-testid="`recipe-link-audit-${step.id}`" class="recipe-panel__link" type="button" @click="focusAuditForStep(step)">
-                ??????
+                查看审计
               </button>
             </div>
             <pre class="recipe-panel__output">{{ step.process.command_line }}
 
-{{ step.process.stdout || step.process.stderr || 'No command output' }}</pre>
+{{ step.process.stdout || step.process.stderr || '暂无输出' }}</pre>
           </article>
         </section>
       </section>

@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+﻿import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiagnosticsSummaryResponse, RecentTaskRecord } from '../types'
 import DiagnosticsCenterPanel from './DiagnosticsCenterPanel.vue'
@@ -27,7 +27,7 @@ function createGovernanceAlert(
 ): RecentTaskRecord {
   const target = overrides.target ?? 'D:/repo/demo.txt'
   const action = overrides.action ?? 'acl:owner'
-  const baseSummary = overrides.summary ?? '?? D:/repo/demo.txt ? Owner'
+  const baseSummary = overrides.summary ?? '设置 D:/repo/demo.txt 的 Owner'
 
   return {
     id: overrides.id ?? 'task-gov-1',
@@ -165,10 +165,10 @@ describe('DiagnosticsCenterPanel', () => {
     await flushPromises()
 
     expect(apiMocks.fetchWorkspaceDiagnosticsSummary).toHaveBeenCalledWith('all')
-    expect(wrapper.text()).toContain('???')
+    expect(wrapper.text()).toContain('诊断中心')
     expect(wrapper.text()).toContain('PATH contains missing entry')
     expect(wrapper.text()).toContain('cstat .')
-    expect(wrapper.text()).toContain('??????')
+    expect(wrapper.text()).toContain('治理预警')
     expect(wrapper.text()).toContain('ACL Owner')
     expect(wrapper.text()).toContain('Administrators')
     expect(wrapper.text()).toContain('dashboard.task.execute.acl:owner')
@@ -266,7 +266,7 @@ describe('DiagnosticsCenterPanel', () => {
       id: 'task-gov-protect',
       action: 'protect:set',
       target: 'D:/repo/protect.txt',
-      summary: '???? D:/repo/protect.txt',
+      summary: '保护 D:/repo/protect.txt',
       auditAction: 'dashboard.task.execute.protect:set',
       process: {
         command_line: 'xun protect set D:/repo/protect.txt --deny delete -y',
@@ -280,7 +280,7 @@ describe('DiagnosticsCenterPanel', () => {
           target: 'D:/repo/protect.txt',
           preview_args: ['protect', 'status', '-f', 'json', 'D:/repo/protect.txt'],
           execute_args: ['protect', 'set', 'D:/repo/protect.txt', '--deny', 'delete'],
-          preview_summary: '???? D:/repo/protect.txt',
+          preview_summary: '保护 D:/repo/protect.txt',
         },
       },
     })
@@ -289,7 +289,7 @@ describe('DiagnosticsCenterPanel', () => {
       action: 'encrypt',
       target: 'D:/repo/secret.txt',
       status: 'failed',
-      summary: '?? D:/repo/secret.txt',
+      summary: '加密 D:/repo/secret.txt',
       auditAction: 'dashboard.task.execute.encrypt',
       process: {
         command_line: 'xun encrypt --to age1abc D:/repo/secret.txt',
@@ -306,7 +306,7 @@ describe('DiagnosticsCenterPanel', () => {
           target: 'D:/repo/secret.txt',
           preview_args: ['find', '--dry-run', '-f', 'json', '--test-path', 'D:/repo/secret.txt'],
           execute_args: ['encrypt', '--to', 'age1abc', 'D:/repo/secret.txt'],
-          preview_summary: '?? D:/repo/secret.txt',
+          preview_summary: '加密 D:/repo/secret.txt',
         },
       },
     })
@@ -322,19 +322,19 @@ describe('DiagnosticsCenterPanel', () => {
     const governancePanel = wrapper.get('[data-panel-id="governance"]')
     expect(governancePanel.text()).toContain('ACL')
     expect(governancePanel.text()).toContain('Protect')
-    expect(governancePanel.text()).toContain('???')
+    expect(governancePanel.text()).toContain('加解密')
     expect(governancePanel.findAll('[data-testid="diagnostics-governance-group"]')).toHaveLength(3)
 
     await wrapper.get('[data-testid="diagnostics-governance-family"]').setValue('crypt')
     await flushPromises()
 
-    expect(governancePanel.text()).toContain('?? D:/repo/secret.txt')
-    expect(governancePanel.text()).not.toContain('???? D:/repo/protect.txt')
+    expect(governancePanel.text()).toContain('加密 D:/repo/secret.txt')
+    expect(governancePanel.text()).not.toContain('保护 D:/repo/protect.txt')
 
     await wrapper.get('[data-testid="diagnostics-governance-status"]').setValue('failed')
     await flushPromises()
 
-    expect(governancePanel.text()).toContain('?? 1 / 3 ?????')
+    expect(governancePanel.text()).toContain('已筛选 1 / 3 条')
 
     await wrapper.get('[data-testid="diagnostics-jump-guarded"]').trigger('click')
 

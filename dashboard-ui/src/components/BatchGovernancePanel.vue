@@ -1,14 +1,22 @@
 ﻿<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { executeGuardedTask, previewGuardedTask } from '../api'
-import type { GuardedTaskPreviewResponse, RecentTasksFocusRequest, WorkspaceCapabilities } from '../types'
+import type {
+  GuardedTaskPreviewResponse,
+  RecentTasksFocusRequest,
+  StatisticsWorkspaceLinkPayload,
+  WorkspaceCapabilities,
+} from '../types'
 import type { TaskFieldDefinition, TaskFieldValue, TaskFormState } from '../workspace-tools'
 import {
   buildBatchGovernancePlan,
+  createAuditLinkFromBatchReceipt,
   createBatchGovernanceDialogPreview,
   createBatchGovernanceItemForm,
   createBatchGovernancePreviewRequests,
   createBatchGovernanceSharedState,
+  createDiagnosticsLinkFromBatchPreview,
+  createDiagnosticsLinkFromBatchReceipt,
   createRecentTasksFocusFromBatchPreview,
   createRecentTasksFocusFromBatchReceipt,
   getBatchGovernanceAction,
@@ -28,6 +36,7 @@ import { Button } from './button'
 
 const emit = defineEmits<{
   (event: 'focus-recent-tasks', request: Omit<RecentTasksFocusRequest, 'key'>): void
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
 }>()
 
 const props = withDefaults(
@@ -95,6 +104,18 @@ function focusPreviewInRecentTasks(item: BatchGovernancePreviewItem) {
 
 function focusReceiptInRecentTasks(item: BatchGovernanceReceiptItem) {
   emit('focus-recent-tasks', createRecentTasksFocusFromBatchReceipt(actionId.value, item))
+}
+
+function openPreviewDiagnostics(item: BatchGovernancePreviewItem) {
+  emit('link-panel', createDiagnosticsLinkFromBatchPreview(actionId.value, item))
+}
+
+function openReceiptAudit(item: BatchGovernanceReceiptItem) {
+  emit('link-panel', createAuditLinkFromBatchReceipt(actionId.value, item))
+}
+
+function openReceiptDiagnostics(item: BatchGovernanceReceiptItem) {
+  emit('link-panel', createDiagnosticsLinkFromBatchReceipt(actionId.value, item))
 }
 
 function errorMessage(err: unknown): string {
@@ -196,7 +217,7 @@ watch(
       <div>
         <h3 class="batch-governance__title">批量治理</h3>
         <p class="batch-governance__desc">
-          当前已纳入 `protect:set / protect:clear / acl:purge / acl:inherit / acl:owner / acl:repair`。流程保持 Triple-Guard：先逐项 dry-run，再统一确认，最后输出逐项回执与审计信息。
+当前已纳入 `protect:set / protect:clear`、`encrypt / decrypt` 以及 `acl:add / copy / restore / purge / inherit / owner / repair`。流程保持 Triple-Guard：先逐项 dry-run，再统一确认，最后输出逐项回执，并可直达最近任务、审计与诊断消费层。
         </p>
       </div>
       <span class="batch-governance__badge">{{ batchPaths.length }} 项</span>
@@ -229,6 +250,7 @@ watch(
             v-if="field.type === 'textarea'"
             :value="String(form[field.key] ?? '')"
             class="batch-governance__textarea"
+            :data-testid="`batch-field-${field.key}`"
             :placeholder="field.placeholder"
             @input="form[field.key] = ($event.target as HTMLTextAreaElement).value"
           />
@@ -236,6 +258,7 @@ watch(
             v-else-if="field.type === 'select'"
             :value="String(form[field.key] ?? '')"
             class="batch-governance__select"
+            :data-testid="`batch-field-${field.key}`"
             @change="form[field.key] = ($event.target as HTMLSelectElement).value"
           >
             <option v-for="option in field.options || []" :key="option.value" :value="option.value">
@@ -247,6 +270,7 @@ watch(
             :checked="form[field.key] === true"
             type="checkbox"
             class="batch-governance__checkbox"
+            :data-testid="`batch-field-${field.key}`"
             @change="form[field.key] = ($event.target as HTMLInputElement).checked"
           />
           <input
@@ -254,6 +278,7 @@ watch(
             :value="String(form[field.key] ?? '')"
             :type="field.type === 'number' ? 'number' : 'text'"
             class="batch-governance__input"
+            :data-testid="`batch-field-${field.key}`"
             :min="field.min"
             :max="field.max"
             :placeholder="field.placeholder"
@@ -333,14 +358,17 @@ watch(
             />
             <div class="batch-governance__item-actions">
               <Button data-testid="batch-preview-link-recent" preset="secondary" @click="focusPreviewInRecentTasks(item)">
-          ????? `protect:set / protect:clear`?`encrypt / decrypt`??? `acl:add / copy / restore / purge / inherit / owner / repair`????? Triple-Guard???? dry-run???????????????????????????????
+                回到最近任务
+              </Button>
+              <Button data-testid="batch-preview-link-diagnostics" preset="secondary" @click="openPreviewDiagnostics(item)">
+                进入诊断中心
               </Button>
             </div>
             <details class="batch-governance__details">
               <summary>查看预演输出</summary>
               <pre class="batch-governance__output">{{ item.preview.process.command_line }}
 
-{{ item.preview.process.stdout || item.preview.process.stderr || 'No preview output' }}</pre>
+{{ item.preview.process.stdout || item.preview.process.stderr || '暂无预演输出' }}</pre>
             </details>
           </template>
         </article>
@@ -387,14 +415,20 @@ watch(
             </div>
             <div class="batch-governance__item-actions">
               <Button data-testid="batch-receipt-link-recent" preset="secondary" @click="focusReceiptInRecentTasks(item)">
-                ??????
+                回到最近任务
+              </Button>
+              <Button data-testid="batch-receipt-link-audit" preset="secondary" @click="openReceiptAudit(item)">
+                查看审计
+              </Button>
+              <Button data-testid="batch-receipt-link-diagnostics" preset="secondary" @click="openReceiptDiagnostics(item)">
+                进入诊断中心
               </Button>
             </div>
             <details class="batch-governance__details">
               <summary>查看执行回执</summary>
               <pre class="batch-governance__output">{{ item.receipt.process.command_line }}
 
-{{ item.receipt.process.stdout || item.receipt.process.stderr || 'No command output' }}</pre>
+{{ item.receipt.process.stdout || item.receipt.process.stderr || '暂无执行输出' }}</pre>
             </details>
           </template>
         </article>
@@ -409,7 +443,35 @@ watch(
       :busy="executeBusy"
       :confirm-disabled="!canConfirm"
       @confirm="confirmBatch"
-    />
+    >
+      <template #preview-extra>
+        <div v-if="previewItems.length" data-testid="batch-preview-dialog-list" class="batch-governance__dialog-list">
+          <article
+            v-for="item in previewItems"
+            :key="`dialog-preview-${item.path}`"
+            class="batch-governance__item"
+            data-testid="batch-preview-dialog-item"
+          >
+            <div class="batch-governance__item-header">
+              <strong class="batch-governance__item-path">{{ item.path }}</strong>
+              <span :class="['batch-governance__item-badge', item.preview?.ready_to_execute ? 'is-ok' : 'is-error']">
+                {{ item.preview?.ready_to_execute ? '就绪' : '阻塞' }}
+              </span>
+            </div>
+            <p v-if="item.error" class="batch-governance__message batch-governance__message--error">{{ item.error }}</p>
+            <FileGovernanceSummary
+              v-else-if="item.preview && item.form"
+              :task="currentAction.task"
+              :form="item.form"
+              phase="preview"
+              :process="item.preview.process"
+              :details="item.preview.details"
+            />
+            <p v-else class="batch-governance__message">暂无可展示的预演摘要。</p>
+          </article>
+        </div>
+      </template>
+    </UnifiedConfirmDialog>
   </section>
 </template>
 
@@ -550,6 +612,7 @@ watch(
   flex-wrap: wrap;
 }
 
+.batch-governance__dialog-list,
 .batch-governance__section,
 .batch-governance__item {
   display: flex;

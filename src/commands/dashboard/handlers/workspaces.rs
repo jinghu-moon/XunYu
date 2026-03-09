@@ -86,7 +86,16 @@ struct PendingGuardedTask {
     preview_args: Vec<String>,
     execute_args: Vec<String>,
     details: Option<WorkspaceTaskDetails>,
+    acl_forecast: Option<GuardedAclForecast>,
     expires_at: Instant,
+}
+
+#[derive(Clone)]
+struct GuardedAclForecast {
+    target: String,
+    reference: String,
+    before_snapshot: acl::types::AclSnapshot,
+    expected_snapshot: acl::types::AclSnapshot,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -452,7 +461,17 @@ impl GuardedTaskService {
             &req.action,
             &req.target,
         );
-        let details = task_details_for_guarded_preview_request(&req);
+        let acl_forecast = guarded_acl_forecast_for_request(&req);
+        let details = task_details_for_guarded_preview_request(&req).or_else(|| {
+            acl_forecast.as_ref().map(|forecast| WorkspaceTaskDetails::AclDiff {
+                diff: build_acl_diff_details_from_snapshots(
+                    &forecast.target,
+                    &forecast.reference,
+                    &forecast.before_snapshot,
+                    &forecast.expected_snapshot,
+                ),
+            })
+        });
 
         {
             let mut pending = self.inner.pending.lock().unwrap_or_else(|e| e.into_inner());
@@ -466,6 +485,7 @@ impl GuardedTaskService {
                     preview_args: req.preview_args.clone(),
                     execute_args: req.execute_args.clone(),
                     details: details.clone(),
+                    acl_forecast,
                     expires_at: Instant::now() + self.inner.ttl,
                 },
             );
@@ -761,6 +781,18 @@ fn read_arg_value(args: &[String], name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+fn has_arg(args: &[String], name: &str) -> bool {
+    args.iter().any(|arg| arg == name)
+}
+
+fn parse_bool_arg(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" => Some(true),
+        "false" | "0" | "no" => Some(false),
+        _ => None,
+    }
+}
+
 fn map_acl_diff_entry(entry: &acl::types::AceEntry) -> AclDiffEntryDetails {
     AclDiffEntryDetails {
         principal: entry.principal.clone(),
@@ -778,11 +810,14 @@ fn map_acl_diff_entry(entry: &acl::types::AceEntry) -> AclDiffEntryDetails {
     }
 }
 
-fn build_acl_diff_details(target: &str, reference: &str) -> Option<AclDiffDetails> {
-    let target_snapshot = acl::reader::get_acl(Path::new(target)).ok()?;
-    let reference_snapshot = acl::reader::get_acl(Path::new(reference)).ok()?;
-    let diff = acl::diff::diff_acl(&target_snapshot, &reference_snapshot);
-    Some(AclDiffDetails {
+fn build_acl_diff_details_from_snapshots(
+    target: &str,
+    reference: &str,
+    target_snapshot: &acl::types::AclSnapshot,
+    reference_snapshot: &acl::types::AclSnapshot,
+) -> AclDiffDetails {
+    let diff = acl::diff::diff_acl(target_snapshot, reference_snapshot);
+    AclDiffDetails {
         target: target.to_string(),
         reference: reference.to_string(),
         common_count: diff.common_count,
@@ -796,13 +831,182 @@ fn build_acl_diff_details(target: &str, reference: &str) -> Option<AclDiffDetail
         }),
         only_in_target: diff.only_in_a.iter().map(map_acl_diff_entry).collect(),
         only_in_reference: diff.only_in_b.iter().map(map_acl_diff_entry).collect(),
-    })
+    }
+}
+
+fn read_acl_snapshot(path: &str) -> Option<acl::types::AclSnapshot> {
+    acl::reader::get_acl(Path::new(path)).ok()
+}
+
+fn build_acl_diff_details(target: &str, reference: &str) -> Option<AclDiffDetails> {
+    let target_snapshot = read_acl_snapshot(target)?;
+    let reference_snapshot = read_acl_snapshot(reference)?;
+    Some(build_acl_diff_details_from_snapshots(
+        target,
+        reference,
+        &target_snapshot,
+        &reference_snapshot,
+    ))
 }
 
 fn build_acl_diff_details_from_args(args: &[String]) -> Option<AclDiffDetails> {
     let target = read_arg_value(args, "-p")?;
     let reference = read_arg_value(args, "-r")?;
     build_acl_diff_details(&target, &reference)
+}
+
+fn read_acl_backup_snapshot(path: &str) -> Option<(String, acl::types::AclSnapshot)> {
+    let raw = std::fs::read_to_string(Path::new(path)).ok()?;
+    let backup: acl::export::AclBackup = serde_json::from_str(&raw).ok()?;
+    let reference = if backup.original_path.trim().is_empty() {
+        format!("backup {}", path)
+    } else {
+        format!("backup {}", backup.original_path.trim())
+    };
+    Some((reference, backup.acl))
+}
+
+fn forecast_acl_restore_snapshot(
+    before_snapshot: &acl::types::AclSnapshot,
+    backup_snapshot: &acl::types::AclSnapshot,
+) -> acl::types::AclSnapshot {
+    let mut expected = before_snapshot.clone();
+    expected.owner = backup_snapshot.owner.clone();
+    expected.entries = before_snapshot
+        .entries
+        .iter()
+        .filter(|entry| entry.is_inherited)
+        .cloned()
+        .collect();
+    expected.entries.extend(
+        backup_snapshot
+            .entries
+            .iter()
+            .filter(|entry| !entry.is_inherited)
+            .cloned(),
+    );
+    expected
+}
+
+fn build_forecast_acl_entry(args: &[String]) -> Option<acl::types::AceEntry> {
+    let principal = read_arg_value(args, "--principal")?;
+    let rights_mask = acl::parse::parse_rights(
+        &read_arg_value(args, "--rights").unwrap_or_else(|| "Read".to_string()),
+    )
+    .ok()?;
+    let ace_type = acl::parse::parse_ace_type(
+        &read_arg_value(args, "--ace-type").unwrap_or_else(|| "Allow".to_string()),
+    )
+    .ok()?;
+    let inheritance = acl::parse::parse_inheritance(
+        &read_arg_value(args, "--inherit").unwrap_or_else(|| "BothInherit".to_string()),
+    )
+    .ok()?;
+
+    Some(acl::types::AceEntry {
+        raw_sid: acl::effective::resolve_user_sid(&principal)
+            .unwrap_or_else(|_| principal.clone()),
+        principal,
+        rights_mask,
+        ace_type,
+        inheritance,
+        propagation: acl::types::PropagationFlags::NONE,
+        is_inherited: false,
+        is_orphan: false,
+    })
+}
+
+fn acl_entry_matches_principal(
+    entry: &acl::types::AceEntry,
+    principal: &str,
+    sid: Option<&str>,
+) -> bool {
+    entry.principal.eq_ignore_ascii_case(principal)
+        || sid.is_some_and(|value| entry.raw_sid.eq_ignore_ascii_case(value))
+}
+
+fn forecast_acl_snapshot(
+    before_snapshot: &acl::types::AclSnapshot,
+    action: &str,
+    args: &[String],
+) -> Option<acl::types::AclSnapshot> {
+    let mut expected = before_snapshot.clone();
+    match action {
+        "acl:add" => {
+            expected.entries.push(build_forecast_acl_entry(args)?);
+            Some(expected)
+        }
+        "acl:purge" => {
+            let principal = read_arg_value(args, "--principal")?;
+            let sid = acl::effective::resolve_user_sid(&principal).ok();
+            expected.entries.retain(|entry| {
+                entry.is_inherited || !acl_entry_matches_principal(entry, &principal, sid.as_deref())
+            });
+            Some(expected)
+        }
+        "acl:owner" => {
+            expected.owner = read_arg_value(args, "--set")?;
+            Some(expected)
+        }
+        "acl:inherit" => {
+            if !has_arg(args, "--disable") {
+                return None;
+            }
+            let preserve = read_arg_value(args, "--preserve")
+                .and_then(|value| parse_bool_arg(&value))
+                .unwrap_or(true);
+            expected.is_protected = true;
+            if preserve {
+                for entry in &mut expected.entries {
+                    if entry.is_inherited {
+                        entry.is_inherited = false;
+                    }
+                }
+            } else {
+                expected.entries.retain(|entry| !entry.is_inherited);
+            }
+            Some(expected)
+        }
+        _ => None,
+    }
+}
+
+fn guarded_acl_forecast_for_request(req: &GuardedTaskPreviewRequest) -> Option<GuardedAclForecast> {
+    match req.action.as_str() {
+        "acl:add" | "acl:purge" | "acl:owner" | "acl:inherit" => {
+            let target = read_arg_value(&req.execute_args, "-p")
+                .or_else(|| {
+                    let target = req.target.trim();
+                    (!target.is_empty()).then(|| target.to_string())
+                })?;
+            let before_snapshot = read_acl_snapshot(&target)?;
+            let expected_snapshot = forecast_acl_snapshot(&before_snapshot, &req.action, &req.execute_args)?;
+            Some(GuardedAclForecast {
+                target,
+                reference: format!("expected {}", req.action),
+                before_snapshot,
+                expected_snapshot,
+            })
+        }
+        "acl:restore" => {
+            let target = read_arg_value(&req.execute_args, "-p")
+                .or_else(|| {
+                    let target = req.target.trim();
+                    (!target.is_empty()).then(|| target.to_string())
+                })?;
+            let backup_path = read_arg_value(&req.execute_args, "--from")?;
+            let before_snapshot = read_acl_snapshot(&target)?;
+            let (reference, backup_snapshot) = read_acl_backup_snapshot(&backup_path)?;
+            let expected_snapshot = forecast_acl_restore_snapshot(&before_snapshot, &backup_snapshot);
+            Some(GuardedAclForecast {
+                target,
+                reference,
+                before_snapshot,
+                expected_snapshot,
+            })
+        }
+        _ => None,
+    }
 }
 
 fn task_details_for_run_request(req: &WorkspaceTaskRunRequest) -> Option<WorkspaceTaskDetails> {
@@ -824,6 +1028,23 @@ fn task_details_for_guarded_preview_request(
 }
 
 fn task_details_for_guarded_receipt(pending: &PendingGuardedTask) -> Option<WorkspaceTaskDetails> {
+    if let Some(forecast) = pending.acl_forecast.as_ref() {
+        let actual_after = read_acl_snapshot(&forecast.target)?;
+        let before = build_acl_diff_details_from_snapshots(
+            &forecast.target,
+            &forecast.reference,
+            &forecast.before_snapshot,
+            &forecast.expected_snapshot,
+        );
+        let after = build_acl_diff_details_from_snapshots(
+            &forecast.target,
+            &forecast.reference,
+            &actual_after,
+            &forecast.expected_snapshot,
+        );
+        return Some(WorkspaceTaskDetails::AclDiffTransition { before, after });
+    }
+
     match pending.action.as_str() {
         "acl:copy" => {
             let after = build_acl_diff_details_from_args(&pending.execute_args)?;
@@ -1710,4 +1931,364 @@ mod tests {
         assert_eq!(execute_json["details"]["before"]["target"], preview_body["target"]);
         assert_eq!(execute_json["details"]["after"]["reference"], reference_str);
     }
+
+
+    #[tokio::test]
+    async fn guarded_acl_add_receipt_includes_diff_transition() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("add-target.txt");
+        std::fs::write(&target, b"target").unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let principal = r"XunYu\PreviewPrincipal";
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
+            as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:add",
+            "target": target_str.clone(),
+            "preview_args": ["acl", "view", "-p", target_str.clone(), "--detail"],
+            "execute_args": [
+                "acl", "add", "-p", target_str.clone(),
+                "--principal", principal,
+                "--rights", "Read",
+                "--ace-type", "Allow",
+                "--inherit", "BothInherit",
+                "-y"
+            ],
+            "preview_summary": "Add ACL entry"
+        });
+
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(preview_json["details"]["kind"], "acl_diff");
+        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:add");
+        assert_eq!(preview_json["details"]["diff"]["only_in_reference"][0]["principal"], principal);
+
+        let execute_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
+        assert_eq!(execute_json["details"]["before"]["reference"], "expected acl:add");
+        assert_eq!(execute_json["details"]["after"]["reference"], "expected acl:add");
+    }
+
+    #[tokio::test]
+    async fn guarded_acl_owner_receipt_includes_diff_transition() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("owner-target.txt");
+        std::fs::write(&target, b"target").unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let new_owner = r"XunYu\ExpectedOwner";
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
+            as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:owner",
+            "target": target_str.clone(),
+            "preview_args": ["acl", "view", "-p", target_str.clone()],
+            "execute_args": ["acl", "owner", "-p", target_str.clone(), "--set", new_owner, "-y"],
+            "preview_summary": "Change owner"
+        });
+
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(preview_json["details"]["kind"], "acl_diff");
+        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:owner");
+        assert_eq!(preview_json["details"]["diff"]["owner_diff"]["reference"], new_owner);
+
+        let execute_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
+        assert_eq!(execute_json["details"]["before"]["owner_diff"]["reference"], new_owner);
+        assert_eq!(execute_json["details"]["after"]["owner_diff"]["reference"], new_owner);
+    }
+
+    #[tokio::test]
+    async fn guarded_acl_purge_preview_includes_acl_diff_details() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("purge-target.txt");
+        std::fs::write(&target, b"target").unwrap();
+        acl::writer::add_rule(
+            &target,
+            "Everyone",
+            acl::parse::parse_rights("Read").unwrap(),
+            acl::types::AceType::Allow,
+            acl::types::InheritanceFlags::NONE,
+            acl::types::PropagationFlags::NONE,
+        )
+        .unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview")])) as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:purge",
+            "target": target_str.clone(),
+            "preview_args": ["acl", "view", "-p", target_str.clone(), "--detail"],
+            "execute_args": ["acl", "purge", "-p", target_str.clone(), "--principal", "Everyone", "-y"],
+            "preview_summary": "Purge ACL principal"
+        });
+
+        let preview_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(preview_json["details"]["kind"], "acl_diff");
+        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:purge");
+        assert_eq!(preview_json["details"]["diff"]["has_diff"], true);
+        assert_eq!(preview_json["details"]["diff"]["only_in_target"][0]["principal"], "Everyone");
+    }
+
+    #[tokio::test]
+    async fn guarded_acl_restore_receipt_includes_diff_transition() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("restore-target.txt");
+        std::fs::write(&target, b"target").unwrap();
+
+        let mut backup_snapshot = acl::reader::get_acl(&target).unwrap();
+        let restored_owner = if backup_snapshot.owner.eq_ignore_ascii_case(r"BUILTIN\Administrators") {
+            r"NT AUTHORITY\SYSTEM"
+        } else {
+            r"BUILTIN\Administrators"
+        };
+        backup_snapshot.owner = restored_owner.to_string();
+
+        let backup_path = dir.path().join("restore.acl.json");
+        let backup_json = serde_json::json!({
+            "version": 1,
+            "created_at": "2026-03-09T00:00:00Z",
+            "original_path": "D:/fixtures/restore-source.txt",
+            "acl": backup_snapshot,
+        });
+        std::fs::write(&backup_path, serde_json::to_string_pretty(&backup_json).unwrap()).unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let backup_str = backup_path.to_string_lossy().to_string();
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
+            as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:restore",
+            "target": target_str.clone(),
+            "preview_args": ["find", "--dry-run", "-f", "json", "--test-path", backup_str.clone()],
+            "execute_args": ["acl", "restore", "-p", target_str.clone(), "--from", backup_str.clone(), "-y"],
+            "preview_summary": "Restore ACL"
+        });
+
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(preview_json["details"]["kind"], "acl_diff");
+        assert_eq!(preview_json["details"]["diff"]["reference"], "backup D:/fixtures/restore-source.txt");
+        assert_eq!(preview_json["details"]["diff"]["owner_diff"]["reference"], restored_owner);
+
+        let execute_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
+        assert_eq!(execute_json["details"]["before"]["reference"], "backup D:/fixtures/restore-source.txt");
+        assert_eq!(execute_json["details"]["after"]["reference"], "backup D:/fixtures/restore-source.txt");
+    }
+
+    #[tokio::test]
+    async fn guarded_acl_inherit_disable_receipt_includes_diff_transition() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("inherit-target.txt");
+        std::fs::write(&target, b"target").unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
+            as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:inherit",
+            "target": target_str.clone(),
+            "preview_args": ["acl", "view", "-p", target_str.clone(), "--detail"],
+            "execute_args": [
+                "acl", "inherit", "-p", target_str.clone(),
+                "--disable",
+                "--preserve", "false"
+            ],
+            "preview_summary": "Disable inheritance"
+        });
+
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(preview_json["details"]["kind"], "acl_diff");
+        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:inherit");
+        assert_eq!(preview_json["details"]["diff"]["inheritance_diff"]["reference_protected"], true);
+
+        let execute_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
+        assert_eq!(execute_json["details"]["before"]["inheritance_diff"]["reference_protected"], true);
+        assert_eq!(execute_json["details"]["after"]["inheritance_diff"]["reference_protected"], true);
+    }
+
 }

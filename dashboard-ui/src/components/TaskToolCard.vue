@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import {
   executeGuardedTask,
@@ -86,7 +86,7 @@ const isSupported = computed(() => {
   return props.capabilities[props.task.feature] !== false
 })
 
-const actionLabel = computed(() => (props.task.mode === 'guarded' ? '预览并确认' : '运行'))
+const actionLabel = computed(() => (props.task.mode === 'guarded' ? '预演并确认' : '运行'))
 const processOutput = computed(() => result.value?.process ?? null)
 const previewOutput = computed(() => preview.value?.process ?? null)
 const stateLabel = computed(() => {
@@ -348,13 +348,13 @@ async function confirmTask() {
 
       <pre class="task-card__output">{{ previewOutput.command_line }}
 
-{{ previewOutput.stdout || previewOutput.stderr || 'No preview output' }}</pre>
+{{ previewOutput.stdout || previewOutput.stderr || '暂无输出' }}</pre>
     </div>
 
     <div v-if="processOutput" class="task-card__result">
       <div class="task-card__result-meta">
         <span :class="['task-card__badge', processOutput.success ? 'is-ok' : 'is-error']">
-          {{ processOutput.success ? '成功' : '失败' }}
+          {{ processOutput.success ? '鎴愬姛' : '澶辫触' }}
         </span>
         <span>{{ processOutput.duration_ms }} ms</span>
       </div>
@@ -362,16 +362,16 @@ async function confirmTask() {
 
       <div class="task-card__result-links">
         <button data-testid="task-card-link-recent" class="task-card__link" type="button" @click="focusRecentTasksForResult">
-          ???????
+          回到最近任务
         </button>
         <button data-testid="task-card-link-audit" class="task-card__link" type="button" @click="focusAuditForResult">
-          ??????
+          查看审计
         </button>
       </div>
 
       <pre class="task-card__output">{{ processOutput.command_line }}
 
-{{ processOutput.stdout || processOutput.stderr || 'No command output' }}</pre>
+{{ processOutput.stdout || processOutput.stderr || '暂无输出' }}</pre>
     </div>
 
     <FileGovernanceSummary
@@ -385,10 +385,10 @@ async function confirmTask() {
 
     <div v-if="receipt" class="task-card__result-links">
       <button data-testid="task-card-link-recent-receipt" class="task-card__link" type="button" @click="focusRecentTasksForReceipt">
-        ???????
+        回到最近任务
       </button>
       <button data-testid="task-card-link-audit-receipt" class="task-card__link" type="button" @click="focusAuditForReceipt">
-        ??????
+        查看审计
       </button>
     </div>
 
@@ -401,7 +401,18 @@ async function confirmTask() {
       :busy="executeBusy"
       :confirm-disabled="!preview?.ready_to_execute"
       @confirm="confirmTask"
-    />
+    >
+      <template #preview-extra>
+        <FileGovernanceSummary
+          v-if="preview && previewOutput"
+          :task="props.task"
+          :form="form"
+          phase="preview"
+          :process="previewOutput"
+          :details="preview.details"
+        />
+      </template>
+    </UnifiedConfirmDialog>
   </article>
 </template>
 

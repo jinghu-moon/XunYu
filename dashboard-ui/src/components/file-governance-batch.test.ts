@@ -4,7 +4,10 @@ import {
   createBatchGovernanceDialogPreview,
   createBatchGovernanceItemForm,
   createBatchGovernancePreviewRequests,
+  createAuditLinkFromBatchReceipt,
   createBatchGovernanceSharedState,
+  createDiagnosticsLinkFromBatchPreview,
+  createDiagnosticsLinkFromBatchReceipt,
   createRecentTasksFocusFromBatchPreview,
   createRecentTasksFocusFromBatchReceipt,
   isBatchPreviewReady,
@@ -263,6 +266,74 @@ describe('file-governance-batch', () => {
       dry_run: 'executed',
       action: 'protect:set',
       search: 'D:/repo/a.txt',
+    })
+  })
+
+  it('builds diagnostics-center link from batch preview items', () => {
+    const payload = createDiagnosticsLinkFromBatchPreview('protect-set', {
+      path: 'D:/repo/a.txt',
+      preview: {
+        action: 'protect:set',
+        target: 'D:/repo/a.txt',
+        status: 'previewed',
+      } as any,
+    })
+
+    expect(payload).toEqual({
+      panel: 'diagnostics-center',
+      request: {
+        panel: 'governance',
+        governance_family: 'protect',
+        governance_status: 'previewed',
+        target: 'D:/repo/a.txt',
+      },
+    })
+  })
+
+  it('builds audit link from batch receipt items', () => {
+    const payload = createAuditLinkFromBatchReceipt('protect-set', {
+      path: 'D:/repo/a.txt',
+      receipt: {
+        action: 'protect:set',
+        status: 'succeeded',
+        audit_action: 'workspace.protect.execute',
+      } as any,
+    })
+
+    expect(payload).toEqual({
+      panel: 'audit',
+      request: {
+        search: 'D:/repo/a.txt',
+        action: 'workspace.protect.execute',
+        result: 'success',
+      },
+    })
+  })
+
+
+  it('builds diagnostics-center link from batch receipt items', () => {
+    const payload = createDiagnosticsLinkFromBatchReceipt('protect-set', {
+      path: 'D:/repo/a.txt',
+      receipt: {
+        action: 'protect:set',
+        target: 'D:/repo/a.txt',
+        status: 'succeeded',
+        audit_action: 'workspace.protect.execute',
+        audited_at: 1700000000,
+      } as any,
+    })
+
+    expect(payload).toEqual({
+      panel: 'diagnostics-center',
+      request: {
+        panel: 'governance',
+        governance_family: 'protect',
+        governance_status: 'succeeded',
+        target: 'D:/repo/a.txt',
+        audit_action: 'workspace.protect.execute',
+        audit_result: 'success',
+        audit_timestamp: 1700000000,
+      },
     })
   })
 

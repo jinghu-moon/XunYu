@@ -726,7 +726,10 @@ function buildAclRestoreSummary(
 
     title: phase === 'preview' ? 'ACL 恢复预演摘要' : 'ACL 恢复执行摘要',
 
-    note: phase === 'preview' ? '当前预演只验证备份文件路径，不会读取或覆盖 ACL 内容。' : undefined,
+    note:
+      phase === 'preview'
+        ? 'CLI 预演只验证备份文件路径，Dashboard 会额外读取备份快照推导预期 ACL，但不会写回目标。'
+        : undefined,
 
     items,
 

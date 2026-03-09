@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { IconRefresh, IconSearch } from '@tabler/icons-vue'
 import { Button } from './button'
@@ -38,9 +38,9 @@ const activeFilterItems = computed(() => {
   const items: Array<{ key: string; label: string; value: string }> = []
   const searchKeyword = search.value.trim()
 
-  if (searchKeyword) items.push({ key: 'search', label: '??', value: searchKeyword })
-  if (action.value) items.push({ key: 'action', label: '??', value: action.value })
-  if (result.value) items.push({ key: 'result', label: '??', value: result.value })
+  if (searchKeyword) items.push({ key: 'search', label: '关键词', value: searchKeyword })
+  if (action.value) items.push({ key: 'action', label: '动作', value: action.value })
+  if (result.value) items.push({ key: 'result', label: '结果', value: result.value })
 
   return items
 })
@@ -133,7 +133,7 @@ function exportAudit(format: 'csv' | 'json') {
     params: e.params,
   }))
   if (!items.length) {
-    pushToast({ level: 'warning', title: 'No audit entries to export' })
+    pushToast({ level: 'warning', title: '没有可导出的审计记录' })
     return
   }
   if (format === 'json') {
@@ -142,7 +142,7 @@ function exportAudit(format: 'csv' | 'json') {
     const rows = items.map(e => [e.timestamp, e.time, e.action, e.target, e.result, e.reason, e.user, e.params])
     downloadCsv('audit', ['timestamp', 'time', 'action', 'target', 'result', 'reason', 'user', 'params'], rows)
   }
-  pushToast({ level: 'success', title: 'Exported audit entries', detail: `${items.length} rows` })
+  pushToast({ level: 'success', title: '已导出审计记录', detail: `${items.length} 条` })
 }
 
 function isFailed(e: AuditEntry): boolean {
@@ -170,51 +170,51 @@ onMounted(load)
     <div class="toolbar">
       <div style="position:relative;flex:1;display:flex;align-items:center">
         <IconSearch :size="16" style="position:absolute;left:var(--space-2);color:var(--text-tertiary)" />
-        <input v-model="search" data-testid="audit-search" placeholder="Search action/target/params/reason..." style="width:100%;padding-left:var(--space-8)" @keydown.enter="load" />
+        <input v-model="search" data-testid="audit-search" placeholder="搜索动作 / 目标 / 参数 / 原因" style="width:100%;padding-left:var(--space-8)" @keydown.enter="load" />
       </div>
       <select v-model="action" data-testid="audit-action" style="max-width:200px" @change="load">
-        <option value="">All actions</option>
+        <option value="">全部动作</option>
         <option v-for="a in actionItems" :key="a" :value="a">{{ a }}</option>
       </select>
       <select v-model="result" data-testid="audit-result" style="max-width:160px" @change="load">
-        <option value="">All results</option>
+        <option value="">全部结果</option>
         <option v-for="r in resultItems" :key="r" :value="r">{{ r }}</option>
       </select>
       <Button size="sm" preset="secondary" :disabled="busy" style="display:flex;align-items:center;gap:var(--space-1)" @click="load">
-        <IconRefresh :size="16" /> Refresh
+        <IconRefresh :size="16" /> 刷新
       </Button>
       <div class="toolbar-group">
-        <span class="toolbar-label">Export</span>
+        <span class="toolbar-label">导出</span>
         <Button size="sm" preset="secondary" @click="exportAudit('csv')">CSV</Button>
         <Button size="sm" preset="secondary" @click="exportAudit('json')">JSON</Button>
       </div>
     </div>
 
     <div v-if="activeFilterItems.length" class="audit-focus" data-testid="audit-active-filters">
-      <span class="audit-focus__label">????</span>
+      <span class="audit-focus__label">当前筛选</span>
       <span v-for="item in activeFilterItems" :key="item.key" class="audit-focus__chip">
-        {{ item.label }}?{{ item.value }}
+        {{ item.label }}：{{ item.value }}
       </span>
       <Button data-testid="clear-audit-filters" size="sm" preset="secondary" :disabled="busy" @click="clearFilters">
-        ????
+        清空筛选
       </Button>
     </div>
 
     <div class="stats">
       <div class="stat">
-        <div class="k">Matched</div>
+        <div class="k">命中条目</div>
         <div class="v">{{ resp.stats.total }}</div>
       </div>
       <div class="stat">
-        <div class="k">Redirect moves</div>
+        <div class="k">Redirect 移动</div>
         <div class="v">{{ resp.stats.by_action.redirect_move || 0 }}</div>
       </div>
       <div class="stat">
-        <div class="k">Redirect copies</div>
+        <div class="k">Redirect 复制</div>
         <div class="v">{{ resp.stats.by_action.redirect_copy || 0 }}</div>
       </div>
       <div class="stat">
-        <div class="k">Redirect skips</div>
+        <div class="k">Redirect 跳过</div>
         <div class="v">{{ resp.stats.by_action.redirect_skip || 0 }}</div>
       </div>
     </div>
@@ -224,11 +224,11 @@ onMounted(load)
     <table v-else>
       <thead>
         <tr>
-          <th style="width:160px">Time</th>
-          <th style="width:140px">Action</th>
-          <th>Target</th>
-          <th style="width:120px">Result</th>
-          <th>Reason</th>
+          <th style="width:160px">时间</th>
+          <th style="width:140px">动作</th>
+          <th>目标</th>
+          <th style="width:120px">结果</th>
+          <th>原因</th>
           <th style="width:90px"></th>
         </tr>
       </thead>
@@ -243,22 +243,22 @@ onMounted(load)
           <td style="color:var(--text-tertiary)">{{ e.reason }}</td>
           <td>
             <div class="audit-actions">
-              <Button size="sm" preset="secondary" @click="openDetail(e)">Details</Button>
-              <Button :data-testid="`audit-link-diagnostics-${e.timestamp}`" size="sm" preset="secondary" @click="openDiagnostics(e)">Diagnose</Button>
+              <Button size="sm" preset="secondary" @click="openDetail(e)">详情</Button>
+              <Button :data-testid="`audit-link-diagnostics-${e.timestamp}`" size="sm" preset="secondary" @click="openDiagnostics(e)">诊断</Button>
             </div>
           </td>
         </tr>
         <tr v-if="!entries.length">
-          <td colspan="6" style="text-align:center;color:var(--text-tertiary)">No audit entries</td>
+          <td colspan="6" style="text-align:center;color:var(--text-tertiary)">暂无审计记录</td>
         </tr>
       </tbody>
     </table>
 
     <div class="pager">
-      <div class="pager-info">Showing {{ pageStart + 1 }}-{{ pageEnd }} of {{ entries.length }}</div>
+      <div class="pager-info">显示 {{ pageStart + 1 }}-{{ pageEnd }} / {{ entries.length }}</div>
       <div style="flex:1" />
       <div class="pager-controls">
-        <span class="pager-label">Rows</span>
+        <span class="pager-label">每页</span>
         <select v-model.number="pageSize">
           <option :value="20">20</option>
           <option :value="50">50</option>
@@ -273,38 +273,38 @@ onMounted(load)
     <div v-if="detailEntry" class="modal-backdrop" @click.self="closeDetail">
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-title">Audit Entry</div>
-          <Button size="sm" preset="secondary" @click="closeDetail">Close</Button>
+          <div class="modal-title">审计详情</div>
+          <Button size="sm" preset="secondary" @click="closeDetail">关闭</Button>
         </div>
         <div class="modal-body">
           <div class="detail-grid">
             <div class="detail-item">
-              <div class="detail-k">Time</div>
+              <div class="detail-k">时间</div>
               <div class="detail-v">{{ fmtTs(detailEntry.timestamp) }}</div>
             </div>
             <div class="detail-item">
-              <div class="detail-k">Action</div>
+              <div class="detail-k">动作</div>
               <div class="detail-v">{{ detailEntry.action }}</div>
             </div>
             <div class="detail-item">
-              <div class="detail-k">Result</div>
+              <div class="detail-k">结果</div>
               <div class="detail-v">{{ detailEntry.result }}</div>
             </div>
             <div class="detail-item">
-              <div class="detail-k">Target</div>
+              <div class="detail-k">目标</div>
               <div class="detail-v">{{ detailEntry.target }}</div>
             </div>
             <div class="detail-item">
-              <div class="detail-k">User</div>
+              <div class="detail-k">用户</div>
               <div class="detail-v">{{ detailEntry.user || '-' }}</div>
             </div>
             <div class="detail-item">
-              <div class="detail-k">Reason</div>
+              <div class="detail-k">原因</div>
               <div class="detail-v">{{ detailEntry.reason || '-' }}</div>
             </div>
           </div>
           <div class="detail-block">
-            <div class="detail-k">Params</div>
+            <div class="detail-k">参数</div>
             <pre class="payload">{{ formatPayload(detailEntry.params) }}</pre>
           </div>
         </div>
@@ -469,3 +469,4 @@ onMounted(load)
   color: var(--text-secondary);
 }
 </style>
+

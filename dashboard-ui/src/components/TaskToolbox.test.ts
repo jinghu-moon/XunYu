@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+﻿import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceTaskDefinition } from '../workspace-tools'
@@ -22,7 +22,7 @@ describe('TaskToolbox', () => {
     const task: WorkspaceTaskDefinition = {
       id: 'recent',
       workspace: 'statistics-diagnostics',
-      title: '????',
+      title: '最近访问',
       description: 'desc',
       action: 'cstat',
       mode: 'run',
@@ -32,7 +32,7 @@ describe('TaskToolbox', () => {
 
     const wrapper = mount(TaskToolbox, {
       props: {
-        title: '????',
+        title: '最近访问',
         tasks: [task],
       },
       global: {

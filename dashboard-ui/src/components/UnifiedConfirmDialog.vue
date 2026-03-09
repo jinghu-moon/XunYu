@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import type { GuardedTaskPreviewResponse } from '../types'
 import { Button } from './button'
@@ -13,7 +13,7 @@ const props = withDefaults(
     confirmDisabled?: boolean
   }>(),
   {
-    warning: '此操作具有破坏性，请先核对 preview 输出。',
+    warning: '此操作具有破坏性，请先核对预演输出。',
     preview: null,
     busy: false,
     confirmDisabled: false,
@@ -57,9 +57,12 @@ const previewReadyLabel = computed(() => (props.preview?.ready_to_execute ? '可
             <div><strong>Dry Run</strong> {{ props.preview.dry_run ? '是' : '否' }}</div>
             <div><strong>过期</strong> {{ props.preview.expires_in_secs }}s</div>
           </div>
+          <div v-if="$slots['preview-extra']" data-testid="confirm-dialog-extra" class="confirm-dialog__extra">
+            <slot name="preview-extra" />
+          </div>
           <pre v-if="props.preview" class="confirm-dialog__output">{{ props.preview.process.command_line }}
 
-{{ props.preview.process.stdout || props.preview.process.stderr || 'No preview output' }}</pre>
+{{ props.preview.process.stdout || props.preview.process.stderr || '暂无预演输出' }}</pre>
         </div>
         <footer class="confirm-dialog__footer">
           <Button preset="secondary" @click="close">取消</Button>
@@ -109,6 +112,12 @@ const previewReadyLabel = computed(() => (props.preview?.ready_to_execute ? '可
   gap: var(--space-2);
   font: var(--type-body-sm);
   color: var(--text-secondary);
+}
+
+.confirm-dialog__extra {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .confirm-dialog__output {
