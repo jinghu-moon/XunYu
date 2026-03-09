@@ -33,6 +33,10 @@ jobs:
         working-directory: dashboard-ui
         run: npm ci
 
+      - name: Build dashboard
+        working-directory: dashboard-ui
+        run: npm run build
+
       - name: Run Rust tests
         run: cargo test --features dashboard
 
@@ -43,7 +47,3 @@ jobs:
       - name: Run dashboard unit tests
         working-directory: dashboard-ui
         run: npm run test
-
-      - name: Build dashboard
-        working-directory: dashboard-ui
-        run: npm run build
