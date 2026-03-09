@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
-import { computed, ref } from 'vue'
-import type { WorkspaceCapabilities } from '../../types'
+import { computed, nextTick, ref } from 'vue'
+import type { RecentTasksFocusRequest, StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
 import type { TaskFormState } from '../../workspace-tools'
 import { filesSecurityTaskGroups } from '../../workspace-tools'
 import BatchGovernancePanel from '../BatchGovernancePanel.vue'
@@ -13,6 +13,10 @@ import RedirectPanel from '../RedirectPanel.vue'
 import TaskToolbox from '../TaskToolbox.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
 
+const emit = defineEmits<{
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
+}>()
+
 defineProps<{
   capabilities?: WorkspaceCapabilities | null
 }>()
@@ -22,6 +26,9 @@ type TaskPresetMap = Record<string, Partial<TaskFormState>>
 const currentDirectory = ref('')
 const selectedPath = ref('')
 const batchPaths = ref<string[]>([])
+const recentTasksFocus = ref<RecentTasksFocusRequest | null>(null)
+const recentTasksFocusKey = ref(0)
+const recentTasksAnchor = ref<HTMLElement | null>(null)
 const taskPresets = ref<TaskPresetMap>({})
 const presetVersion = ref(0)
 const syncMessage = ref('等待从上方文件管理器同步上下文。')
@@ -189,6 +196,24 @@ function clearBatch() {
   syncMessage.value = '已清空批量队列。'
 }
 
+async function focusRecentTasks(request: Omit<RecentTasksFocusRequest, 'key'>) {
+  recentTasksFocusKey.value += 1
+  recentTasksFocus.value = {
+    key: recentTasksFocusKey.value,
+    ...request,
+  }
+  await nextTick()
+  recentTasksAnchor.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
+
+async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
+  if (payload.panel === 'recent-tasks') {
+    await focusRecentTasks(payload.request)
+    return
+  }
+  emit('link-panel', payload)
+}
+
 function onDirectoryChange(path: string) {
   currentDirectory.value = normalizePath(path)
 }
@@ -255,7 +280,7 @@ function onSelectionChange(path: string) {
             <div class="files-security__batch-header">
               <div>
                 <h4 class="files-security__batch-title">批量队列与治理</h4>
-                <p class="files-security__batch-desc">先收集目标，再填充到查找 / 备份任务卡；当前已补齐 protect 与部分 ACL 的批量 Triple-Guard 闭环。</p>
+                <p class="files-security__batch-desc">??????????? protect / encrypt / decrypt / ACL ???????????????????????????</p>
               </div>
               <Button preset="secondary" :disabled="!hasBatch" @click="clearBatch">清空</Button>
             </div>
@@ -275,7 +300,11 @@ function onSelectionChange(path: string) {
             <p v-else class="files-security__empty">先在 File Manager 选中文件，再加入批量队列。</p>
           </div>
 
-          <BatchGovernancePanel :paths="batchPaths" :capabilities="capabilities" />
+          <BatchGovernancePanel
+            :paths="batchPaths"
+            :capabilities="capabilities"
+            @focus-recent-tasks="focusRecentTasks"
+          />
         </section>
 
         <FileGovernancePanel :path="selectedPath" :capabilities="capabilities" />
@@ -285,6 +314,7 @@ function onSelectionChange(path: string) {
           description="只显示 Files & Security 工作台的最近任务，支持安全重放。"
           workspace="files-security"
           :limit="12"
+          :focus-request="recentTasksFocus"
         />
 
         <RecipePanel
@@ -314,6 +344,7 @@ function onSelectionChange(path: string) {
         :capabilities="capabilities"
         :task-presets="taskPresets"
         :preset-version="presetVersion"
+        @link-panel="handleWorkspaceLink"
       />
     </section>
   </WorkspaceFrame>

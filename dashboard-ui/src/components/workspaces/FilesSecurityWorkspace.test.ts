@@ -42,14 +42,31 @@ const BatchGovernancePanelStub = defineComponent({
   props: {
     paths: { type: Array, default: () => [] },
   },
-  template: '<div data-testid="batch-paths">{{ paths.join("|") }}</div>',
+  emits: ['focus-recent-tasks'],
+  template: `
+    <div>
+      <div data-testid="batch-paths">{{ paths.join("|") }}</div>
+      <button
+        data-testid="emit-batch-recent-focus"
+        @click="$emit('focus-recent-tasks', { status: 'succeeded', dry_run: 'executed', action: 'protect:set', search: 'D:/repo/src/a.rs' })"
+      >
+        emit-batch-recent-focus
+      </button>
+    </div>
+  `,
 })
 
 const RecentTasksPanelStub = defineComponent({
   props: {
     workspace: { type: String, default: '' },
+    focusRequest: { type: Object, default: null },
   },
-  template: '<div data-testid="recent-workspace">{{ workspace }}</div>',
+  template: `
+    <div>
+      <div data-testid="recent-workspace">{{ workspace }}</div>
+      <div data-testid="recent-focus">{{ JSON.stringify(focusRequest ?? null) }}</div>
+    </div>
+  `,
 })
 
 const RecipePanelStub = defineComponent({
@@ -110,6 +127,18 @@ describe('FilesSecurityWorkspace', () => {
     expect(wrapper.get('[data-testid="governance-path"]').text()).toBe('D:/repo/src/a.rs')
     expect(wrapper.get('[data-testid="recent-workspace"]').text()).toBe('files-security')
     expect(wrapper.get('[data-testid="recipe-category"]').text()).toBe('files-security')
+  })
+
+  it('bridges batch governance focus into recent tasks panel', async () => {
+    const wrapper = mountWorkspace()
+
+    await wrapper.get('[data-testid="emit-batch-recent-focus"]').trigger('click')
+
+    const recentFocus = wrapper.get('[data-testid="recent-focus"]').text()
+    expect(recentFocus).toContain('"status":"succeeded"')
+    expect(recentFocus).toContain('"dry_run":"executed"')
+    expect(recentFocus).toContain('"action":"protect:set"')
+    expect(recentFocus).toContain('"search":"D:/repo/src/a.rs"')
   })
 
   it('accumulates batch targets and projects them into find / backup presets', async () => {

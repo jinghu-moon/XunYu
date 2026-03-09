@@ -8,6 +8,7 @@ import {
 import type {
   GuardedTaskPreviewResponse,
   GuardedTaskReceipt,
+  StatisticsWorkspaceLinkPayload,
   WorkspaceCapabilities,
   WorkspaceTaskRunResponse,
 } from '../types'
@@ -24,6 +25,10 @@ type TaskExecutionState =
   | 'running'
   | 'succeeded'
   | 'failed'
+
+const emit = defineEmits<{
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
+}>()
 
 const props = withDefaults(
   defineProps<{
@@ -105,6 +110,72 @@ const stateTone = computed(() => {
   if (state.value === 'failed') return 'is-error'
   return ''
 })
+
+
+function emitRecentTasksLink(payload: {
+  status: 'succeeded' | 'failed'
+  dryRun: 'dry-run' | 'executed'
+  search?: string
+  action?: string
+}) {
+  emit('link-panel', {
+    panel: 'recent-tasks',
+    request: {
+      status: payload.status,
+      dry_run: payload.dryRun,
+      search: payload.search,
+      action: payload.action,
+    },
+  })
+}
+
+function emitAuditLink(payload: { search?: string; action?: string; result: 'success' | 'failed' | 'dry_run' }) {
+  emit('link-panel', {
+    panel: 'audit',
+    request: {
+      search: payload.search,
+      action: payload.action,
+      result: payload.result,
+    },
+  })
+}
+
+function focusRecentTasksForResult() {
+  if (!processOutput.value) return
+  emitRecentTasksLink({
+    status: processOutput.value.success ? 'succeeded' : 'failed',
+    dryRun: 'executed',
+    search: result.value?.target || undefined,
+    action: result.value?.action || props.task.action,
+  })
+}
+
+function focusAuditForResult() {
+  if (!result.value) return
+  emitAuditLink({
+    search: result.value.target || undefined,
+    result: result.value.process.success ? 'success' : 'failed',
+  })
+}
+
+function focusRecentTasksForReceipt() {
+  if (!receipt.value) return
+  emitRecentTasksLink({
+    status: receipt.value.status,
+    dryRun: receipt.value.dry_run ? 'dry-run' : 'executed',
+    search: receipt.value.target || undefined,
+    action: receipt.value.action,
+  })
+}
+
+function focusAuditForReceipt() {
+  if (!receipt.value) return
+  emitAuditLink({
+    search: receipt.value.target || undefined,
+    action: receipt.value.audit_action || undefined,
+    result: receipt.value.status === 'failed' ? 'failed' : 'success',
+  })
+}
 
 watch(
   () => props.presetVersion,
@@ -273,7 +344,7 @@ async function confirmTask() {
         </span>
         <span>{{ preview.summary }}</span>
       </div>
-      <FileGovernanceSummary :task="props.task" :form="form" phase="preview" :process="previewOutput" />
+      <FileGovernanceSummary :task="props.task" :form="form" phase="preview" :process="previewOutput" :details="preview.details" />
 
       <pre class="task-card__output">{{ previewOutput.command_line }}
 
@@ -287,11 +358,38 @@ async function confirmTask() {
         </span>
         <span>{{ processOutput.duration_ms }} ms</span>
       </div>
-      <FileGovernanceSummary :task="props.task" :form="form" phase="execute" :process="processOutput" />
+      <FileGovernanceSummary :task="props.task" :form="form" phase="execute" :process="processOutput" :details="result?.details ?? null" />
+
+      <div class="task-card__result-links">
+        <button data-testid="task-card-link-recent" class="task-card__link" type="button" @click="focusRecentTasksForResult">
+          ???????
+        </button>
+        <button data-testid="task-card-link-audit" class="task-card__link" type="button" @click="focusAuditForResult">
+          ??????
+        </button>
+      </div>
 
       <pre class="task-card__output">{{ processOutput.command_line }}
 
 {{ processOutput.stdout || processOutput.stderr || 'No command output' }}</pre>
+    </div>
+
+    <FileGovernanceSummary
+      v-if="receipt"
+      :task="props.task"
+      :form="form"
+      phase="execute"
+      :process="receipt.process"
+      :details="receipt.details"
+    />
+
+    <div v-if="receipt" class="task-card__result-links">
+      <button data-testid="task-card-link-recent-receipt" class="task-card__link" type="button" @click="focusRecentTasksForReceipt">
+        ???????
+      </button>
+      <button data-testid="task-card-link-audit-receipt" class="task-card__link" type="button" @click="focusAuditForReceipt">
+        ??????
+      </button>
     </div>
 
     <TaskReceiptComponent v-if="receipt" :receipt="receipt" />
@@ -417,6 +515,21 @@ async function confirmTask() {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.task-card__result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.task-card__link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: var(--type-caption);
 }
 
 .task-card__result-meta {

@@ -384,4 +384,190 @@ describe('TaskToolCard', () => {
 
     expect((wrapper.get('input[type="text"]').element as HTMLInputElement).value).toBe('D:/seed/b.txt')
   })
+  it('renders structured acl diff transition for guarded receipt', async () => {
+    const task: WorkspaceTaskDefinition = {
+      id: 'acl-copy',
+      workspace: 'files-security',
+      title: 'ACL copy',
+      description: 'copy acl',
+      action: 'acl:copy',
+      mode: 'guarded',
+      fields: [
+        { key: 'path', label: 'path', type: 'text', required: true, defaultValue: 'D:/repo/a.txt' },
+        { key: 'reference', label: 'reference', type: 'text', required: true, defaultValue: 'D:/repo/template.txt' },
+      ],
+      target: () => 'D:/repo/a.txt',
+      buildPreviewArgs: () => ['acl', 'diff', '-p', 'D:/repo/a.txt', '-r', 'D:/repo/template.txt'],
+      buildExecuteArgs: () => ['acl', 'copy', '-p', 'D:/repo/a.txt', '-r', 'D:/repo/template.txt', '-y'],
+      previewSummary: () => 'copy acl',
+    }
+
+    apiMocks.previewGuardedTask.mockResolvedValue({
+      token: 'token-acl-copy',
+      workspace: 'files-security',
+      action: 'acl:copy',
+      target: 'D:/repo/a.txt',
+      phase: 'preview',
+      status: 'previewed',
+      guarded: true,
+      dry_run: true,
+      ready_to_execute: true,
+      summary: 'copy acl',
+      preview_summary: 'copy acl',
+      expires_in_secs: 300,
+      process: {
+        command_line: 'xun acl diff -p D:/repo/a.txt -r D:/repo/template.txt',
+        exit_code: 0,
+        success: true,
+        stdout: 'preview ok',
+        stderr: '',
+        duration_ms: 10,
+      },
+      details: {
+        kind: 'acl_diff',
+        diff: {
+          target: 'D:/repo/a.txt',
+          reference: 'D:/repo/template.txt',
+          common_count: 1,
+          has_diff: true,
+          owner_diff: null,
+          inheritance_diff: null,
+          only_in_target: [
+            {
+              principal: 'BUILTIN\\Users',
+              sid: 'S-1-5-32-545',
+              rights: 'Read',
+              ace_type: 'Allow',
+              source: 'explicit',
+              inheritance: 'BothInherit',
+              propagation: 'None',
+              orphan: false,
+            },
+          ],
+          only_in_reference: [],
+        },
+      },
+    })
+    apiMocks.executeGuardedTask.mockResolvedValue({
+      token: 'token-acl-copy',
+      workspace: 'files-security',
+      action: 'acl:copy',
+      target: 'D:/repo/a.txt',
+      phase: 'execute',
+      status: 'succeeded',
+      guarded: true,
+      dry_run: false,
+      summary: 'copy acl',
+      audit_action: 'dashboard.task.execute.acl:copy',
+      audited_at: 1700000000,
+      process: {
+        command_line: 'xun acl copy -p D:/repo/a.txt -r D:/repo/template.txt -y',
+        exit_code: 0,
+        success: true,
+        stdout: 'copied',
+        stderr: '',
+        duration_ms: 15,
+      },
+      details: {
+        kind: 'acl_diff_transition',
+        before: {
+          target: 'D:/repo/a.txt',
+          reference: 'D:/repo/template.txt',
+          common_count: 1,
+          has_diff: true,
+          owner_diff: null,
+          inheritance_diff: null,
+          only_in_target: [
+            {
+              principal: 'BUILTIN\\Users',
+              sid: 'S-1-5-32-545',
+              rights: 'Read',
+              ace_type: 'Allow',
+              source: 'explicit',
+              inheritance: 'BothInherit',
+              propagation: 'None',
+              orphan: false,
+            },
+          ],
+          only_in_reference: [],
+        },
+        after: {
+          target: 'D:/repo/a.txt',
+          reference: 'D:/repo/template.txt',
+          common_count: 2,
+          has_diff: false,
+          owner_diff: null,
+          inheritance_diff: null,
+          only_in_target: [],
+          only_in_reference: [],
+        },
+      },
+    })
+
+    const wrapper = mount(TaskToolCard, { props: { task }, attachTo: document.body })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    const buttons = [...document.body.querySelectorAll('button')]
+    const confirmButton = buttons[buttons.length - 1]
+    expect(confirmButton).toBeTruthy()
+    ;(confirmButton as HTMLButtonElement).click()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="acl-diff-panel-before"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="acl-diff-panel-after"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('S-1-5-32-545')
+  })
+
+
+  it('emits focus links for run results', async () => {
+    const task: WorkspaceTaskDefinition = {
+      id: 'recent-focus',
+      workspace: 'paths-context',
+      title: '????',
+      description: '??????',
+      action: 'recent',
+      mode: 'run',
+      fields: [{ key: 'limit', label: '??', type: 'number', defaultValue: '10' }],
+      buildRunArgs: () => ['recent', '-n', '10', '-f', 'json'],
+    }
+
+    apiMocks.runWorkspaceTask.mockResolvedValue({
+      workspace: 'paths-context',
+      action: 'recent',
+      target: '',
+      process: {
+        command_line: 'xun recent -n 10 -f json',
+        exit_code: 0,
+        success: true,
+        stdout: '[1,2,3]',
+        stderr: '',
+        duration_ms: 10,
+      },
+    })
+
+    const wrapper = mount(TaskToolCard, { props: { task }, attachTo: document.body })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="task-card-link-recent"]').trigger('click')
+    await wrapper.get('[data-testid="task-card-link-audit"]').trigger('click')
+
+    expect(wrapper.emitted('link-panel')).toHaveLength(2)
+    expect(wrapper.emitted('link-panel')?.[0]?.[0]).toMatchObject({
+      panel: 'recent-tasks',
+      request: {
+        status: 'succeeded',
+        dry_run: 'executed',
+        action: 'recent',
+      },
+    })
+    expect(wrapper.emitted('link-panel')?.[1]?.[0]).toMatchObject({
+      panel: 'audit',
+      request: {
+        result: 'success',
+      },
+    })
+  })
+
 })

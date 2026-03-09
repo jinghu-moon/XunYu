@@ -1,4 +1,4 @@
-import type { RecentTaskRecord, TaskProcessOutput } from '../types'
+import type { RecentTaskRecord, TaskProcessOutput, WorkspaceTaskDetails } from '../types'
 import { findWorkspaceTaskDefinition, type TaskFormState, type WorkspaceTaskDefinition } from '../workspace-tools'
 
 export interface RecentTaskGovernanceContext {
@@ -6,6 +6,7 @@ export interface RecentTaskGovernanceContext {
   form: TaskFormState
   phase: 'preview' | 'execute'
   process: TaskProcessOutput
+  details?: WorkspaceTaskDetails | null
 }
 
 function createInitialForm(task: WorkspaceTaskDefinition): TaskFormState {
@@ -127,6 +128,7 @@ export function resolveRecentTaskGovernanceContext(
   record: RecentTaskRecord,
   processOverride?: TaskProcessOutput,
   phaseOverride?: 'preview' | 'execute',
+  detailsOverride?: WorkspaceTaskDetails | null,
 ): RecentTaskGovernanceContext | null {
   if (record.workspace !== 'files-security') return null
 
@@ -142,5 +144,6 @@ export function resolveRecentTaskGovernanceContext(
     form,
     phase: phaseOverride ?? (record.phase === 'preview' ? 'preview' : 'execute'),
     process: processOverride ?? record.process,
+    details: detailsOverride ?? record.details ?? null,
   }
 }

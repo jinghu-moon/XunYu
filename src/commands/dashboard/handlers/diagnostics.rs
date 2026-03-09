@@ -34,6 +34,7 @@ pub(in crate::commands::dashboard) struct DiagnosticsOverview {
     doctor_fixable: usize,
     recent_failed_tasks: usize,
     recent_guarded_receipts: usize,
+    recent_governance_alerts: usize,
     audit_entries: usize,
     urgent_items: usize,
 }
@@ -46,6 +47,7 @@ pub(in crate::commands::dashboard) struct DiagnosticsSummaryResponse {
     audit_timeline: Vec<AuditEntry>,
     failed_tasks: Vec<RecentTaskRecord>,
     guarded_receipts: Vec<RecentTaskRecord>,
+    governance_alerts: Vec<RecentTaskRecord>,
 }
 
 pub(in crate::commands::dashboard) async fn workspace_diagnostics_summary(
@@ -64,6 +66,7 @@ pub(in crate::commands::dashboard) async fn workspace_diagnostics_summary(
     let audit_timeline = latest_audit_entries(audit_limit);
     let failed_tasks = state.guarded_tasks().failed_tasks(task_limit);
     let guarded_receipts = state.guarded_tasks().guarded_receipts(task_limit);
+    let governance_alerts = state.guarded_tasks().governance_alerts(task_limit);
     let overview = DiagnosticsOverview {
         doctor_issues: doctor.issues.len(),
         doctor_errors: doctor.errors,
@@ -71,6 +74,7 @@ pub(in crate::commands::dashboard) async fn workspace_diagnostics_summary(
         doctor_fixable: doctor.fixable,
         recent_failed_tasks: failed_tasks.len(),
         recent_guarded_receipts: guarded_receipts.len(),
+        recent_governance_alerts: governance_alerts.len(),
         audit_entries: audit_entry_count(),
         urgent_items: doctor.errors + failed_tasks.len(),
     };
@@ -82,6 +86,7 @@ pub(in crate::commands::dashboard) async fn workspace_diagnostics_summary(
         audit_timeline,
         failed_tasks,
         guarded_receipts,
+        governance_alerts,
     }))
 }
 
@@ -319,12 +324,18 @@ mod tests {
         assert!(summary_json["doctor"]["issues"].is_array());
         assert_eq!(summary_json["overview"]["recent_failed_tasks"], 1);
         assert_eq!(summary_json["overview"]["recent_guarded_receipts"], 1);
+        assert_eq!(summary_json["overview"]["recent_governance_alerts"], 1);
         assert!(summary_json["overview"]["audit_entries"].as_u64().unwrap() >= 2);
         assert_eq!(summary_json["failed_tasks"].as_array().unwrap().len(), 1);
         assert_eq!(
             summary_json["guarded_receipts"].as_array().unwrap().len(),
             1
         );
+        assert_eq!(
+            summary_json["governance_alerts"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(summary_json["governance_alerts"][0]["workspace"], "files-security");
         let audit_timeline = summary_json["audit_timeline"].as_array().unwrap();
         assert!(audit_timeline.len() >= 2);
         assert!(

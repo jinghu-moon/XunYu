@@ -1,12 +1,16 @@
 ﻿<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { executeGuardedTask, previewGuardedTask } from '../api'
-import type { GuardedTaskPreviewResponse, WorkspaceCapabilities } from '../types'
+import type { GuardedTaskPreviewResponse, RecentTasksFocusRequest, WorkspaceCapabilities } from '../types'
 import type { TaskFieldDefinition, TaskFieldValue, TaskFormState } from '../workspace-tools'
 import {
+  buildBatchGovernancePlan,
   createBatchGovernanceDialogPreview,
+  createBatchGovernanceItemForm,
   createBatchGovernancePreviewRequests,
   createBatchGovernanceSharedState,
+  createRecentTasksFocusFromBatchPreview,
+  createRecentTasksFocusFromBatchReceipt,
   getBatchGovernanceAction,
   getBatchGovernanceActions,
   getBatchGovernanceSharedFields,
@@ -19,7 +23,12 @@ import {
   type BatchGovernanceReceiptItem,
 } from './file-governance-batch'
 import UnifiedConfirmDialog from './UnifiedConfirmDialog.vue'
+import FileGovernanceSummary from './FileGovernanceSummary.vue'
 import { Button } from './button'
+
+const emit = defineEmits<{
+  (event: 'focus-recent-tasks', request: Omit<RecentTasksFocusRequest, 'key'>): void
+}>()
 
 const props = withDefaults(
   defineProps<{
@@ -53,6 +62,7 @@ const isSupported = computed(() => {
 const previewStats = computed(() => summarizeBatchPreviews(previewItems.value))
 const receiptStats = computed(() => summarizeBatchReceipts(receiptItems.value))
 const canConfirm = computed(() => isBatchPreviewReady(previewItems.value))
+const batchPlan = computed(() => buildBatchGovernancePlan(actionId.value, batchPaths.value, form))
 const dialogPreview = computed<GuardedTaskPreviewResponse | null>(() => {
   if (!previewItems.value.length) return null
   return createBatchGovernanceDialogPreview(actionId.value, previewItems.value)
@@ -77,6 +87,14 @@ function updateAction(value: string) {
   if (actions.some((action) => action.id === value)) {
     actionId.value = value as BatchGovernanceActionId
   }
+}
+
+function focusPreviewInRecentTasks(item: BatchGovernancePreviewItem) {
+  emit('focus-recent-tasks', createRecentTasksFocusFromBatchPreview(actionId.value, item))
+}
+
+function focusReceiptInRecentTasks(item: BatchGovernanceReceiptItem) {
+  emit('focus-recent-tasks', createRecentTasksFocusFromBatchReceipt(actionId.value, item))
 }
 
 function errorMessage(err: unknown): string {
@@ -106,13 +124,14 @@ async function previewBatch() {
 
   try {
     const requests = createBatchGovernancePreviewRequests(actionId.value, batchPaths.value, form)
+    const itemForms = batchPaths.value.map((path) => createBatchGovernanceItemForm(actionId.value, path, form))
     const results = await Promise.allSettled(requests.map((payload) => previewGuardedTask(payload)))
 
     previewItems.value = results.map((result, index) => {
       if (result.status === 'fulfilled') {
-        return { path: batchPaths.value[index] ?? '', preview: result.value }
+        return { path: batchPaths.value[index] ?? '', form: itemForms[index], preview: result.value }
       }
-      return { path: batchPaths.value[index] ?? '', error: errorMessage(result.reason) }
+      return { path: batchPaths.value[index] ?? '', form: itemForms[index], error: errorMessage(result.reason) }
     })
 
     dialogOpen.value = true
@@ -135,15 +154,15 @@ async function confirmBatch() {
 
     for (const item of previewItems.value) {
       if (!item.preview?.ready_to_execute) {
-        nextReceipts.push({ path: item.path, error: item.error || '预演未就绪，已阻止执行。' })
+        nextReceipts.push({ path: item.path, form: item.form, error: item.error || '预演未就绪，已阻止执行。' })
         continue
       }
 
       try {
         const receipt = await executeGuardedTask({ token: item.preview.token, confirm: true })
-        nextReceipts.push({ path: item.path, receipt })
+        nextReceipts.push({ path: item.path, form: item.form, receipt })
       } catch (err) {
-        nextReceipts.push({ path: item.path, error: errorMessage(err) })
+        nextReceipts.push({ path: item.path, form: item.form, error: errorMessage(err) })
       }
     }
 
@@ -257,6 +276,23 @@ watch(
         <span v-if="!isSupported" class="batch-governance__message">当前构建未启用该治理能力。</span>
         <span v-else class="batch-governance__message">会对 {{ batchPaths.length }} 项路径逐项生成 dry-run 结果。</span>
       </div>
+
+
+      <section class="batch-governance__section" data-testid="batch-governance-plan">
+        <header class="batch-governance__section-header">
+          <div>
+            <h4 class="batch-governance__section-title">{{ batchPlan.title }}</h4>
+            <p v-if="batchPlan.note" class="batch-governance__section-desc">{{ batchPlan.note }}</p>
+          </div>
+        </header>
+
+        <dl class="batch-governance__plan-grid">
+          <div v-for="item in batchPlan.items" :key="item.label" class="batch-governance__plan-item">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </dl>
+      </section>
     </template>
 
     <p v-if="requestError" class="batch-governance__message batch-governance__message--error">{{ requestError }}</p>
@@ -287,6 +323,19 @@ watch(
           <p v-if="item.error" class="batch-governance__message batch-governance__message--error">{{ item.error }}</p>
           <template v-else-if="item.preview">
             <p class="batch-governance__message">{{ item.preview.summary }}</p>
+            <FileGovernanceSummary
+              v-if="item.form"
+              :task="currentAction.task"
+              :form="item.form"
+              phase="preview"
+              :process="item.preview.process"
+              :details="item.preview.details"
+            />
+            <div class="batch-governance__item-actions">
+              <Button data-testid="batch-preview-link-recent" preset="secondary" @click="focusPreviewInRecentTasks(item)">
+          ????? `protect:set / protect:clear`?`encrypt / decrypt`??? `acl:add / copy / restore / purge / inherit / owner / repair`????? Triple-Guard???? dry-run???????????????????????????????
+              </Button>
+            </div>
             <details class="batch-governance__details">
               <summary>查看预演输出</summary>
               <pre class="batch-governance__output">{{ item.preview.process.command_line }}
@@ -323,10 +372,23 @@ watch(
           </div>
           <p v-if="item.error" class="batch-governance__message batch-governance__message--error">{{ item.error }}</p>
           <template v-else-if="item.receipt">
+            <FileGovernanceSummary
+              v-if="item.form"
+              :task="currentAction.task"
+              :form="item.form"
+              phase="execute"
+              :process="item.receipt.process"
+              :details="item.receipt.details"
+            />
             <div class="batch-governance__receipt-meta">
               <span>{{ item.receipt.audit_action }}</span>
               <span>{{ item.receipt.token }}</span>
               <span>{{ item.receipt.process.duration_ms }} ms</span>
+            </div>
+            <div class="batch-governance__item-actions">
+              <Button data-testid="batch-receipt-link-recent" preset="secondary" @click="focusReceiptInRecentTasks(item)">
+                ??????
+              </Button>
             </div>
             <details class="batch-governance__details">
               <summary>查看执行回执</summary>
@@ -378,6 +440,12 @@ watch(
   color: var(--text-primary);
 }
 
+.batch-governance__item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .batch-governance__desc,
 .batch-governance__section-desc,
 .batch-governance__message,
@@ -410,9 +478,36 @@ watch(
 }
 
 .batch-governance__form,
-.batch-governance__list {
+.batch-governance__list,
+.batch-governance__plan-grid {
   display: grid;
   gap: var(--space-3);
+}
+
+.batch-governance__plan-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.batch-governance__plan-item {
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.batch-governance__plan-item dt {
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+
+.batch-governance__plan-item dd {
+  margin: 0;
+  color: var(--text-primary);
+  font: var(--type-body-sm);
+  word-break: break-word;
 }
 
 .batch-governance__field {

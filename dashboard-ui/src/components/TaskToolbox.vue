@@ -1,7 +1,11 @@
 ﻿<script setup lang="ts">
-import type { WorkspaceCapabilities } from '../types'
+import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../types'
 import type { WorkspaceTaskDefinition } from '../workspace-tools'
 import TaskToolCard from './TaskToolCard.vue'
+
+const emit = defineEmits<{
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
+}>()
 
 const props = withDefaults(
   defineProps<{
@@ -37,6 +41,7 @@ const props = withDefaults(
         :capabilities="props.capabilities"
         :initial-values="props.taskPresets?.[task.id] ?? null"
         :preset-version="props.presetVersion"
+        @link-panel="emit('link-panel', $event)"
       />
     </div>
   </section>

@@ -200,6 +200,28 @@ describe('RecipePanel', () => {
     expect(apiMocks.executeWorkspaceRecipe).toHaveBeenCalledWith({ token: 'recipe-token-1', confirm: true })
     expect(wrapper.text()).toContain('执行回执')
     expect(wrapper.text()).toContain('deleted')
+
+    await wrapper.get('[data-testid="recipe-link-recent-guarded-rm"]').trigger('click')
+    await wrapper.get('[data-testid="recipe-link-audit-guarded-rm"]').trigger('click')
+
+    expect(wrapper.emitted('link-panel')).toHaveLength(2)
+    expect(wrapper.emitted('link-panel')?.[0]?.[0]).toMatchObject({
+      panel: 'recent-tasks',
+      request: {
+        status: 'succeeded',
+        dry_run: 'executed',
+        search: 'D:/tmp/demo.log',
+        action: 'rm',
+      },
+    })
+    expect(wrapper.emitted('link-panel')?.[1]?.[0]).toMatchObject({
+      panel: 'audit',
+      request: {
+        search: 'D:/tmp/demo.log',
+        action: 'dashboard.task.execute.rm',
+        result: 'success',
+      },
+    })
   })
 
   it('stays blocked when preview fails', async () => {

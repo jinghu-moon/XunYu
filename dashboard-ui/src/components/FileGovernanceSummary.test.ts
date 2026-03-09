@@ -1,6 +1,6 @@
 ﻿import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import type { TaskProcessOutput } from '../types'
+import type { TaskProcessOutput, WorkspaceTaskDetails } from '../types'
 import type { TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
 import FileGovernanceSummary from './FileGovernanceSummary.vue'
 
@@ -25,6 +25,50 @@ function createProcess(stdout: string, success = true): TaskProcessOutput {
     stdout,
     stderr: '',
     duration_ms: 8,
+  }
+}
+
+function createAclDiffDetails(): WorkspaceTaskDetails {
+  return {
+    kind: 'acl_diff',
+    diff: {
+      target: 'D:/repo/a.txt',
+      reference: 'D:/repo/b.txt',
+      common_count: 5,
+      has_diff: true,
+      owner_diff: {
+        target: 'BUILTIN\\Administrators',
+        reference: 'NT AUTHORITY\\SYSTEM',
+      },
+      inheritance_diff: {
+        target_protected: false,
+        reference_protected: true,
+      },
+      only_in_target: [
+        {
+          principal: 'BUILTIN\\Users',
+          sid: 'S-1-5-32-545',
+          rights: 'Read',
+          ace_type: 'Allow',
+          source: 'explicit',
+          inheritance: 'BothInherit',
+          propagation: 'None',
+          orphan: false,
+        },
+      ],
+      only_in_reference: [
+        {
+          principal: 'DOMAIN\\alice',
+          sid: 'S-1-5-21-100',
+          rights: 'Modify',
+          ace_type: 'Allow',
+          source: 'inherited',
+          inheritance: 'ContainerInherit',
+          propagation: 'InheritOnly',
+          orphan: true,
+        },
+      ],
+    },
   }
 }
 
@@ -263,6 +307,59 @@ describe('FileGovernanceSummary', () => {
     expect(wrapper.text()).toContain('ACL 有效权限摘要')
     expect(wrapper.text()).toContain('DOMAIN\\alice')
     expect(wrapper.text()).toContain('有效权限已返回')
+  })
+
+  it('renders structured acl diff details when provided', () => {
+    const wrapper = mount(FileGovernanceSummary, {
+      props: {
+        task: createTask('acl:diff'),
+        phase: 'execute',
+        form: {
+          path: 'D:/repo/a.txt',
+          reference: 'D:/repo/b.txt',
+          output: '',
+        } satisfies TaskFormState,
+        process: createProcess('Only in A: 1\nOnly in B: 1\nCommon: 5'),
+        details: createAclDiffDetails(),
+      },
+    })
+
+    expect(wrapper.find('[data-testid="acl-diff-details"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('S-1-5-32-545')
+    expect(wrapper.text()).toContain('S-1-5-21-100')
+    expect(wrapper.text()).toContain('S-1-5-32-545')
+  })
+
+  it('renders acl copy transition details when receipt carries before and after diff', () => {
+    const details = createAclDiffDetails()
+    if (details.kind !== 'acl_diff') throw new Error('expected acl diff details')
+    const diff = details.diff
+    const wrapper = mount(FileGovernanceSummary, {
+      props: {
+        task: createTask('acl:copy'),
+        phase: 'execute',
+        form: {
+          path: 'D:/repo/a.txt',
+          reference: 'D:/repo/template.txt',
+        } satisfies TaskFormState,
+        process: createProcess('ACL copied'),
+        details: {
+          kind: 'acl_diff_transition',
+          before: diff,
+          after: {
+            ...diff,
+            has_diff: false,
+            only_in_target: [],
+            only_in_reference: [],
+          },
+        } satisfies WorkspaceTaskDetails,
+      },
+    })
+
+    expect(wrapper.find('[data-testid="acl-diff-panel-before"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="acl-diff-panel-after"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('S-1-5-32-545')
+    expect(wrapper.get('[data-testid="acl-diff-panel-after"]').text()).toContain('D:/repo/b.txt')
   })
 
 })

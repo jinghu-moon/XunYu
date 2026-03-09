@@ -1,18 +1,23 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
-import type { TaskProcessOutput } from '../types'
+import type { TaskProcessOutput, WorkspaceTaskDetails } from '../types'
 import type { TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
 import { buildFileGovernanceSummary } from './file-governance-summary'
+import AclDiffDetails from './AclDiffDetails.vue'
 
 const props = defineProps<{
   task: WorkspaceTaskDefinition
   form: TaskFormState
   phase: 'preview' | 'execute'
   process: TaskProcessOutput
+  details?: WorkspaceTaskDetails | null
 }>()
 
 const target = computed(() => props.task.target?.(props.form) ?? '')
 const summary = computed(() => buildFileGovernanceSummary(props.task, props.form, props.phase, props.process, target.value))
+const diffDetails = computed(() =>
+  props.details?.kind === 'acl_diff' || props.details?.kind === 'acl_diff_transition' ? props.details : null,
+)
 </script>
 
 <template>
@@ -28,6 +33,7 @@ const summary = computed(() => buildFileGovernanceSummary(props.task, props.form
         <dd>{{ item.value }}</dd>
       </div>
     </dl>
+    <AclDiffDetails v-if="diffDetails" :details="diffDetails" />
   </section>
 </template>
 

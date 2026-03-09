@@ -103,8 +103,19 @@ describe('RecentTasksPanel', () => {
 
     await wrapper.get('[data-testid="status-filter"]').setValue('all')
     await wrapper.get('[data-testid="dryrun-filter"]').setValue('dry-run')
-    expect(wrapper.text()).toContain('删除 demo.txt')
+    expect(wrapper.text()).toContain('D:/tmp/demo.txt')
     expect(wrapper.text()).not.toContain('cstat .')
+
+    await wrapper.get('[data-testid="dryrun-filter"]').setValue('all')
+    await wrapper.get('[data-testid="recent-search-filter"]').setValue('D:/tmp/demo.txt')
+    expect(wrapper.text()).toContain('D:/tmp/demo.txt')
+    expect(wrapper.text()).not.toContain('cstat .')
+
+    await wrapper.get('[data-testid="recent-search-filter"]').setValue('')
+    await wrapper.get('[data-testid="recent-action-filter"]').setValue('recent')
+    expect(wrapper.text()).toContain('recent')
+    expect(wrapper.text()).not.toContain('cstat .')
+    expect(wrapper.text()).not.toContain('D:/tmp/demo.txt')
   })
 
   it('replays run tasks directly', async () => {
@@ -308,6 +319,223 @@ describe('RecentTasksPanel', () => {
     expect(wrapper.text()).toContain('ACL 备份摘要')
     expect(wrapper.text()).toContain('D:/repo/demo.acl.json')
     expect(wrapper.text()).toContain('6 条')
+  })
+
+  it('renders structured acl diff details for selected recent task', async () => {
+    apiMocks.fetchRecentWorkspaceTasks.mockResolvedValue({
+      stats: { total: 1, succeeded: 1, failed: 0, dry_run: 0 },
+      entries: [
+        {
+          id: 'task-1',
+          workspace: 'files-security',
+          action: 'acl:copy',
+          target: 'D:/repo/a.txt',
+          mode: 'guarded',
+          phase: 'execute',
+          status: 'succeeded',
+          guarded: true,
+          dry_run: false,
+          summary: 'copy acl',
+          created_at: 1700000000,
+          audit_action: 'dashboard.task.execute.acl:copy',
+          process: {
+            command_line: 'xun acl copy -p D:/repo/a.txt -r D:/repo/template.txt -y',
+            exit_code: 0,
+            success: true,
+            stdout: 'copied',
+            stderr: '',
+            duration_ms: 10,
+          },
+          details: {
+            kind: 'acl_diff_transition',
+            before: {
+              target: 'D:/repo/a.txt',
+              reference: 'D:/repo/template.txt',
+              common_count: 2,
+              has_diff: true,
+              owner_diff: null,
+              inheritance_diff: null,
+              only_in_target: [
+                {
+                  principal: 'BUILTIN\\Users',
+                  sid: 'S-1-5-32-545',
+                  rights: 'Read',
+                  ace_type: 'Allow',
+                  source: 'explicit',
+                  inheritance: 'BothInherit',
+                  propagation: 'None',
+                  orphan: false,
+                },
+              ],
+              only_in_reference: [],
+            },
+            after: {
+              target: 'D:/repo/a.txt',
+              reference: 'D:/repo/template.txt',
+              common_count: 3,
+              has_diff: false,
+              owner_diff: null,
+              inheritance_diff: null,
+              only_in_target: [],
+              only_in_reference: [],
+            },
+          },
+          replay: {
+            kind: 'guarded_preview',
+            request: {
+              workspace: 'files-security',
+              action: 'acl:copy',
+              target: 'D:/repo/a.txt',
+              preview_args: ['acl', 'diff', '-p', 'D:/repo/a.txt', '-r', 'D:/repo/template.txt'],
+              execute_args: ['acl', 'copy', '-p', 'D:/repo/a.txt', '-r', 'D:/repo/template.txt', '-y'],
+              preview_summary: 'copy acl',
+            },
+          },
+        },
+      ],
+    })
+
+    const wrapper = mount(RecentTasksPanel)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="acl-diff-details"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="acl-diff-panel-before"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="acl-diff-panel-after"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('S-1-5-32-545')
+  })
+
+
+  it('applies focus requests from the diagnostics workspace', async () => {
+    const response = {
+      stats: { total: 3, succeeded: 1, failed: 1, dry_run: 1 },
+      entries: [
+        {
+          id: 'task-1',
+          workspace: 'files-security',
+          action: 'rm',
+          target: 'D:/tmp/demo.txt',
+          mode: 'guarded',
+          phase: 'preview',
+          status: 'previewed',
+          guarded: true,
+          dry_run: true,
+          summary: 'D:/tmp/demo.txt',
+          created_at: 1700000000,
+          audit_action: 'dashboard.task.preview',
+          process: { command_line: 'xun rm --dry-run D:/tmp/demo.txt', exit_code: 0, success: true, stdout: 'preview ok', stderr: '', duration_ms: 10 },
+          replay: { kind: 'guarded_preview', request: { workspace: 'files-security', action: 'rm', target: 'D:/tmp/demo.txt', preview_args: ['rm', '--dry-run', 'D:/tmp/demo.txt'], execute_args: ['rm', '-y', 'D:/tmp/demo.txt'], preview_summary: 'D:/tmp/demo.txt' } },
+        },
+        {
+          id: 'task-2',
+          workspace: 'statistics-diagnostics',
+          action: 'cstat',
+          target: '.',
+          mode: 'run',
+          phase: 'run',
+          status: 'failed',
+          guarded: false,
+          dry_run: false,
+          summary: 'cstat .',
+          created_at: 1700000001,
+          audit_action: null,
+          process: { command_line: 'xun cstat .', exit_code: 1, success: false, stdout: '', stderr: 'boom', duration_ms: 11 },
+          replay: { kind: 'run', request: { workspace: 'statistics-diagnostics', action: 'cstat', target: '.', args: ['cstat', '.'] } },
+        },
+        {
+          id: 'task-3',
+          workspace: 'paths-context',
+          action: 'recent',
+          target: '',
+          mode: 'run',
+          phase: 'run',
+          status: 'succeeded',
+          guarded: false,
+          dry_run: false,
+          summary: 'recent',
+          created_at: 1700000002,
+          audit_action: null,
+          process: { command_line: 'xun recent', exit_code: 0, success: true, stdout: '[]', stderr: '', duration_ms: 12 },
+          replay: { kind: 'run', request: { workspace: 'paths-context', action: 'recent', target: '', args: ['recent'] } },
+        },
+      ],
+    }
+    apiMocks.fetchRecentWorkspaceTasks.mockResolvedValue(response)
+
+    const wrapper = mount(RecentTasksPanel)
+    await flushPromises()
+
+    await wrapper.setProps({
+      focusRequest: {
+        key: 1,
+        selected_task_id: 'task-2',
+        status: 'failed',
+        dry_run: 'executed',
+        search: 'cstat',
+        action: 'cstat',
+      },
+    })
+    await flushPromises()
+
+    expect(apiMocks.fetchRecentWorkspaceTasks).toHaveBeenCalledTimes(2)
+    expect((wrapper.get('[data-testid="status-filter"]').element as HTMLSelectElement).value).toBe('failed')
+    expect((wrapper.get('[data-testid="dryrun-filter"]').element as HTMLSelectElement).value).toBe('executed')
+    expect((wrapper.get('[data-testid="recent-search-filter"]').element as HTMLInputElement).value).toBe('cstat')
+    expect((wrapper.get('[data-testid="recent-action-filter"]').element as HTMLSelectElement).value).toBe('cstat')
+    expect(wrapper.get('[data-testid="recent-active-filters"]').text()).toContain('failed')
+    expect(wrapper.get('[data-testid="recent-active-filters"]').text()).toContain('cstat')
+    expect(wrapper.get('[data-testid="recent-active-filters"]').text()).toContain('cstat')
+    expect(wrapper.get('[data-testid="recent-active-filters"]').text()).toContain('Dry Run')
+    expect(wrapper.get('[data-testid="task-item-task-2"]').classes()).toContain('is-active')
+    expect(wrapper.text()).toContain('cstat .')
+    expect(wrapper.text()).not.toContain('D:/tmp/demo.txt')
+
+    await wrapper.get('[data-testid="clear-recent-filters"]').trigger('click')
+    await flushPromises()
+
+    expect((wrapper.get('[data-testid="status-filter"]').element as HTMLSelectElement).value).toBe('all')
+    expect((wrapper.get('[data-testid="dryrun-filter"]').element as HTMLSelectElement).value).toBe('all')
+    expect((wrapper.get('[data-testid="recent-search-filter"]').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('[data-testid="recent-action-filter"]').element as HTMLSelectElement).value).toBe('')
+    expect(wrapper.find('[data-testid="recent-active-filters"]').exists()).toBe(false)
+  })
+
+  it('emits diagnostics-center focus requests from selected records', async () => {
+    apiMocks.fetchRecentWorkspaceTasks.mockResolvedValue({
+      stats: { total: 1, succeeded: 0, failed: 1, dry_run: 0 },
+      entries: [
+        {
+          id: 'task-2',
+          workspace: 'statistics-diagnostics',
+          action: 'cstat',
+          target: '.',
+          mode: 'run',
+          phase: 'run',
+          status: 'failed',
+          guarded: false,
+          dry_run: false,
+          summary: 'cstat .',
+          created_at: 1700000001,
+          audit_action: null,
+          process: { command_line: 'xun cstat .', exit_code: 1, success: false, stdout: '', stderr: 'boom', duration_ms: 11 },
+          replay: { kind: 'run', request: { workspace: 'statistics-diagnostics', action: 'cstat', target: '.', args: ['cstat', '.'] } },
+        },
+      ],
+    })
+
+    const wrapper = mount(RecentTasksPanel)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="recent-link-diagnostics"]').trigger('click')
+
+    expect(wrapper.emitted('link-panel')).toHaveLength(1)
+    expect(wrapper.emitted('link-panel')?.[0]?.[0]).toEqual({
+      panel: 'diagnostics-center',
+      request: {
+        panel: 'failed',
+        task_id: 'task-2',
+        target: '.',
+      },
+    })
   })
 
 })

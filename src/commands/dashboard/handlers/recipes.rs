@@ -1003,6 +1003,212 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
             ],
         },
         RecipeDefinition {
+            id: "paths-context-health".to_string(),
+            name: "??????".to_string(),
+            description: "??????????????????".to_string(),
+            category: "paths-context".to_string(),
+            source: RecipeSource::Builtin,
+            supports_dry_run: true,
+            params: vec![
+                RecipeParamDefinition {
+                    key: "limit".to_string(),
+                    label: "????".to_string(),
+                    description: "recent ????????".to_string(),
+                    default_value: "10".to_string(),
+                    required: true,
+                    placeholder: "10".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "days".to_string(),
+                    label: "????(?)".to_string(),
+                    description: "check ??????????".to_string(),
+                    default_value: "90".to_string(),
+                    required: true,
+                    placeholder: "90".to_string(),
+                },
+            ],
+            steps: vec![
+                RecipeStepDefinition::Run {
+                    id: "ctx-list".to_string(),
+                    title: "?????".to_string(),
+                    workspace: "paths-context".to_string(),
+                    action: "ctx:list".to_string(),
+                    target: String::new(),
+                    summary: "?????????".to_string(),
+                    run_args: vec!["ctx", "list", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["ctx", "list", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "bookmark-recent".to_string(),
+                    title: "????".to_string(),
+                    workspace: "paths-context".to_string(),
+                    action: "recent".to_string(),
+                    target: "{{limit}}".to_string(),
+                    summary: "???? {{limit}} ?????".to_string(),
+                    run_args: vec!["recent", "-n", "{{limit}}", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["recent", "-n", "{{limit}}", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "bookmark-check".to_string(),
+                    title: "????".to_string(),
+                    workspace: "paths-context".to_string(),
+                    action: "check".to_string(),
+                    target: "{{days}}".to_string(),
+                    summary: "? {{days}} ???????????".to_string(),
+                    run_args: vec!["check", "-d", "{{days}}", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["check", "-d", "{{days}}", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+            ],
+        },
+        RecipeDefinition {
+            id: "integration-shell-bootstrap".to_string(),
+            name: "Shell ????".to_string(),
+            description: "???? init ? completion ????????? shell ???".to_string(),
+            category: "integration-automation".to_string(),
+            source: RecipeSource::Builtin,
+            supports_dry_run: true,
+            params: vec![RecipeParamDefinition {
+                key: "shell".to_string(),
+                label: "Shell".to_string(),
+                description: "init ? completion ??? shell ???".to_string(),
+                default_value: "powershell".to_string(),
+                required: true,
+                placeholder: "powershell".to_string(),
+            }],
+            steps: vec![
+                RecipeStepDefinition::Run {
+                    id: "shell-init".to_string(),
+                    title: "?? init".to_string(),
+                    workspace: "integration-automation".to_string(),
+                    action: "init".to_string(),
+                    target: "{{shell}}".to_string(),
+                    summary: "?? {{shell}} init ??".to_string(),
+                    run_args: vec!["init", "{{shell}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["init", "{{shell}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "shell-completion".to_string(),
+                    title: "?? completion".to_string(),
+                    workspace: "integration-automation".to_string(),
+                    action: "completion".to_string(),
+                    target: "{{shell}}".to_string(),
+                    summary: "?? {{shell}} completion ??".to_string(),
+                    run_args: vec!["completion", "{{shell}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["completion", "{{shell}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+            ],
+        },
+        RecipeDefinition {
+            id: "media-video-probe-compress".to_string(),
+            name: "???????".to_string(),
+            description: "????????????? mode / engine ???????".to_string(),
+            category: "media-conversion".to_string(),
+            source: RecipeSource::Builtin,
+            supports_dry_run: true,
+            params: vec![
+                RecipeParamDefinition {
+                    key: "input".to_string(),
+                    label: "????".to_string(),
+                    description: "????????????".to_string(),
+                    default_value: String::new(),
+                    required: true,
+                    placeholder: "D:/media/demo.mp4".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "output".to_string(),
+                    label: "????".to_string(),
+                    description: "???????????".to_string(),
+                    default_value: String::new(),
+                    required: true,
+                    placeholder: "D:/media/demo.small.mp4".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "mode".to_string(),
+                    label: "????".to_string(),
+                    description: "balanced / fastest / smallest".to_string(),
+                    default_value: "balanced".to_string(),
+                    required: true,
+                    placeholder: "balanced".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "engine".to_string(),
+                    label: "??".to_string(),
+                    description: "auto / cpu / gpu".to_string(),
+                    default_value: "auto".to_string(),
+                    required: true,
+                    placeholder: "auto".to_string(),
+                },
+            ],
+            steps: vec![
+                RecipeStepDefinition::Run {
+                    id: "video-probe".to_string(),
+                    title: "????".to_string(),
+                    workspace: "media-conversion".to_string(),
+                    action: "video:probe".to_string(),
+                    target: "{{input}}".to_string(),
+                    summary: "?? {{input}} ??????".to_string(),
+                    run_args: vec!["video", "probe", "-i", "{{input}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["video", "probe", "-i", "{{input}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "video-compress".to_string(),
+                    title: "????".to_string(),
+                    workspace: "media-conversion".to_string(),
+                    action: "video:compress".to_string(),
+                    target: "{{input}} -> {{output}}".to_string(),
+                    summary: "? {{input}} ? {{mode}} / {{engine}} ??? {{output}}".to_string(),
+                    run_args: vec![
+                        "video", "compress", "-i", "{{input}}", "-o", "{{output}}", "--mode", "{{mode}}", "--engine", "{{engine}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                    dry_run_args: vec![
+                        "video", "compress", "-i", "{{input}}", "-o", "{{output}}", "--mode", "{{mode}}", "--engine", "{{engine}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                },
+            ],
+        },
+        RecipeDefinition {
             id: "proxy-diagnostics".to_string(),
             name: "代理诊断快照".to_string(),
             description: "连续采集代理状态、系统代理配置与端口快照。".to_string(),
@@ -1205,6 +1411,29 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[tokio::test]
+    async fn builtin_recipe_catalog_covers_phase3_to_phase5_workspaces() {
+        let app = test_router(Arc::new(FakeRunner::default()));
+        let list_resp = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/workspaces/recipes")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(list_resp.status(), StatusCode::OK);
+        let body = to_bytes(list_resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let recipes = json["recipes"].as_array().unwrap();
+
+        assert!(recipes.iter().any(|entry| entry["id"] == "paths-context-health" && entry["category"] == "paths-context"));
+        assert!(recipes.iter().any(|entry| entry["id"] == "integration-shell-bootstrap" && entry["category"] == "integration-automation"));
+        assert!(recipes.iter().any(|entry| entry["id"] == "media-video-probe-compress" && entry["category"] == "media-conversion"));
     }
 
     #[tokio::test]

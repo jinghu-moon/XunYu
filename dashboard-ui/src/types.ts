@@ -479,6 +479,42 @@ export interface TaskProcessOutput {
   duration_ms: number
 }
 
+export interface AclDiffEntryDetails {
+  principal: string
+  sid: string
+  rights: string
+  ace_type: string
+  source: string
+  inheritance: string
+  propagation: string
+  orphan: boolean
+}
+
+export interface AclDiffOwnerDetails {
+  target: string
+  reference: string
+}
+
+export interface AclDiffInheritanceDetails {
+  target_protected: boolean
+  reference_protected: boolean
+}
+
+export interface AclDiffDetails {
+  target: string
+  reference: string
+  common_count: number
+  has_diff: boolean
+  owner_diff?: AclDiffOwnerDetails | null
+  inheritance_diff?: AclDiffInheritanceDetails | null
+  only_in_target: AclDiffEntryDetails[]
+  only_in_reference: AclDiffEntryDetails[]
+}
+
+export type WorkspaceTaskDetails =
+  | { kind: 'acl_diff'; diff: AclDiffDetails }
+  | { kind: 'acl_diff_transition'; before: AclDiffDetails; after: AclDiffDetails }
+
 export interface WorkspaceTaskRunRequest {
   workspace: string
   action: string
@@ -491,6 +527,7 @@ export interface WorkspaceTaskRunResponse {
   action: string
   target: string
   process: TaskProcessOutput
+  details?: WorkspaceTaskDetails | null
 }
 
 export interface GuardedTaskPreviewRequest {
@@ -516,6 +553,7 @@ export interface GuardedTaskPreviewResponse {
   preview_summary: string
   process: TaskProcessOutput
   expires_in_secs: number
+  details?: WorkspaceTaskDetails | null
 }
 
 export interface GuardedTaskExecuteRequest {
@@ -536,6 +574,7 @@ export interface GuardedTaskReceipt {
   audit_action: string
   audited_at: number
   process: TaskProcessOutput
+  details?: WorkspaceTaskDetails | null
 }
 
 export type RecentTaskReplay =
@@ -556,6 +595,7 @@ export interface RecentTaskRecord {
   created_at: number
   audit_action?: string | null
   process: TaskProcessOutput
+  details?: WorkspaceTaskDetails | null
   replay?: RecentTaskReplay | null
 }
 
@@ -570,6 +610,46 @@ export interface RecentTaskListResponse {
   entries: RecentTaskRecord[]
   stats: RecentTaskStats
 }
+
+export type RecentTaskStatusFilter = 'all' | RecentTaskRecord['status']
+export type RecentTaskDryRunFilter = 'all' | 'dry-run' | 'executed'
+
+export interface RecentTasksFocusRequest {
+  key: number
+  selected_task_id?: string
+  status?: RecentTaskStatusFilter
+  dry_run?: RecentTaskDryRunFilter
+  search?: string
+  action?: string
+}
+
+export interface AuditFocusRequest {
+  key: number
+  search?: string
+  action?: string
+  result?: string
+}
+
+export type DiagnosticsCenterPanelId = 'doctor' | 'governance' | 'failed' | 'guarded' | 'audit'
+export type DiagnosticsGovernanceFamilyFilter = 'all' | 'acl' | 'protect' | 'crypt' | 'other'
+export type DiagnosticsGovernanceStatusFilter = 'all' | RecentTaskRecord['status']
+
+export interface DiagnosticsCenterFocusRequest {
+  key: number
+  panel: DiagnosticsCenterPanelId
+  governance_family?: DiagnosticsGovernanceFamilyFilter
+  governance_status?: DiagnosticsGovernanceStatusFilter
+  task_id?: string
+  target?: string
+  audit_action?: string
+  audit_result?: string
+  audit_timestamp?: number
+}
+
+export type StatisticsWorkspaceLinkPayload =
+  | { panel: 'recent-tasks'; request: Omit<RecentTasksFocusRequest, 'key'> }
+  | { panel: 'audit'; request: Omit<AuditFocusRequest, 'key'> }
+  | { panel: 'diagnostics-center'; request: Omit<DiagnosticsCenterFocusRequest, 'key'> }
 
 export interface WorkspaceCapabilities {
   alias: boolean
@@ -733,6 +813,7 @@ export interface DiagnosticsOverview {
   doctor_fixable: number
   recent_failed_tasks: number
   recent_guarded_receipts: number
+  recent_governance_alerts: number
   audit_entries: number
   urgent_items: number
 }
@@ -744,4 +825,5 @@ export interface DiagnosticsSummaryResponse {
   audit_timeline: AuditEntry[]
   failed_tasks: RecentTaskRecord[]
   guarded_receipts: RecentTaskRecord[]
+  governance_alerts: RecentTaskRecord[]
 }

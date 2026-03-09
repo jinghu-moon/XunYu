@@ -2,11 +2,25 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { IconRefresh, IconSearch } from '@tabler/icons-vue'
 import { Button } from './button'
-import type { AuditEntry, AuditResponse } from '../types'
+import type { AuditEntry, AuditFocusRequest, AuditResponse, StatisticsWorkspaceLinkPayload } from '../types'
 import { fetchAudit } from '../api'
 import SkeletonTable from './SkeletonTable.vue'
 import { pushToast } from '../ui/feedback'
 import { downloadCsv, downloadJson } from '../ui/export'
+import { resolveDiagnosticsCenterFocusFromAuditEntry } from './statistics-diagnostics-focus'
+
+const emit = defineEmits<{
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
+}>()
+
+const props = withDefaults(
+  defineProps<{
+    focusRequest?: AuditFocusRequest | null
+  }>(),
+  {
+    focusRequest: null,
+  },
+)
 
 const search = ref('')
 const action = ref('')
@@ -20,6 +34,16 @@ const detailEntry = ref<AuditEntry | null>(null)
 const entries = computed<AuditEntry[]>(() => resp.value.entries)
 const actionItems = computed(() => Object.keys(resp.value.stats.by_action).sort())
 const resultItems = computed(() => Object.keys(resp.value.stats.by_result).sort())
+const activeFilterItems = computed(() => {
+  const items: Array<{ key: string; label: string; value: string }> = []
+  const searchKeyword = search.value.trim()
+
+  if (searchKeyword) items.push({ key: 'search', label: '??', value: searchKeyword })
+  if (action.value) items.push({ key: 'action', label: '??', value: action.value })
+  if (result.value) items.push({ key: 'result', label: '??', value: result.value })
+
+  return items
+})
 const pageCount = computed(() => Math.max(1, Math.ceil(entries.value.length / pageSize.value)))
 const pageStart = computed(() => (page.value - 1) * pageSize.value)
 const pageEnd = computed(() => Math.min(entries.value.length, pageStart.value + pageSize.value))
@@ -39,6 +63,22 @@ async function load() {
   } finally {
     busy.value = false
   }
+}
+
+function applyFocusRequest(request: AuditFocusRequest | null | undefined) {
+  if (!request) return
+  search.value = request.search ?? ''
+  action.value = request.action ?? ''
+  result.value = request.result ?? ''
+  detailEntry.value = null
+}
+
+async function clearFilters() {
+  search.value = ''
+  action.value = ''
+  result.value = ''
+  detailEntry.value = null
+  await load()
 }
 
 function fmtTs(ts: number): string {
@@ -61,6 +101,13 @@ function openDetail(e: AuditEntry) {
 
 function closeDetail() {
   detailEntry.value = null
+}
+
+function openDiagnostics(entry: AuditEntry) {
+  emit('link-panel', {
+    panel: 'diagnostics-center',
+    request: resolveDiagnosticsCenterFocusFromAuditEntry(entry),
+  })
 }
 
 function formatPayload(raw: string): string {
@@ -106,21 +153,30 @@ watch([entries, pageSize], () => {
   if (page.value > pageCount.value) page.value = pageCount.value
 })
 
+watch(
+  () => props.focusRequest?.key,
+  async () => {
+    if (!props.focusRequest) return
+    applyFocusRequest(props.focusRequest)
+    await load()
+  },
+)
+
 onMounted(load)
 </script>
 
 <template>
-  <div>
+  <div data-testid="audit-panel">
     <div class="toolbar">
       <div style="position:relative;flex:1;display:flex;align-items:center">
         <IconSearch :size="16" style="position:absolute;left:var(--space-2);color:var(--text-tertiary)" />
-        <input v-model="search" placeholder="Search action/target/params/reason..." style="width:100%;padding-left:var(--space-8)" @keydown.enter="load" />
+        <input v-model="search" data-testid="audit-search" placeholder="Search action/target/params/reason..." style="width:100%;padding-left:var(--space-8)" @keydown.enter="load" />
       </div>
-      <select v-model="action" style="max-width:200px" @change="load">
+      <select v-model="action" data-testid="audit-action" style="max-width:200px" @change="load">
         <option value="">All actions</option>
         <option v-for="a in actionItems" :key="a" :value="a">{{ a }}</option>
       </select>
-      <select v-model="result" style="max-width:160px" @change="load">
+      <select v-model="result" data-testid="audit-result" style="max-width:160px" @change="load">
         <option value="">All results</option>
         <option v-for="r in resultItems" :key="r" :value="r">{{ r }}</option>
       </select>
@@ -132,6 +188,16 @@ onMounted(load)
         <Button size="sm" preset="secondary" @click="exportAudit('csv')">CSV</Button>
         <Button size="sm" preset="secondary" @click="exportAudit('json')">JSON</Button>
       </div>
+    </div>
+
+    <div v-if="activeFilterItems.length" class="audit-focus" data-testid="audit-active-filters">
+      <span class="audit-focus__label">????</span>
+      <span v-for="item in activeFilterItems" :key="item.key" class="audit-focus__chip">
+        {{ item.label }}?{{ item.value }}
+      </span>
+      <Button data-testid="clear-audit-filters" size="sm" preset="secondary" :disabled="busy" @click="clearFilters">
+        ????
+      </Button>
     </div>
 
     <div class="stats">
@@ -176,7 +242,10 @@ onMounted(load)
           </td>
           <td style="color:var(--text-tertiary)">{{ e.reason }}</td>
           <td>
-            <Button size="sm" preset="secondary" @click="openDetail(e)">Details</Button>
+            <div class="audit-actions">
+              <Button size="sm" preset="secondary" @click="openDetail(e)">Details</Button>
+              <Button :data-testid="`audit-link-diagnostics-${e.timestamp}`" size="sm" preset="secondary" @click="openDiagnostics(e)">Diagnose</Button>
+            </div>
           </td>
         </tr>
         <tr v-if="!entries.length">
@@ -270,6 +339,30 @@ onMounted(load)
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+.audit-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+.audit-focus {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.audit-focus__label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+.audit-focus__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  font: var(--type-caption);
 }
 .toolbar-label {
   font-size: var(--text-xs);

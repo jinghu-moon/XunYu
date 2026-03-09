@@ -6,8 +6,12 @@ import {
   previewWorkspaceRecipe,
   saveWorkspaceRecipe,
 } from '../api'
-import type { RecipeDefinition, RecipeExecutionReceipt, RecipePreviewResponse } from '../types'
+import type { RecipeDefinition, RecipeExecutionReceipt, RecipeExecutionStepReceipt, RecipePreviewResponse, StatisticsWorkspaceLinkPayload } from '../types'
 import { Button } from './button'
+
+const emit = defineEmits<{
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
+}>()
 
 const props = withDefaults(
   defineProps<{
@@ -63,6 +67,30 @@ const validationError = computed(() => {
 })
 
 const canPreview = computed(() => Boolean(selectedRecipe.value && !validationError.value))
+
+
+function focusRecentTasksForStep(step: RecipeExecutionStepReceipt) {
+  emit('link-panel', {
+    panel: 'recent-tasks',
+    request: {
+      status: step.status,
+      dry_run: step.dry_run ? 'dry-run' : 'executed',
+      search: step.target || undefined,
+      action: step.action,
+    },
+  })
+}
+
+function focusAuditForStep(step: RecipeExecutionStepReceipt) {
+  emit('link-panel', {
+    panel: 'audit',
+    request: {
+      search: step.target || undefined,
+      action: step.audit_action || undefined,
+      result: step.status === 'failed' ? 'failed' : 'success',
+    },
+  })
+}
 
 function resetForm(recipe: RecipeDefinition | null) {
   for (const key of Object.keys(formValues)) {
@@ -350,6 +378,14 @@ onMounted(() => {
               </span>
             </div>
             <p class="recipe-panel__item-desc">{{ step.summary }}</p>
+            <div class="recipe-panel__result-links">
+              <button :data-testid="`recipe-link-recent-${step.id}`" class="recipe-panel__link" type="button" @click="focusRecentTasksForStep(step)">
+                ???????
+              </button>
+              <button :data-testid="`recipe-link-audit-${step.id}`" class="recipe-panel__link" type="button" @click="focusAuditForStep(step)">
+                ??????
+              </button>
+            </div>
             <pre class="recipe-panel__output">{{ step.process.command_line }}
 
 {{ step.process.stdout || step.process.stderr || 'No command output' }}</pre>
@@ -498,6 +534,21 @@ onMounted(() => {
 
 .recipe-panel__input {
   width: 100%;
+}
+
+.recipe-panel__result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.recipe-panel__link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: var(--type-caption);
 }
 
 .recipe-panel__output {

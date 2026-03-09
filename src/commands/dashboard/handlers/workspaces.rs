@@ -1,9 +1,12 @@
 use super::*;
 
 use std::collections::{BTreeMap, VecDeque};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use crate::acl;
 
 const GUARDED_TASK_TTL_SECS: u64 = 300;
 const TASK_HISTORY_LIMIT: usize = 64;
@@ -82,6 +85,7 @@ struct PendingGuardedTask {
     summary: String,
     preview_args: Vec<String>,
     execute_args: Vec<String>,
+    details: Option<WorkspaceTaskDetails>,
     expires_at: Instant,
 }
 
@@ -105,11 +109,63 @@ pub(in crate::commands::dashboard) struct WorkspaceTaskRunRequest {
 }
 
 #[derive(Serialize, Clone, Debug)]
+pub(in crate::commands::dashboard) struct AclDiffEntryDetails {
+    pub(in crate::commands::dashboard) principal: String,
+    pub(in crate::commands::dashboard) sid: String,
+    pub(in crate::commands::dashboard) rights: String,
+    pub(in crate::commands::dashboard) ace_type: String,
+    pub(in crate::commands::dashboard) source: String,
+    pub(in crate::commands::dashboard) inheritance: String,
+    pub(in crate::commands::dashboard) propagation: String,
+    pub(in crate::commands::dashboard) orphan: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(in crate::commands::dashboard) struct AclDiffOwnerDetails {
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) reference: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(in crate::commands::dashboard) struct AclDiffInheritanceDetails {
+    pub(in crate::commands::dashboard) target_protected: bool,
+    pub(in crate::commands::dashboard) reference_protected: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub(in crate::commands::dashboard) struct AclDiffDetails {
+    pub(in crate::commands::dashboard) target: String,
+    pub(in crate::commands::dashboard) reference: String,
+    pub(in crate::commands::dashboard) common_count: usize,
+    pub(in crate::commands::dashboard) has_diff: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::commands::dashboard) owner_diff: Option<AclDiffOwnerDetails>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::commands::dashboard) inheritance_diff: Option<AclDiffInheritanceDetails>,
+    pub(in crate::commands::dashboard) only_in_target: Vec<AclDiffEntryDetails>,
+    pub(in crate::commands::dashboard) only_in_reference: Vec<AclDiffEntryDetails>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(in crate::commands::dashboard) enum WorkspaceTaskDetails {
+    AclDiff {
+        diff: AclDiffDetails,
+    },
+    AclDiffTransition {
+        before: AclDiffDetails,
+        after: AclDiffDetails,
+    },
+}
+
+#[derive(Serialize, Clone, Debug)]
 pub(in crate::commands::dashboard) struct WorkspaceTaskRunResponse {
     pub(in crate::commands::dashboard) workspace: String,
     pub(in crate::commands::dashboard) action: String,
     pub(in crate::commands::dashboard) target: String,
     pub(in crate::commands::dashboard) process: TaskProcessOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::commands::dashboard) details: Option<WorkspaceTaskDetails>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -138,6 +194,8 @@ pub(in crate::commands::dashboard) struct GuardedTaskPreviewResponse {
     pub(in crate::commands::dashboard) preview_summary: String,
     pub(in crate::commands::dashboard) process: TaskProcessOutput,
     pub(in crate::commands::dashboard) expires_in_secs: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::commands::dashboard) details: Option<WorkspaceTaskDetails>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -161,6 +219,8 @@ pub(in crate::commands::dashboard) struct GuardedTaskReceipt {
     pub(in crate::commands::dashboard) audit_action: String,
     pub(in crate::commands::dashboard) audited_at: u64,
     pub(in crate::commands::dashboard) process: TaskProcessOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(in crate::commands::dashboard) details: Option<WorkspaceTaskDetails>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -185,6 +245,8 @@ pub(in crate::commands::dashboard) struct RecentTaskRecord {
     created_at: u64,
     audit_action: Option<String>,
     process: TaskProcessOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<WorkspaceTaskDetails>,
     replay: Option<RecentTaskReplay>,
 }
 
@@ -265,11 +327,13 @@ impl GuardedTaskService {
             return Err((StatusCode::BAD_REQUEST, "args is empty".to_string()));
         }
         let process = self.inner.runner.run(&req.args);
+        let details = task_details_for_run_request(&req);
         let response = WorkspaceTaskRunResponse {
             workspace: req.workspace.clone(),
             action: req.action.clone(),
             target: req.target.clone(),
             process,
+            details,
         };
         self.record_history(RecentTaskRecord {
             id: self.next_history_id(),
@@ -289,6 +353,7 @@ impl GuardedTaskService {
             created_at: now_unix_secs(),
             audit_action: None,
             process: response.process.clone(),
+            details: response.details.clone(),
             replay: Some(RecentTaskReplay::Run { request: req }),
         });
         Ok(response)
@@ -304,11 +369,13 @@ impl GuardedTaskService {
             return Err((StatusCode::BAD_REQUEST, "args is empty".to_string()));
         }
         let process = self.inner.runner.run(&req.args);
+        let details = task_details_for_run_request(&req);
         let response = WorkspaceTaskRunResponse {
             workspace: req.workspace.clone(),
             action: req.action.clone(),
             target: req.target.clone(),
             process,
+            details,
         };
         self.record_history(RecentTaskRecord {
             id: self.next_history_id(),
@@ -330,6 +397,7 @@ impl GuardedTaskService {
             created_at: now_unix_secs(),
             audit_action: Some("dashboard.task.preview.run".to_string()),
             process: response.process.clone(),
+            details: response.details.clone(),
             replay: None,
         });
         if !response.process.success {
@@ -384,6 +452,7 @@ impl GuardedTaskService {
             &req.action,
             &req.target,
         );
+        let details = task_details_for_guarded_preview_request(&req);
 
         {
             let mut pending = self.inner.pending.lock().unwrap_or_else(|e| e.into_inner());
@@ -396,6 +465,7 @@ impl GuardedTaskService {
                     summary: summary.clone(),
                     preview_args: req.preview_args.clone(),
                     execute_args: req.execute_args.clone(),
+                    details: details.clone(),
                     expires_at: Instant::now() + self.inner.ttl,
                 },
             );
@@ -425,6 +495,7 @@ impl GuardedTaskService {
             preview_summary: summary,
             process,
             expires_in_secs: self.inner.ttl.as_secs(),
+            details,
         };
         self.record_history(RecentTaskRecord {
             id: self.next_history_id(),
@@ -440,6 +511,7 @@ impl GuardedTaskService {
             created_at: now_unix_secs(),
             audit_action: Some("dashboard.task.preview".to_string()),
             process: response.process.clone(),
+            details: response.details.clone(),
             replay: Some(RecentTaskReplay::GuardedPreview { request: req }),
         });
         Ok(response)
@@ -473,6 +545,7 @@ impl GuardedTaskService {
             preview_summary: pending.summary.clone(),
         };
         let process = self.inner.runner.run(&pending.execute_args);
+        let details = task_details_for_guarded_receipt(&pending);
         let audit_action = format!("dashboard.task.execute.{}", pending.action);
         let result = if process.success { "success" } else { "failed" };
         let reason = if process.success {
@@ -507,6 +580,7 @@ impl GuardedTaskService {
             audit_action,
             audited_at: now_unix_secs(),
             process,
+            details,
         };
         self.record_history(RecentTaskRecord {
             id: self.next_history_id(),
@@ -522,6 +596,7 @@ impl GuardedTaskService {
             created_at: receipt.audited_at,
             audit_action: Some(receipt.audit_action.clone()),
             process: receipt.process.clone(),
+            details: receipt.details.clone(),
             replay: Some(RecentTaskReplay::GuardedPreview {
                 request: replay_request,
             }),
@@ -577,6 +652,19 @@ impl GuardedTaskService {
         history
             .iter()
             .filter(|entry| entry.guarded && entry.phase == "execute")
+            .take(limit.max(1).min(100))
+            .cloned()
+            .collect()
+    }
+
+    pub(in crate::commands::dashboard) fn governance_alerts(
+        &self,
+        limit: usize,
+    ) -> Vec<RecentTaskRecord> {
+        let history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
+        history
+            .iter()
+            .filter(|entry| is_governance_alert_task(entry))
             .take(limit.max(1).min(100))
             .cloned()
             .collect()
@@ -663,6 +751,96 @@ fn task_summary(workspace: &str, action: &str, target: &str) -> String {
         return format!("{} / {}", workspace, action);
     }
     format!("{} / {} / {}", workspace, action, target)
+}
+
+
+fn read_arg_value(args: &[String], name: &str) -> Option<String> {
+    let index = args.iter().position(|arg| arg == name)?;
+    args.get(index + 1)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn map_acl_diff_entry(entry: &acl::types::AceEntry) -> AclDiffEntryDetails {
+    AclDiffEntryDetails {
+        principal: entry.principal.clone(),
+        sid: entry.raw_sid.clone(),
+        rights: entry.rights_display(),
+        ace_type: entry.ace_type.to_string(),
+        source: if entry.is_inherited {
+            "inherited".to_string()
+        } else {
+            "explicit".to_string()
+        },
+        inheritance: entry.inheritance.to_string(),
+        propagation: entry.propagation.to_string(),
+        orphan: entry.is_orphan,
+    }
+}
+
+fn build_acl_diff_details(target: &str, reference: &str) -> Option<AclDiffDetails> {
+    let target_snapshot = acl::reader::get_acl(Path::new(target)).ok()?;
+    let reference_snapshot = acl::reader::get_acl(Path::new(reference)).ok()?;
+    let diff = acl::diff::diff_acl(&target_snapshot, &reference_snapshot);
+    Some(AclDiffDetails {
+        target: target.to_string(),
+        reference: reference.to_string(),
+        common_count: diff.common_count,
+        has_diff: diff.has_diff(),
+        owner_diff: diff.owner_diff.map(|(target, reference)| AclDiffOwnerDetails { target, reference }),
+        inheritance_diff: diff.inherit_diff.map(|(target_protected, reference_protected)| {
+            AclDiffInheritanceDetails {
+                target_protected,
+                reference_protected,
+            }
+        }),
+        only_in_target: diff.only_in_a.iter().map(map_acl_diff_entry).collect(),
+        only_in_reference: diff.only_in_b.iter().map(map_acl_diff_entry).collect(),
+    })
+}
+
+fn build_acl_diff_details_from_args(args: &[String]) -> Option<AclDiffDetails> {
+    let target = read_arg_value(args, "-p")?;
+    let reference = read_arg_value(args, "-r")?;
+    build_acl_diff_details(&target, &reference)
+}
+
+fn task_details_for_run_request(req: &WorkspaceTaskRunRequest) -> Option<WorkspaceTaskDetails> {
+    match req.action.as_str() {
+        "acl:diff" => build_acl_diff_details_from_args(&req.args)
+            .map(|diff| WorkspaceTaskDetails::AclDiff { diff }),
+        _ => None,
+    }
+}
+
+fn task_details_for_guarded_preview_request(
+    req: &GuardedTaskPreviewRequest,
+) -> Option<WorkspaceTaskDetails> {
+    match req.action.as_str() {
+        "acl:copy" => build_acl_diff_details_from_args(&req.preview_args)
+            .map(|diff| WorkspaceTaskDetails::AclDiff { diff }),
+        _ => None,
+    }
+}
+
+fn task_details_for_guarded_receipt(pending: &PendingGuardedTask) -> Option<WorkspaceTaskDetails> {
+    match pending.action.as_str() {
+        "acl:copy" => {
+            let after = build_acl_diff_details_from_args(&pending.execute_args)?;
+            match pending.details.clone() {
+                Some(WorkspaceTaskDetails::AclDiff { diff: before }) => {
+                    Some(WorkspaceTaskDetails::AclDiffTransition { before, after })
+                }
+                _ => Some(WorkspaceTaskDetails::AclDiff { diff: after }),
+            }
+        }
+        _ => None,
+    }
+}
+
+fn is_governance_alert_task(entry: &RecentTaskRecord) -> bool {
+    entry.workspace == "files-security"
+        && (entry.status == "failed" || (entry.guarded && entry.phase == "execute"))
 }
 
 fn history_stats(entries: &[RecentTaskRecord]) -> RecentTaskStats {
@@ -885,6 +1063,7 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use axum::routing::{get, post};
     use tower::util::ServiceExt;
+    use tempfile::tempdir;
 
     #[derive(Clone)]
     struct FakeRunner {
@@ -1420,5 +1599,115 @@ mod tests {
         assert_eq!(recent_json["stats"]["failed"], 1);
         assert_eq!(recent_json["entries"][0]["status"], "failed");
         assert_eq!(recent_json["entries"][0]["replay"]["kind"], "run");
+    }
+
+
+    #[tokio::test]
+    async fn run_task_includes_acl_diff_details_when_available() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        let reference = dir.path().join("b.txt");
+        std::fs::write(&target, b"a").unwrap();
+        std::fs::write(&reference, b"b").unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let reference_str = reference.to_string_lossy().to_string();
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("acl-diff")])) as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:diff",
+            "target": target_str.clone(),
+            "args": ["acl", "diff", "-p", target_str, "-r", reference_str.clone()]
+        });
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/run")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp.into_body(), usize::MAX).await.unwrap()).unwrap();
+        assert_eq!(json["details"]["kind"], "acl_diff");
+        assert_eq!(json["details"]["diff"]["target"], body["target"]);
+        assert_eq!(json["details"]["diff"]["reference"], reference_str);
+    }
+
+    #[tokio::test]
+    async fn guarded_acl_copy_receipt_includes_diff_transition() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("copy-target.txt");
+        let reference = dir.path().join("copy-reference.txt");
+        std::fs::write(&target, b"target").unwrap();
+        std::fs::write(&reference, b"reference").unwrap();
+
+        let target_str = target.to_string_lossy().to_string();
+        let reference_str = reference.to_string_lossy().to_string();
+        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
+            as Arc<dyn TaskRunner>;
+        let app = test_router(fake);
+        let preview_body = serde_json::json!({
+            "workspace": "files-security",
+            "action": "acl:copy",
+            "target": target_str.clone(),
+            "preview_args": ["acl", "diff", "-p", target_str, "-r", reference_str.clone()],
+            "execute_args": ["acl", "copy", "-p", target_str.clone(), "-r", reference_str.clone(), "-y"],
+            "preview_summary": "Copy ACL"
+        });
+
+        let preview_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/preview")
+                    .header("content-type", "application/json")
+                    .body(Body::from(preview_body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(preview_resp.status(), StatusCode::OK);
+        let preview_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(preview_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(preview_json["details"]["kind"], "acl_diff");
+
+        let execute_resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/workspaces/guarded/execute")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "token": preview_json["token"], "confirm": true })
+                            .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(execute_resp.status(), StatusCode::OK);
+        let execute_json: serde_json::Value = serde_json::from_slice(
+            &to_bytes(execute_resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
+        assert_eq!(execute_json["details"]["before"]["target"], preview_body["target"]);
+        assert_eq!(execute_json["details"]["after"]["reference"], reference_str);
     }
 }

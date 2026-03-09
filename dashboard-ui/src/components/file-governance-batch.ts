@@ -2,6 +2,7 @@
   GuardedTaskPreviewRequest,
   GuardedTaskPreviewResponse,
   GuardedTaskReceipt,
+  RecentTasksFocusRequest,
   TaskProcessOutput,
 } from '../types'
 import type { TaskFieldDefinition, TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
@@ -10,6 +11,11 @@ import { filesSecurityTaskGroups } from '../workspace-tools'
 export type BatchGovernanceActionId =
   | 'protect-set'
   | 'protect-clear'
+  | 'encrypt'
+  | 'decrypt'
+  | 'acl-add'
+  | 'acl-copy'
+  | 'acl-restore'
   | 'acl-purge'
   | 'acl-inherit'
   | 'acl-owner'
@@ -24,14 +30,27 @@ export interface BatchGovernanceActionDefinition {
 
 export interface BatchGovernancePreviewItem {
   path: string
+  form?: TaskFormState
   preview?: GuardedTaskPreviewResponse
   error?: string
 }
 
 export interface BatchGovernanceReceiptItem {
   path: string
+  form?: TaskFormState
   receipt?: GuardedTaskReceipt
   error?: string
+}
+
+export interface BatchGovernancePlanItem {
+  label: string
+  value: string
+}
+
+export interface BatchGovernancePlanModel {
+  title: string
+  note?: string
+  items: BatchGovernancePlanItem[]
 }
 
 const batchGovernanceActionMeta: Record<BatchGovernanceActionId, { label: string; description: string }> = {
@@ -42,6 +61,26 @@ const batchGovernanceActionMeta: Record<BatchGovernanceActionId, { label: string
   'protect-clear': {
     label: '批量清除保护',
     description: '对批量队列里的路径统一移除保护规则。',
+  },
+  encrypt: {
+    label: '批量加密文件',
+    description: '对批量队列里的路径统一执行 EFS 或 age 公钥加密。',
+  },
+  decrypt: {
+    label: '批量解密文件',
+    description: '对批量队列里的路径统一执行 EFS 或 identity 解密。',
+  },
+  'acl-add': {
+    label: '批量新增 ACL 规则',
+    description: '按同一组 principal / rights / inherit 参数批量写入显式 ACE。',
+  },
+  'acl-copy': {
+    label: '批量复制 ACL',
+    description: '用同一个参考路径的 ACL 覆盖批量队列里的目标路径。',
+  },
+  'acl-restore': {
+    label: '批量恢复 ACL',
+    description: '从同一个备份文件恢复批量队列里的目标 ACL。',
   },
   'acl-purge': {
     label: '批量清理 ACL 主体',
@@ -66,6 +105,32 @@ function createTaskState(fields: TaskFieldDefinition[]): TaskFormState {
     state[field.key] = field.defaultValue ?? (field.type === 'checkbox' ? false : '')
     return state
   }, {})
+}
+
+function formatPlanFieldValue(field: TaskFieldDefinition, values: TaskFormState): string {
+  const value = values[field.key]
+
+  if (field.type === 'checkbox') {
+    return value === true ? '是' : '否'
+  }
+
+  if (typeof value !== 'string') return '-'
+  const trimmed = value.trim()
+  if (!trimmed) return '-'
+
+  if (field.type === 'select' && field.options?.length) {
+    return field.options.find((option) => option.value === trimmed)?.label ?? trimmed
+  }
+
+  if (field.type === 'textarea') {
+    return trimmed
+      .split(/[\r\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join(' / ')
+  }
+
+  return trimmed
 }
 
 function findFilesSecurityTask(taskId: BatchGovernanceActionId): WorkspaceTaskDefinition {
@@ -141,6 +206,53 @@ export function createBatchGovernanceSharedState(actionId: BatchGovernanceAction
   return createTaskState(getBatchGovernanceSharedFields(actionId))
 }
 
+export function createBatchGovernanceItemForm(
+  actionId: BatchGovernanceActionId,
+  path: string,
+  sharedValues: TaskFormState,
+): TaskFormState {
+  const task = getBatchGovernanceAction(actionId).task
+  return {
+    ...createTaskState(task.fields),
+    ...sharedValues,
+    path,
+  }
+}
+
+export function buildBatchGovernancePlan(
+  actionId: BatchGovernanceActionId,
+  paths: string[],
+  sharedValues: TaskFormState,
+): BatchGovernancePlanModel {
+  const action = getBatchGovernanceAction(actionId)
+  const normalizedPaths = normalizeBatchPaths(paths)
+  const sampleForm = createBatchGovernanceItemForm(actionId, normalizedPaths[0] ?? '', sharedValues)
+  const sharedItems = getBatchGovernanceSharedFields(actionId)
+    .map((field) => ({ label: field.label, value: formatPlanFieldValue(field, sampleForm), type: field.type }))
+    .filter((item) => item.value !== '-' || item.type === 'checkbox')
+    .map(({ label, value }) => ({ label, value }))
+
+  const scopeValue =
+    normalizedPaths.length > 3
+      ? `${normalizedPaths.slice(0, 3).join(' / ')} / 共 ${normalizedPaths.length} 项`
+      : normalizedPaths.join(' / ') || '-'
+
+  return {
+    title: '治理计划',
+    note:
+      action.task.tone === 'danger'
+        ? '高风险批量治理动作；先逐项 dry-run，再统一确认，并输出逐项回执。'
+        : '本次治理会先执行批量预演，再统一确认并输出回执。',
+    items: [
+      { label: '治理动作', value: action.label },
+      { label: '目标数量', value: `${normalizedPaths.length} 项` },
+      { label: '执行模式', value: 'Triple-Guard：预演 → 确认 → 回执' },
+      { label: '治理范围', value: scopeValue },
+      ...sharedItems,
+    ],
+  }
+}
+
 export function createBatchGovernancePreviewRequests(
   actionId: BatchGovernanceActionId,
   paths: string[],
@@ -156,11 +268,7 @@ export function createBatchGovernancePreviewRequests(
   }
 
   return normalizeBatchPaths(paths).map((path) => {
-    const values: TaskFormState = {
-      ...createTaskState(task.fields),
-      ...sharedValues,
-      path,
-    }
+    const values = createBatchGovernanceItemForm(actionId, path, sharedValues)
 
     return {
       workspace: task.workspace,
@@ -201,6 +309,39 @@ export function summarizeBatchReceipts(items: BatchGovernanceReceiptItem[]): {
 
 export function isBatchPreviewReady(items: BatchGovernancePreviewItem[]): boolean {
   return items.length > 0 && items.every((item) => item.preview?.ready_to_execute === true)
+}
+
+function resolveRecentTasksAction(
+  actionId: BatchGovernanceActionId,
+  action: string | null | undefined,
+): string {
+  const normalized = String(action ?? '').trim()
+  if (normalized) return normalized
+  return getBatchGovernanceAction(actionId).task.action
+}
+
+export function createRecentTasksFocusFromBatchPreview(
+  actionId: BatchGovernanceActionId,
+  item: BatchGovernancePreviewItem,
+): Omit<RecentTasksFocusRequest, 'key'> {
+  return {
+    status: item.preview?.status ?? 'previewed',
+    dry_run: 'dry-run',
+    action: resolveRecentTasksAction(actionId, item.preview?.action),
+    search: item.path,
+  }
+}
+
+export function createRecentTasksFocusFromBatchReceipt(
+  actionId: BatchGovernanceActionId,
+  item: BatchGovernanceReceiptItem,
+): Omit<RecentTasksFocusRequest, 'key'> {
+  return {
+    status: item.receipt?.status ?? 'failed',
+    dry_run: 'executed',
+    action: resolveRecentTasksAction(actionId, item.receipt?.action),
+    search: item.path,
+  }
 }
 
 export function createBatchGovernanceDialogPreview(

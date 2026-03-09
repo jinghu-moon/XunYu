@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { fetchWorkspaceOverviewSummary } from '../../api'
-import type { WorkspaceCapabilities, WorkspaceOverviewSummary } from '../../types'
+import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities, WorkspaceOverviewSummary } from '../../types'
 import HomePanel from '../HomePanel.vue'
 import RecentTasksPanel from '../RecentTasksPanel.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
+
+const emit = defineEmits<{
+  (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
+}>()
 
 const props = defineProps<{
   capabilities?: WorkspaceCapabilities | null
@@ -22,7 +26,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <WorkspaceFrame title="总览" description="统一查看工作台能力、关键指标、最近任务和现有 Home 面板摘要。">
+  <WorkspaceFrame title="??" description="?????????????????????? Home ?????">
     <template #summary>
       <div class="overview-kpis">
         <div class="overview-kpi">
@@ -52,10 +56,15 @@ onMounted(() => {
       </div>
     </template>
 
-    <RecentTasksPanel title="最近任务" description="查看最新运行、预演和危险动作执行结果。" :limit="12" />
+    <RecentTasksPanel
+      title="????"
+      description="???????????????????"
+      :limit="12"
+      @link-panel="emit('link-panel', $event)"
+    />
 
     <section class="overview-section">
-      <h3 class="overview-section__title">工作台能力</h3>
+      <h3 class="overview-section__title">?????</h3>
       <div class="overview-capabilities">
         <span v-for="name in summary?.workspaces || []" :key="name" class="overview-chip">{{ name }}</span>
       </div>

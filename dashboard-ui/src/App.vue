@@ -7,13 +7,15 @@ import DensityToggle from './components/DensityToggle.vue'
 import GlobalFeedback from './components/GlobalFeedback.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
 import { fetchWorkspaceCapabilities } from './api'
-import type { WorkspaceCapabilities, WorkspaceKey } from './types'
+import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities, WorkspaceKey } from './types'
 import { workspaceTabs } from './workspace-tools'
 import { isToastMarked, notifyError } from './ui/feedback'
 
 const workspace = ref<WorkspaceKey>('overview')
 const paletteOpen = ref(false)
 const capabilities = ref<WorkspaceCapabilities | null>(null)
+const statisticsLink = ref<{ key: number; payload: StatisticsWorkspaceLinkPayload } | null>(null)
+const statisticsLinkSequence = ref(0)
 
 function loadWorkspaceComponent(loader: Parameters<typeof defineAsyncComponent>[0]): Component {
   return defineAsyncComponent(loader)
@@ -70,6 +72,15 @@ async function loadCapabilities() {
   capabilities.value = await fetchWorkspaceCapabilities()
 }
 
+function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
+  statisticsLinkSequence.value += 1
+  statisticsLink.value = {
+    key: statisticsLinkSequence.value,
+    payload,
+  }
+  workspace.value = 'statistics-diagnostics'
+}
+
 function onUnhandledRejection(event: PromiseRejectionEvent) {
   if (isToastMarked(event.reason)) return
   notifyError(event.reason, 'Unhandled rejection')
@@ -121,7 +132,12 @@ onBeforeUnmount(() => {
       </div>
     </header>
     <main>
-      <component :is="activeComponent" :capabilities="capabilities" />
+      <component
+        :is="activeComponent"
+        :capabilities="capabilities"
+        :external-link="statisticsLink"
+        @link-panel="handleWorkspaceLink"
+      />
     </main>
     <CommandPalette v-model="paletteOpen" :commands="commands" />
     <GlobalFeedback />
