@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import type { RecentTasksFocusRequest, StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
 import { pathsContextTaskGroups } from '../../workspace-tools'
@@ -41,7 +41,7 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
 </script>
 
 <template>
-  <WorkspaceFrame title="路径与上下文" description="围绕 Bookmarks、ctx、recent、gc 与 workspace 管理本地路径上下文。">
+  <WorkspaceFrame title="路径与上下文" description="围绕 Bookmarks、ctx、recent、gc 与工作区批量打开（ws）管理本地路径上下文。">
     <BookmarksPanel />
     <div ref="recentTasksAnchor" data-testid="paths-recent-tasks-anchor">
       <RecentTasksPanel

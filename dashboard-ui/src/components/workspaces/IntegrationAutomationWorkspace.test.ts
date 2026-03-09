@@ -4,9 +4,15 @@ import { describe, expect, it } from 'vitest'
 import IntegrationAutomationWorkspace from './IntegrationAutomationWorkspace.vue'
 
 const TaskToolboxStub = defineComponent({
+  props: {
+    taskPresets: { type: Object, default: null },
+    presetVersion: { type: Number, default: 0 },
+  },
   emits: ['link-panel'],
   template: `
     <div>
+      <div data-testid="toolbox-preset-version">{{ presetVersion }}</div>
+      <div data-testid="toolbox-preset-payload">{{ JSON.stringify(taskPresets ?? null) }}</div>
       <button
         data-testid="emit-toolbox-recent"
         @click="$emit('link-panel', { panel: 'recent-tasks', request: { status: 'failed', dry_run: 'executed', action: 'brn', search: 'D:/repo' } })"
@@ -43,22 +49,45 @@ const RecipePanelStub = defineComponent({
   `,
 })
 
+const ShellIntegrationGuidePanelStub = defineComponent({
+  emits: ['apply-task-presets'],
+  template: `
+    <button
+      data-testid="emit-shell-presets"
+      @click="$emit('apply-task-presets', {
+        init: { shell: 'bash' },
+        completion: { shell: 'bash' },
+        complete: { args: 'alias ls --j' },
+      })"
+    >
+      shell
+    </button>
+  `,
+})
+
 const WorkspaceFrameStub = defineComponent({
   template: '<section><slot /></section>',
 })
 
 describe('IntegrationAutomationWorkspace', () => {
-  it('focuses local recent tasks and re-emits audit links', async () => {
+  it('focuses local recent tasks, re-emits audit links, and applies shell presets', async () => {
     const wrapper = mount(IntegrationAutomationWorkspace, {
       global: {
         stubs: {
           TaskToolbox: TaskToolboxStub,
           RecentTasksPanel: RecentTasksPanelStub,
           RecipePanel: RecipePanelStub,
+          ShellIntegrationGuidePanel: ShellIntegrationGuidePanelStub,
           WorkspaceFrame: WorkspaceFrameStub,
         },
       },
     })
+
+    await wrapper.get('[data-testid="emit-shell-presets"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="toolbox-preset-version"]').text()).toBe('1')
+    expect(wrapper.get('[data-testid="toolbox-preset-payload"]').text()).toContain('"shell":"bash"')
+    expect(wrapper.get('[data-testid="toolbox-preset-payload"]').text()).toContain('"args":"alias ls --j"')
 
     await wrapper.get('[data-testid="emit-toolbox-recent"]').trigger('click')
     await flushPromises()

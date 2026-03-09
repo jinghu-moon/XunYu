@@ -354,7 +354,7 @@ async function confirmTask() {
     <div v-if="processOutput" class="task-card__result">
       <div class="task-card__result-meta">
         <span :class="['task-card__badge', processOutput.success ? 'is-ok' : 'is-error']">
-          {{ processOutput.success ? '鎴愬姛' : '澶辫触' }}
+          {{ processOutput.success ? '成功' : '失败' }}
         </span>
         <span>{{ processOutput.duration_ms }} ms</span>
       </div>

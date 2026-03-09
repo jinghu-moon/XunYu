@@ -1,4 +1,4 @@
-﻿# XunYu P3-P5 完成说明
+# XunYu P3-P5 完成说明
 
 ## 1. 本期目标
 
@@ -42,7 +42,7 @@
 `dashboard-ui/src/components/workspaces/PathsContextWorkspace.vue` 已补齐下列工作台级能力：
 
 - `BookmarksPanel` 继续承载路径资产浏览
-- `TaskToolbox` 承载 `ctx / workspace / recent / stats / dedup / check / gc / keys / all / fuzzy`
+- `TaskToolbox` 承载 `ctx / ws / recent / stats / dedup / check / gc / keys / all / fuzzy`
 - `RecentTasksPanel` 作为本地最近任务消费层
 - `RecipePanel` 作为本域顺序工作流入口
 
@@ -214,3 +214,120 @@
 - 本地闭环优先，跨域诊断统一归并到 `Statistics & Diagnostics`
 - 危险动作继续坚持 `Preview -> Confirm -> Receipt + Audit`
 - Recipe 继续作为高频流程固化入口，而不是补第二套编排系统
+
+---
+
+## 6. P3-P5 最终收尾记录
+
+在主线功能完成后，本轮又按 `docs/project/P3-P5-Remaining-Tasks.md` 做了最终收尾，目标是把 P3-P5 从“功能已可用”推进到“文案、体验、命名、测试都收干净”的状态。
+
+### 6.1 Priority 1：内置 Recipe 文案清理完成
+
+`src/commands/dashboard/handlers/recipes.rs` 已统一清理以下内置 Recipe 的中文文案与步骤摘要：
+
+- `paths-context-health`
+- `integration-shell-bootstrap`
+- `media-video-probe-compress`
+- `proxy-diagnostics`
+
+同时补充了三个场景化 Recipe：
+
+- `media-video-remux-validate`
+- `media-image-batch-convert`
+- `statistics-cstat-review`
+
+为避免文案回退，后端新增了两个直接断言内置目录质量的测试：
+
+- `builtin_recipe_catalog_uses_readable_chinese_labels`
+- `builtin_recipe_catalog_includes_finalization_recipes`
+
+### 6.2 Priority 2：`ws` 命名口径统一完成
+
+本轮确认并固化了如下规则：
+
+- CLI 子命令继续使用真实命令名 `ws`
+- UI 与文档对外统一说明为“工作区批量打开（`ws`）”
+- 不再把过时静态补全项写成 `workspace`
+
+本次统一覆盖了：
+
+- shell completion 静态列表
+- `xun init` fallback completion 列表
+- `Paths & Context` 工作台文案
+- `workspace-tools.ts` 内任务标题与描述
+
+### 6.3 Priority 3：Shell Integration 闭环完成
+
+前端新增 `dashboard-ui/src/components/ShellIntegrationGuidePanel.vue`，不再只输出脚本，而是补齐了安装闭环：
+
+- shell 选择：`powershell / bash / zsh`
+- profile 路径提示
+- profile 写入片段展示
+- `init` / `completion` 命令一键复制
+- `__complete` 验证命令一键复制
+- 一键把推荐参数填入任务卡
+
+`dashboard-ui/src/components/workspaces/IntegrationAutomationWorkspace.vue` 已接入该向导，并通过 `taskPresets + presetVersion` 把预设值送入现有 `TaskToolbox` / `TaskToolCard`，形成“指引 -> 任务执行 -> 最近任务回看”的完整链路。
+
+### 6.4 Priority 4：alias 全链路可视化完成
+
+`dashboard-ui/src/workspace-tools.ts` 现已覆盖剩余 alias 操作：
+
+- `alias:setup`
+- `alias:add`
+- `alias:rm`
+- `alias:export`
+- `alias:import`
+- `alias:app-add`
+- `alias:app-rm`
+- `alias:app-ls`
+- `alias:app-scan`
+- `alias:app-which`
+- `alias:app-sync`
+
+其中删除类动作已继续遵守 Triple-Guard：
+
+- `alias:rm`：先 `alias which <name>`，再执行 `alias rm <name>`
+- `alias:app-rm`：先 `alias app which <name>`，再执行 `alias app rm <name>`
+
+这保证了别名治理能力没有退回到 CLI-only，也没有绕开高风险确认链。
+
+### 6.5 Priority 5：`img` 高级参数可视化完成
+
+媒体工作台已把 CLI 侧高频高级参数暴露进 UI：
+
+- `svg_method`
+- `svg_diffvg_iters`
+- `svg_diffvg_strokes`
+- `jpeg_backend`
+- `png_lossy`
+- `png_dither_level`
+- `webp_lossy`
+- `threads`
+- `avif_threads`
+
+这让 `img` 任务不再只停留在“输入 / 输出 / 格式 / 质量”的基础层，而能覆盖更接近真实生产使用场景的编码控制。
+
+### 6.6 前端文案污染一并清理
+
+收尾过程中顺带清理了前端少量残留乱码与重复字段，主要涉及：
+
+- `dashboard-ui/src/components/RecentTasksPanel.vue`
+- `dashboard-ui/src/components/TaskToolCard.vue`
+- `dashboard-ui/src/components/TaskToolCard.test.ts`
+
+目标是确保“测试通过”和“实际界面可读”同时成立，不留下已知脏点。
+
+### 6.7 收尾验证结果
+
+本轮收尾完成后再次通过：
+
+- `cargo test --features dashboard`
+- `npm run test`
+- `npm run build`
+
+至此可以认为：
+
+- `P3` 到 `P5` 的主线能力已完成
+- `P3-P5-Remaining-Tasks.md` 中列出的 5 个优先级已全部落地
+- Dashboard 在这些工作域上已进入“可持续迭代，而不是继续救火收尾”的状态

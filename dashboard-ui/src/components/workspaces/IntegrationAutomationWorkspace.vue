@@ -1,11 +1,14 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import type { RecentTasksFocusRequest, StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
 import { integrationAutomationTaskGroups } from '../../workspace-tools'
 import RecentTasksPanel from '../RecentTasksPanel.vue'
 import RecipePanel from '../RecipePanel.vue'
+import ShellIntegrationGuidePanel from '../ShellIntegrationGuidePanel.vue'
 import TaskToolbox from '../TaskToolbox.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
+
+type TaskPresetMap = Record<string, Partial<Record<string, string | boolean>>>
 
 const emit = defineEmits<{
   (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
@@ -14,6 +17,9 @@ const emit = defineEmits<{
 const recentTasksFocus = ref<RecentTasksFocusRequest | null>(null)
 const recentTasksFocusKey = ref(0)
 const recentTasksAnchor = ref<HTMLElement | null>(null)
+const toolboxAnchor = ref<HTMLElement | null>(null)
+const taskPresets = ref<TaskPresetMap | null>(null)
+const presetVersion = ref(0)
 
 defineProps<{
   capabilities?: WorkspaceCapabilities | null
@@ -37,6 +43,13 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
   }
   emit('link-panel', payload)
 }
+
+async function applyTaskPresets(presets: TaskPresetMap) {
+  taskPresets.value = presets
+  presetVersion.value += 1
+  await nextTick()
+  toolboxAnchor.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
 </script>
 
 <template>
@@ -51,20 +64,25 @@ async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
         @link-panel="handleWorkspaceLink"
       />
     </div>
+    <ShellIntegrationGuidePanel @apply-task-presets="applyTaskPresets" />
     <RecipePanel
       title="自动化 Recipes"
       description="把 shell 集成与自动化流程固化成顺序工作流。"
       category="integration-automation"
       @link-panel="handleWorkspaceLink"
     />
-    <TaskToolbox
-      v-for="group in integrationAutomationTaskGroups"
-      :key="group.id"
-      :title="group.title"
-      :description="group.description"
-      :tasks="group.tasks"
-      :capabilities="capabilities"
-      @link-panel="handleWorkspaceLink"
-    />
+    <div ref="toolboxAnchor" data-testid="integration-toolbox-anchor">
+      <TaskToolbox
+        v-for="group in integrationAutomationTaskGroups"
+        :key="group.id"
+        :title="group.title"
+        :description="group.description"
+        :tasks="group.tasks"
+        :capabilities="capabilities"
+        :task-presets="taskPresets"
+        :preset-version="presetVersion"
+        @link-panel="handleWorkspaceLink"
+      />
+    </div>
   </WorkspaceFrame>
 </template>

@@ -40,7 +40,7 @@ const SUBCOMMANDS: &[&str] = &[
     "list",
     "z",
     "open",
-    "workspace",
+    "ws",
     "save",
     "set",
     "del",

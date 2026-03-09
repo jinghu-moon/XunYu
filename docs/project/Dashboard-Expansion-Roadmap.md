@@ -1,4 +1,4 @@
-﻿# Dashboard 扩展路线图
+# Dashboard 扩展路线图
 
 这份文档用于回答一个明确问题：**如果要把 `XunYu` 的能力“统统纳入” Dashboard，可视化边界应该怎么划、一级导航应该怎么收、实施顺序应该怎么排。**
 
@@ -90,7 +90,7 @@
 
 | 能力域 | CLI 命令族 | 目标工作台 | 当前状态 | 建议的 Dashboard 形态 |
 | --- | --- | --- | --- | --- |
-| 书签与路径导航 | `list`、`z`、`open`、`workspace`、`save`、`set`、`delete`、`touch`、`rename`、`tag`、`recent`、`stats`、`dedup`、`export`、`import`、`keys`、`all`、`fuzzy`、`check`、`gc` | 路径与上下文 | 部分已纳入 | 书签列表、工作区切换器、标签看板、最近访问、健康检查、去重/GC、导入导出 |
+| 书签与路径导航 | `list`、`z`、`open`、`ws`、`save`、`set`、`delete`、`touch`、`rename`、`tag`、`recent`、`stats`、`dedup`、`export`、`import`、`keys`、`all`、`fuzzy`、`check`、`gc` | 路径与上下文 | 部分已纳入 | 书签列表、工作区切换器、标签看板、最近访问、健康检查、去重/GC、导入导出 |
 | 上下文切换 | `ctx` | 路径与上下文 | 未纳入 | Context 列表、切换、重命名、删除、与书签/工作区联动 |
 | 代理与网络执行 | `proxy`、`pon`、`poff`、`pst`、`px` | 网络与代理 | 部分已纳入 | 代理状态面板、快速开关、配置模板、检测与测试历史、带代理执行预设 |
 | 端口与进程 | `ports`、`kill`、`ps`、`pkill` | 网络与代理 | 部分已纳入 | 端口/PID 表格、筛选、批量终止、进程详情、图标与命令行信息 |
@@ -195,7 +195,7 @@
 这一期把书签系统从 CRUD 扩展成真正的“路径中控台”：
 
 - `ctx`
-- `workspace`
+- `ws`
 - `recent`
 - `stats`
 - `dedup`

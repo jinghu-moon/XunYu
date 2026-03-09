@@ -13,7 +13,7 @@ if (-not (Get-Variable XunHooks -Scope Global -ErrorAction SilentlyContinue)) {
 }
 
 $global:XunSubcommands = @(
-    "acl","alias","init","completion","config","ctx","list","z","open","workspace","save","set","delete","del","check","gc","touch","rename","tag",
+    "acl","alias","init","completion","config","ctx","list","z","open","ws","save","set","delete","del","check","gc","touch","rename","tag",
     "recent","stats","dedup","export","import","proxy","pon","poff","pst","px","ports","kill","ps","pkill","keys","all","fuzzy",
     "bak","tree","find","env","img","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect",
     "brn","cstat"
@@ -345,7 +345,7 @@ _xun_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     local sub="${COMP_WORDS[1]}"
-    local subcommands="acl alias init completion config ctx list z open workspace save set delete del check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill ps pkill keys all fuzzy bak tree find env img video lock rm mv renfile protect encrypt decrypt serve redirect brn cstat"
+    local subcommands="acl alias init completion config ctx list z open ws save set delete del check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill ps pkill keys all fuzzy bak tree find env img video lock rm mv renfile protect encrypt decrypt serve redirect brn cstat"
     local formats="auto table tsv json"
     local proxy_sub="set del get detect test"
     local ctx_sub="set use off list show del rename"

@@ -1004,24 +1004,24 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
         },
         RecipeDefinition {
             id: "paths-context-health".to_string(),
-            name: "??????".to_string(),
-            description: "??????????????????".to_string(),
+            name: "路径健康巡检".to_string(),
+            description: "串联上下文、最近访问与书签健康检查，快速完成路径工作台体检。".to_string(),
             category: "paths-context".to_string(),
             source: RecipeSource::Builtin,
             supports_dry_run: true,
             params: vec![
                 RecipeParamDefinition {
                     key: "limit".to_string(),
-                    label: "????".to_string(),
-                    description: "recent ????????".to_string(),
+                    label: "最近数量".to_string(),
+                    description: "recent 步骤返回的记录数量。".to_string(),
                     default_value: "10".to_string(),
                     required: true,
                     placeholder: "10".to_string(),
                 },
                 RecipeParamDefinition {
                     key: "days".to_string(),
-                    label: "????(?)".to_string(),
-                    description: "check ??????????".to_string(),
+                    label: "陈旧阈值(天)".to_string(),
+                    description: "check 步骤使用的陈旧阈值。".to_string(),
                     default_value: "90".to_string(),
                     required: true,
                     placeholder: "90".to_string(),
@@ -1030,11 +1030,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
             steps: vec![
                 RecipeStepDefinition::Run {
                     id: "ctx-list".to_string(),
-                    title: "?????".to_string(),
+                    title: "列出上下文".to_string(),
                     workspace: "paths-context".to_string(),
                     action: "ctx:list".to_string(),
                     target: String::new(),
-                    summary: "?????????".to_string(),
+                    summary: "查看当前可用的上下文配置".to_string(),
                     run_args: vec!["ctx", "list", "-f", "json"]
                         .into_iter()
                         .map(str::to_string)
@@ -1046,11 +1046,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeStepDefinition::Run {
                     id: "bookmark-recent".to_string(),
-                    title: "????".to_string(),
+                    title: "查看最近访问".to_string(),
                     workspace: "paths-context".to_string(),
                     action: "recent".to_string(),
                     target: "{{limit}}".to_string(),
-                    summary: "???? {{limit}} ?????".to_string(),
+                    summary: "查看最近 {{limit}} 条访问记录".to_string(),
                     run_args: vec!["recent", "-n", "{{limit}}", "-f", "json"]
                         .into_iter()
                         .map(str::to_string)
@@ -1062,11 +1062,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeStepDefinition::Run {
                     id: "bookmark-check".to_string(),
-                    title: "????".to_string(),
+                    title: "执行健康检查".to_string(),
                     workspace: "paths-context".to_string(),
                     action: "check".to_string(),
                     target: "{{days}}".to_string(),
-                    summary: "? {{days}} ???????????".to_string(),
+                    summary: "按 {{days}} 天阈值检查缺失路径和陈旧记录".to_string(),
                     run_args: vec!["check", "-d", "{{days}}", "-f", "json"]
                         .into_iter()
                         .map(str::to_string)
@@ -1080,15 +1080,15 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
         },
         RecipeDefinition {
             id: "integration-shell-bootstrap".to_string(),
-            name: "Shell ????".to_string(),
-            description: "???? init ? completion ????????? shell ???".to_string(),
+            name: "Shell 安装引导".to_string(),
+            description: "依次生成 init 与 completion 输出，用于初始化目标 shell 的集成与补全。".to_string(),
             category: "integration-automation".to_string(),
             source: RecipeSource::Builtin,
             supports_dry_run: true,
             params: vec![RecipeParamDefinition {
                 key: "shell".to_string(),
                 label: "Shell".to_string(),
-                description: "init ? completion ??? shell ???".to_string(),
+                description: "init 与 completion 使用的 shell 类型。".to_string(),
                 default_value: "powershell".to_string(),
                 required: true,
                 placeholder: "powershell".to_string(),
@@ -1096,11 +1096,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
             steps: vec![
                 RecipeStepDefinition::Run {
                     id: "shell-init".to_string(),
-                    title: "?? init".to_string(),
+                    title: "生成 init 脚本".to_string(),
                     workspace: "integration-automation".to_string(),
                     action: "init".to_string(),
                     target: "{{shell}}".to_string(),
-                    summary: "?? {{shell}} init ??".to_string(),
+                    summary: "生成 {{shell}} init 输出".to_string(),
                     run_args: vec!["init", "{{shell}}"]
                         .into_iter()
                         .map(str::to_string)
@@ -1112,11 +1112,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeStepDefinition::Run {
                     id: "shell-completion".to_string(),
-                    title: "?? completion".to_string(),
+                    title: "生成 completion 脚本".to_string(),
                     workspace: "integration-automation".to_string(),
                     action: "completion".to_string(),
                     target: "{{shell}}".to_string(),
-                    summary: "?? {{shell}} completion ??".to_string(),
+                    summary: "生成 {{shell}} completion 输出".to_string(),
                     run_args: vec!["completion", "{{shell}}"]
                         .into_iter()
                         .map(str::to_string)
@@ -1130,31 +1130,31 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
         },
         RecipeDefinition {
             id: "media-video-probe-compress".to_string(),
-            name: "???????".to_string(),
-            description: "????????????? mode / engine ???????".to_string(),
+            name: "视频探测与压缩".to_string(),
+            description: "先探测视频元数据，再按 mode / engine 执行压缩输出。".to_string(),
             category: "media-conversion".to_string(),
             source: RecipeSource::Builtin,
             supports_dry_run: true,
             params: vec![
                 RecipeParamDefinition {
                     key: "input".to_string(),
-                    label: "????".to_string(),
-                    description: "????????????".to_string(),
+                    label: "输入文件".to_string(),
+                    description: "需要探测和压缩的视频文件。".to_string(),
                     default_value: String::new(),
                     required: true,
                     placeholder: "D:/media/demo.mp4".to_string(),
                 },
                 RecipeParamDefinition {
                     key: "output".to_string(),
-                    label: "????".to_string(),
-                    description: "???????????".to_string(),
+                    label: "输出文件".to_string(),
+                    description: "压缩后的输出文件路径。".to_string(),
                     default_value: String::new(),
                     required: true,
                     placeholder: "D:/media/demo.small.mp4".to_string(),
                 },
                 RecipeParamDefinition {
                     key: "mode".to_string(),
-                    label: "????".to_string(),
+                    label: "压缩模式".to_string(),
                     description: "balanced / fastest / smallest".to_string(),
                     default_value: "balanced".to_string(),
                     required: true,
@@ -1162,7 +1162,7 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeParamDefinition {
                     key: "engine".to_string(),
-                    label: "??".to_string(),
+                    label: "压缩引擎".to_string(),
                     description: "auto / cpu / gpu".to_string(),
                     default_value: "auto".to_string(),
                     required: true,
@@ -1172,11 +1172,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
             steps: vec![
                 RecipeStepDefinition::Run {
                     id: "video-probe".to_string(),
-                    title: "????".to_string(),
+                    title: "探测视频".to_string(),
                     workspace: "media-conversion".to_string(),
                     action: "video:probe".to_string(),
                     target: "{{input}}".to_string(),
-                    summary: "?? {{input}} ??????".to_string(),
+                    summary: "读取 {{input}} 的媒体信息".to_string(),
                     run_args: vec!["video", "probe", "-i", "{{input}}"]
                         .into_iter()
                         .map(str::to_string)
@@ -1188,11 +1188,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeStepDefinition::Run {
                     id: "video-compress".to_string(),
-                    title: "????".to_string(),
+                    title: "压缩视频".to_string(),
                     workspace: "media-conversion".to_string(),
                     action: "video:compress".to_string(),
                     target: "{{input}} -> {{output}}".to_string(),
-                    summary: "? {{input}} ? {{mode}} / {{engine}} ??? {{output}}".to_string(),
+                    summary: "按 {{mode}} / {{engine}} 将 {{input}} 压缩到 {{output}}".to_string(),
                     run_args: vec![
                         "video", "compress", "-i", "{{input}}", "-o", "{{output}}", "--mode", "{{mode}}", "--engine", "{{engine}}",
                     ]
@@ -1209,9 +1209,237 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
             ],
         },
         RecipeDefinition {
+            id: "media-video-remux-validate".to_string(),
+            name: "视频无损封装校验".to_string(),
+            description: "先探测输入，再执行 remux，最后重新探测输出文件。".to_string(),
+            category: "media-conversion".to_string(),
+            source: RecipeSource::Builtin,
+            supports_dry_run: true,
+            params: vec![
+                RecipeParamDefinition {
+                    key: "input".to_string(),
+                    label: "输入文件".to_string(),
+                    description: "需要执行 remux 的视频文件。".to_string(),
+                    default_value: String::new(),
+                    required: true,
+                    placeholder: "D:/media/demo.mkv".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "output".to_string(),
+                    label: "输出文件".to_string(),
+                    description: "remux 后的输出文件路径。".to_string(),
+                    default_value: String::new(),
+                    required: true,
+                    placeholder: "D:/media/demo.mp4".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "strict".to_string(),
+                    label: "严格模式".to_string(),
+                    description: "true 表示流不兼容时直接失败。".to_string(),
+                    default_value: "true".to_string(),
+                    required: true,
+                    placeholder: "true".to_string(),
+                },
+            ],
+            steps: vec![
+                RecipeStepDefinition::Run {
+                    id: "remux-probe-input".to_string(),
+                    title: "探测输入文件".to_string(),
+                    workspace: "media-conversion".to_string(),
+                    action: "video:probe".to_string(),
+                    target: "{{input}}".to_string(),
+                    summary: "读取 {{input}} 的输入媒体信息".to_string(),
+                    run_args: vec!["video", "probe", "-i", "{{input}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["video", "probe", "-i", "{{input}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "video-remux".to_string(),
+                    title: "执行无损封装转换".to_string(),
+                    workspace: "media-conversion".to_string(),
+                    action: "video:remux".to_string(),
+                    target: "{{input}} -> {{output}}".to_string(),
+                    summary: "按 strict={{strict}} 将 {{input}} 无损封装到 {{output}}".to_string(),
+                    run_args: vec!["video", "remux", "-i", "{{input}}", "-o", "{{output}}", "--strict", "{{strict}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["video", "remux", "-i", "{{input}}", "-o", "{{output}}", "--strict", "{{strict}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "remux-probe-output".to_string(),
+                    title: "探测输出文件".to_string(),
+                    workspace: "media-conversion".to_string(),
+                    action: "video:probe".to_string(),
+                    target: "{{output}}".to_string(),
+                    summary: "读取 {{output}} 的输出媒体信息".to_string(),
+                    run_args: vec!["video", "probe", "-i", "{{output}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["video", "probe", "-i", "{{output}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+            ],
+        },
+        RecipeDefinition {
+            id: "media-image-batch-convert".to_string(),
+            name: "图片目录批量转换".to_string(),
+            description: "将整批图片统一转换到目标格式，并在输出目录上执行统计复盘。".to_string(),
+            category: "media-conversion".to_string(),
+            source: RecipeSource::Builtin,
+            supports_dry_run: true,
+            params: vec![
+                RecipeParamDefinition {
+                    key: "input".to_string(),
+                    label: "输入目录".to_string(),
+                    description: "待处理图片目录。".to_string(),
+                    default_value: String::new(),
+                    required: true,
+                    placeholder: "D:/media/raw".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "output".to_string(),
+                    label: "输出目录".to_string(),
+                    description: "转换后的目标目录。".to_string(),
+                    default_value: String::new(),
+                    required: true,
+                    placeholder: "D:/media/out".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "format".to_string(),
+                    label: "输出格式".to_string(),
+                    description: "webp / jpeg / png / avif / svg".to_string(),
+                    default_value: "webp".to_string(),
+                    required: true,
+                    placeholder: "webp".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "quality".to_string(),
+                    label: "质量".to_string(),
+                    description: "有损编码时的质量参数。".to_string(),
+                    default_value: "80".to_string(),
+                    required: true,
+                    placeholder: "80".to_string(),
+                },
+            ],
+            steps: vec![
+                RecipeStepDefinition::Run {
+                    id: "image-batch-convert".to_string(),
+                    title: "执行图像批量转换".to_string(),
+                    workspace: "media-conversion".to_string(),
+                    action: "img".to_string(),
+                    target: "{{input}} -> {{output}}".to_string(),
+                    summary: "按 {{format}} / q={{quality}} 转换 {{input}} 到 {{output}}".to_string(),
+                    run_args: vec!["img", "-i", "{{input}}", "-o", "{{output}}", "-f", "{{format}}", "-q", "{{quality}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["img", "-i", "{{input}}", "-o", "{{output}}", "-f", "{{format}}", "-q", "{{quality}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "image-output-cstat".to_string(),
+                    title: "复盘输出目录".to_string(),
+                    workspace: "statistics-diagnostics".to_string(),
+                    action: "cstat".to_string(),
+                    target: "{{output}}".to_string(),
+                    summary: "对 {{output}} 执行统计扫描，复盘转换产物".to_string(),
+                    run_args: vec!["cstat", "{{output}}", "--all", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["cstat", "{{output}}", "--all", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+            ],
+        },
+        RecipeDefinition {
+            id: "statistics-cstat-review".to_string(),
+            name: "目录统计与复盘".to_string(),
+            description: "执行全量 cstat 扫描，并回看最近任务，便于诊断目录治理结果。".to_string(),
+            category: "statistics-diagnostics".to_string(),
+            source: RecipeSource::Builtin,
+            supports_dry_run: true,
+            params: vec![
+                RecipeParamDefinition {
+                    key: "path".to_string(),
+                    label: "扫描路径".to_string(),
+                    description: "cstat 需要扫描的根路径。".to_string(),
+                    default_value: ".".to_string(),
+                    required: true,
+                    placeholder: ".".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "output".to_string(),
+                    label: "导出 JSON".to_string(),
+                    description: "用于留存 cstat 结果的 JSON 文件路径。".to_string(),
+                    default_value: "report.json".to_string(),
+                    required: true,
+                    placeholder: "report.json".to_string(),
+                },
+                RecipeParamDefinition {
+                    key: "limit".to_string(),
+                    label: "最近任务数量".to_string(),
+                    description: "复盘最近任务时使用的记录数量。".to_string(),
+                    default_value: "10".to_string(),
+                    required: true,
+                    placeholder: "10".to_string(),
+                },
+            ],
+            steps: vec![
+                RecipeStepDefinition::Run {
+                    id: "cstat-full-scan".to_string(),
+                    title: "执行目录统计".to_string(),
+                    workspace: "statistics-diagnostics".to_string(),
+                    action: "cstat".to_string(),
+                    target: "{{path}}".to_string(),
+                    summary: "对 {{path}} 执行 --all 扫描并导出到 {{output}}".to_string(),
+                    run_args: vec!["cstat", "{{path}}", "--all", "-f", "json", "-o", "{{output}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["cstat", "{{path}}", "--all", "-f", "json", "-o", "{{output}}"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+                RecipeStepDefinition::Run {
+                    id: "recent-review".to_string(),
+                    title: "回看最近任务".to_string(),
+                    workspace: "paths-context".to_string(),
+                    action: "recent".to_string(),
+                    target: "{{limit}}".to_string(),
+                    summary: "回看最近 {{limit}} 条任务上下文，辅助复盘".to_string(),
+                    run_args: vec!["recent", "-n", "{{limit}}", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                    dry_run_args: vec!["recent", "-n", "{{limit}}", "-f", "json"]
+                        .into_iter()
+                        .map(str::to_string)
+                        .collect(),
+                },
+            ],
+        },
+        RecipeDefinition {
             id: "proxy-diagnostics".to_string(),
             name: "代理诊断快照".to_string(),
-            description: "连续采集代理状态、系统代理配置与端口快照。".to_string(),
+            description: "连续采集代理状态、系统代理探测与端口快照，便于排障留档。".to_string(),
             category: "network-proxy".to_string(),
             source: RecipeSource::Builtin,
             supports_dry_run: true,
@@ -1219,11 +1447,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
             steps: vec![
                 RecipeStepDefinition::Run {
                     id: "proxy-status".to_string(),
-                    title: "代理状态".to_string(),
+                    title: "查看代理状态".to_string(),
                     workspace: "network-proxy".to_string(),
                     action: "pst".to_string(),
                     target: String::new(),
-                    summary: "查看代理状态".to_string(),
+                    summary: "查看当前代理状态快照".to_string(),
                     run_args: vec!["pst", "-f", "json"]
                         .into_iter()
                         .map(str::to_string)
@@ -1235,11 +1463,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeStepDefinition::Run {
                     id: "proxy-detect".to_string(),
-                    title: "系统代理探测".to_string(),
+                    title: "探测系统代理".to_string(),
                     workspace: "network-proxy".to_string(),
                     action: "proxy:detect".to_string(),
                     target: String::new(),
-                    summary: "探测系统代理".to_string(),
+                    summary: "读取系统代理配置".to_string(),
                     run_args: vec!["proxy", "detect", "-f", "json"]
                         .into_iter()
                         .map(str::to_string)
@@ -1251,11 +1479,11 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                 },
                 RecipeStepDefinition::Run {
                     id: "ports-snapshot".to_string(),
-                    title: "端口快照".to_string(),
+                    title: "查看端口快照".to_string(),
                     workspace: "network-proxy".to_string(),
                     action: "ports".to_string(),
                     target: String::new(),
-                    summary: "查看端口快照".to_string(),
+                    summary: "查看当前端口占用快照".to_string(),
                     run_args: vec!["ports", "-f", "json"]
                         .into_iter()
                         .map(str::to_string)
@@ -1434,6 +1662,55 @@ mod tests {
         assert!(recipes.iter().any(|entry| entry["id"] == "paths-context-health" && entry["category"] == "paths-context"));
         assert!(recipes.iter().any(|entry| entry["id"] == "integration-shell-bootstrap" && entry["category"] == "integration-automation"));
         assert!(recipes.iter().any(|entry| entry["id"] == "media-video-probe-compress" && entry["category"] == "media-conversion"));
+    }
+
+    #[test]
+    fn builtin_recipe_catalog_uses_readable_chinese_labels() {
+        let recipes = builtin_recipes();
+
+        let paths = recipes
+            .iter()
+            .find(|recipe| recipe.id == "paths-context-health")
+            .expect("paths-context-health recipe");
+        assert_eq!(paths.name, "路径健康巡检");
+        assert_eq!(paths.description, "串联上下文、最近访问与书签健康检查，快速完成路径工作台体检。");
+
+        let shell = recipes
+            .iter()
+            .find(|recipe| recipe.id == "integration-shell-bootstrap")
+            .expect("integration-shell-bootstrap recipe");
+        assert_eq!(shell.name, "Shell 安装引导");
+        assert_eq!(shell.description, "依次生成 init 与 completion 输出，用于初始化目标 shell 的集成与补全。");
+
+        let media = recipes
+            .iter()
+            .find(|recipe| recipe.id == "media-video-probe-compress")
+            .expect("media-video-probe-compress recipe");
+        assert_eq!(media.name, "视频探测与压缩");
+        assert_eq!(media.description, "先探测视频元数据，再按 mode / engine 执行压缩输出。");
+
+        let proxy = recipes
+            .iter()
+            .find(|recipe| recipe.id == "proxy-diagnostics")
+            .expect("proxy-diagnostics recipe");
+        assert_eq!(proxy.name, "代理诊断快照");
+        assert_eq!(proxy.description, "连续采集代理状态、系统代理探测与端口快照，便于排障留档。");
+    }
+
+    #[test]
+    fn builtin_recipe_catalog_includes_finalization_recipes() {
+        let recipes = builtin_recipes();
+
+        for (id, category) in [
+            ("media-video-remux-validate", "media-conversion"),
+            ("media-image-batch-convert", "media-conversion"),
+            ("statistics-cstat-review", "statistics-diagnostics"),
+        ] {
+            assert!(
+                recipes.iter().any(|recipe| recipe.id == id && recipe.category == category),
+                "missing builtin recipe {id} in {category}"
+            );
+        }
     }
 
     #[tokio::test]

@@ -55,7 +55,7 @@ describe('TaskToolCard', () => {
 
     expect(apiMocks.runWorkspaceTask).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('[1,2,3]')
-    expect(wrapper.text()).toContain('鎴愬姛')
+    expect(wrapper.text()).toContain('成功')
   })
 
   it('renders governance execute summary for acl:diff run tasks', async () => {
@@ -112,11 +112,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '鍗遍櫓鍔ㄤ綔',
+      description: '危险动作',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
@@ -250,11 +250,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '鍗遍櫓鍔ㄤ綔',
+      description: '危险动作',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
@@ -278,11 +278,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '鍗遍櫓鍔ㄤ綔',
+      description: '危险动作',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
+      fields: [{ key: 'path', label: '路径', type: 'text', required: true, defaultValue: 'D:/tmp/demo.txt' }],
       target: () => 'D:/tmp/demo.txt',
       buildPreviewArgs: () => ['rm', '--dry-run', 'D:/tmp/demo.txt'],
       buildExecuteArgs: () => ['rm', '-y', 'D:/tmp/demo.txt'],
@@ -354,11 +354,11 @@ describe('TaskToolCard', () => {
       id: 'rm',
       workspace: 'files-security',
       title: '删除文件',
-      description: '鍗遍櫓鍔ㄤ綔',
+      description: '危险动作',
       action: 'rm',
       mode: 'guarded',
       tone: 'danger',
-      fields: [{ key: 'path', label: '璺緞', type: 'text', required: true }],
+      fields: [{ key: 'path', label: '路径', type: 'text', required: true }],
       target: () => '',
       buildPreviewArgs: () => ['rm', '--dry-run'],
       buildExecuteArgs: () => ['rm', '-y'],

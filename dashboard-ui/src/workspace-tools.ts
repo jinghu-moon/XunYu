@@ -1,4 +1,4 @@
-﻿import type { WorkspaceCapabilities, WorkspaceKey } from './types'
+import type { WorkspaceCapabilities, WorkspaceKey } from './types'
 
 export type TaskFieldType = 'text' | 'textarea' | 'number' | 'select' | 'checkbox'
 export type TaskFieldValue = string | boolean
@@ -65,6 +65,25 @@ const shellCompletionOptions: TaskFieldOption[] = [
   { label: 'Fish', value: 'fish' },
 ]
 
+const aliasTypeOptions: TaskFieldOption[] = [
+  { label: '全部', value: '' },
+  { label: 'cmd', value: 'cmd' },
+  { label: 'app', value: 'app' },
+]
+
+const aliasModeOptions: TaskFieldOption[] = [
+  { label: 'auto', value: 'auto' },
+  { label: 'exe', value: 'exe' },
+  { label: 'cmd', value: 'cmd' },
+]
+
+const aliasShellOptions: TaskFieldOption[] = [
+  { label: 'cmd', value: 'cmd' },
+  { label: 'ps', value: 'ps' },
+  { label: 'bash', value: 'bash' },
+  { label: 'nu', value: 'nu' },
+]
+
 const dedupModeOptions: TaskFieldOption[] = [
   { label: '按路径', value: 'path' },
   { label: '按名称', value: 'name' },
@@ -85,6 +104,27 @@ const imgFormatOptions: TaskFieldOption[] = [
   { label: 'png', value: 'png' },
   { label: 'avif', value: 'avif' },
   { label: 'svg', value: 'svg' },
+]
+
+const imgSvgMethodOptions: TaskFieldOption[] = [
+  { label: 'bezier', value: 'bezier' },
+  { label: 'visioncortex', value: 'visioncortex' },
+  { label: 'potrace', value: 'potrace' },
+  { label: 'skeleton', value: 'skeleton' },
+  { label: 'diffvg', value: 'diffvg' },
+]
+
+const imgJpegBackendOptions: TaskFieldOption[] = [
+  { label: 'auto', value: 'auto' },
+  { label: 'moz', value: 'moz' },
+  { label: 'turbo', value: 'turbo' },
+]
+
+const aliasAppScanSourceOptions: TaskFieldOption[] = [
+  { label: 'all', value: 'all' },
+  { label: 'reg', value: 'reg' },
+  { label: 'startmenu', value: 'startmenu' },
+  { label: 'path', value: 'path' },
 ]
 
 const videoModeOptions: TaskFieldOption[] = [
@@ -416,8 +456,8 @@ export const pathsContextTaskGroups: WorkspaceTaskGroup[] = [
       runTask({
         id: 'ws',
         workspace: 'paths-context',
-        title: '批量打开工作区',
-        description: '按标签在 WT 中打开全部路径。',
+        title: '工作区批量打开（ws）',
+        description: '按标签在 Windows Terminal 中批量打开路径（ws）。',
         action: 'ws',
         fields: [{ key: 'tag', label: '标签', type: 'text', required: true, placeholder: '例如 work' }],
         target: (values) => readText(values, 'tag'),
@@ -1132,7 +1172,7 @@ export const integrationAutomationTaskGroups: WorkspaceTaskGroup[] = [
   {
     id: 'shell-bootstrap',
     title: 'Shell 集成',
-    description: '初始化 wrapper、导出补全脚本与内部补全调试。',
+    description: '通过 init / completion / __complete 形成安装、导出与验证闭环。',
     tasks: [
       runTask({
         id: 'init',
@@ -1167,8 +1207,79 @@ export const integrationAutomationTaskGroups: WorkspaceTaskGroup[] = [
   {
     id: 'alias-tools',
     title: '别名与同步',
-    description: '将 alias 族命令纳入 Dashboard。',
+    description: '覆盖 alias 常用治理动作，并为删除类操作启用 Triple-Guard。',
     tasks: [
+      runTask({
+        id: 'alias-setup',
+        workspace: 'integration-automation',
+        title: '初始化 alias 运行时',
+        description: '安装 shim 模板与 shell 集成。',
+        action: 'alias:setup',
+        feature: 'alias',
+        fields: [
+          { key: 'no_cmd', label: '跳过 cmd', type: 'checkbox', defaultValue: false },
+          { key: 'no_ps', label: '跳过 PowerShell', type: 'checkbox', defaultValue: false },
+          { key: 'no_bash', label: '跳过 Bash', type: 'checkbox', defaultValue: false },
+          { key: 'no_nu', label: '跳过 Nushell', type: 'checkbox', defaultValue: false },
+          { key: 'core_only', label: '仅核心 Shell', type: 'checkbox', defaultValue: false },
+        ],
+        buildRunArgs: (values) => {
+          const args = ['alias', 'setup']
+          if (readBool(values, 'no_cmd')) args.push('--no-cmd')
+          if (readBool(values, 'no_ps')) args.push('--no-ps')
+          if (readBool(values, 'no_bash')) args.push('--no-bash')
+          if (readBool(values, 'no_nu')) args.push('--no-nu')
+          if (readBool(values, 'core_only')) args.push('--core-only')
+          return args
+        },
+      }),
+      runTask({
+        id: 'alias-add',
+        workspace: 'integration-automation',
+        title: '新增命令别名',
+        description: '添加普通 alias，并支持 tags / shells / force。',
+        action: 'alias:add',
+        feature: 'alias',
+        fields: [
+          { key: 'name', label: '别名', type: 'text', required: true, placeholder: 'gst' },
+          { key: 'command', label: '命令串', type: 'textarea', required: true, placeholder: 'git status -sb' },
+          { key: 'mode', label: '模式', type: 'select', defaultValue: 'auto', options: aliasModeOptions },
+          { key: 'desc', label: '说明', type: 'text', placeholder: '可选' },
+          { key: 'tag', label: '标签', type: 'textarea', placeholder: 'dev,git' },
+          { key: 'shell', label: '生效 Shell', type: 'textarea', placeholder: 'cmd,ps,bash,nu' },
+          { key: 'force', label: '覆盖已存在别名', type: 'checkbox', defaultValue: false },
+        ],
+        target: (values) => readText(values, 'name'),
+        buildRunArgs: (values) => {
+          const args = [
+            'alias',
+            'add',
+            readText(values, 'name'),
+            readText(values, 'command'),
+            '--mode',
+            readText(values, 'mode') || 'auto',
+          ]
+          pushOption(args, '--desc', readText(values, 'desc'))
+          pushRepeatableOption(args, '--tag', readText(values, 'tag'))
+          pushRepeatableOption(args, '--shell', readText(values, 'shell'))
+          if (readBool(values, 'force')) args.push('--force')
+          return args
+        },
+      }),
+      guardedTask({
+        id: 'alias-rm',
+        workspace: 'integration-automation',
+        title: '删除命令别名',
+        description: '先查看 alias 指向，再执行删除。',
+        action: 'alias:rm',
+        tone: 'danger',
+        feature: 'alias',
+        fields: [{ key: 'name', label: '别名', type: 'text', required: true, placeholder: 'gst' }],
+        target: (values) => readText(values, 'name'),
+        buildPreviewArgs: (values) => ['alias', 'which', readText(values, 'name')],
+        buildExecuteArgs: (values) => ['alias', 'rm', readText(values, 'name')],
+        previewSummary: (values) => `删除 alias ${readText(values, 'name')} 前先查看解析结果`,
+      }),
       runTask({
         id: 'alias-ls',
         workspace: 'integration-automation',
@@ -1177,7 +1288,7 @@ export const integrationAutomationTaskGroups: WorkspaceTaskGroup[] = [
         action: 'alias:ls',
         feature: 'alias',
         fields: [
-          { key: 'type', label: '类型', type: 'select', defaultValue: '', options: [{ label: '全部', value: '' }, { label: 'cmd', value: 'cmd' }, { label: 'app', value: 'app' }] },
+          { key: 'type', label: '类型', type: 'select', defaultValue: '', options: aliasTypeOptions },
           { key: 'tag', label: '标签', type: 'text', placeholder: '可选' },
         ],
         buildRunArgs: (values) => {
@@ -1218,6 +1329,131 @@ export const integrationAutomationTaskGroups: WorkspaceTaskGroup[] = [
         feature: 'alias',
         fields: [],
         buildRunArgs: () => ['alias', 'sync'],
+      }),
+      runTask({
+        id: 'alias-export',
+        workspace: 'integration-automation',
+        title: '导出别名',
+        description: '导出 aliases.toml 到指定文件或 stdout。',
+        action: 'alias:export',
+        feature: 'alias',
+        fields: [{ key: 'output', label: '输出文件', type: 'text', placeholder: '可选；留空输出到 stdout' }],
+        buildRunArgs: (values) => {
+          const args = ['alias', 'export']
+          pushOption(args, '-o', readText(values, 'output'))
+          return args
+        },
+      }),
+      runTask({
+        id: 'alias-import',
+        workspace: 'integration-automation',
+        title: '导入别名',
+        description: '从 TOML 文件导入别名定义。',
+        action: 'alias:import',
+        feature: 'alias',
+        fields: [
+          { key: 'file', label: 'TOML 文件', type: 'text', required: true, placeholder: 'D:/xun/aliases.toml' },
+          { key: 'force', label: '覆盖冲突项', type: 'checkbox', defaultValue: false },
+        ],
+        target: (values) => readText(values, 'file'),
+        buildRunArgs: (values) => {
+          const args = ['alias', 'import', readText(values, 'file')]
+          if (readBool(values, 'force')) args.push('--force')
+          return args
+        },
+      }),
+      runTask({
+        id: 'alias-app-add',
+        workspace: 'integration-automation',
+        title: '新增应用别名',
+        description: '为可执行文件注册 app alias。',
+        action: 'alias:app-add',
+        feature: 'alias',
+        fields: [
+          { key: 'name', label: '别名', type: 'text', required: true, placeholder: 'code' },
+          { key: 'exe', label: '可执行文件', type: 'text', required: true, placeholder: 'C:/Program Files/Microsoft VS Code/Code.exe' },
+          { key: 'args', label: '固定参数', type: 'text', placeholder: '可选' },
+          { key: 'desc', label: '说明', type: 'text', placeholder: '可选' },
+          { key: 'tag', label: '标签', type: 'textarea', placeholder: 'editor,dev' },
+          { key: 'no_apppaths', label: '禁用 App Paths 注册', type: 'checkbox', defaultValue: false },
+          { key: 'force', label: '覆盖冲突项', type: 'checkbox', defaultValue: false },
+        ],
+        target: (values) => readText(values, 'name'),
+        buildRunArgs: (values) => {
+          const args = ['alias', 'app', 'add', readText(values, 'name'), readText(values, 'exe')]
+          pushOption(args, '--args', readText(values, 'args'))
+          pushOption(args, '--desc', readText(values, 'desc'))
+          pushRepeatableOption(args, '--tag', readText(values, 'tag'))
+          if (readBool(values, 'no_apppaths')) args.push('--no-apppaths')
+          if (readBool(values, 'force')) args.push('--force')
+          return args
+        },
+      }),
+      guardedTask({
+        id: 'alias-app-rm',
+        workspace: 'integration-automation',
+        title: '删除应用别名',
+        description: '先查看 app alias 指向，再执行删除。',
+        action: 'alias:app-rm',
+        tone: 'danger',
+        feature: 'alias',
+        fields: [{ key: 'name', label: '应用别名', type: 'text', required: true, placeholder: 'code' }],
+        target: (values) => readText(values, 'name'),
+        buildPreviewArgs: (values) => ['alias', 'app', 'which', readText(values, 'name')],
+        buildExecuteArgs: (values) => ['alias', 'app', 'rm', readText(values, 'name')],
+        previewSummary: (values) => `删除 app alias ${readText(values, 'name')} 前先查看解析结果`,
+      }),
+      runTask({
+        id: 'alias-app-ls',
+        workspace: 'integration-automation',
+        title: '列出应用别名',
+        description: '以 JSON 输出当前 app alias 清单。',
+        action: 'alias:app-ls',
+        feature: 'alias',
+        fields: [],
+        buildRunArgs: () => ['alias', 'app', 'ls', '--json'],
+      }),
+      runTask({
+        id: 'alias-app-scan',
+        workspace: 'integration-automation',
+        title: '扫描应用候选项',
+        description: '从注册表、开始菜单或 PATH 扫描可注册应用。',
+        action: 'alias:app-scan',
+        feature: 'alias',
+        fields: [
+          { key: 'source', label: '扫描来源', type: 'select', defaultValue: 'all', options: aliasAppScanSourceOptions },
+          { key: 'filter', label: '关键字过滤', type: 'text', placeholder: '可选' },
+          { key: 'all', label: '加入全部扫描结果', type: 'checkbox', defaultValue: false },
+          { key: 'no_cache', label: '绕过缓存', type: 'checkbox', defaultValue: false },
+        ],
+        buildRunArgs: (values) => {
+          const args = ['alias', 'app', 'scan', '--source', readText(values, 'source') || 'all', '--json']
+          pushOption(args, '--filter', readText(values, 'filter'))
+          if (readBool(values, 'all')) args.push('--all')
+          if (readBool(values, 'no_cache')) args.push('--no-cache')
+          return args
+        },
+      }),
+      runTask({
+        id: 'alias-app-which',
+        workspace: 'integration-automation',
+        title: '解析应用别名',
+        description: '查看 app alias 指向的可执行文件。',
+        action: 'alias:app-which',
+        feature: 'alias',
+        fields: [{ key: 'name', label: '应用别名', type: 'text', required: true, placeholder: 'code' }],
+        target: (values) => readText(values, 'name'),
+        buildRunArgs: (values) => ['alias', 'app', 'which', readText(values, 'name')],
+      }),
+      runTask({
+        id: 'alias-app-sync',
+        workspace: 'integration-automation',
+        title: '同步应用别名',
+        description: '只同步 app alias 相关落地。',
+        action: 'alias:app-sync',
+        feature: 'alias',
+        fields: [],
+        buildRunArgs: () => ['alias', 'app', 'sync'],
       }),
     ],
   },
@@ -1290,7 +1526,7 @@ export const mediaConversionTaskGroups: WorkspaceTaskGroup[] = [
   {
     id: 'image-tools',
     title: '图像处理',
-    description: 'img 统一以任务卡形式接入。',
+    description: 'img 统一以任务卡形式接入，并暴露高级编码参数。',
     tasks: [
       runTask({
         id: 'img',
@@ -1304,15 +1540,50 @@ export const mediaConversionTaskGroups: WorkspaceTaskGroup[] = [
           { key: 'output', label: '输出目录', type: 'text', required: true },
           { key: 'format', label: '格式', type: 'select', defaultValue: 'webp', options: imgFormatOptions },
           { key: 'quality', label: '质量', type: 'number', defaultValue: '80', min: 1, max: 100 },
+          { key: 'svg_method', label: 'SVG 方法', type: 'select', defaultValue: 'bezier', options: imgSvgMethodOptions },
+          { key: 'svg_diffvg_iters', label: 'DiffVG 迭代', type: 'number', defaultValue: '150' },
+          { key: 'svg_diffvg_strokes', label: 'DiffVG 线条数', type: 'number', defaultValue: '64' },
+          { key: 'jpeg_backend', label: 'JPEG 后端', type: 'select', defaultValue: 'auto', options: imgJpegBackendOptions },
+          { key: 'png_lossy', label: 'PNG 有损量化', type: 'checkbox', defaultValue: true },
+          { key: 'png_dither_level', label: 'PNG 抖动级别', type: 'number', defaultValue: '0.0' },
+          { key: 'webp_lossy', label: 'WebP 有损模式', type: 'checkbox', defaultValue: true },
           { key: 'mw', label: '最大宽度', type: 'number', placeholder: '可选' },
           { key: 'mh', label: '最大高度', type: 'number', placeholder: '可选' },
+          { key: 'threads', label: '工作线程', type: 'number', placeholder: '可选' },
+          { key: 'avif_threads', label: 'AVIF 内部线程', type: 'number', placeholder: '可选' },
           { key: 'overwrite', label: '覆盖输出', type: 'checkbox', defaultValue: false },
         ],
         target: (values) => readText(values, 'input'),
         buildRunArgs: (values) => {
-          const args = ['img', '-i', readText(values, 'input'), '-o', readText(values, 'output'), '-f', readText(values, 'format') || 'webp', '-q', readText(values, 'quality') || '80']
+          const args = [
+            'img',
+            '-i',
+            readText(values, 'input'),
+            '-o',
+            readText(values, 'output'),
+            '-f',
+            readText(values, 'format') || 'webp',
+            '-q',
+            readText(values, 'quality') || '80',
+            '--svg-method',
+            readText(values, 'svg_method') || 'bezier',
+            '--svg-diffvg-iters',
+            readText(values, 'svg_diffvg_iters') || '150',
+            '--svg-diffvg-strokes',
+            readText(values, 'svg_diffvg_strokes') || '64',
+            '--jpeg-backend',
+            readText(values, 'jpeg_backend') || 'auto',
+            '--png-lossy',
+            readBool(values, 'png_lossy') ? 'true' : 'false',
+            '--png-dither-level',
+            readText(values, 'png_dither_level') || '0.0',
+            '--webp-lossy',
+            readBool(values, 'webp_lossy') ? 'true' : 'false',
+          ]
           pushOption(args, '--mw', readText(values, 'mw'))
           pushOption(args, '--mh', readText(values, 'mh'))
+          pushOption(args, '-t', readText(values, 'threads'))
+          pushOption(args, '--avif-threads', readText(values, 'avif_threads'))
           if (readBool(values, 'overwrite')) args.push('--overwrite')
           return args
         },

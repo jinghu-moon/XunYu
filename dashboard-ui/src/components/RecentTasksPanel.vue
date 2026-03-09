@@ -565,11 +565,11 @@ onMounted(() => {
 
     <div class="recent-tasks__summary">
 
-      <span class="recent-tasks__chip">鎬绘暟 {{ stats?.total ?? 0 }}</span>
+      <span class="recent-tasks__chip">总数 {{ stats?.total ?? 0 }}</span>
 
-      <span class="recent-tasks__chip recent-tasks__chip--ok">鎴愬姛 {{ stats?.succeeded ?? 0 }}</span>
+      <span class="recent-tasks__chip recent-tasks__chip--ok">成功 {{ stats?.succeeded ?? 0 }}</span>
 
-      <span class="recent-tasks__chip recent-tasks__chip--error">澶辫触 {{ stats?.failed ?? 0 }}</span>
+      <span class="recent-tasks__chip recent-tasks__chip--error">失败 {{ stats?.failed ?? 0 }}</span>
 
       <span class="recent-tasks__chip">Dry Run {{ stats?.dry_run ?? 0 }}</span>
 
@@ -701,17 +701,13 @@ onMounted(() => {
 
         <div class="recent-tasks__detail-meta">
           <div><strong>模式</strong> {{ selectedRecord.mode }}</div>
-          <div><strong>妯″紡</strong> {{ selectedRecord.mode }}</div>
 
           <div><strong>阶段</strong> {{ selectedRecord.phase }}</div>
 
           <div><strong>Dry Run</strong> {{ selectedRecord.dry_run ? '是' : '否' }}</div>
           <div><strong>时间</strong> {{ formatTime(selectedRecord.created_at) }}</div>
-          <div><strong>鏃堕棿</strong> {{ formatTime(selectedRecord.created_at) }}</div>
           <div><strong>审计</strong> {{ selectedRecord.audit_action || '-' }}</div>
-          <div><strong>瀹¤</strong> {{ selectedRecord.audit_action || '-' }}</div>
           <div><strong>耗时</strong> {{ selectedRecord.process.duration_ms }} ms</div>
-          <div><strong>鑰楁椂</strong> {{ selectedRecord.process.duration_ms }} ms</div>
 
         </div>
 
