@@ -74,8 +74,8 @@ pub(super) fn build_xun_components(
     let mut root_to_region: HashMap<usize, usize> = HashMap::new();
     let mut stats: Vec<RegionStat> = Vec::new();
 
-    for idx in 0..pixel_count {
-        let label = labels[idx];
+    for (idx, label_slot) in labels.iter_mut().take(pixel_count).enumerate() {
+        let label = *label_slot;
         if label == LABEL_NONE {
             continue;
         }
@@ -94,7 +94,7 @@ pub(super) fn build_xun_components(
             stats.len() - 1
         });
 
-        labels[idx] = region_id + 1;
+        *label_slot = region_id + 1;
 
         let x = idx % width;
         let y = idx / width;
@@ -139,11 +139,11 @@ pub(super) fn build_xun_components(
         .filter_map(|(idx, s)| (s.area >= cfg.min_component_area).then_some(idx))
         .collect();
 
-    if let Some(max_components) = cfg.max_components {
-        if kept_regions.len() > max_components {
-            kept_regions.sort_by_key(|&idx| Reverse(stats[idx].area));
-            kept_regions.truncate(max_components);
-        }
+    if let Some(max_components) = cfg.max_components
+        && kept_regions.len() > max_components
+    {
+        kept_regions.sort_by_key(|&idx| Reverse(stats[idx].area));
+        kept_regions.truncate(max_components);
     }
 
     if kept_regions.is_empty() {
@@ -173,8 +173,7 @@ pub(super) fn build_xun_components(
         });
     }
 
-    for idx in 0..pixel_count {
-        let compact = labels[idx];
+    for (idx, &compact) in labels.iter().take(pixel_count).enumerate() {
         if compact == LABEL_NONE {
             continue;
         }

@@ -145,11 +145,11 @@ pub(super) fn scan_parallel(
                 if local_count > 0 {
                     total_count.fetch_add(local_count, Ordering::SeqCst);
                 }
-            } else if let Some(results) = results {
-                if !local_items.is_empty() {
-                    let mut guard = results.lock().unwrap();
-                    guard.extend(local_items);
-                }
+            } else if let Some(results) = results
+                && !local_items.is_empty()
+            {
+                let mut guard = results.lock().unwrap();
+                guard.extend(local_items);
             }
         });
         handles.push(handle);
@@ -182,6 +182,7 @@ pub(super) fn scan_parallel(
     Ok(ScanOutput { items, count })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_task(
     task: Task,
     rules: &CompiledRules,

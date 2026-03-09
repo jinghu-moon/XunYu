@@ -96,8 +96,8 @@ pub(super) fn merge_small_regions(
     let mut root_to_new: HashMap<usize, usize> = HashMap::new();
     let mut merged_stats: Vec<RegionStat> = Vec::new();
 
-    for idx in 0..labels.len() {
-        let label = labels[idx];
+    for (idx, label_slot) in labels.iter_mut().enumerate() {
+        let label = *label_slot;
         if label == LABEL_NONE {
             continue;
         }
@@ -116,7 +116,7 @@ pub(super) fn merge_small_regions(
             });
             merged_stats.len() - 1
         });
-        labels[idx] = new_id + 1;
+        *label_slot = new_id + 1;
 
         let x = idx % width;
         let y = idx / width;

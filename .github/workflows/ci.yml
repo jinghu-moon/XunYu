@@ -130,7 +130,7 @@ jobs:
         run: cargo build --locked -p alias-shim --release
 
   rust-clippy:
-    name: Rust clippy (advisory)
+    name: Rust clippy
     runs-on: windows-latest
     needs:
       - frontend
@@ -171,8 +171,8 @@ jobs:
             throw "dashboard-ui/dist/index.html not found"
           }
 
-      - name: Run cargo clippy advisory scan
-        run: cargo clippy --workspace --all-targets --all-features --exclude alias-shim --locked
+      - name: Run cargo clippy gate
+        run: cargo clippy --workspace --all-targets --all-features --exclude alias-shim --locked -- -D warnings
 
   rust-tests:
     name: Rust tests

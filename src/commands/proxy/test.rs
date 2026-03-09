@@ -114,8 +114,6 @@ pub(crate) fn run_proxy_tests_with(
         let mut handles = Vec::new();
         for (i, t) in targets[idx..end].iter().cloned().enumerate() {
             let index = idx + i;
-            let timeout = timeout;
-            let addr = addr;
             handles.push((
                 index,
                 thread::spawn(move || {

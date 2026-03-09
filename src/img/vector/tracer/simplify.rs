@@ -28,8 +28,8 @@ pub(super) fn rdp_simplify(pts: &[Pt], eps: f64) -> Vec<Pt> {
     }
     let (first, last) = (&pts[0], &pts[pts.len() - 1]);
     let (mut max_d, mut max_i) = (0.0f64, 0);
-    for i in 1..pts.len() - 1 {
-        let d = pt_line_dist(&pts[i], first, last);
+    for (i, point) in pts.iter().enumerate().take(pts.len() - 1).skip(1) {
+        let d = pt_line_dist(point, first, last);
         if d > max_d {
             max_d = d;
             max_i = i;

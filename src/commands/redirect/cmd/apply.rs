@@ -77,11 +77,9 @@ pub(super) fn cmd_redirect_apply(
         )
     })?;
 
-    if !args.dry_run {
-        if !confirm_overwrite_for_profile(apply_profile, args.yes, &plan_file.items)? {
-            ui_println!("Cancelled.");
-            return Ok(());
-        }
+    if !args.dry_run && !confirm_overwrite_for_profile(apply_profile, args.yes, &plan_file.items)? {
+        ui_println!("Cancelled.");
+        return Ok(());
     }
 
     if matches!(apply_profile.on_conflict, RedirectOnConflict::Ask) && !args.dry_run {

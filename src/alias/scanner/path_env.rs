@@ -6,10 +6,8 @@ use super::{AppEntry, Source, auto_alias, cache, is_utility_exe};
 
 pub(crate) fn scan_path_env(no_cache: bool) -> Vec<AppEntry> {
     let fingerprint = path_env_fingerprint();
-    if !no_cache {
-        if let Some(v) = cache::load_source("path", 24 * 3600, Some(&fingerprint)) {
-            return v;
-        }
+    if !no_cache && let Some(v) = cache::load_source("path", 24 * 3600, Some(&fingerprint)) {
+        return v;
     }
     let list = scan_path_env_inner();
     if !no_cache {

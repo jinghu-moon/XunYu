@@ -86,7 +86,7 @@ fn split_sfc(source: &str) -> Vec<SfcSection> {
 
             // 查找对应闭标签
             let close_tag = format!("</{}>", tag);
-            let after_gt = if open_end_col + 1 <= lines[open_end_line].len() {
+            let after_gt = if open_end_col < lines[open_end_line].len() {
                 &lines[open_end_line][open_end_col + 1..]
             } else {
                 ""

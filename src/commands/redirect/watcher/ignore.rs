@@ -14,7 +14,7 @@ pub(super) fn resolve_dest_dirs(source: &Path, profile: &RedirectProfile) -> Vec
         .collect();
 
     if let crate::config::RedirectUnmatched::Archive { dest, .. } = &profile.unmatched {
-        out.push(dest_root_path(source, &dest));
+        out.push(dest_root_path(source, dest));
     }
 
     out.sort();

@@ -150,10 +150,10 @@ pub(in crate::commands::dashboard) async fn port_icon(
                     return Ok(bytes);
                 }
 
-                if let Ok(file) = icon_cache().extract_to_file(&exe_path) {
-                    if let Ok(bytes) = std::fs::read(&file) {
-                        return Ok(bytes);
-                    }
+                if let Ok(file) = icon_cache().extract_to_file(&exe_path)
+                    && let Ok(bytes) = std::fs::read(&file)
+                {
+                    return Ok(bytes);
                 }
             }
             fallback_icon_webp(size)

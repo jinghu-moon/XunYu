@@ -97,6 +97,7 @@ fn audit_log_to_file(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn audit_log_to_file_with_serializer(
     log_file: &Path,
     action: &str,
@@ -155,15 +156,15 @@ fn audit_log_to_file_with_serializer(
     };
 
     // Check rotation (10MB)
-    if let Ok(meta) = fs::metadata(&log_file) {
-        if meta.len() >= 10 * 1024 * 1024 {
-            let mut backup = log_file.to_path_buf();
-            backup.set_extension("jsonl.1");
-            let _ = fs::rename(&log_file, &backup);
-        }
+    if let Ok(meta) = fs::metadata(log_file)
+        && meta.len() >= 10 * 1024 * 1024
+    {
+        let mut backup = log_file.to_path_buf();
+        backup.set_extension("jsonl.1");
+        let _ = fs::rename(log_file, &backup);
     }
 
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_file) {
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(log_file) {
         let _ = writeln!(f, "{}", line);
     }
 }
@@ -238,10 +239,7 @@ mod tests {
     #[test]
     fn audit_log_silently_returns_when_serializer_fails() {
         fn always_fail(_: &serde_json::Value) -> Result<String, serde_json::Error> {
-            Err(serde_json::Error::io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "boom",
-            )))
+            Err(serde_json::Error::io(std::io::Error::other("boom")))
         }
 
         let dir = tempdir().unwrap();

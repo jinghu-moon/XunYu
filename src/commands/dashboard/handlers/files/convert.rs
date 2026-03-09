@@ -262,7 +262,7 @@ pub(in crate::commands::dashboard) async fn validate_file(
                 .content
                 .as_deref()
                 .map(str::to_string)
-                .ok_or_else(|| "missing content")
+                .ok_or("missing content")
                 .and_then(|c| {
                     let format_raw = req
                         .format

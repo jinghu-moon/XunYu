@@ -46,10 +46,10 @@ pub(super) fn audit_log(cfg: &AclRuntimeConfig) -> AuditLog {
 
 pub(super) fn map_acl_err(err: anyhow::Error) -> CliError {
     let mut details: Vec<String> = Vec::new();
-    if let Some(acl_err) = err.downcast_ref::<AclError>() {
-        if acl_err.is_access_denied() {
-            details.push("Hint: Run as Administrator for ACL write/repair operations.".to_string());
-        }
+    if let Some(acl_err) = err.downcast_ref::<AclError>()
+        && acl_err.is_access_denied()
+    {
+        details.push("Hint: Run as Administrator for ACL write/repair operations.".to_string());
     }
     CliError {
         code: 1,

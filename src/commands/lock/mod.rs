@@ -340,6 +340,7 @@ pub(crate) fn cmd_ren_file(args: RenFileCmd) -> CliResult {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn do_move(
     src: &Path,
     dst: &Path,

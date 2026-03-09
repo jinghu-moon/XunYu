@@ -39,8 +39,10 @@ pub(super) fn build_paths_with_xun_components(
     components: &mut [XunComponent],
     cfg: PathBuildConfig,
 ) -> (String, XunPathBuildStats) {
-    let mut stats = XunPathBuildStats::default();
-    stats.components_total = components.len() as u64;
+    let mut stats = XunPathBuildStats {
+        components_total: components.len() as u64,
+        ..XunPathBuildStats::default()
+    };
 
     let sort_start = Instant::now();
     components.sort_by_key(|c| Reverse(c.area));

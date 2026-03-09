@@ -1,9 +1,11 @@
-pub(super) fn median_cut(pixels: &[(u8, u8, u8, u8)], num_colors: usize) -> Vec<(u8, u8, u8)> {
+type Rgb = (u8, u8, u8);
+
+pub(super) fn median_cut(pixels: &[(u8, u8, u8, u8)], num_colors: usize) -> Vec<Rgb> {
     if num_colors == 0 {
         return vec![];
     }
     let step = (pixels.len() / 50_000).max(1);
-    let colors: Vec<(u8, u8, u8)> = pixels
+    let colors: Vec<Rgb> = pixels
         .iter()
         .step_by(step)
         .map(|&(r, g, b, _)| (r, g, b))
@@ -12,7 +14,7 @@ pub(super) fn median_cut(pixels: &[(u8, u8, u8, u8)], num_colors: usize) -> Vec<
         return vec![(0, 0, 0)];
     }
 
-    let mut boxes: Vec<Vec<(u8, u8, u8)>> = vec![colors];
+    let mut boxes: Vec<Vec<Rgb>> = vec![colors];
     while boxes.len() < num_colors {
         let best = boxes
             .iter()
@@ -35,7 +37,7 @@ pub(super) fn median_cut(pixels: &[(u8, u8, u8, u8)], num_colors: usize) -> Vec<
     boxes.iter().map(|b| box_avg(b)).collect()
 }
 
-fn box_range(c: &[(u8, u8, u8)]) -> u16 {
+fn box_range(c: &[Rgb]) -> u16 {
     let (mut rn, mut rx, mut gn, mut gx, mut bn, mut bx) = (255, 0u8, 255, 0u8, 255, 0u8);
     for &(r, g, b) in c {
         rn = rn.min(r);
@@ -50,7 +52,7 @@ fn box_range(c: &[(u8, u8, u8)]) -> u16 {
         .max((bx - bn) as u16)
 }
 
-fn split(mut c: Vec<(u8, u8, u8)>) -> (Vec<(u8, u8, u8)>, Vec<(u8, u8, u8)>) {
+fn split(mut c: Vec<Rgb>) -> (Vec<Rgb>, Vec<Rgb>) {
     let (mut rn, mut rx, mut gn, mut gx, mut bn, mut bx) = (255, 0u8, 255, 0u8, 255, 0u8);
     for &(r, g, b) in &c {
         rn = rn.min(r);
@@ -75,7 +77,7 @@ fn split(mut c: Vec<(u8, u8, u8)>) -> (Vec<(u8, u8, u8)>, Vec<(u8, u8, u8)>) {
     (c, r)
 }
 
-fn box_avg(c: &[(u8, u8, u8)]) -> (u8, u8, u8) {
+fn box_avg(c: &[Rgb]) -> Rgb {
     if c.is_empty() {
         return (0, 0, 0);
     }

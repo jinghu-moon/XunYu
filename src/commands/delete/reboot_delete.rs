@@ -1,3 +1,5 @@
+#![allow(clippy::upper_case_acronyms)]
+
 use std::ptr;
 
 type PCWSTR = *const u16;

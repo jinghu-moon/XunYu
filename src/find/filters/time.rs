@@ -137,11 +137,11 @@ fn parse_time_point(expr: &str) -> CliResult<TimePoint> {
         return Err(CliError::new(2, "Empty time expression."));
     }
     let mut prefix = None;
-    if let Some(ch) = s.chars().next() {
-        if ch == '+' || ch == '-' || ch == '~' {
-            prefix = Some(ch);
-            s = &s[ch.len_utf8()..];
-        }
+    if let Some(ch) = s.chars().next()
+        && (ch == '+' || ch == '-' || ch == '~')
+    {
+        prefix = Some(ch);
+        s = &s[ch.len_utf8()..];
     }
     if is_absolute_date(s) {
         let (secs, _) = parse_absolute_datetime(s)?;
@@ -223,14 +223,14 @@ fn parse_absolute_datetime(s: &str) -> CliResult<(i64, usize)> {
     } else {
         (0, 0, 0)
     };
-    if month < 1 || month > 12 {
+    if !(1..=12).contains(&month) {
         return Err(CliError::new(2, "Invalid date value."));
     }
     let dim = days_in_month(year, month);
     if day < 1 || day > dim {
         return Err(CliError::new(2, "Invalid date value."));
     }
-    if hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59 {
+    if !(0..=23).contains(&hour) || !(0..=59).contains(&minute) || !(0..=59).contains(&second) {
         return Err(CliError::new(2, "Invalid time value."));
     }
     let days = days_from_civil(year, month, day);

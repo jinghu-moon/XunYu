@@ -174,24 +174,20 @@ pub(super) fn match_path<'a>(
     rules: &'a [RedirectRule],
 ) -> Option<&'a RedirectRule> {
     let file_name = src_path.file_name()?.to_str()?;
-    for r in rules {
-        if rule_matches(src_path, file_name, r) {
-            return Some(r);
-        }
-    }
-    None
+    rules
+        .iter()
+        .find(|&r| rule_matches(src_path, file_name, r))
+        .map(|v| v as _)
 }
 
 pub(super) fn match_file<'a>(
     file_name: &str,
     rules: &'a [RedirectRule],
 ) -> Option<&'a RedirectRule> {
-    for r in rules {
-        if rule_matches(Path::new(file_name), file_name, r) {
-            return Some(r);
-        }
-    }
-    None
+    rules
+        .iter()
+        .find(|&r| rule_matches(Path::new(file_name), file_name, r))
+        .map(|v| v as _)
 }
 
 fn rule_matches_name_only(file_name: &str, rule: &RedirectRule) -> bool {

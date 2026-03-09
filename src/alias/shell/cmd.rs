@@ -121,20 +121,20 @@ fn merge_autorun(existing: &str, inject: &str) -> String {
     if existing.trim().is_empty() {
         return inject.to_string();
     }
-    if let (Some(s), Some(e)) = (existing.find(AUTORUN_BEGIN), existing.find(AUTORUN_END)) {
-        if s < e {
-            let head = existing[..s].trim().trim_end_matches('&').trim();
-            let tail = existing[e + AUTORUN_END.len()..]
-                .trim()
-                .trim_start_matches('&')
-                .trim();
-            return match (head.is_empty(), tail.is_empty()) {
-                (true, true) => inject.to_string(),
-                (false, true) => format!("{head} & {inject}"),
-                (true, false) => format!("{inject} & {tail}"),
-                (false, false) => format!("{head} & {inject} & {tail}"),
-            };
-        }
+    if let (Some(s), Some(e)) = (existing.find(AUTORUN_BEGIN), existing.find(AUTORUN_END))
+        && s < e
+    {
+        let head = existing[..s].trim().trim_end_matches('&').trim();
+        let tail = existing[e + AUTORUN_END.len()..]
+            .trim()
+            .trim_start_matches('&')
+            .trim();
+        return match (head.is_empty(), tail.is_empty()) {
+            (true, true) => inject.to_string(),
+            (false, true) => format!("{head} & {inject}"),
+            (true, false) => format!("{inject} & {tail}"),
+            (false, false) => format!("{head} & {inject} & {tail}"),
+        };
     }
     if existing.contains("@doskey /macrofile=") {
         // 兼容旧值：不做复杂替换，直接追加新片段（保持无破坏）。

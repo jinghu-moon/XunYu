@@ -245,7 +245,7 @@ fn apply_renames(ops: &[crate::batch_rename::types::RenameOp]) -> CliResult {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn filename_str(path: &std::path::PathBuf) -> String {
+fn filename_str(path: &std::path::Path) -> String {
     path.file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("?")

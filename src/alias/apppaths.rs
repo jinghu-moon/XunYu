@@ -89,7 +89,7 @@ pub(crate) fn list_registered() -> Result<Vec<RegisteredEntry>> {
             let name = key_name.trim_end_matches(".exe").to_string();
             entries.push(RegisteredEntry { name, exe_path });
         }
-        return Ok(entries);
+        Ok(entries)
     }
     #[cfg(not(windows))]
     {

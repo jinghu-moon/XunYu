@@ -18,7 +18,7 @@ pub(super) fn zhang_suen(bin: &mut [u8], w: usize, h: usize) {
                 let [p2, p3, p4, p5, p6, p7, p8, p9] = nb(bin, w, x, y);
                 let b = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
                 let a = trans([p2, p3, p4, p5, p6, p7, p8, p9, p2]);
-                if b >= 2 && b <= 6 && a == 1 && p2 * p4 * p6 == 0 && p4 * p6 * p8 == 0 {
+                if (2..=6).contains(&b) && a == 1 && p2 * p4 * p6 == 0 && p4 * p6 * p8 == 0 {
                     del.push(idx);
                 }
             }
@@ -39,7 +39,7 @@ pub(super) fn zhang_suen(bin: &mut [u8], w: usize, h: usize) {
                 let [p2, p3, p4, p5, p6, p7, p8, p9] = nb(bin, w, x, y);
                 let b = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
                 let a = trans([p2, p3, p4, p5, p6, p7, p8, p9, p2]);
-                if b >= 2 && b <= 6 && a == 1 && p2 * p4 * p8 == 0 && p2 * p6 * p8 == 0 {
+                if (2..=6).contains(&b) && a == 1 && p2 * p4 * p8 == 0 && p2 * p6 * p8 == 0 {
                     del2.push(idx);
                 }
             }

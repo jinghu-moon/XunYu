@@ -67,6 +67,7 @@ impl FileTree {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn populate(
         nodes: &mut Vec<TreeNode>,
         parent_id: usize,

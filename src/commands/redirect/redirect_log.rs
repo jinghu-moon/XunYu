@@ -35,9 +35,7 @@ fn parse_tx_from_params(params: &str) -> Option<String> {
 }
 
 fn extract_tx(v: &Value) -> Option<String> {
-    let Some(params) = v.get("params_json").or_else(|| v.get("params")) else {
-        return None;
-    };
+    let params = v.get("params_json").or_else(|| v.get("params"))?;
     match params {
         Value::Object(map) => map.get("tx").and_then(Value::as_str).map(|s| s.to_string()),
         Value::String(s) => parse_tx_from_params(s),
@@ -61,10 +59,10 @@ pub(crate) fn query_tx_summaries(filter_tx: Option<&str>, last: Option<usize>) -
         let Some(tx) = extract_tx(&v) else {
             continue;
         };
-        if let Some(filter) = filter_tx {
-            if tx != filter {
-                continue;
-            }
+        if let Some(filter) = filter_tx
+            && tx != filter
+        {
+            continue;
         }
         let ts = v.get("timestamp").and_then(Value::as_u64).unwrap_or(0);
         let result = v.get("result").and_then(Value::as_str).unwrap_or("");

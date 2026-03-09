@@ -64,10 +64,7 @@ pub(in crate::commands::dashboard) async fn get_audit(Query(q): Query<AuditQuery
     }
     let audit_path = audit_file_path();
 
-    let mut entries = match read_audit_tail(&audit_path, 2 * 1024 * 1024, 5000) {
-        Ok(v) => v,
-        Err(_) => Vec::new(),
-    };
+    let mut entries = read_audit_tail(&audit_path, 2 * 1024 * 1024, 5000).unwrap_or_default();
 
     if let Some(from) = q.from {
         entries.retain(|e| e.timestamp >= from);
@@ -81,15 +78,15 @@ pub(in crate::commands::dashboard) async fn get_audit(Query(q): Query<AuditQuery
         let action = q.action.as_deref().map(|s| s.to_ascii_lowercase());
         let result = q.result.as_deref().map(|s| s.to_ascii_lowercase());
         entries.retain(|e| {
-            if let Some(a) = &action {
-                if e.action.to_ascii_lowercase() != *a {
-                    return false;
-                }
+            if let Some(a) = &action
+                && e.action.to_ascii_lowercase() != *a
+            {
+                return false;
             }
-            if let Some(r) = &result {
-                if e.result.to_ascii_lowercase() != *r {
-                    return false;
-                }
+            if let Some(r) = &result
+                && e.result.to_ascii_lowercase() != *r
+            {
+                return false;
             }
             if let Some(s) = &search {
                 let hay = format!(
@@ -147,7 +144,7 @@ pub(in crate::commands::dashboard) async fn get_audit(Query(q): Query<AuditQuery
 }
 
 pub(in crate::commands::dashboard) fn latest_audit_entries(limit: usize) -> Vec<AuditEntry> {
-    read_audit_tail(&audit_file_path(), 2 * 1024 * 1024, limit.max(1).min(500)).unwrap_or_default()
+    read_audit_tail(&audit_file_path(), 2 * 1024 * 1024, limit.clamp(1, 500)).unwrap_or_default()
 }
 
 pub(in crate::commands::dashboard) fn audit_entry_count() -> usize {

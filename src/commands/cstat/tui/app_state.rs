@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::widgets::{ListState, TableState};
 
@@ -87,15 +87,15 @@ impl App {
             return;
         }
         let items = self.issue_items();
-        if let Some(idx) = self.issues_state.selected() {
-            if let Some((_, Some(path))) = items.get(idx) {
-                self.show_confirm = Some(path.clone());
-                self.message = None;
-            }
+        if let Some(idx) = self.issues_state.selected()
+            && let Some((_, Some(path))) = items.get(idx)
+        {
+            self.show_confirm = Some(path.clone());
+            self.message = None;
         }
     }
 
-    pub(super) fn remove_from_issues(&mut self, path: &PathBuf) {
+    pub(super) fn remove_from_issues(&mut self, path: &Path) {
         let p = path.to_string_lossy().into_owned();
         self.report.issues.empty.retain(|x| x != &p);
         self.report.issues.large.retain(|(x, _)| x != &p);

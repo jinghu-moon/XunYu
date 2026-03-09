@@ -107,7 +107,7 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
 }
 
 pub(super) fn flag_takes_value(subcmd: &str, subsub: Option<&str>, flag: &str) -> bool {
-    value_flags_for(subcmd, subsub).iter().any(|f| *f == flag)
+    value_flags_for(subcmd, subsub).contains(&flag)
 }
 
 pub(super) fn value_candidates(

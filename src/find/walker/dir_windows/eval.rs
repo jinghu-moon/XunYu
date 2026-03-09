@@ -1,6 +1,7 @@
 use super::entry::FastEntry;
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn evaluate_entry_fast(
     dir: &Path,
     entry: &FastEntry,

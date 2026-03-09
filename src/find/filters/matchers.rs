@@ -29,15 +29,15 @@ pub(crate) fn depth_filter_match(filter: Option<&DepthFilter>, depth: i32) -> bo
     let Some(filter) = filter else {
         return true;
     };
-    if let Some(min) = filter.min {
-        if depth < min {
-            return false;
-        }
+    if let Some(min) = filter.min
+        && depth < min
+    {
+        return false;
     }
-    if let Some(max) = filter.max {
-        if depth > max {
-            return false;
-        }
+    if let Some(max) = filter.max
+        && depth > max
+    {
+        return false;
     }
     true
 }

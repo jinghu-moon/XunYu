@@ -168,22 +168,22 @@ pub(crate) fn cmd_diff(args: DiffCmd) -> CliResult {
         .map_err(|e| CliError::new(1, format!("failed to read '{}': {e}", args.new)))?;
 
     // 4.5 UTF-8 验证：非 --text 模式下，非 UTF-8 文件视为 Binary
-    if !args.text {
-        if std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err() {
-            let (actual_algorithm, _) = diff::line::map_algorithm(algorithm);
-            let result = diff::types::DiffResult {
-                kind: diff::types::DiffResultKind::Binary,
-                stats: diff::types::DiffStats::zero(diff::types::StatsUnit::Line),
-                hunks: vec![],
-                actual_algorithm,
-                identical_with_filters: false,
-            };
-            match args.format.as_str() {
-                "json" => print_json(&result),
-                "text" | _ => print_text(&result, &args.old, &args.new, algorithm),
-            }
-            return Ok(());
+    if !args.text
+        && (std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err())
+    {
+        let (actual_algorithm, _) = diff::line::map_algorithm(algorithm);
+        let result = diff::types::DiffResult {
+            kind: diff::types::DiffResultKind::Binary,
+            stats: diff::types::DiffStats::zero(diff::types::StatsUnit::Line),
+            hunks: vec![],
+            actual_algorithm,
+            identical_with_filters: false,
+        };
+        match args.format.as_str() {
+            "json" => print_json(&result),
+            _ => print_text(&result, &args.old, &args.new, algorithm),
         }
+        return Ok(());
     }
 
     let old_text = String::from_utf8_lossy(&old_bytes);
@@ -219,7 +219,7 @@ pub(crate) fn cmd_diff(args: DiffCmd) -> CliResult {
     // 7. 输出
     match args.format.as_str() {
         "json" => print_json(&result),
-        "text" | _ => print_text(&result, &args.old, &args.new, algorithm),
+        _ => print_text(&result, &args.old, &args.new, algorithm),
     }
 
     Ok(())

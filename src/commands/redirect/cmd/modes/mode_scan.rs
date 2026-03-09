@@ -264,13 +264,13 @@ pub(in super::super) fn ensure_source_dir(source: &Path, apply_mode: bool) -> Cl
     }
     if !source.exists() {
         return Err(err2(
-            &format!("Source directory not found: {}", source.display()),
+            format!("Source directory not found: {}", source.display()),
             &["Hint: Check the path exists, or omit [source] to use the current directory."],
         ));
     }
     if !source.is_dir() {
         return Err(err2(
-            &format!("Source must be a directory: {}", source.display()),
+            format!("Source must be a directory: {}", source.display()),
             &["Fix: Provide a directory path (not a file)."],
         ));
     }

@@ -104,19 +104,19 @@ fn split_vue_sections<'a>(content: &'a [u8]) -> Vec<(&'static LangRules, &'a [u8
         let rest = &content[lt..];
         let mut matched = false;
         for &(open, rules, close) in tags {
-            if rest.starts_with(open) {
-                if let Some(gt) = memchr(b'>', rest) {
-                    let from = lt + gt + 1;
-                    if let Some(cp) = memmem::find(&content[from..], close) {
-                        out.push((rules, &content[from..from + cp]));
-                        pos = from + cp + close.len();
-                    } else {
-                        out.push((rules, &content[from..]));
-                        pos = content.len();
-                    }
-                    matched = true;
-                    break;
+            if rest.starts_with(open)
+                && let Some(gt) = memchr(b'>', rest)
+            {
+                let from = lt + gt + 1;
+                if let Some(cp) = memmem::find(&content[from..], close) {
+                    out.push((rules, &content[from..from + cp]));
+                    pos = from + cp + close.len();
+                } else {
+                    out.push((rules, &content[from..]));
+                    pos = content.len();
                 }
+                matched = true;
+                break;
             }
         }
         if !matched {
@@ -171,48 +171,47 @@ fn classify_line(line: &[u8], state: &mut ScanState, rules: &LangRules, stat: &m
     }
 
     // Line comment
-    if let Some(lc) = rules.line_comment {
-        if trimmed.starts_with(lc.as_bytes()) {
-            stat.comment += 1;
-            return;
-        }
+    if let Some(lc) = rules.line_comment
+        && trimmed.starts_with(lc.as_bytes())
+    {
+        stat.comment += 1;
+        return;
     }
 
     // Block comment start (primary)
-    if let (Some(bs), Some(be)) = (rules.block_start, rules.block_end) {
-        if trimmed.starts_with(bs.as_bytes()) {
-            let after = &trimmed[bs.len()..];
-            if memmem::find(after, be.as_bytes()).is_some() {
-                stat.comment += 1;
-            } else {
-                *state = ScanState::BlockComment;
-                stat.comment += 1;
-            }
-            return;
+    if let (Some(bs), Some(be)) = (rules.block_start, rules.block_end)
+        && trimmed.starts_with(bs.as_bytes())
+    {
+        let after = &trimmed[bs.len()..];
+        if memmem::find(after, be.as_bytes()).is_some() {
+            stat.comment += 1;
+        } else {
+            *state = ScanState::BlockComment;
+            stat.comment += 1;
         }
+        return;
     }
 
     // Block comment start (secondary)
-    if let (Some(bs2), Some(be2)) = (rules.block_start2, rules.block_end2) {
-        if trimmed.starts_with(bs2.as_bytes()) {
-            let after = &trimmed[bs2.len()..];
-            if memmem::find(after, be2.as_bytes()).is_some() {
-                stat.comment += 1;
-            } else {
-                *state = ScanState::BlockComment2;
-                stat.comment += 1;
-            }
-            return;
+    if let (Some(bs2), Some(be2)) = (rules.block_start2, rules.block_end2)
+        && trimmed.starts_with(bs2.as_bytes())
+    {
+        let after = &trimmed[bs2.len()..];
+        if memmem::find(after, be2.as_bytes()).is_some() {
+            stat.comment += 1;
+        } else {
+            *state = ScanState::BlockComment2;
+            stat.comment += 1;
         }
+        return;
     }
 
     // Mid-line block comment open
-    if let (Some(bs), Some(be)) = (rules.block_start, rules.block_end) {
-        if let Some(op) = memmem::find(trimmed, bs.as_bytes()) {
-            if memmem::find(&trimmed[op + bs.len()..], be.as_bytes()).is_none() {
-                *state = ScanState::BlockComment;
-            }
-        }
+    if let (Some(bs), Some(be)) = (rules.block_start, rules.block_end)
+        && let Some(op) = memmem::find(trimmed, bs.as_bytes())
+        && memmem::find(&trimmed[op + bs.len()..], be.as_bytes()).is_none()
+    {
+        *state = ScanState::BlockComment;
     }
 
     stat.code += 1;

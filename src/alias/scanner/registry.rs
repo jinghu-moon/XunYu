@@ -4,10 +4,8 @@ use super::{AppEntry, Source, auto_alias, cache, is_utility_exe};
 
 pub(crate) fn scan_registry(no_cache: bool) -> Vec<AppEntry> {
     let fingerprint = registry_fingerprint();
-    if !no_cache {
-        if let Some(v) = cache::load_source("registry", 24 * 3600, Some(&fingerprint)) {
-            return v;
-        }
+    if !no_cache && let Some(v) = cache::load_source("registry", 24 * 3600, Some(&fingerprint)) {
+        return v;
     }
 
     #[cfg(windows)]
@@ -96,8 +94,7 @@ fn extract_exe_from_display_icon(raw: &str) -> Option<String> {
     if raw.is_empty() {
         return None;
     }
-    let first = if raw.starts_with('"') {
-        let rest = &raw[1..];
+    let first = if let Some(rest) = raw.strip_prefix('"') {
         let end = rest.find('"')?;
         &rest[..end]
     } else {

@@ -16,10 +16,10 @@ impl FileTree {
                 if node.kind == NodeKind::TargetFile && !node.name.to_lowercase().contains(&q) {
                     return;
                 }
-                if node.kind == NodeKind::Dir || node.kind == NodeKind::File {
-                    if !self.subtree_has_match(id, &q) {
-                        return;
-                    }
+                if (node.kind == NodeKind::Dir || node.kind == NodeKind::File)
+                    && !self.subtree_has_match(id, &q)
+                {
+                    return;
                 }
             }
             out.push(id);
@@ -74,10 +74,10 @@ impl FileTree {
 
     pub(crate) fn expand_cursor(&mut self) {
         let visible = self.visible_nodes();
-        if let Some(&id) = visible.get(self.cursor) {
-            if self.nodes[id].kind == NodeKind::Dir {
-                self.nodes[id].expanded = true;
-            }
+        if let Some(&id) = visible.get(self.cursor)
+            && self.nodes[id].kind == NodeKind::Dir
+        {
+            self.nodes[id].expanded = true;
         }
     }
 
@@ -99,10 +99,10 @@ impl FileTree {
 
     pub(crate) fn toggle_expand_cursor(&mut self) {
         let visible = self.visible_nodes();
-        if let Some(&id) = visible.get(self.cursor) {
-            if self.nodes[id].kind == NodeKind::Dir {
-                self.nodes[id].expanded = !self.nodes[id].expanded;
-            }
+        if let Some(&id) = visible.get(self.cursor)
+            && self.nodes[id].kind == NodeKind::Dir
+        {
+            self.nodes[id].expanded = !self.nodes[id].expanded;
         }
     }
 

@@ -21,7 +21,7 @@ fn utf16_le_bytes(s: &str) -> Vec<u8> {
 fn push_basic_record(buf: &mut Vec<u8>, action: u32, name: &str, has_next: bool) {
     let name_bytes = utf16_le_bytes(name);
     let mut len = 12 + name_bytes.len();
-    while len % 4 != 0 {
+    while !len.is_multiple_of(4) {
         len += 1;
     }
     let next = if has_next { len as u32 } else { 0u32 };
@@ -39,7 +39,7 @@ fn push_extended_record(buf: &mut Vec<u8>, action: u32, name: &str, has_next: bo
     let name_bytes = utf16_le_bytes(name);
 
     let mut len = name_off + name_bytes.len();
-    while len % 4 != 0 {
+    while !len.is_multiple_of(4) {
         len += 1;
     }
     let next = if has_next { len as u32 } else { 0u32 };

@@ -113,7 +113,7 @@ pub(super) fn cmd_batch(args: AclBatchCmd) -> CliResult {
         wtr.write_record(["Path", "Error"])
             .map_err(|e| map_acl_err(anyhow::Error::new(e)))?;
         for (p, e) in &errors {
-            wtr.write_record([&p.to_string_lossy().into_owned(), e.as_str()])
+            wtr.write_record([&p.to_string_lossy(), e.as_str()])
                 .map_err(|e| map_acl_err(anyhow::Error::new(e)))?;
         }
         wtr.flush()

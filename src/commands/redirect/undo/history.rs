@@ -12,7 +12,7 @@ pub(super) fn load_audit_entries_for_tx(tx: &str) -> Vec<AuditEntry> {
     };
     let rdr = io::BufReader::new(f);
     let mut out = Vec::new();
-    for line in rdr.lines().flatten() {
+    for line in rdr.lines().map_while(Result::ok) {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else {
             continue;
         };

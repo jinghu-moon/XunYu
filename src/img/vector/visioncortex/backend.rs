@@ -48,6 +48,7 @@ pub(super) fn cluster_backend_from_env() -> ClusterBackend {
     }
 }
 
+#[allow(clippy::field_reassign_with_default)]
 pub(super) fn build_runner_config(
     width: usize,
     height: usize,

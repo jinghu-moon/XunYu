@@ -178,15 +178,11 @@ impl FromStr for ShellExportFormat {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ImportStrategy {
+    #[default]
     Merge,
     Overwrite,
-}
-
-impl Default for ImportStrategy {
-    fn default() -> Self {
-        Self::Merge
-    }
 }
 
 impl FromStr for ImportStrategy {

@@ -47,12 +47,12 @@ pub(crate) fn cmd_proxy_on(args: ProxyOnCmd) -> CliResult {
     if !args.no_test {
         let targets = parse_proxy_targets(Some("proxy"));
         let res = run_proxy_tests_with(&proxy_url, targets, Duration::from_secs(2), 1);
-        let ok = res.get(0).and_then(|(_, r)| r.as_ref().ok()).copied();
+        let ok = res.first().and_then(|(_, r)| r.as_ref().ok()).copied();
         match ok {
             Some(ms) => ui_println!("Proxy connectivity: ✓ (latency: {ms}ms)"),
             None => {
                 let msg = res
-                    .get(0)
+                    .first()
                     .and_then(|(_, r)| r.as_ref().err())
                     .map(|s| s.as_str())
                     .unwrap_or("failed");

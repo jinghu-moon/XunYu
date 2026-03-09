@@ -63,29 +63,28 @@ pub(super) fn apply_plan_item(
         return;
     }
 
-    if let Some(fp) = &it.src_fp {
-        if let Some(cur) = fingerprint_path(&src_path) {
-            if cur.size != fp.size || cur.mtime_ts != fp.mtime_ts {
-                out.push(RedirectResult {
-                    action: "skip".to_string(),
-                    src: it.src.clone(),
-                    dst: it.dst.clone(),
-                    rule: it.rule.clone(),
-                    result: "skipped".to_string(),
-                    reason: "stale".to_string(),
-                });
-                audit_if(
-                    &local_opts,
-                    "redirect_skip",
-                    &src_path.to_string_lossy(),
-                    "cli",
-                    audit_params_redirect(tx, dest.to_string_lossy().as_ref(), is_copy),
-                    "success",
-                    "stale",
-                );
-                return;
-            }
-        }
+    if let Some(fp) = &it.src_fp
+        && let Some(cur) = fingerprint_path(&src_path)
+        && (cur.size != fp.size || cur.mtime_ts != fp.mtime_ts)
+    {
+        out.push(RedirectResult {
+            action: "skip".to_string(),
+            src: it.src.clone(),
+            dst: it.dst.clone(),
+            rule: it.rule.clone(),
+            result: "skipped".to_string(),
+            reason: "stale".to_string(),
+        });
+        audit_if(
+            &local_opts,
+            "redirect_skip",
+            &src_path.to_string_lossy(),
+            "cli",
+            audit_params_redirect(tx, dest.to_string_lossy().as_ref(), is_copy),
+            "success",
+            "stale",
+        );
+        return;
     }
 
     let Some(dest_dir) = dest.parent().map(|p| p.to_path_buf()) else {

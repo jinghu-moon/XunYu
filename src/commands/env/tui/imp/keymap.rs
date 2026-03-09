@@ -39,25 +39,25 @@ pub(super) fn handle_vars_key(app: &mut App, key: KeyCode) -> CliResult {
             }
         }
         KeyCode::Char('e') => {
-            if let Some((name, current)) = app.current_var().map(|v| (v.name, v.raw_value)) {
-                if let Some(value) = prompt_edit_var(&name, &current)? {
-                    app.manager
-                        .set_var(app.scope, &name, &value, false)
-                        .map_err(map_env_err)?;
-                    app.status = format!("updated {}", name);
-                    app.refresh_all();
-                }
+            if let Some((name, current)) = app.current_var().map(|v| (v.name, v.raw_value))
+                && let Some(value) = prompt_edit_var(&name, &current)?
+            {
+                app.manager
+                    .set_var(app.scope, &name, &value, false)
+                    .map_err(map_env_err)?;
+                app.status = format!("updated {}", name);
+                app.refresh_all();
             }
         }
         KeyCode::Char('d') => {
-            if let Some(var) = app.current_var() {
-                if prompt_yes_no(&format!("Delete {}?", var.name))? {
-                    app.manager
-                        .delete_var(app.scope, &var.name)
-                        .map_err(map_env_err)?;
-                    app.status = format!("deleted {}", var.name);
-                    app.refresh_all();
-                }
+            if let Some(var) = app.current_var()
+                && prompt_yes_no(&format!("Delete {}?", var.name))?
+            {
+                app.manager
+                    .delete_var(app.scope, &var.name)
+                    .map_err(map_env_err)?;
+                app.status = format!("deleted {}", var.name);
+                app.refresh_all();
             }
         }
         _ => {}
@@ -86,14 +86,14 @@ pub(super) fn handle_path_key(app: &mut App, key: KeyCode) -> CliResult {
             }
         }
         KeyCode::Char('d') => {
-            if let Some(entry) = app.current_path() {
-                if prompt_yes_no(&format!("Remove PATH entry?\n{}", entry))? {
-                    app.manager
-                        .path_remove(app.scope, &entry)
-                        .map_err(map_env_err)?;
-                    app.status = "PATH removed".to_string();
-                    app.refresh_all();
-                }
+            if let Some(entry) = app.current_path()
+                && prompt_yes_no(&format!("Remove PATH entry?\n{}", entry))?
+            {
+                app.manager
+                    .path_remove(app.scope, &entry)
+                    .map_err(map_env_err)?;
+                app.status = "PATH removed".to_string();
+                app.refresh_all();
             }
         }
         KeyCode::Char('H') => {
@@ -137,14 +137,14 @@ pub(super) fn handle_snapshot_key(app: &mut App, key: KeyCode) -> CliResult {
             app.refresh_all();
         }
         KeyCode::Char('R') => {
-            if let Some(id) = app.current_snapshot_id() {
-                if prompt_yes_no(&format!("Restore snapshot {} ?", id))? {
-                    app.manager
-                        .snapshot_restore(app.scope, Some(&id), false)
-                        .map_err(map_env_err)?;
-                    app.status = format!("restored {}", id);
-                    app.refresh_all();
-                }
+            if let Some(id) = app.current_snapshot_id()
+                && prompt_yes_no(&format!("Restore snapshot {} ?", id))?
+            {
+                app.manager
+                    .snapshot_restore(app.scope, Some(&id), false)
+                    .map_err(map_env_err)?;
+                app.status = format!("restored {}", id);
+                app.refresh_all();
             }
         }
         _ => {}
@@ -228,11 +228,8 @@ pub(super) fn handle_profiles_key(app: &mut App, key: KeyCode) -> CliResult {
 }
 
 pub(super) fn handle_history_key(app: &mut App, key: KeyCode) -> CliResult {
-    match key {
-        KeyCode::Char('u') => {
-            handle_undo(app)?;
-        }
-        _ => {}
+    if let KeyCode::Char('u') = key {
+        handle_undo(app)?;
     }
     Ok(())
 }

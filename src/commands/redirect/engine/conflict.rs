@@ -76,6 +76,7 @@ pub(crate) fn resolve_conflict(
     Some("unsupported_conflict".to_string())
 }
 
+#[allow(clippy::ptr_arg)]
 pub(crate) fn resolve_conflict_with_source(
     tx: &str,
     src_path: &Path,

@@ -30,12 +30,13 @@ pub(super) fn ensure_output_container(path: &Path) -> Result<OutputContainer, Vi
 }
 
 pub(super) fn ensure_parent_dir(path: &Path) -> Result<(), VideoError> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() && !parent.exists() {
-            std::fs::create_dir_all(parent).map_err(|e| VideoError::SpawnFailed {
-                detail: format!("创建输出目录失败: {} ({e})", parent.display()),
-            })?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && !parent.exists()
+    {
+        std::fs::create_dir_all(parent).map_err(|e| VideoError::SpawnFailed {
+            detail: format!("创建输出目录失败: {} ({e})", parent.display()),
+        })?;
     }
     Ok(())
 }

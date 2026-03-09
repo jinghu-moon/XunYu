@@ -74,18 +74,18 @@ pub(super) fn parse_size_filter(expr: &str, is_fuzzy: bool) -> Result<SizeFilter
         });
     }
 
-    if let Some(dash_pos) = s.find('-') {
-        if dash_pos > 0 {
-            let prev = s.as_bytes()[dash_pos - 1] as char;
-            if prev != '>' && prev != '<' && prev != '=' {
-                let (min, max) = parse_range_values(&s)?;
-                return Ok(SizeFilter::Range {
-                    min,
-                    max,
-                    left: RangeBound::Closed,
-                    right: RangeBound::Closed,
-                });
-            }
+    if let Some(dash_pos) = s.find('-')
+        && dash_pos > 0
+    {
+        let prev = s.as_bytes()[dash_pos - 1] as char;
+        if prev != '>' && prev != '<' && prev != '=' {
+            let (min, max) = parse_range_values(&s)?;
+            return Ok(SizeFilter::Range {
+                min,
+                max,
+                left: RangeBound::Closed,
+                right: RangeBound::Closed,
+            });
         }
     }
 

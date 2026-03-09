@@ -140,7 +140,7 @@ fn parse_csv_import(content: &str) -> EnvResult<ParsedImport> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_reader(content.as_bytes());
-    let headers = reader.headers().map(|h| h.clone()).map_err(EnvError::Csv)?;
+    let headers = reader.headers().cloned().map_err(EnvError::Csv)?;
     let idx_name = headers
         .iter()
         .position(|h| h.eq_ignore_ascii_case("name"))

@@ -3,6 +3,7 @@ use crate::output::CliResult;
 
 use super::super::{ctx, env as env_cmd};
 
+#[allow(clippy::result_large_err)]
 pub(super) fn try_dispatch(cmd: SubCommand) -> Result<CliResult, SubCommand> {
     match cmd {
         SubCommand::Ctx(a) => Ok(ctx::cmd_ctx(a)),

@@ -641,7 +641,7 @@ impl GuardedTaskService {
         let stats = history_stats(&filtered);
         let entries = filtered
             .into_iter()
-            .take(limit.max(1).min(100))
+            .take(limit.clamp(1, 100))
             .collect::<Vec<_>>();
         RecentTaskListResponse { stats, entries }
     }
@@ -659,7 +659,7 @@ impl GuardedTaskService {
         history
             .iter()
             .filter(|entry| entry.status == "failed")
-            .take(limit.max(1).min(100))
+            .take(limit.clamp(1, 100))
             .cloned()
             .collect()
     }
@@ -672,7 +672,7 @@ impl GuardedTaskService {
         history
             .iter()
             .filter(|entry| entry.guarded && entry.phase == "execute")
-            .take(limit.max(1).min(100))
+            .take(limit.clamp(1, 100))
             .cloned()
             .collect()
     }
@@ -685,7 +685,7 @@ impl GuardedTaskService {
         history
             .iter()
             .filter(|entry| is_governance_alert_task(entry))
-            .take(limit.max(1).min(100))
+            .take(limit.clamp(1, 100))
             .cloned()
             .collect()
     }
@@ -1068,8 +1068,10 @@ fn is_governance_alert_task(entry: &RecentTaskRecord) -> bool {
 }
 
 fn history_stats(entries: &[RecentTaskRecord]) -> RecentTaskStats {
-    let mut stats = RecentTaskStats::default();
-    stats.total = entries.len();
+    let mut stats = RecentTaskStats {
+        total: entries.len(),
+        ..RecentTaskStats::default()
+    };
     for entry in entries {
         if entry.status == "succeeded" {
             stats.succeeded += 1;

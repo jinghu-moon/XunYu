@@ -40,8 +40,7 @@ pub(super) fn open_volume_handle(letter: u8) -> Option<windows_sys::Win32::Found
 pub(super) fn enumerate_mft(
     handle: windows_sys::Win32::Foundation::HANDLE,
 ) -> Option<(Vec<MftRecord>, WcharPool)> {
-    let mut records: Vec<MftRecord> = Vec::new();
-    records.reserve(800_000);
+    let mut records: Vec<MftRecord> = Vec::with_capacity(800_000);
     let mut pool = WcharPool::new();
     pool.reserve(800_000 * 12);
 

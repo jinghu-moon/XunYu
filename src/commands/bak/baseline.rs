@@ -12,7 +12,7 @@ pub(crate) struct FileMeta {
 
 pub(crate) fn read_baseline(prev: &Path) -> HashMap<String, FileMeta> {
     let mut old = HashMap::new();
-    if prev.extension().map_or(false, |e| e == "zip") && prev.is_file() {
+    if prev.extension().is_some_and(|e| e == "zip") && prev.is_file() {
         read_baseline_zip(prev, &mut old);
     } else if prev.is_dir() {
         read_baseline_dir(prev, prev, &mut old);
@@ -40,7 +40,7 @@ fn read_baseline_zip(zip_path: &Path, old: &mut HashMap<String, FileMeta>) {
         }
         let modified = entry
             .last_modified()
-            .map(|dt| zip_datetime_to_systime(dt))
+            .map(zip_datetime_to_systime)
             .unwrap_or(SystemTime::UNIX_EPOCH);
         old.insert(
             name,

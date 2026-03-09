@@ -1,3 +1,5 @@
+#![allow(clippy::upper_case_acronyms)]
+
 use std::ffi::{OsString, c_void};
 use std::mem::size_of;
 use std::os::windows::ffi::OsStringExt;

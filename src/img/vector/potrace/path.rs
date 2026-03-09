@@ -154,8 +154,8 @@ pub(super) fn otsu(gray: &[u8]) -> u8 {
     let total = gray.len() as f64;
     let sum_t: f64 = (0..256).map(|i| i as f64 * hist[i] as f64).sum();
     let (mut wb, mut sum_b, mut best, mut thresh) = (0.0f64, 0.0f64, 0.0f64, 128u8);
-    for t in 0..256usize {
-        wb += hist[t] as f64;
+    for (t, count) in hist.iter().enumerate() {
+        wb += *count as f64;
         if wb == 0.0 {
             continue;
         }
@@ -163,7 +163,7 @@ pub(super) fn otsu(gray: &[u8]) -> u8 {
         if wf == 0.0 {
             break;
         }
-        sum_b += t as f64 * hist[t] as f64;
+        sum_b += t as f64 * *count as f64;
         let between = wb * wf * ((sum_b / wb) - (sum_t - sum_b) / wf).powi(2);
         if between > best {
             best = between;

@@ -5,10 +5,10 @@ pub(crate) fn shell_alias_to_shim(alias: &ShellAlias) -> String {
     match classify_mode(&alias.command, alias.mode) {
         ShimKind::Exe { path, fixed_args } => {
             let mut out = format!("type = exe\npath = {}\n", path);
-            if let Some(args) = fixed_args {
-                if !args.trim().is_empty() {
-                    out.push_str(&format!("args = {}\n", args));
-                }
+            if let Some(args) = fixed_args
+                && !args.trim().is_empty()
+            {
+                out.push_str(&format!("args = {}\n", args));
             }
             out
         }
@@ -33,10 +33,10 @@ pub(super) fn shell_alias_to_shim_with_template(alias: &ShellAlias) -> (String, 
     match classify_mode(&alias.command, alias.mode) {
         ShimKind::Exe { path, fixed_args } => {
             let mut out = format!("type = exe\npath = {}\n", path);
-            if let Some(args) = fixed_args {
-                if !args.trim().is_empty() {
-                    out.push_str(&format!("args = {}\n", args));
-                }
+            if let Some(args) = fixed_args
+                && !args.trim().is_empty()
+            {
+                out.push_str(&format!("args = {}\n", args));
             }
             (out, is_gui_exe_path(&path))
         }

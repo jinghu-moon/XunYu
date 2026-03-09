@@ -120,6 +120,7 @@ pub struct Xun {
 
 #[derive(FromArgs)]
 #[argh(subcommand)]
+#[allow(clippy::large_enum_variant, clippy::result_large_err)]
 pub enum SubCommand {
     Acl(AclCmd),
     Init(InitCmd),

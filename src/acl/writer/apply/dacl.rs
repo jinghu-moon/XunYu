@@ -47,9 +47,11 @@ pub(super) fn add_rule(
 
     unsafe {
         // Build EXPLICIT_ACCESS_W with SID trustee
-        let mut trustee = TRUSTEE_W::default();
-        trustee.TrusteeForm = TRUSTEE_IS_SID;
-        trustee.ptstrName = PWSTR(sid.0 as *mut u16);
+        let trustee = TRUSTEE_W {
+            TrusteeForm: TRUSTEE_IS_SID,
+            ptstrName: PWSTR(sid.0 as *mut u16),
+            ..Default::default()
+        };
 
         let ea = EXPLICIT_ACCESS_W {
             grfAccessPermissions: rights_mask,
@@ -293,10 +295,10 @@ pub(super) fn purge_principal(path: &Path, principal: &str) -> Result<u32> {
             };
 
             let sid = PSID(sid_ptr as *mut _);
-            if sid_to_string(sid).ok().as_deref() == Some(&target_str) {
-                if DeleteAce(p_dacl, i as u32).is_ok() {
-                    removed += 1;
-                }
+            if sid_to_string(sid).ok().as_deref() == Some(&target_str)
+                && DeleteAce(p_dacl, i as u32).is_ok()
+            {
+                removed += 1;
             }
         }
 

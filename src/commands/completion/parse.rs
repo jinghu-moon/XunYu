@@ -9,9 +9,8 @@ pub(super) fn split_flag_value(raw: &str) -> Option<(String, String)> {
     if !raw.starts_with("--") {
         return None;
     }
-    let mut iter = raw.splitn(2, '=');
-    let flag = iter.next()?;
-    let value = iter.next()?;
+    let (flag, value) = raw.split_once('=')?;
+
     Some((flag.to_string(), value.to_string()))
 }
 

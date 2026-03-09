@@ -126,10 +126,10 @@ pub(super) fn cached_audit_txs() -> Arc<Vec<String>> {
         let mut out = Vec::new();
         let mut seen = std::collections::HashSet::new();
         for line in content.lines().rev().take(200) {
-            if let Some(tx) = extract_tx_from_line(line) {
-                if seen.insert(tx.clone()) {
-                    out.push(tx);
-                }
+            if let Some(tx) = extract_tx_from_line(line)
+                && seen.insert(tx.clone())
+            {
+                out.push(tx);
             }
         }
         cache.audit_txs = Arc::new(out);
@@ -170,12 +170,11 @@ fn audit_path() -> PathBuf {
 
 #[cfg(feature = "redirect")]
 fn extract_tx_from_line(line: &str) -> Option<String> {
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
-        if let Some(params) = v.get("params_json").or_else(|| v.get("params")) {
-            if let Some(tx) = extract_tx_from_params(params) {
-                return Some(tx);
-            }
-        }
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(line)
+        && let Some(params) = v.get("params_json").or_else(|| v.get("params"))
+        && let Some(tx) = extract_tx_from_params(params)
+    {
+        return Some(tx);
     }
     if let Some(idx) = line.find("\"tx\"") {
         let rest = &line[idx..];

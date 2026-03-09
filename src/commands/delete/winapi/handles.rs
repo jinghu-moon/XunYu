@@ -45,21 +45,21 @@ pub(crate) fn force_close_external_handles(path: &str, snapshot: &[SysHandleEntr
             }
             let _dg = HandleGuard(dup);
 
-            if let Some(p) = path_from_handle(dup) {
-                if p.eq_ignore_ascii_case(&canonical) {
-                    let mut dummy: HANDLE = 0;
-                    if DuplicateHandle(
-                        h_proc,
-                        entry.handle_value as isize,
-                        0,
-                        &mut dummy,
-                        0,
-                        0,
-                        DUPLICATE_CLOSE_SOURCE,
-                    ) != 0
-                    {
-                        closed += 1;
-                    }
+            if let Some(p) = path_from_handle(dup)
+                && p.eq_ignore_ascii_case(&canonical)
+            {
+                let mut dummy: HANDLE = 0;
+                if DuplicateHandle(
+                    h_proc,
+                    entry.handle_value as isize,
+                    0,
+                    &mut dummy,
+                    0,
+                    0,
+                    DUPLICATE_CLOSE_SOURCE,
+                ) != 0
+                {
+                    closed += 1;
                 }
             }
         }
@@ -94,9 +94,8 @@ fn path_from_handle(h: HANDLE) -> Option<String> {
         return None;
     }
     let s = String::from_utf16_lossy(&buf[..len as usize]);
-    Some(if s.starts_with("\\\\?\\") {
-        s[4..].to_string()
-    } else {
-        s
+    Some(match s.strip_prefix("\\\\?\\") {
+        Some(stripped) => stripped.to_string(),
+        None => s,
     })
 }

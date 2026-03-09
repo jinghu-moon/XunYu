@@ -81,19 +81,19 @@ pub(crate) fn try_delete_from_level(
         }
     }
 
-    if start_level <= 3 && (err == 5 || start_level == 3) {
-        if winapi::take_ownership_and_grant(path) {
-            err = winapi::delete_file(path);
-            if err == 0 {
-                return Outcome::OkOwn;
-            }
+    if start_level <= 3 && (err == 5 || start_level == 3) && winapi::take_ownership_and_grant(path)
+    {
+        err = winapi::delete_file(path);
+        if err == 0 {
+            return Outcome::OkOwn;
         }
     }
 
-    if start_level <= 4 && (err == 32 || err == 5 || start_level == 4) {
-        if winapi::mark_delete_on_close(path) {
-            return Outcome::OkNtd;
-        }
+    if start_level <= 4
+        && (err == 32 || err == 5 || start_level == 4)
+        && winapi::mark_delete_on_close(path)
+    {
+        return Outcome::OkNtd;
     }
 
     if start_level <= 5 && (err == 32 || start_level == 5) {
@@ -106,10 +106,8 @@ pub(crate) fn try_delete_from_level(
         }
     }
 
-    if start_level == 6 {
-        if reboot_delete::schedule_delete_on_reboot(path) {
-            return Outcome::OkReboot;
-        }
+    if start_level == 6 && reboot_delete::schedule_delete_on_reboot(path) {
+        return Outcome::OkReboot;
     }
 
     Outcome::Error(winapi::get_last_error())

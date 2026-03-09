@@ -29,8 +29,8 @@ pub(crate) fn cmd_kill(args: KillCmd) -> CliResult {
         ));
     }
 
-    let want_tcp = args.tcp || (!args.tcp && !args.udp);
-    let want_udp = args.udp || (!args.tcp && !args.udp);
+    let want_tcp = args.tcp || !args.udp;
+    let want_udp = args.udp || !args.tcp;
     let mut items = Vec::new();
     if want_tcp {
         items.extend(list_tcp_listeners());

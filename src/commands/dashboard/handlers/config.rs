@@ -177,22 +177,22 @@ fn validate_redirect_profile(p: &config::RedirectProfile) -> Result<(), String> 
             return Err(format!("rules[{idx}].match is empty"));
         }
 
-        if let Some(re) = r.match_cond.regex.as_deref() {
-            if !re.trim().is_empty() {
-                regex::Regex::new(re).map_err(|e| format!("rules[{idx}].regex invalid: {e}"))?;
-            }
+        if let Some(re) = r.match_cond.regex.as_deref()
+            && !re.trim().is_empty()
+        {
+            regex::Regex::new(re).map_err(|e| format!("rules[{idx}].regex invalid: {e}"))?;
         }
-        if let Some(sz) = r.match_cond.size.as_deref() {
-            if !sz.trim().is_empty() {
-                crate::commands::redirect::parse_size_expr(sz)
-                    .map_err(|e| format!("rules[{idx}].size invalid: {e}"))?;
-            }
+        if let Some(sz) = r.match_cond.size.as_deref()
+            && !sz.trim().is_empty()
+        {
+            crate::commands::redirect::parse_size_expr(sz)
+                .map_err(|e| format!("rules[{idx}].size invalid: {e}"))?;
         }
-        if let Some(age) = r.match_cond.age.as_deref() {
-            if !age.trim().is_empty() {
-                crate::commands::redirect::parse_age_expr(age)
-                    .map_err(|e| format!("rules[{idx}].age invalid: {e}"))?;
-            }
+        if let Some(age) = r.match_cond.age.as_deref()
+            && !age.trim().is_empty()
+        {
+            crate::commands::redirect::parse_age_expr(age)
+                .map_err(|e| format!("rules[{idx}].age invalid: {e}"))?;
         }
     }
     Ok(())

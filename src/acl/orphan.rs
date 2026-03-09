@@ -185,10 +185,10 @@ fn purge_by_raw_sid(path: &Path, raw_sid: &str) -> Result<u32> {
             };
 
             let ace_sid = PSID(sid_ptr as *mut _);
-            if sid_to_string(ace_sid).ok().as_deref() == Some(&target_str) {
-                if DeleteAce(p_dacl, i as u32).is_ok() {
-                    removed += 1;
-                }
+            if sid_to_string(ace_sid).ok().as_deref() == Some(&target_str)
+                && DeleteAce(p_dacl, i as u32).is_ok()
+            {
+                removed += 1;
             }
         }
 
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn orphan_filter_logic() {
         // Simulate a snapshot where one entry is orphaned
-        let entries = vec![
+        let entries = [
             {
                 let mut e = orphan_ace("S-1-5-99-12345");
                 e.is_orphan = true;

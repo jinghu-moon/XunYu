@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, c_void};
 use std::os::windows::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use image::{DynamicImage, ImageBuffer, Rgba};
@@ -47,7 +47,7 @@ unsafe fn load_symbol<T>(module: HMODULE, symbol: &'static [u8]) -> Result<T, ()
     Ok(unsafe { std::mem::transmute_copy(&proc) })
 }
 
-fn try_load_library(path: &PathBuf) -> Option<HMODULE> {
+fn try_load_library(path: &Path) -> Option<HMODULE> {
     let normalized = path.to_string_lossy().replace('/', "\\");
     let wide = to_wide_nul(&normalized);
     let mut last_error = 0u32;
@@ -88,16 +88,16 @@ fn try_load_library(path: &PathBuf) -> Option<HMODULE> {
 fn avif_dll_candidates() -> Vec<PathBuf> {
     let mut candidates = Vec::<PathBuf>::new();
 
-    if let Ok(custom) = std::env::var("XUN_AVIF_DLL") {
-        if !custom.trim().is_empty() {
-            candidates.push(PathBuf::from(custom));
-        }
+    if let Ok(custom) = std::env::var("XUN_AVIF_DLL")
+        && !custom.trim().is_empty()
+    {
+        candidates.push(PathBuf::from(custom));
     }
 
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("xun_avif.dll"));
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(parent) = exe.parent()
+    {
+        candidates.push(parent.join("xun_avif.dll"));
     }
 
     if let Ok(cwd) = std::env::current_dir() {

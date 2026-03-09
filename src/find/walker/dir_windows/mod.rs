@@ -39,6 +39,7 @@ mod time;
 use fast_scan::scan_dir_fast;
 use nt_scan::scan_dir_nt;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn scan_dir_windows(
     dir: &Path,
     base_root: &Path,

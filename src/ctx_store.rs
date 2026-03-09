@@ -38,16 +38,12 @@ pub(crate) struct CtxProxy {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub(crate) enum CtxProxyMode {
+    #[default]
     Keep,
     Set,
     Off,
-}
-
-impl Default for CtxProxyMode {
-    fn default() -> Self {
-        Self::Keep
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -70,10 +66,10 @@ pub(crate) struct CtxSession {
 }
 
 pub(crate) fn ctx_store_path() -> PathBuf {
-    if let Ok(path) = env::var(CTX_FILE_ENV) {
-        if !path.trim().is_empty() {
-            return PathBuf::from(path);
-        }
+    if let Ok(path) = env::var(CTX_FILE_ENV)
+        && !path.trim().is_empty()
+    {
+        return PathBuf::from(path);
     }
     let home = env::var("USERPROFILE").unwrap_or_else(|_| ".".into());
     PathBuf::from(home).join(".xun.ctx.json")

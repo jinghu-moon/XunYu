@@ -3,6 +3,7 @@ use super::eval::evaluate_entry_fast;
 use super::time::to_wide_null;
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn scan_dir_fast(
     dir: &Path,
     base_root: &Path,

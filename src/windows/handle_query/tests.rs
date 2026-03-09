@@ -260,11 +260,11 @@ fn modules_match_targets_uses_file_and_dir_rules() {
 
     assert!(modules_match_targets(
         &[r"C:\a\b.txt".to_string()],
-        &[file_target.clone()]
+        std::slice::from_ref(&file_target)
     ));
     assert!(modules_match_targets(
         &[r"C:\x\child\m.dll".to_string()],
-        &[dir_target.clone()]
+        std::slice::from_ref(&dir_target)
     ));
 
     // A file target must match exactly (no "dir prefix" matching).

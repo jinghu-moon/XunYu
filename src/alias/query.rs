@@ -23,10 +23,10 @@ pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
         apply_pretty_table_style(&mut table);
         table.set_header(["Name", "Command", "Mode", "Shells", "Desc"]);
         for (name, alias) in &cfg.alias {
-            if let Some(tag) = &args.tag {
-                if !alias.tags.iter().any(|t| t == tag) {
-                    continue;
-                }
+            if let Some(tag) = &args.tag
+                && !alias.tags.iter().any(|t| t == tag)
+            {
+                continue;
             }
             table.add_row(vec![
                 Cell::new(name),
@@ -48,10 +48,10 @@ pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
         apply_pretty_table_style(&mut table);
         table.set_header(["Name", "Executable", "Args", "AppPaths", "Desc"]);
         for (name, app) in &cfg.app {
-            if let Some(tag) = &args.tag {
-                if !app.tags.iter().any(|t| t == tag) {
-                    continue;
-                }
+            if let Some(tag) = &args.tag
+                && !app.tags.iter().any(|t| t == tag)
+            {
+                continue;
             }
             table.add_row(vec![
                 Cell::new(name),

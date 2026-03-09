@@ -130,6 +130,7 @@ pub(super) fn scan_one_base(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn scan_single_file(
     path: &Path,
     base_root: &Path,

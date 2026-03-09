@@ -138,7 +138,7 @@ fn group_hunks(raw: &[imara_diff::Hunk], ctx: u32, _old_len: u32) -> Vec<Vec<ima
     let threshold = 2 * ctx;
 
     for h in raw {
-        let should_merge = groups.last().map_or(false, |g| {
+        let should_merge = groups.last().is_some_and(|g| {
             let prev = g.last().unwrap();
             h.before.start.saturating_sub(prev.before.end) <= threshold
         });

@@ -95,13 +95,14 @@ pub(super) fn cmd_import(manager: &EnvManager, args: EnvImportCmd) -> CliResult 
             ],
         ));
     }
-    if matches!(strategy, ImportStrategy::Overwrite) && !args.dry_run {
-        if !prompt_confirm(
+    if matches!(strategy, ImportStrategy::Overwrite)
+        && !args.dry_run
+        && !prompt_confirm(
             "Import with overwrite will replace existing variables. Continue?",
             args.yes,
-        )? {
-            return Err(CliError::new(2, "operation canceled"));
-        }
+        )?
+    {
+        return Err(CliError::new(2, "operation canceled"));
     }
     let result = if args.stdin {
         let mut content = String::new();

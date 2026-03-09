@@ -21,10 +21,10 @@ pub(crate) fn take_ownership_and_grant(path: &str) -> bool {
         Some(x) => x,
         None => return false,
     };
-    if let Some(root) = p.ancestors().last() {
-        if parent == root {
-            return false;
-        }
+    if let Some(root) = p.ancestors().last()
+        && parent == root
+    {
+        return false;
     }
 
     unsafe {

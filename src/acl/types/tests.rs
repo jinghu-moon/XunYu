@@ -44,11 +44,13 @@ fn ace_entry_diff_key_stable() {
 
 #[test]
 fn repair_stats_summary() {
-    let mut s = RepairStats::default();
-    s.total = 10;
-    s.owner_ok = 9;
+    let mut s = RepairStats {
+        total: 10,
+        owner_ok: 9,
+        acl_ok: 10,
+        ..RepairStats::default()
+    };
     s.owner_fail.push((PathBuf::from("a"), "err".into()));
-    s.acl_ok = 10;
     assert_eq!(s.total_fail(), 1);
     assert!(s.summary().contains("10"));
 }

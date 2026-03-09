@@ -56,12 +56,12 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, _: LPARAM) -> BOOL {
         return 1;
     }
 
-    if let Ok(mut guard) = WINDOW_MAP.lock() {
-        if let Some(map) = guard.as_mut() {
-            // A process may own multiple windows; keep the first non-empty title.
-            if !map.iter().any(|(p, _)| *p == pid) {
-                map.push((pid, title));
-            }
+    if let Ok(mut guard) = WINDOW_MAP.lock()
+        && let Some(map) = guard.as_mut()
+    {
+        // A process may own multiple windows; keep the first non-empty title.
+        if !map.iter().any(|(p, _)| *p == pid) {
+            map.push((pid, title));
         }
     }
 

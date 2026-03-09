@@ -173,7 +173,7 @@ impl DirectoryWatcher {
 
 impl Drop for DirectoryWatcher {
     fn drop(&mut self) {
-        if self.dir_handle != std::ptr::null_mut() && self.dir_handle != INVALID_HANDLE_VALUE {
+        if !self.dir_handle.is_null() && self.dir_handle != INVALID_HANDLE_VALUE {
             unsafe { CloseHandle(self.dir_handle) };
         }
     }
@@ -198,11 +198,12 @@ fn open_directory_handle(path: &Path) -> io::Result<HANDLE> {
     Ok(h)
 }
 
+#[allow(clippy::manual_c_str_literals)]
 fn resolve_read_dir_changes_exw() -> Option<ReadDirChangesExWFn> {
     unsafe {
         let mod_name = to_wide_str("kernel32.dll");
         let h = GetModuleHandleW(mod_name.as_ptr());
-        if h == std::ptr::null_mut() {
+        if h.is_null() {
             return None;
         }
         let proc = GetProcAddress(h, b"ReadDirectoryChangesExW\0".as_ptr());

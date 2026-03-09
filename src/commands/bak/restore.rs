@@ -34,14 +34,14 @@ pub(crate) fn cmd_bak_restore(
     }
 
     let file = args.file.as_deref().map(PathBuf::from);
-    if let Some(ref rel) = file {
-        if !is_safe_rel_path(rel) {
-            return Err(CliError::with_details(
-                2,
-                format!("Unsafe restore path: {}", rel.display()),
-                &["Fix: Pass a relative path without '..' (e.g. src/main.rs)."],
-            ));
-        }
+    if let Some(ref rel) = file
+        && !is_safe_rel_path(rel)
+    {
+        return Err(CliError::with_details(
+            2,
+            format!("Unsafe restore path: {}", rel.display()),
+            &["Fix: Pass a relative path without '..' (e.g. src/main.rs)."],
+        ));
     }
 
     if src.is_dir() {
@@ -92,10 +92,10 @@ fn restore_from_dir(
     if let Some(rel) = file {
         let src = src_dir.join(rel);
         let dst = dest_root.join(rel);
-        if let Some(p) = dst.parent() {
-            if !dry_run {
-                let _ = fs::create_dir_all(p);
-            }
+        if let Some(p) = dst.parent()
+            && !dry_run
+        {
+            let _ = fs::create_dir_all(p);
         }
         if dry_run {
             ui_println!("DRY RUN: would restore {}", rel.display());
@@ -116,10 +116,10 @@ fn restore_from_dir(
             } else {
                 let rel = p.strip_prefix(base).unwrap_or(&p);
                 let dst = dest_root.join(rel);
-                if let Some(parent) = dst.parent() {
-                    if !dry_run {
-                        let _ = fs::create_dir_all(parent);
-                    }
+                if let Some(parent) = dst.parent()
+                    && !dry_run
+                {
+                    let _ = fs::create_dir_all(parent);
                 }
                 if dry_run {
                     ui_println!("DRY RUN: would restore {}", rel.display());
@@ -160,17 +160,17 @@ fn restore_from_zip(
         if name.is_empty() {
             continue;
         }
-        if let Some(ref w) = want {
-            if &name != w {
-                continue;
-            }
+        if let Some(ref w) = want
+            && &name != w
+        {
+            continue;
         }
         let rel = PathBuf::from(name.replace('/', "\\"));
         let dst = dest_root.join(&rel);
-        if let Some(parent) = dst.parent() {
-            if !dry_run {
-                let _ = fs::create_dir_all(parent);
-            }
+        if let Some(parent) = dst.parent()
+            && !dry_run
+        {
+            let _ = fs::create_dir_all(parent);
         }
         if dry_run {
             ui_println!("DRY RUN: would restore {}", rel.display());

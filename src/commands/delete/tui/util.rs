@@ -11,8 +11,8 @@ pub(super) fn calc_scroll(cursor: usize, height: usize, total: usize) -> usize {
     if cursor + margin >= total {
         return total.saturating_sub(height);
     }
-    let lo = cursor.saturating_sub(height.saturating_sub(margin + 1));
-    lo
+
+    cursor.saturating_sub(height.saturating_sub(margin + 1))
 }
 
 pub(super) fn centered_rect(width: u16, height: u16, r: Rect) -> Rect {

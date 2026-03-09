@@ -185,18 +185,18 @@ pub fn calc_scaled_dims(
 ) -> (u32, u32) {
     let (mut w, mut h) = (orig_w, orig_h);
 
-    if let Some(mw) = max_w {
-        if w > mw {
-            h = (h as f64 * mw as f64 / w as f64).round() as u32;
-            w = mw;
-        }
+    if let Some(mw) = max_w
+        && w > mw
+    {
+        h = (h as f64 * mw as f64 / w as f64).round() as u32;
+        w = mw;
     }
 
-    if let Some(mh) = max_h {
-        if h > mh {
-            w = (w as f64 * mh as f64 / h as f64).round() as u32;
-            h = mh;
-        }
+    if let Some(mh) = max_h
+        && h > mh
+    {
+        w = (w as f64 * mh as f64 / h as f64).round() as u32;
+        h = mh;
     }
 
     (w.max(1), h.max(1))

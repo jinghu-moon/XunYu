@@ -7,6 +7,7 @@ use super::super::super::fs_utils::sha256_file;
 use super::super::audit::audit_params_redirect;
 use super::super::types::{RedirectOptions, RedirectResult};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn handle_hash_dedup(
     tx: &str,
     on_conflict: &RedirectOnConflict,
@@ -35,45 +36,45 @@ pub(super) fn handle_hash_dedup(
             None
         }
     };
-    if let (Some(a), Some(b)) = (src_hash, dst_hash) {
-        if a == b {
-            if opts.copy {
-                out.push(RedirectResult {
-                    action: "skip".to_string(),
-                    src: src_path.to_string_lossy().to_string(),
-                    dst: dest.to_string_lossy().to_string(),
-                    rule: rule_name.to_string(),
-                    result: "dry_run".to_string(),
-                    reason: "hash_dedup_same".to_string(),
-                });
-                audit_log(
-                    "redirect_skip",
-                    &src_path.to_string_lossy(),
-                    "cli",
-                    audit_params_redirect(tx, dest.to_string_lossy().as_ref(), opts.copy),
-                    "success",
-                    "dry_run",
-                );
-            } else {
-                out.push(RedirectResult {
-                    action: "dedup".to_string(),
-                    src: src_path.to_string_lossy().to_string(),
-                    dst: dest.to_string_lossy().to_string(),
-                    rule: rule_name.to_string(),
-                    result: "dry_run".to_string(),
-                    reason: "hash_dedup_same_deleted_src".to_string(),
-                });
-                audit_log(
-                    "redirect_dedup",
-                    &src_path.to_string_lossy(),
-                    "cli",
-                    audit_params_redirect(tx, dest.to_string_lossy().as_ref(), opts.copy),
-                    "success",
-                    "dry_run",
-                );
-            }
-            return true;
+    if let (Some(a), Some(b)) = (src_hash, dst_hash)
+        && a == b
+    {
+        if opts.copy {
+            out.push(RedirectResult {
+                action: "skip".to_string(),
+                src: src_path.to_string_lossy().to_string(),
+                dst: dest.to_string_lossy().to_string(),
+                rule: rule_name.to_string(),
+                result: "dry_run".to_string(),
+                reason: "hash_dedup_same".to_string(),
+            });
+            audit_log(
+                "redirect_skip",
+                &src_path.to_string_lossy(),
+                "cli",
+                audit_params_redirect(tx, dest.to_string_lossy().as_ref(), opts.copy),
+                "success",
+                "dry_run",
+            );
+        } else {
+            out.push(RedirectResult {
+                action: "dedup".to_string(),
+                src: src_path.to_string_lossy().to_string(),
+                dst: dest.to_string_lossy().to_string(),
+                rule: rule_name.to_string(),
+                result: "dry_run".to_string(),
+                reason: "hash_dedup_same_deleted_src".to_string(),
+            });
+            audit_log(
+                "redirect_dedup",
+                &src_path.to_string_lossy(),
+                "cli",
+                audit_params_redirect(tx, dest.to_string_lossy().as_ref(), opts.copy),
+                "success",
+                "dry_run",
+            );
         }
+        return true;
     }
 
     false

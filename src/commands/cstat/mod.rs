@@ -8,7 +8,7 @@ pub(crate) mod render;
 pub(crate) mod tui;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use ignore::WalkBuilder;
@@ -82,14 +82,14 @@ pub(crate) fn cmd_cstat(args: CstatCmd) -> CliResult {
         let stat = scan_bytes(&content, &rules);
 
         // Large file check
-        if let Some(threshold) = large_threshold {
-            if stat.total_lines() > threshold as u32 {
-                issues
-                    .lock()
-                    .unwrap()
-                    .large
-                    .push((path_str.clone(), stat.total_lines()));
-            }
+        if let Some(threshold) = large_threshold
+            && stat.total_lines() > threshold as u32
+        {
+            issues
+                .lock()
+                .unwrap()
+                .large
+                .push((path_str.clone(), stat.total_lines()));
         }
 
         // Accumulate
@@ -195,15 +195,15 @@ fn collect_files(args: &CstatCmd) -> CliResult<Vec<PathBuf>> {
     let files: Vec<PathBuf> = builder
         .build()
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map_or(false, |t| t.is_file()))
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
         .map(|e| e.into_path())
         .filter(|p| {
             if exts.is_empty() {
                 p.extension()
                     .and_then(|e| e.to_str())
-                    .map_or(false, |e| rules_for_ext(e).is_some())
+                    .is_some_and(|e| rules_for_ext(e).is_some())
             } else {
-                p.extension().and_then(|e| e.to_str()).map_or(false, |e| {
+                p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
                     let lower = e.to_ascii_lowercase();
                     exts.iter().any(|f| f == &lower)
                 })
@@ -216,7 +216,7 @@ fn collect_files(args: &CstatCmd) -> CliResult<Vec<PathBuf>> {
 
 // ─── Temp file detection ─────────────────────────────────────────────────────
 
-fn is_tmp_file(path: &PathBuf) -> bool {
+fn is_tmp_file(path: &Path) -> bool {
     let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {

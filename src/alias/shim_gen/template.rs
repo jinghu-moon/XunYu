@@ -98,10 +98,10 @@ fn shim_template_candidates() -> Vec<PathBuf> {
             .join("alias_shim.exe"),
     );
 
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            out.push(dir.join("alias-shim.exe"));
-        }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        out.push(dir.join("alias-shim.exe"));
     }
     out
 }

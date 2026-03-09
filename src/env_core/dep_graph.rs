@@ -5,6 +5,11 @@ use regex::Regex;
 
 use super::types::{EnvDepTree, EnvError, EnvResult, EnvScope, EnvVar};
 
+type DepDisplayNames = HashMap<String, String>;
+type DepAdjacency = HashMap<String, Vec<String>>;
+type DepPresent = HashSet<String>;
+type DepMaps = (DepDisplayNames, DepAdjacency, DepPresent);
+
 lazy_static! {
     static ref VAR_REF_RE: Regex =
         Regex::new(r"%([A-Za-z0-9_]+)%").expect("dependency regex must be valid");
@@ -75,6 +80,7 @@ pub fn build_tree(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_tree(
     current: &str,
     prefix: &str,
@@ -137,13 +143,7 @@ fn walk_tree(
     }
 }
 
-fn build_maps(
-    vars: &[EnvVar],
-) -> (
-    HashMap<String, String>,
-    HashMap<String, Vec<String>>,
-    HashSet<String>,
-) {
+fn build_maps(vars: &[EnvVar]) -> DepMaps {
     let mut display_names = HashMap::<String, String>::new();
     let mut adjacency = HashMap::<String, Vec<String>>::new();
     let mut present = HashSet::<String>::new();

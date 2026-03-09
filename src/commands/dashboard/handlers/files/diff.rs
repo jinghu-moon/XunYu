@@ -108,18 +108,18 @@ pub(in crate::commands::dashboard) async fn diff_handler(
 
     // 3.6 UTF-8 验证：非 force_text 模式下，非 UTF-8 文件视为 Binary
     let force_text = req.force_text.unwrap_or(false);
-    if !force_text {
-        if std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err() {
-            let (actual_algorithm, _) = crate::diff::line::map_algorithm(algorithm);
-            let binary_result = crate::diff::types::DiffResult {
-                kind: crate::diff::types::DiffResultKind::Binary,
-                stats: crate::diff::types::DiffStats::zero(crate::diff::types::StatsUnit::Line),
-                hunks: vec![],
-                actual_algorithm,
-                identical_with_filters: false,
-            };
-            return Json(binary_result).into_response();
-        }
+    if !force_text
+        && (std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err())
+    {
+        let (actual_algorithm, _) = crate::diff::line::map_algorithm(algorithm);
+        let binary_result = crate::diff::types::DiffResult {
+            kind: crate::diff::types::DiffResultKind::Binary,
+            stats: crate::diff::types::DiffStats::zero(crate::diff::types::StatsUnit::Line),
+            hunks: vec![],
+            actual_algorithm,
+            identical_with_filters: false,
+        };
+        return Json(binary_result).into_response();
     }
 
     // 4. 解析剩余参数

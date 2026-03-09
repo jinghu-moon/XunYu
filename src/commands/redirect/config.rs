@@ -59,24 +59,24 @@ pub(crate) fn validate_profile(p: &RedirectProfile) -> Result<(), String> {
             ));
         }
 
-        if let Some(re) = r.match_cond.regex.as_deref() {
-            if !re.trim().is_empty() {
-                Regex::new(re).map_err(|e| format!("Redirect rule[{idx}] regex invalid: {e}"))?;
-            }
+        if let Some(re) = r.match_cond.regex.as_deref()
+            && !re.trim().is_empty()
+        {
+            Regex::new(re).map_err(|e| format!("Redirect rule[{idx}] regex invalid: {e}"))?;
         }
 
-        if let Some(sz) = r.match_cond.size.as_deref() {
-            if !sz.trim().is_empty() {
-                super::matcher::parse_size_expr(sz)
-                    .map_err(|e| format!("Redirect rule[{idx}] size invalid: {e}"))?;
-            }
+        if let Some(sz) = r.match_cond.size.as_deref()
+            && !sz.trim().is_empty()
+        {
+            super::matcher::parse_size_expr(sz)
+                .map_err(|e| format!("Redirect rule[{idx}] size invalid: {e}"))?;
         }
 
-        if let Some(age) = r.match_cond.age.as_deref() {
-            if !age.trim().is_empty() {
-                super::matcher::parse_age_expr(age)
-                    .map_err(|e| format!("Redirect rule[{idx}] age invalid: {e}"))?;
-            }
+        if let Some(age) = r.match_cond.age.as_deref()
+            && !age.trim().is_empty()
+        {
+            super::matcher::parse_age_expr(age)
+                .map_err(|e| format!("Redirect rule[{idx}] age invalid: {e}"))?;
         }
     }
 
@@ -108,7 +108,7 @@ fn validate_dest_template(dest: &str) -> Result<(), String> {
         };
         let end_idx = i + end;
         let token = &dest[i..=end_idx];
-        if !allowed.iter().any(|a| *a == token) {
+        if !allowed.contains(&token) {
             return Err(format!("unknown template token: {token}"));
         }
         i = end_idx + 1;

@@ -6,10 +6,8 @@ use super::{AppEntry, Source, auto_alias, cache, is_utility_exe};
 
 pub(crate) fn scan_startmenu(no_cache: bool) -> Vec<AppEntry> {
     let fingerprint = startmenu_fingerprint();
-    if !no_cache {
-        if let Some(v) = cache::load_source("startmenu", 24 * 3600, Some(&fingerprint)) {
-            return v;
-        }
+    if !no_cache && let Some(v) = cache::load_source("startmenu", 24 * 3600, Some(&fingerprint)) {
+        return v;
     }
 
     #[cfg(windows)]

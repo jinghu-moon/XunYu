@@ -39,10 +39,10 @@ pub(crate) fn has_cmd(cmd: &str) -> bool {
     let cache = CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
 
     let key = cmd.trim().to_ascii_lowercase();
-    if let Ok(map) = cache.lock() {
-        if let Some(v) = map.get(&key) {
-            return *v;
-        }
+    if let Ok(map) = cache.lock()
+        && let Some(v) = map.get(&key)
+    {
+        return *v;
     }
 
     let ok = Command::new("where")

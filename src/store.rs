@@ -34,6 +34,7 @@ impl Lock {
             match fs::OpenOptions::new()
                 .write(true)
                 .create(true)
+                .truncate(false)
                 .share_mode(0)
                 .open(path)
             {

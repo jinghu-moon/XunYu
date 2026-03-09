@@ -21,6 +21,7 @@ pub(super) fn ok<T: Serialize>(data: T) -> Json<ApiSuccess<T>> {
     Json(ApiSuccess { ok: true, data })
 }
 
+#[allow(clippy::result_large_err)]
 pub(super) fn resolve_scope(
     value: Option<String>,
     default: EnvScope,

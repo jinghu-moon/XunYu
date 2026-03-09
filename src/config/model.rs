@@ -95,7 +95,9 @@ pub(crate) struct RedirectProfile {
 #[cfg(feature = "redirect")]
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
+#[derive(Default)]
 pub(crate) enum RedirectOnConflict {
+    #[default]
     RenameNew,
     RenameDate,
     RenameExisting,
@@ -125,9 +127,14 @@ impl RedirectOnConflict {
 #[cfg(feature = "redirect")]
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
+#[derive(Default)]
 pub(crate) enum RedirectUnmatched {
+    #[default]
     Skip,
-    Archive { age_expr: String, dest: String },
+    Archive {
+        age_expr: String,
+        dest: String,
+    },
 }
 
 #[cfg(feature = "redirect")]

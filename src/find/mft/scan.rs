@@ -181,15 +181,16 @@ pub(crate) fn try_scan_mft(
                 {
                     should_output = false;
                 }
-                if !is_dir && should_output {
-                    if !size_filters_match(&filters.size_filters, size.unwrap_or(0)) {
-                        should_output = false;
-                    }
+                if !is_dir
+                    && should_output
+                    && !size_filters_match(&filters.size_filters, size.unwrap_or(0))
+                {
+                    should_output = false;
                 }
-                if should_output {
-                    if !passes_empty_filter_mft(filters, is_dir, rec.file_ref, size, &children) {
-                        should_output = false;
-                    }
+                if should_output
+                    && !passes_empty_filter_mft(filters, is_dir, rec.file_ref, size, &children)
+                {
+                    should_output = false;
                 }
 
                 if should_output {

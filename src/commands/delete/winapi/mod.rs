@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, clippy::upper_case_acronyms)]
 
 mod delete;
 mod elevation;

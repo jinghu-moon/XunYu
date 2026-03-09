@@ -11,10 +11,11 @@ pub(crate) enum SizeOp {
     Eq,
 }
 
-static SIZE_EXPR_CACHE: OnceLock<Mutex<HashMap<String, Result<(SizeOp, u64), String>>>> =
-    OnceLock::new();
-static AGE_EXPR_CACHE: OnceLock<Mutex<HashMap<String, Result<(SizeOp, u64), String>>>> =
-    OnceLock::new();
+type ParsedExpr = Result<(SizeOp, u64), String>;
+type ExprCache = OnceLock<Mutex<HashMap<String, ParsedExpr>>>;
+
+static SIZE_EXPR_CACHE: ExprCache = OnceLock::new();
+static AGE_EXPR_CACHE: ExprCache = OnceLock::new();
 
 fn parse_size_expr_uncached(s: &str) -> Result<(SizeOp, u64), String> {
     let (op, rest) = if let Some(r) = s.strip_prefix(">=") {

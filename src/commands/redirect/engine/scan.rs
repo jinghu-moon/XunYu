@@ -104,7 +104,7 @@ pub(crate) fn collect_paths_recursive(
                 continue;
             }
             if is_dir {
-                if depth + 1 <= max_depth {
+                if depth < max_depth {
                     stack.push((p, depth + 1));
                 }
             } else {

@@ -51,7 +51,7 @@ pub(crate) fn cmd_bak_list(root: &Path, cfg: &BakConfig) -> CliResult {
                 .unwrap_or(0);
             let (is_zip, size) = if path.is_dir() {
                 (false, dir_size(&path))
-            } else if path.extension().map_or(false, |e| e == "zip") {
+            } else if path.extension().is_some_and(|e| e == "zip") {
                 (true, meta.as_ref().map(|m| m.len()).unwrap_or(0))
             } else {
                 continue;

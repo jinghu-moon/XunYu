@@ -107,7 +107,7 @@ pub fn resolve_sid(sid: PSID) -> Result<String> {
         return Ok("(null SID)".to_string());
     }
     unsafe {
-        if IsValidSid(sid).as_bool() == false {
+        if !IsValidSid(sid).as_bool() {
             return Ok("(invalid SID)".to_string());
         }
 
@@ -215,12 +215,11 @@ fn collect_children(dir: &Path, recursive: bool, out: &mut Vec<PathBuf>) -> Resu
             continue;
         }
         out.push(child_path.clone());
-        if recursive {
-            if let Ok(meta) = entry.metadata() {
-                if meta.is_dir() {
-                    collect_children(&child_path, true, out)?;
-                }
-            }
+        if recursive
+            && let Ok(meta) = entry.metadata()
+            && meta.is_dir()
+        {
+            collect_children(&child_path, true, out)?;
         }
     }
     Ok(())

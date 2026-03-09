@@ -123,6 +123,7 @@ struct FileSearchRunStats {
 }
 
 #[cfg(feature = "diff")]
+#[allow(clippy::too_many_arguments)]
 fn search_dir_parallel(
     dir: std::path::PathBuf,
     needle: &str,

@@ -236,16 +236,16 @@ pub(super) fn undo_move_one(
         };
     }
 
-    if let Some(parent) = restore_target.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            return UndoResult {
-                action: "undo_move".to_string(),
-                src: current_dst.to_string(),
-                dst: restore_target.to_string_lossy().to_string(),
-                result: "failed".to_string(),
-                reason: format!("mkdir_failed:{e}"),
-            };
-        }
+    if let Some(parent) = restore_target.parent()
+        && let Err(e) = std::fs::create_dir_all(parent)
+    {
+        return UndoResult {
+            action: "undo_move".to_string(),
+            src: current_dst.to_string(),
+            dst: restore_target.to_string_lossy().to_string(),
+            result: "failed".to_string(),
+            reason: format!("mkdir_failed:{e}"),
+        };
     }
 
     let op = move_file_cross_volume_or_rename(&mut dst_path, &restore_target);

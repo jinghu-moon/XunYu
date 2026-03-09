@@ -54,10 +54,10 @@ fn preprocess_whitespace<'a>(text: &'a str, opts: &WhitespaceOpt) -> Cow<'a, str
         let mut l = Cow::Borrowed(raw_line);
 
         // 剥离行尾 CR
-        if opts.strip_trailing_cr {
-            if let Some(stripped) = l.strip_suffix('\r') {
-                l = Cow::Owned(stripped.to_string());
-            }
+        if opts.strip_trailing_cr
+            && let Some(stripped) = l.strip_suffix('\r')
+        {
+            l = Cow::Owned(stripped.to_string());
         }
 
         // 忽略所有空白（优先级高于 ignore_space_change）

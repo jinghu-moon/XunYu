@@ -13,6 +13,7 @@ pub(super) fn now_unix_ts() -> u64 {
         .as_secs()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn apply_results_and_maybe_exit(
     source_abs: &Path,
     dest_dirs: &[PathBuf],

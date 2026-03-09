@@ -2,7 +2,7 @@
 //
 // File collection using walkdir + dunce.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::output::{CliError, CliResult};
@@ -33,7 +33,7 @@ pub(crate) fn collect_files(
     Ok(files)
 }
 
-fn ext_matches(path: &PathBuf, exts: &[String]) -> bool {
+fn ext_matches(path: &Path, exts: &[String]) -> bool {
     if exts.is_empty() {
         return true;
     }

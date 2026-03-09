@@ -57,10 +57,10 @@ pub(crate) fn parse_selection(input: &str, max: usize) -> Vec<usize> {
             }
             continue;
         }
-        if let Ok(v) = part.parse::<usize>() {
-            if (1..=max).contains(&v) {
-                indices.push(v - 1);
-            }
+        if let Ok(v) = part.parse::<usize>()
+            && (1..=max).contains(&v)
+        {
+            indices.push(v - 1);
         }
     }
     indices.sort_unstable();

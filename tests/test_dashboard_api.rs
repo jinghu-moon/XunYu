@@ -50,7 +50,7 @@ fn http_request(port: u16, method: &str, path: &str, body: Option<&str>) -> (u16
     let req = if body.is_some() {
         format!(
             "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body_str.as_bytes().len(),
+            body_str.len(),
             body_str
         )
     } else {

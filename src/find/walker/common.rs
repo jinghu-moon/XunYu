@@ -84,10 +84,10 @@ pub(super) fn build_rel_path<'a>(prefix: &str, name: &str, buffer: &'a mut Strin
 }
 
 pub(super) fn resolve_base_root(base_raw: &str, base_path: &Path) -> (PathBuf, String) {
-    if base_path.is_file() {
-        if let Some(parent) = base_path.parent() {
-            return (parent.to_path_buf(), parent.to_string_lossy().into_owned());
-        }
+    if base_path.is_file()
+        && let Some(parent) = base_path.parent()
+    {
+        return (parent.to_path_buf(), parent.to_string_lossy().into_owned());
     }
     (base_path.to_path_buf(), base_raw.to_string())
 }

@@ -39,10 +39,10 @@ fn get_volume_info(path: &Path) -> Result<VolumeInfo, u32> {
     let root_key = root_path.to_lowercase();
 
     // Check cache
-    if let Ok(cache) = VOLUME_CAPABILITY_CACHE.read() {
-        if let Some(info) = cache.get(&root_key) {
-            return Ok(*info);
-        }
+    if let Ok(cache) = VOLUME_CAPABILITY_CACHE.read()
+        && let Some(info) = cache.get(&root_key)
+    {
+        return Ok(*info);
     }
 
     // Call GetVolumeInformationW

@@ -158,7 +158,7 @@ impl FuzzyIndex {
             }
             if let Some(fs) = fuzzy_score(&pattern_chars, &item.name_lower) {
                 let boost = cwd.map(|c| cwd_boost(c, &item.entry.path)).unwrap_or(1.0);
-                let combined = fs as f64 * (1.0 + frecency(&item.entry) * FRECENCY_WEIGHT) * boost;
+                let combined = fs * (1.0 + frecency(&item.entry) * FRECENCY_WEIGHT) * boost;
                 scored.push((combined, item.name.clone(), item.entry.clone()));
             }
         }
@@ -276,10 +276,10 @@ pub(crate) fn fuzzy_score(pattern_chars: &[char], text_lower: &str) -> Option<f6
     for (i, c) in text_lower.chars().enumerate() {
         if c == pattern_chars[pi] {
             score += 1.0;
-            if let Some(prev) = last_match {
-                if i == prev + 1 {
-                    score += 1.0;
-                }
+            if let Some(prev) = last_match
+                && i == prev + 1
+            {
+                score += 1.0;
             }
             last_match = Some(i);
             pi += 1;

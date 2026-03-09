@@ -42,16 +42,16 @@ pub fn diff_maps(before: &HashMap<String, String>, after: &HashMap<String, Strin
     }
 
     for (name, old_value) in before {
-        if let Some(new_value) = after.get(name) {
-            if old_value != new_value {
-                result.changed.push(DiffEntry {
-                    name: name.clone(),
-                    kind: DiffChangeKind::Changed,
-                    old_value: Some(old_value.clone()),
-                    new_value: Some(new_value.clone()),
-                    path_diff: diff_path_segments(old_value, new_value),
-                });
-            }
+        if let Some(new_value) = after.get(name)
+            && old_value != new_value
+        {
+            result.changed.push(DiffEntry {
+                name: name.clone(),
+                kind: DiffChangeKind::Changed,
+                old_value: Some(old_value.clone()),
+                new_value: Some(new_value.clone()),
+                path_diff: diff_path_segments(old_value, new_value),
+            });
         }
     }
 

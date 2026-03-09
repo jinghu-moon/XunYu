@@ -26,7 +26,7 @@ pub(crate) fn determine_path_state(
                 if rule.dir_only && !is_dir {
                     continue;
                 }
-                if best_exact.map_or(true, |b| *idx > b) {
+                if best_exact.is_none_or(|b| *idx > b) {
                     best_exact = Some(*idx);
                 }
             }
@@ -40,7 +40,7 @@ pub(crate) fn determine_path_state(
                 if rule.dir_only && !is_dir {
                     continue;
                 }
-                if best_exact.map_or(true, |b| *idx > b) {
+                if best_exact.is_none_or(|b| *idx > b) {
                     best_exact = Some(*idx);
                 }
             }
@@ -104,7 +104,7 @@ fn rule_matches_with_parts(
             if target.is_empty() {
                 false
             } else {
-                rule.regex.as_ref().map_or(false, |re| re.is_match(target))
+                rule.regex.as_ref().is_some_and(|re| re.is_match(target))
             }
         }
     }

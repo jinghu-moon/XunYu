@@ -120,7 +120,7 @@ pub fn encrypt_to_recipients(
 
     let encryptor =
         Encryptor::with_recipients(recipients.iter().map(|r| r.as_ref() as &dyn age::Recipient))
-            .map_err(|e| AgeError::Encrypt(e))?;
+            .map_err(AgeError::Encrypt)?;
 
     let mut writer = encryptor.wrap_output(out_file).map_err(AgeError::Io)?;
 

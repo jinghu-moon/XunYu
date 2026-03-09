@@ -121,28 +121,27 @@ pub(super) fn opt_curves(segs: Vec<Seg>, tol: f64) -> Vec<Seg> {
     let mut result = Vec::new();
     let mut i = 0;
     while i < segs.len() {
-        if i + 1 < segs.len() {
-            if let (Seg::Curve(c1a, c1b, mid), Seg::Curve(_c2a, c2b, end)) =
+        if i + 1 < segs.len()
+            && let (Seg::Curve(c1a, c1b, mid), Seg::Curve(_c2a, c2b, end)) =
                 (&segs[i], &segs[i + 1])
-            {
-                // 检查中间点误差
-                let err = mid.dist(&Pt::new(
-                    0.5 * c1b.x + 0.5 * mid.x,
-                    0.5 * c1b.y + 0.5 * mid.y,
-                ));
-                if err <= tol {
-                    // 合并为单段
-                    let start = if i > 0 {
-                        segs[i - 1].end().clone()
-                    } else {
-                        segs.last().unwrap().end().clone()
-                    };
-                    let nc1 = Pt::new((start.x + c1a.x) / 2.0, (start.y + c1a.y) / 2.0);
-                    let nc2 = Pt::new((c2b.x + end.x) / 2.0, (c2b.y + end.y) / 2.0);
-                    result.push(Seg::Curve(nc1, nc2, end.clone()));
-                    i += 2;
-                    continue;
-                }
+        {
+            // 检查中间点误差
+            let err = mid.dist(&Pt::new(
+                0.5 * c1b.x + 0.5 * mid.x,
+                0.5 * c1b.y + 0.5 * mid.y,
+            ));
+            if err <= tol {
+                // 合并为单段
+                let start = if i > 0 {
+                    segs[i - 1].end().clone()
+                } else {
+                    segs.last().unwrap().end().clone()
+                };
+                let nc1 = Pt::new((start.x + c1a.x) / 2.0, (start.y + c1a.y) / 2.0);
+                let nc2 = Pt::new((c2b.x + end.x) / 2.0, (c2b.y + end.y) / 2.0);
+                result.push(Seg::Curve(nc1, nc2, end.clone()));
+                i += 2;
+                continue;
             }
         }
         result.push(segs[i].clone());

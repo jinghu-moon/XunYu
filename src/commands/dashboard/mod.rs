@@ -44,12 +44,12 @@ impl DashboardState {
         {
             let (event_tx, _) = tokio::sync::broadcast::channel::<String>(256);
             let watch_cmd_tx = spawn_watch_thread(event_tx.clone());
-            return Self {
+            Self {
                 guarded_tasks,
                 recipes,
                 event_tx,
                 watch_cmd_tx,
-            };
+            }
         }
 
         #[cfg(not(feature = "diff"))]
@@ -79,12 +79,12 @@ impl DashboardState {
         {
             let (event_tx, _) = tokio::sync::broadcast::channel::<String>(64);
             let watch_cmd_tx = spawn_watch_thread(event_tx.clone());
-            return Self {
+            Self {
                 guarded_tasks,
                 recipes,
                 event_tx,
                 watch_cmd_tx,
-            };
+            }
         }
 
         #[cfg(not(feature = "diff"))]

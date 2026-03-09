@@ -2,7 +2,7 @@ fn char_equals(a: u8, b: u8, case_sensitive: bool) -> bool {
     if case_sensitive {
         return a == b;
     }
-    a.to_ascii_lowercase() == b.to_ascii_lowercase()
+    a.eq_ignore_ascii_case(&b)
 }
 
 fn is_char_in_range(c: u8, start: u8, end: u8, case_sensitive: bool) -> bool {

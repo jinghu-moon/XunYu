@@ -61,7 +61,7 @@ fn encode_jpeg_auto(
         if let Ok(bytes) = encode_jpeg_turbo(rgb, width, height, quality) {
             return Ok(bytes);
         }
-        return encode_jpeg_moz(rgb, width, height, quality);
+        encode_jpeg_moz(rgb, width, height, quality)
     }
 
     #[cfg(all(feature = "img-moz", not(feature = "img-turbo")))]
@@ -90,7 +90,7 @@ fn encode_jpeg_force_moz(
 
     #[cfg(feature = "img-moz")]
     {
-        return encode_jpeg_moz(rgb, width, height, quality);
+        encode_jpeg_moz(rgb, width, height, quality)
     }
 
     #[cfg(not(feature = "img-moz"))]
@@ -112,7 +112,7 @@ fn encode_jpeg_force_turbo(
 
     #[cfg(feature = "img-turbo")]
     {
-        return encode_jpeg_turbo(rgb, width, height, quality);
+        encode_jpeg_turbo(rgb, width, height, quality)
     }
 
     #[cfg(not(feature = "img-turbo"))]

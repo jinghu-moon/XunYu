@@ -2,7 +2,7 @@
 //
 // TUI mode for batch rename — checkbox selection + confirm + apply.
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -354,7 +354,7 @@ impl App {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn filename_str(path: &PathBuf) -> String {
+fn filename_str(path: &Path) -> String {
     path.file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("?")

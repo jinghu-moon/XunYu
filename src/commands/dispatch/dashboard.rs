@@ -8,6 +8,7 @@ use super::super::dashboard;
 #[cfg(feature = "img")]
 use super::super::img;
 
+#[allow(clippy::result_large_err)]
 pub(super) fn try_dispatch(cmd: SubCommand) -> Result<CliResult, SubCommand> {
     match cmd {
         #[cfg(feature = "dashboard")]

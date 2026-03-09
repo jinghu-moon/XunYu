@@ -92,8 +92,8 @@ pub fn load_env_config() -> EnvCoreConfig {
     let path = config_file_path();
     match fs::read_to_string(&path) {
         Ok(content) => toml::from_str::<EnvCoreConfig>(&content)
-            .unwrap_or_else(|_| load_legacy_json().unwrap_or_else(EnvCoreConfig::default)),
-        Err(_) => load_legacy_json().unwrap_or_else(EnvCoreConfig::default),
+            .unwrap_or_else(|_| load_legacy_json().unwrap_or_default()),
+        Err(_) => load_legacy_json().unwrap_or_default(),
     }
 }
 

@@ -107,13 +107,13 @@ pub(crate) fn deny_delete_access(path: &Path) -> Result<(), &'static str> {
     // 3. Add Deny ACE *FIRST* (Index 0 in effectively empty ACL)
     // S-1-1-0 is Everyone
     let mut sid_everyone: *mut std::ffi::c_void = ptr::null_mut();
-    let mut auth = windows_sys::Win32::Security::SID_IDENTIFIER_AUTHORITY {
+    let auth = windows_sys::Win32::Security::SID_IDENTIFIER_AUTHORITY {
         Value: [0, 0, 0, 0, 0, 1], // SECURITY_WORLD_SID_AUTHORITY
     };
 
     let ok = unsafe {
         windows_sys::Win32::Security::AllocateAndInitializeSid(
-            &mut auth,
+            &auth,
             1,
             0, // SECURITY_WORLD_RID
             0,

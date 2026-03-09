@@ -152,10 +152,10 @@ pub(super) fn scan_volume(
             continue;
         }
 
-        if let Some(full_path) = resolve_path(frn, &frn_map, root_prefix) {
-            if !path_excluded(&full_path, exclude_dirs) {
-                results.push(PathBuf::from(&full_path));
-            }
+        if let Some(full_path) = resolve_path(frn, &frn_map, root_prefix)
+            && !path_excluded(&full_path, exclude_dirs)
+        {
+            results.push(PathBuf::from(&full_path));
         }
     }
 

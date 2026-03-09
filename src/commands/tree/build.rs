@@ -6,6 +6,7 @@ use super::constants::{BRANCH_END, BRANCH_MID};
 use super::format::format_bytes;
 use super::types::{SortKey, TreeFilters, TreeOutput};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_tree_inner(
     dir: &Path,
     prefix: &mut String,
@@ -25,19 +26,19 @@ pub(super) fn build_tree_inner(
     if max_depth > 0 && depth > max_depth {
         return;
     }
-    if let Some(max) = max_items {
-        if *count >= max {
-            return;
-        }
+    if let Some(max) = max_items
+        && *count >= max
+    {
+        return;
     }
 
     let items = collect_items(dir, root, filters, sort, fast, show_size);
     let total = items.len();
     for (i, item) in items.into_iter().enumerate() {
-        if let Some(max) = max_items {
-            if *count >= max {
-                break;
-            }
+        if let Some(max) = max_items
+            && *count >= max
+        {
+            break;
         }
         let is_last = i + 1 == total;
         let (branch, child_prefix) = if plain {
@@ -111,10 +112,10 @@ pub(super) fn count_tree_inner(
     if max_depth > 0 && depth > max_depth {
         return;
     }
-    if let Some(max) = max_items {
-        if *count >= max {
-            return;
-        }
+    if let Some(max) = max_items
+        && *count >= max
+    {
+        return;
     }
 
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -122,10 +123,10 @@ pub(super) fn count_tree_inner(
     };
     let need_rel = super::filters::needs_rel(filters);
     for e in entries.flatten() {
-        if let Some(max) = max_items {
-            if *count >= max {
-                break;
-            }
+        if let Some(max) = max_items
+            && *count >= max
+        {
+            break;
         }
         let name_os = e.file_name();
         let name = name_os.to_string_lossy().into_owned();

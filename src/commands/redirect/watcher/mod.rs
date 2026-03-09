@@ -166,12 +166,11 @@ pub(crate) fn watch_loop(
                 if should_ignore(&source_abs, &dest_dirs, &ignore, &p) {
                     continue;
                 }
-                if unmatched_is_skip {
-                    if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
-                        if !matcher::any_rule_matches_name_only(name, &profile.rules) {
-                            continue;
-                        }
-                    }
+                if unmatched_is_skip
+                    && let Some(name) = p.file_name().and_then(|s| s.to_str())
+                    && !matcher::any_rule_matches_name_only(name, &profile.rules)
+                {
+                    continue;
                 }
                 if !p.exists() {
                     continue;
@@ -213,12 +212,11 @@ pub(crate) fn watch_loop(
                 if should_ignore(&source_abs, &dest_dirs, &ignore, &item.path) {
                     continue;
                 }
-                if unmatched_is_skip {
-                    if let Some(name) = item.path.file_name().and_then(|s| s.to_str()) {
-                        if !matcher::any_rule_matches_name_only(name, &profile.rules) {
-                            continue;
-                        }
-                    }
+                if unmatched_is_skip
+                    && let Some(name) = item.path.file_name().and_then(|s| s.to_str())
+                    && !matcher::any_rule_matches_name_only(name, &profile.rules)
+                {
+                    continue;
                 }
                 if !item.path.exists() {
                     continue;

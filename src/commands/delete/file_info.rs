@@ -112,7 +112,7 @@ fn identify(head: &[u8], path: &Path) -> FileKind {
     }
 
     let sample = &head[..head.len().min(512)];
-    if sample.iter().all(|&b| b >= 0x09 && b < 0x80) {
+    if sample.iter().all(|&b| (0x09..0x80).contains(&b)) {
         return FileKind::Text;
     }
 

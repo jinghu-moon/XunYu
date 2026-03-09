@@ -19,11 +19,7 @@ pub(crate) fn ensure_safe_target(path: &Path) -> Result<(), &'static str> {
 
     let p_str = canonical.to_string_lossy().to_lowercase();
     // remove UNC prefix if any for easier matching
-    let check_str = if p_str.starts_with(r"\\?\") {
-        &p_str[4..]
-    } else {
-        &p_str
-    };
+    let check_str = p_str.strip_prefix(r"\\?\").unwrap_or(&p_str);
 
     for &blocked in BLACKLIST_DIRS {
         if check_str.contains(blocked) || check_str == blocked {

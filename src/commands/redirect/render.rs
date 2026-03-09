@@ -35,7 +35,7 @@ pub(crate) fn render_simulate_results(
     for raw in names {
         let out = debug_tools::explain_one(profile, raw);
         let rule = out.matched_rule.unwrap_or_else(|| "(none)".to_string());
-        let dest = out.rendered_dest_file.unwrap_or_else(|| "".to_string());
+        let dest = out.rendered_dest_file.unwrap_or_default();
         rows.push((raw.clone(), rule, dest));
     }
 

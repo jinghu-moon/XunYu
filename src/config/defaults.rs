@@ -24,20 +24,6 @@ pub(super) fn default_redirect_max_depth() -> u32 {
 }
 
 #[cfg(feature = "redirect")]
-impl Default for RedirectOnConflict {
-    fn default() -> Self {
-        Self::RenameNew
-    }
-}
-
-#[cfg(feature = "redirect")]
-impl Default for RedirectUnmatched {
-    fn default() -> Self {
-        Self::Skip
-    }
-}
-
-#[cfg(feature = "redirect")]
 impl Default for RedirectProfile {
     fn default() -> Self {
         Self {

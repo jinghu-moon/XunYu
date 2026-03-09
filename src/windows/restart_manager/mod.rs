@@ -287,8 +287,7 @@ pub(crate) fn get_locking_processes(paths: &[&Path]) -> Result<Vec<LockerInfo>, 
 
             if rm_res == ERROR_SUCCESS {
                 let mut lockers = Vec::new();
-                for i in 0..allocated as usize {
-                    let info = &proc_info_array[i];
+                for info in proc_info_array.iter().take(allocated as usize) {
                     let pid = info.Process.dwProcessId;
                     let app_type = info.ApplicationType as u32;
 

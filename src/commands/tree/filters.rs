@@ -7,10 +7,7 @@ use super::types::{SortKey, TreeFilters};
 pub(super) fn is_version_dir(name: &str) -> bool {
     name.starts_with('v')
         && name.len() > 1
-        && name[1..]
-            .chars()
-            .next()
-            .map_or(false, |c| c.is_ascii_digit())
+        && name[1..].chars().next().is_some_and(|c| c.is_ascii_digit())
 }
 
 pub(super) fn parse_sort(raw: &str) -> Option<SortKey> {
@@ -48,16 +45,14 @@ pub(super) fn should_exclude(
     if is_dir && is_version_dir(name) {
         return true;
     }
-    if !is_dir {
-        if let Some(ext) = Path::new(name).extension() {
-            let dot_ext = format!(".{}", ext.to_string_lossy());
-            if filters
-                .exclude_exts
-                .iter()
-                .any(|e| e.eq_ignore_ascii_case(&dot_ext))
-            {
-                return true;
-            }
+    if !is_dir && let Some(ext) = Path::new(name).extension() {
+        let dot_ext = format!(".{}", ext.to_string_lossy());
+        if filters
+            .exclude_exts
+            .iter()
+            .any(|e| e.eq_ignore_ascii_case(&dot_ext))
+        {
+            return true;
         }
     }
 

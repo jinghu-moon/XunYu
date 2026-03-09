@@ -194,19 +194,19 @@ pub(crate) fn cmd_complete(args: CompleteCmd) -> CliResult {
     let mut value_flag: Option<String> = None;
     let mut value_prefix: Option<String> = None;
 
-    if let Some(last) = tokens.last().cloned() {
-        if let Some((flag, value)) = split_flag_value(&last) {
-            value_flag = Some(flag.clone());
-            value_prefix = Some(format!("{flag}="));
-            current = value;
-            tokens.pop();
-            tokens.push(flag);
-            debug.log(format!(
-                "split_flag_value flag={} value={}",
-                value_flag.as_deref().unwrap_or(""),
-                current
-            ));
-        }
+    if let Some(last) = tokens.last().cloned()
+        && let Some((flag, value)) = split_flag_value(&last)
+    {
+        value_flag = Some(flag.clone());
+        value_prefix = Some(format!("{flag}="));
+        current = value;
+        tokens.pop();
+        tokens.push(flag);
+        debug.log(format!(
+            "split_flag_value flag={} value={}",
+            value_flag.as_deref().unwrap_or(""),
+            current
+        ));
     }
 
     let current_lower = current.to_ascii_lowercase();

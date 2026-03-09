@@ -405,6 +405,7 @@ fi
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 pub(super) fn try_dispatch(cmd: SubCommand) -> Result<CliResult, SubCommand> {
     match cmd {
         SubCommand::Init(a) => Ok(cmd_init(a)),

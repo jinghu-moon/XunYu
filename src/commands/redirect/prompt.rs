@@ -54,7 +54,7 @@ pub(crate) fn confirm_overwrite_for_profile(
     confirm_overwrite(yes, n)
 }
 
-pub(crate) fn prompt_conflicts(items: &mut Vec<PlanItem>) -> CliResult {
+pub(crate) fn prompt_conflicts(items: &mut [PlanItem]) -> CliResult {
     if !can_interact() {
         return Err(err2(
             "on_conflict=ask requires interactive mode.",

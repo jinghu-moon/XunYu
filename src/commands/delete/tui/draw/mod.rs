@@ -13,6 +13,7 @@ mod panels;
 mod popup;
 mod status;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn draw(
     f: &mut Frame,
     area: Rect,
@@ -36,9 +37,9 @@ pub(super) fn draw(
     body::draw_body(f, layout[1], state, tree, list_state);
     status::draw_statusbar(f, layout[2], state, tree);
 
-    if let AppState::ConfirmDelete = state {
-        if let Some(t) = tree {
-            popup::draw_confirm_popup(f, area, t);
-        }
+    if let AppState::ConfirmDelete = state
+        && let Some(t) = tree
+    {
+        popup::draw_confirm_popup(f, area, t);
     }
 }
