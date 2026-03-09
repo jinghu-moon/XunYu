@@ -463,14 +463,16 @@ impl GuardedTaskService {
         );
         let acl_forecast = guarded_acl_forecast_for_request(&req);
         let details = task_details_for_guarded_preview_request(&req).or_else(|| {
-            acl_forecast.as_ref().map(|forecast| WorkspaceTaskDetails::AclDiff {
-                diff: build_acl_diff_details_from_snapshots(
-                    &forecast.target,
-                    &forecast.reference,
-                    &forecast.before_snapshot,
-                    &forecast.expected_snapshot,
-                ),
-            })
+            acl_forecast
+                .as_ref()
+                .map(|forecast| WorkspaceTaskDetails::AclDiff {
+                    diff: build_acl_diff_details_from_snapshots(
+                        &forecast.target,
+                        &forecast.reference,
+                        &forecast.before_snapshot,
+                        &forecast.expected_snapshot,
+                    ),
+                })
         });
 
         {
@@ -630,9 +632,7 @@ impl GuardedTaskService {
         workspace: Option<&str>,
     ) -> RecentTaskListResponse {
         let history = self.inner.history.lock().unwrap_or_else(|e| e.into_inner());
-        let workspace = workspace
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
+        let workspace = workspace.map(str::trim).filter(|value| !value.is_empty());
         let filtered = history
             .iter()
             .filter(|entry| workspace.is_none_or(|value| entry.workspace == value))
@@ -773,7 +773,6 @@ fn task_summary(workspace: &str, action: &str, target: &str) -> String {
     format!("{} / {} / {}", workspace, action, target)
 }
 
-
 fn read_arg_value(args: &[String], name: &str) -> Option<String> {
     let index = args.iter().position(|arg| arg == name)?;
     args.get(index + 1)
@@ -822,13 +821,17 @@ fn build_acl_diff_details_from_snapshots(
         reference: reference.to_string(),
         common_count: diff.common_count,
         has_diff: diff.has_diff(),
-        owner_diff: diff.owner_diff.map(|(target, reference)| AclDiffOwnerDetails { target, reference }),
-        inheritance_diff: diff.inherit_diff.map(|(target_protected, reference_protected)| {
-            AclDiffInheritanceDetails {
-                target_protected,
-                reference_protected,
-            }
-        }),
+        owner_diff: diff
+            .owner_diff
+            .map(|(target, reference)| AclDiffOwnerDetails { target, reference }),
+        inheritance_diff: diff
+            .inherit_diff
+            .map(
+                |(target_protected, reference_protected)| AclDiffInheritanceDetails {
+                    target_protected,
+                    reference_protected,
+                },
+            ),
         only_in_target: diff.only_in_a.iter().map(map_acl_diff_entry).collect(),
         only_in_reference: diff.only_in_b.iter().map(map_acl_diff_entry).collect(),
     }
@@ -904,8 +907,7 @@ fn build_forecast_acl_entry(args: &[String]) -> Option<acl::types::AceEntry> {
     .ok()?;
 
     Some(acl::types::AceEntry {
-        raw_sid: acl::effective::resolve_user_sid(&principal)
-            .unwrap_or_else(|_| principal.clone()),
+        raw_sid: acl::effective::resolve_user_sid(&principal).unwrap_or_else(|_| principal.clone()),
         principal,
         rights_mask,
         ace_type,
@@ -940,7 +942,8 @@ fn forecast_acl_snapshot(
             let principal = read_arg_value(args, "--principal")?;
             let sid = acl::effective::resolve_user_sid(&principal).ok();
             expected.entries.retain(|entry| {
-                entry.is_inherited || !acl_entry_matches_principal(entry, &principal, sid.as_deref())
+                entry.is_inherited
+                    || !acl_entry_matches_principal(entry, &principal, sid.as_deref())
             });
             Some(expected)
         }
@@ -974,13 +977,13 @@ fn forecast_acl_snapshot(
 fn guarded_acl_forecast_for_request(req: &GuardedTaskPreviewRequest) -> Option<GuardedAclForecast> {
     match req.action.as_str() {
         "acl:add" | "acl:purge" | "acl:owner" | "acl:inherit" => {
-            let target = read_arg_value(&req.execute_args, "-p")
-                .or_else(|| {
-                    let target = req.target.trim();
-                    (!target.is_empty()).then(|| target.to_string())
-                })?;
+            let target = read_arg_value(&req.execute_args, "-p").or_else(|| {
+                let target = req.target.trim();
+                (!target.is_empty()).then(|| target.to_string())
+            })?;
             let before_snapshot = read_acl_snapshot(&target)?;
-            let expected_snapshot = forecast_acl_snapshot(&before_snapshot, &req.action, &req.execute_args)?;
+            let expected_snapshot =
+                forecast_acl_snapshot(&before_snapshot, &req.action, &req.execute_args)?;
             Some(GuardedAclForecast {
                 target,
                 reference: format!("expected {}", req.action),
@@ -989,15 +992,15 @@ fn guarded_acl_forecast_for_request(req: &GuardedTaskPreviewRequest) -> Option<G
             })
         }
         "acl:restore" => {
-            let target = read_arg_value(&req.execute_args, "-p")
-                .or_else(|| {
-                    let target = req.target.trim();
-                    (!target.is_empty()).then(|| target.to_string())
-                })?;
+            let target = read_arg_value(&req.execute_args, "-p").or_else(|| {
+                let target = req.target.trim();
+                (!target.is_empty()).then(|| target.to_string())
+            })?;
             let backup_path = read_arg_value(&req.execute_args, "--from")?;
             let before_snapshot = read_acl_snapshot(&target)?;
             let (reference, backup_snapshot) = read_acl_backup_snapshot(&backup_path)?;
-            let expected_snapshot = forecast_acl_restore_snapshot(&before_snapshot, &backup_snapshot);
+            let expected_snapshot =
+                forecast_acl_restore_snapshot(&before_snapshot, &backup_snapshot);
             Some(GuardedAclForecast {
                 target,
                 reference,
@@ -1283,8 +1286,8 @@ mod tests {
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
     use axum::routing::{get, post};
-    use tower::util::ServiceExt;
     use tempfile::tempdir;
+    use tower::util::ServiceExt;
 
     #[derive(Clone)]
     struct FakeRunner {
@@ -1714,8 +1717,10 @@ mod tests {
 
     #[tokio::test]
     async fn recent_tasks_endpoint_supports_workspace_filter() {
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("tree"), ok_output("recent")]))
-            as Arc<dyn TaskRunner>;
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("tree"),
+            ok_output("recent"),
+        ])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
 
         let files_body = serde_json::json!({
@@ -1777,7 +1782,6 @@ mod tests {
         assert_eq!(recent_json["entries"][0]["workspace"], "files-security");
     }
 
-
     #[tokio::test]
     async fn recent_tasks_endpoint_captures_failed_run_status() {
         let fake = Arc::new(FakeRunner::new(vec![fail_output("run")])) as Arc<dyn TaskRunner>;
@@ -1821,7 +1825,6 @@ mod tests {
         assert_eq!(recent_json["entries"][0]["status"], "failed");
         assert_eq!(recent_json["entries"][0]["replay"]["kind"], "run");
     }
-
 
     #[tokio::test]
     async fn run_task_includes_acl_diff_details_when_available() {
@@ -1872,8 +1875,10 @@ mod tests {
 
         let target_str = target.to_string_lossy().to_string();
         let reference_str = reference.to_string_lossy().to_string();
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
-            as Arc<dyn TaskRunner>;
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            ok_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
         let preview_body = serde_json::json!({
             "workspace": "files-security",
@@ -1928,10 +1933,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
-        assert_eq!(execute_json["details"]["before"]["target"], preview_body["target"]);
+        assert_eq!(
+            execute_json["details"]["before"]["target"],
+            preview_body["target"]
+        );
         assert_eq!(execute_json["details"]["after"]["reference"], reference_str);
     }
-
 
     #[tokio::test]
     async fn guarded_acl_add_receipt_includes_diff_transition() {
@@ -1941,8 +1948,10 @@ mod tests {
 
         let target_str = target.to_string_lossy().to_string();
         let principal = r"XunYu\PreviewPrincipal";
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
-            as Arc<dyn TaskRunner>;
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            ok_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
         let preview_body = serde_json::json!({
             "workspace": "files-security",
@@ -1980,8 +1989,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview_json["details"]["kind"], "acl_diff");
-        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:add");
-        assert_eq!(preview_json["details"]["diff"]["only_in_reference"][0]["principal"], principal);
+        assert_eq!(
+            preview_json["details"]["diff"]["reference"],
+            "expected acl:add"
+        );
+        assert_eq!(
+            preview_json["details"]["diff"]["only_in_reference"][0]["principal"],
+            principal
+        );
 
         let execute_resp = app
             .clone()
@@ -2006,8 +2021,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
-        assert_eq!(execute_json["details"]["before"]["reference"], "expected acl:add");
-        assert_eq!(execute_json["details"]["after"]["reference"], "expected acl:add");
+        assert_eq!(
+            execute_json["details"]["before"]["reference"],
+            "expected acl:add"
+        );
+        assert_eq!(
+            execute_json["details"]["after"]["reference"],
+            "expected acl:add"
+        );
     }
 
     #[tokio::test]
@@ -2018,8 +2039,10 @@ mod tests {
 
         let target_str = target.to_string_lossy().to_string();
         let new_owner = r"XunYu\ExpectedOwner";
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
-            as Arc<dyn TaskRunner>;
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            ok_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
         let preview_body = serde_json::json!({
             "workspace": "files-security",
@@ -2050,8 +2073,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview_json["details"]["kind"], "acl_diff");
-        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:owner");
-        assert_eq!(preview_json["details"]["diff"]["owner_diff"]["reference"], new_owner);
+        assert_eq!(
+            preview_json["details"]["diff"]["reference"],
+            "expected acl:owner"
+        );
+        assert_eq!(
+            preview_json["details"]["diff"]["owner_diff"]["reference"],
+            new_owner
+        );
 
         let execute_resp = app
             .clone()
@@ -2076,8 +2105,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
-        assert_eq!(execute_json["details"]["before"]["owner_diff"]["reference"], new_owner);
-        assert_eq!(execute_json["details"]["after"]["owner_diff"]["reference"], new_owner);
+        assert_eq!(
+            execute_json["details"]["before"]["owner_diff"]["reference"],
+            new_owner
+        );
+        assert_eq!(
+            execute_json["details"]["after"]["owner_diff"]["reference"],
+            new_owner
+        );
     }
 
     #[tokio::test]
@@ -2126,9 +2161,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview_json["details"]["kind"], "acl_diff");
-        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:purge");
+        assert_eq!(
+            preview_json["details"]["diff"]["reference"],
+            "expected acl:purge"
+        );
         assert_eq!(preview_json["details"]["diff"]["has_diff"], true);
-        assert_eq!(preview_json["details"]["diff"]["only_in_target"][0]["principal"], "Everyone");
+        assert_eq!(
+            preview_json["details"]["diff"]["only_in_target"][0]["principal"],
+            "Everyone"
+        );
     }
 
     #[tokio::test]
@@ -2138,7 +2179,10 @@ mod tests {
         std::fs::write(&target, b"target").unwrap();
 
         let mut backup_snapshot = acl::reader::get_acl(&target).unwrap();
-        let restored_owner = if backup_snapshot.owner.eq_ignore_ascii_case(r"BUILTIN\Administrators") {
+        let restored_owner = if backup_snapshot
+            .owner
+            .eq_ignore_ascii_case(r"BUILTIN\Administrators")
+        {
             r"NT AUTHORITY\SYSTEM"
         } else {
             r"BUILTIN\Administrators"
@@ -2152,12 +2196,18 @@ mod tests {
             "original_path": "D:/fixtures/restore-source.txt",
             "acl": backup_snapshot,
         });
-        std::fs::write(&backup_path, serde_json::to_string_pretty(&backup_json).unwrap()).unwrap();
+        std::fs::write(
+            &backup_path,
+            serde_json::to_string_pretty(&backup_json).unwrap(),
+        )
+        .unwrap();
 
         let target_str = target.to_string_lossy().to_string();
         let backup_str = backup_path.to_string_lossy().to_string();
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
-            as Arc<dyn TaskRunner>;
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            ok_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
         let preview_body = serde_json::json!({
             "workspace": "files-security",
@@ -2188,8 +2238,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview_json["details"]["kind"], "acl_diff");
-        assert_eq!(preview_json["details"]["diff"]["reference"], "backup D:/fixtures/restore-source.txt");
-        assert_eq!(preview_json["details"]["diff"]["owner_diff"]["reference"], restored_owner);
+        assert_eq!(
+            preview_json["details"]["diff"]["reference"],
+            "backup D:/fixtures/restore-source.txt"
+        );
+        assert_eq!(
+            preview_json["details"]["diff"]["owner_diff"]["reference"],
+            restored_owner
+        );
 
         let execute_resp = app
             .clone()
@@ -2214,8 +2270,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
-        assert_eq!(execute_json["details"]["before"]["reference"], "backup D:/fixtures/restore-source.txt");
-        assert_eq!(execute_json["details"]["after"]["reference"], "backup D:/fixtures/restore-source.txt");
+        assert_eq!(
+            execute_json["details"]["before"]["reference"],
+            "backup D:/fixtures/restore-source.txt"
+        );
+        assert_eq!(
+            execute_json["details"]["after"]["reference"],
+            "backup D:/fixtures/restore-source.txt"
+        );
     }
 
     #[tokio::test]
@@ -2225,8 +2287,10 @@ mod tests {
         std::fs::write(&target, b"target").unwrap();
 
         let target_str = target.to_string_lossy().to_string();
-        let fake = Arc::new(FakeRunner::new(vec![ok_output("preview"), ok_output("execute")]))
-            as Arc<dyn TaskRunner>;
+        let fake = Arc::new(FakeRunner::new(vec![
+            ok_output("preview"),
+            ok_output("execute"),
+        ])) as Arc<dyn TaskRunner>;
         let app = test_router(fake);
         let preview_body = serde_json::json!({
             "workspace": "files-security",
@@ -2261,8 +2325,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview_json["details"]["kind"], "acl_diff");
-        assert_eq!(preview_json["details"]["diff"]["reference"], "expected acl:inherit");
-        assert_eq!(preview_json["details"]["diff"]["inheritance_diff"]["reference_protected"], true);
+        assert_eq!(
+            preview_json["details"]["diff"]["reference"],
+            "expected acl:inherit"
+        );
+        assert_eq!(
+            preview_json["details"]["diff"]["inheritance_diff"]["reference_protected"],
+            true
+        );
 
         let execute_resp = app
             .clone()
@@ -2287,8 +2357,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(execute_json["details"]["kind"], "acl_diff_transition");
-        assert_eq!(execute_json["details"]["before"]["inheritance_diff"]["reference_protected"], true);
-        assert_eq!(execute_json["details"]["after"]["inheritance_diff"]["reference_protected"], true);
+        assert_eq!(
+            execute_json["details"]["before"]["inheritance_diff"]["reference_protected"],
+            true
+        );
+        assert_eq!(
+            execute_json["details"]["after"]["inheritance_diff"]["reference_protected"],
+            true
+        );
     }
-
 }

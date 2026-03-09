@@ -335,7 +335,10 @@ mod tests {
             summary_json["governance_alerts"].as_array().unwrap().len(),
             1
         );
-        assert_eq!(summary_json["governance_alerts"][0]["workspace"], "files-security");
+        assert_eq!(
+            summary_json["governance_alerts"][0]["workspace"],
+            "files-security"
+        );
         let audit_timeline = summary_json["audit_timeline"].as_array().unwrap();
         assert!(audit_timeline.len() >= 2);
         assert!(

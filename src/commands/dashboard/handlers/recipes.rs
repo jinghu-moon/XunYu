@@ -1081,7 +1081,8 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
         RecipeDefinition {
             id: "integration-shell-bootstrap".to_string(),
             name: "Shell 安装引导".to_string(),
-            description: "依次生成 init 与 completion 输出，用于初始化目标 shell 的集成与补全。".to_string(),
+            description: "依次生成 init 与 completion 输出，用于初始化目标 shell 的集成与补全。"
+                .to_string(),
             category: "integration-automation".to_string(),
             source: RecipeSource::Builtin,
             supports_dry_run: true,
@@ -1194,13 +1195,31 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                     target: "{{input}} -> {{output}}".to_string(),
                     summary: "按 {{mode}} / {{engine}} 将 {{input}} 压缩到 {{output}}".to_string(),
                     run_args: vec![
-                        "video", "compress", "-i", "{{input}}", "-o", "{{output}}", "--mode", "{{mode}}", "--engine", "{{engine}}",
+                        "video",
+                        "compress",
+                        "-i",
+                        "{{input}}",
+                        "-o",
+                        "{{output}}",
+                        "--mode",
+                        "{{mode}}",
+                        "--engine",
+                        "{{engine}}",
                     ]
                     .into_iter()
                     .map(str::to_string)
                     .collect(),
                     dry_run_args: vec![
-                        "video", "compress", "-i", "{{input}}", "-o", "{{output}}", "--mode", "{{mode}}", "--engine", "{{engine}}",
+                        "video",
+                        "compress",
+                        "-i",
+                        "{{input}}",
+                        "-o",
+                        "{{output}}",
+                        "--mode",
+                        "{{mode}}",
+                        "--engine",
+                        "{{engine}}",
                     ]
                     .into_iter()
                     .map(str::to_string)
@@ -1265,14 +1284,32 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                     action: "video:remux".to_string(),
                     target: "{{input}} -> {{output}}".to_string(),
                     summary: "按 strict={{strict}} 将 {{input}} 无损封装到 {{output}}".to_string(),
-                    run_args: vec!["video", "remux", "-i", "{{input}}", "-o", "{{output}}", "--strict", "{{strict}}"]
-                        .into_iter()
-                        .map(str::to_string)
-                        .collect(),
-                    dry_run_args: vec!["video", "remux", "-i", "{{input}}", "-o", "{{output}}", "--strict", "{{strict}}"]
-                        .into_iter()
-                        .map(str::to_string)
-                        .collect(),
+                    run_args: vec![
+                        "video",
+                        "remux",
+                        "-i",
+                        "{{input}}",
+                        "-o",
+                        "{{output}}",
+                        "--strict",
+                        "{{strict}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                    dry_run_args: vec![
+                        "video",
+                        "remux",
+                        "-i",
+                        "{{input}}",
+                        "-o",
+                        "{{output}}",
+                        "--strict",
+                        "{{strict}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 },
                 RecipeStepDefinition::Run {
                     id: "remux-probe-output".to_string(),
@@ -1340,15 +1377,36 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                     workspace: "media-conversion".to_string(),
                     action: "img".to_string(),
                     target: "{{input}} -> {{output}}".to_string(),
-                    summary: "按 {{format}} / q={{quality}} 转换 {{input}} 到 {{output}}".to_string(),
-                    run_args: vec!["img", "-i", "{{input}}", "-o", "{{output}}", "-f", "{{format}}", "-q", "{{quality}}"]
-                        .into_iter()
-                        .map(str::to_string)
-                        .collect(),
-                    dry_run_args: vec!["img", "-i", "{{input}}", "-o", "{{output}}", "-f", "{{format}}", "-q", "{{quality}}"]
-                        .into_iter()
-                        .map(str::to_string)
-                        .collect(),
+                    summary: "按 {{format}} / q={{quality}} 转换 {{input}} 到 {{output}}"
+                        .to_string(),
+                    run_args: vec![
+                        "img",
+                        "-i",
+                        "{{input}}",
+                        "-o",
+                        "{{output}}",
+                        "-f",
+                        "{{format}}",
+                        "-q",
+                        "{{quality}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                    dry_run_args: vec![
+                        "img",
+                        "-i",
+                        "{{input}}",
+                        "-o",
+                        "{{output}}",
+                        "-f",
+                        "{{format}}",
+                        "-q",
+                        "{{quality}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 },
                 RecipeStepDefinition::Run {
                     id: "image-output-cstat".to_string(),
@@ -1409,14 +1467,30 @@ fn builtin_recipes() -> Vec<RecipeDefinition> {
                     action: "cstat".to_string(),
                     target: "{{path}}".to_string(),
                     summary: "对 {{path}} 执行 --all 扫描并导出到 {{output}}".to_string(),
-                    run_args: vec!["cstat", "{{path}}", "--all", "-f", "json", "-o", "{{output}}"]
-                        .into_iter()
-                        .map(str::to_string)
-                        .collect(),
-                    dry_run_args: vec!["cstat", "{{path}}", "--all", "-f", "json", "-o", "{{output}}"]
-                        .into_iter()
-                        .map(str::to_string)
-                        .collect(),
+                    run_args: vec![
+                        "cstat",
+                        "{{path}}",
+                        "--all",
+                        "-f",
+                        "json",
+                        "-o",
+                        "{{output}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                    dry_run_args: vec![
+                        "cstat",
+                        "{{path}}",
+                        "--all",
+                        "-f",
+                        "json",
+                        "-o",
+                        "{{output}}",
+                    ]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
                 },
                 RecipeStepDefinition::Run {
                     id: "recent-review".to_string(),
@@ -1659,9 +1733,24 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let recipes = json["recipes"].as_array().unwrap();
 
-        assert!(recipes.iter().any(|entry| entry["id"] == "paths-context-health" && entry["category"] == "paths-context"));
-        assert!(recipes.iter().any(|entry| entry["id"] == "integration-shell-bootstrap" && entry["category"] == "integration-automation"));
-        assert!(recipes.iter().any(|entry| entry["id"] == "media-video-probe-compress" && entry["category"] == "media-conversion"));
+        assert!(
+            recipes
+                .iter()
+                .any(|entry| entry["id"] == "paths-context-health"
+                    && entry["category"] == "paths-context")
+        );
+        assert!(
+            recipes
+                .iter()
+                .any(|entry| entry["id"] == "integration-shell-bootstrap"
+                    && entry["category"] == "integration-automation")
+        );
+        assert!(
+            recipes
+                .iter()
+                .any(|entry| entry["id"] == "media-video-probe-compress"
+                    && entry["category"] == "media-conversion")
+        );
     }
 
     #[test]
@@ -1673,28 +1762,40 @@ mod tests {
             .find(|recipe| recipe.id == "paths-context-health")
             .expect("paths-context-health recipe");
         assert_eq!(paths.name, "路径健康巡检");
-        assert_eq!(paths.description, "串联上下文、最近访问与书签健康检查，快速完成路径工作台体检。");
+        assert_eq!(
+            paths.description,
+            "串联上下文、最近访问与书签健康检查，快速完成路径工作台体检。"
+        );
 
         let shell = recipes
             .iter()
             .find(|recipe| recipe.id == "integration-shell-bootstrap")
             .expect("integration-shell-bootstrap recipe");
         assert_eq!(shell.name, "Shell 安装引导");
-        assert_eq!(shell.description, "依次生成 init 与 completion 输出，用于初始化目标 shell 的集成与补全。");
+        assert_eq!(
+            shell.description,
+            "依次生成 init 与 completion 输出，用于初始化目标 shell 的集成与补全。"
+        );
 
         let media = recipes
             .iter()
             .find(|recipe| recipe.id == "media-video-probe-compress")
             .expect("media-video-probe-compress recipe");
         assert_eq!(media.name, "视频探测与压缩");
-        assert_eq!(media.description, "先探测视频元数据，再按 mode / engine 执行压缩输出。");
+        assert_eq!(
+            media.description,
+            "先探测视频元数据，再按 mode / engine 执行压缩输出。"
+        );
 
         let proxy = recipes
             .iter()
             .find(|recipe| recipe.id == "proxy-diagnostics")
             .expect("proxy-diagnostics recipe");
         assert_eq!(proxy.name, "代理诊断快照");
-        assert_eq!(proxy.description, "连续采集代理状态、系统代理探测与端口快照，便于排障留档。");
+        assert_eq!(
+            proxy.description,
+            "连续采集代理状态、系统代理探测与端口快照，便于排障留档。"
+        );
     }
 
     #[test]
@@ -1707,7 +1808,9 @@ mod tests {
             ("statistics-cstat-review", "statistics-diagnostics"),
         ] {
             assert!(
-                recipes.iter().any(|recipe| recipe.id == id && recipe.category == category),
+                recipes
+                    .iter()
+                    .any(|recipe| recipe.id == id && recipe.category == category),
                 "missing builtin recipe {id} in {category}"
             );
         }
