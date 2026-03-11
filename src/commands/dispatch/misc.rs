@@ -12,6 +12,8 @@ use super::super::bookmarks;
 use super::super::completion;
 #[cfg(feature = "crypt")]
 use super::super::crypt;
+#[cfg(feature = "crypt")]
+use super::super::vault;
 use super::super::delete;
 #[cfg(feature = "diff")]
 use super::super::diff;
@@ -83,6 +85,8 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Encrypt(a) => crypt::cmd_encrypt(a),
         #[cfg(feature = "crypt")]
         SubCommand::Decrypt(a) => crypt::cmd_decrypt(a),
+        #[cfg(feature = "crypt")]
+        SubCommand::Vault(a) => vault::cmd_vault(a),
         #[cfg(feature = "diff")]
         SubCommand::Diff(a) => diff::cmd_diff(a),
         #[cfg(feature = "redirect")]

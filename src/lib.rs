@@ -30,6 +30,9 @@ pub(crate) mod protect;
 #[cfg(feature = "crypt")]
 pub(crate) mod age_wrapper;
 
+#[cfg(feature = "crypt")]
+pub(crate) mod filevault;
+
 #[cfg(feature = "diff")]
 mod diff;
 

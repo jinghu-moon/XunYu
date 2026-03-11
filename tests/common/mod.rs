@@ -409,6 +409,38 @@ pub fn measure_working_set_peak_bytes(mut child: Child, sample_ms: u64) -> u64 {
     peak
 }
 
+pub fn measure_handle_peak_count(mut child: Child, sample_ms: u64) -> u32 {
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::Threading::GetProcessHandleCount;
+
+    let handle = child.as_raw_handle() as HANDLE;
+    let mut peak = 0u32;
+
+    let sample = || -> u32 {
+        let mut count = 0u32;
+        let ok = unsafe { GetProcessHandleCount(handle, &mut count) };
+        if ok == 0 { 0 } else { count }
+    };
+
+    loop {
+        let current = sample();
+        if current > peak {
+            peak = current;
+        }
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(sample_ms));
+    }
+
+    let current = sample();
+    if current > peak {
+        peak = current;
+    }
+    let _ = child.wait();
+    peak
+}
+
 pub fn start_fake_proxy(expected: usize) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();

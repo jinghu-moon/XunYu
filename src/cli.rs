@@ -30,6 +30,8 @@ mod proxy;
 mod redirect;
 mod shell;
 mod tree;
+#[cfg(feature = "crypt")]
+mod vault;
 mod video;
 
 use argh::FromArgs;
@@ -60,6 +62,11 @@ pub use bookmarks::{
 pub use config::{ConfigCmd, ConfigEditCmd, ConfigGetCmd, ConfigSetCmd, ConfigSubCommand};
 #[cfg(feature = "crypt")]
 pub use crypt::{DecryptCmd, EncryptCmd};
+#[cfg(feature = "crypt")]
+pub use vault::{
+    VaultCleanupCmd, VaultCmd, VaultDecCmd, VaultEncCmd, VaultInspectCmd, VaultRecoverKeyCmd,
+    VaultResumeCmd, VaultRewrapCmd, VaultSubCommand, VaultVerifyCmd,
+};
 #[cfg(feature = "cstat")]
 pub use cstat::CstatCmd;
 pub use ctx::{
@@ -177,6 +184,8 @@ pub enum SubCommand {
     Encrypt(EncryptCmd),
     #[cfg(feature = "crypt")]
     Decrypt(DecryptCmd),
+    #[cfg(feature = "crypt")]
+    Vault(VaultCmd),
     #[cfg(feature = "dashboard")]
     Serve(ServeCmd),
     #[cfg(feature = "diff")]

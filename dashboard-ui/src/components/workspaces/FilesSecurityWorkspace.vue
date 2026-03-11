@@ -5,6 +5,7 @@ import type { TaskFormState } from '../../workspace-tools'
 import { filesSecurityTaskGroups } from '../../workspace-tools'
 import BatchGovernancePanel from '../BatchGovernancePanel.vue'
 import FileGovernancePanel from '../FileGovernancePanel.vue'
+import FileVaultFoundationPanel from '../FileVaultFoundationPanel.vue'
 import RecentTasksPanel from '../RecentTasksPanel.vue'
 import RecipePanel from '../RecipePanel.vue'
 import { Button } from '../button'
@@ -347,6 +348,8 @@ function onSelectionChange(path: string) {
         </section>
 
         <FileGovernancePanel :path="selectedPath" :acl-reference-path="aclReferencePath" :capabilities="capabilities" />
+
+        <FileVaultFoundationPanel :path="selectedPath" :capabilities="capabilities" />
 
         <RecentTasksPanel
           title="文件任务中心"

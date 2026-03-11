@@ -28,6 +28,8 @@ pub(crate) mod img;
 
 #[cfg(feature = "crypt")]
 pub(crate) mod crypt;
+#[cfg(feature = "crypt")]
+pub(crate) mod vault;
 #[cfg(feature = "dashboard")]
 pub(crate) mod dashboard;
 #[cfg(feature = "diff")]

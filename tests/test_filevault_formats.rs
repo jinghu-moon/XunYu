@@ -1,0 +1,405 @@
+#![cfg(all(windows, feature = "crypt"))]
+
+mod common;
+
+use common::*;
+use serde_json::Value;
+use std::fs;
+use std::io::{Cursor, Write};
+
+fn parse_stdout_json(output: &std::process::Output) -> Value {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    serde_json::from_str(stdout.trim()).unwrap_or_else(|err| {
+        panic!("stdout is not valid json: {err}; stdout={stdout}")
+    })
+}
+
+fn write_case(path: &std::path::Path, bytes: &[u8]) {
+    fs::write(path, bytes).unwrap();
+}
+
+fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let cursor = Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored);
+    for (name, bytes) in entries {
+        writer.start_file(name, options).unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+fn minimal_png() -> Vec<u8> {
+    vec![
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+        0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+        0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78,
+        0x9C, 0x63, 0xF8, 0xFF, 0xFF, 0xFF, 0x7F, 0x00, 0x09, 0xFB, 0x03, 0xFD, 0x05, 0x43,
+        0x45, 0xCA, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ]
+}
+
+fn minimal_gif() -> Vec<u8> {
+    vec![
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2C,
+        0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+        0x3B,
+    ]
+}
+
+fn minimal_bmp() -> Vec<u8> {
+    let mut bytes = vec![0u8; 58];
+    bytes[0..2].copy_from_slice(b"BM");
+    bytes[2..6].copy_from_slice(&(58u32).to_le_bytes());
+    bytes[10..14].copy_from_slice(&(54u32).to_le_bytes());
+    bytes[14..18].copy_from_slice(&(40u32).to_le_bytes());
+    bytes[18..22].copy_from_slice(&(1u32).to_le_bytes());
+    bytes[22..26].copy_from_slice(&(1u32).to_le_bytes());
+    bytes[26..28].copy_from_slice(&(1u16).to_le_bytes());
+    bytes[28..30].copy_from_slice(&(24u16).to_le_bytes());
+    bytes[54..58].copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+    bytes
+}
+
+fn minimal_tiff() -> Vec<u8> {
+    vec![
+        0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]
+}
+
+fn minimal_pdf() -> Vec<u8> {
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n".to_vec()
+}
+
+fn minimal_jpeg() -> Vec<u8> {
+    vec![
+        0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01,
+        0x00, 0x60, 0x00, 0x60, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x03, 0x02, 0x02,
+        0x03, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x04, 0x03, 0x03, 0x04, 0x05, 0x08, 0x05,
+        0x05, 0x04, 0x04, 0x05, 0x0A, 0x07, 0x07, 0x06, 0x08, 0x0C, 0x0A, 0x0C, 0x0C, 0x0B,
+        0x0A, 0x0B, 0x0B, 0x0D, 0x0E, 0x12, 0x10, 0x0D, 0x0E, 0x11, 0x0E, 0x0B, 0x0B, 0x10,
+        0x16, 0x10, 0x11, 0x13, 0x14, 0x15, 0x15, 0x15, 0x0C, 0x0F, 0x17, 0x18, 0x16, 0x14,
+        0x18, 0x12, 0x14, 0x15, 0x14, 0xFF, 0xDB, 0x00, 0x43, 0x01, 0x03, 0x04, 0x04, 0x05,
+        0x04, 0x05, 0x09, 0x05, 0x05, 0x09, 0x14, 0x0D, 0x0B, 0x0D, 0x14, 0x14, 0x14, 0x14,
+        0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14,
+        0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14,
+        0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14,
+        0x14, 0x14, 0x14, 0x14, 0xFF, 0xC0, 0x00, 0x11, 0x08, 0x00, 0x01, 0x00, 0x01, 0x03,
+        0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xFF, 0xC4, 0x00, 0x1F, 0x00,
+        0x00, 0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+        0xFF, 0xC4, 0x00, 0xB5, 0x10, 0x00, 0x02, 0x01, 0x03, 0x03, 0x02, 0x04, 0x03, 0x05,
+        0x05, 0x04, 0x04, 0x00, 0x00, 0x01, 0x7D, 0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05,
+        0x12, 0x21, 0x31, 0x41, 0x06, 0x13, 0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81,
+        0x91, 0xA1, 0x08, 0x23, 0x42, 0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0, 0x24, 0x33, 0x62,
+        0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x25, 0x26, 0x27, 0x28, 0x29,
+        0x2A, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48,
+        0x49, 0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66,
+        0x67, 0x68, 0x69, 0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84,
+        0x85, 0x86, 0x87, 0x88, 0x89, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99,
+        0x9A, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5,
+        0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA,
+        0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5,
+        0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9,
+        0xFA, 0xFF, 0xC4, 0x00, 0x1F, 0x01, 0x00, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+        0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04,
+        0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0xFF, 0xC4, 0x00, 0xB5, 0x11, 0x00, 0x02,
+        0x01, 0x02, 0x04, 0x04, 0x03, 0x04, 0x07, 0x05, 0x04, 0x04, 0x00, 0x01, 0x02, 0x77,
+        0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51, 0x07,
+        0x61, 0x71, 0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xA1, 0xB1, 0xC1, 0x09,
+        0x23, 0x33, 0x52, 0xF0, 0x15, 0x62, 0x72, 0xD1, 0x0A, 0x16, 0x24, 0x34, 0xE1, 0x25,
+        0xF1, 0x17, 0x18, 0x19, 0x1A, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x35, 0x36, 0x37, 0x38,
+        0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x53, 0x54, 0x55, 0x56,
+        0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x73, 0x74,
+        0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+        0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5,
+        0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA,
+        0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6,
+        0xD7, 0xD8, 0xD9, 0xDA, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF2,
+        0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFF, 0xDA, 0x00, 0x0C, 0x03, 0x01,
+        0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3F, 0x00, 0xF9, 0xD2, 0x8A, 0x28, 0xAF, 0xC3,
+        0x0F, 0xF5, 0x4C, 0xFF, 0xD9,
+    ]
+}
+
+fn minimal_wav() -> Vec<u8> {
+    vec![
+        0x52, 0x49, 0x46, 0x46, 0x28, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6D,
+        0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x40, 0x1F, 0x00, 0x00,
+        0x40, 0x1F, 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x64, 0x61, 0x74, 0x61, 0x04, 0x00,
+        0x00, 0x00, 0x80, 0x80, 0x80, 0x80,
+    ]
+}
+
+fn minimal_mp3() -> Vec<u8> {
+    vec![0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+}
+
+fn minimal_ogg() -> Vec<u8> {
+    vec![
+        0x4F, 0x67, 0x67, 0x53, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]
+}
+
+fn minimal_mp4() -> Vec<u8> {
+    vec![
+        0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00,
+        0x02, 0x00, 0x69, 0x73, 0x6F, 0x6D, 0x69, 0x73, 0x6F, 0x32, 0x00, 0x00, 0x00, 0x08,
+        0x6D, 0x64, 0x61, 0x74,
+    ]
+}
+
+fn minimal_sqlite() -> Vec<u8> {
+    let mut bytes = vec![0u8; 4096];
+    bytes[..16].copy_from_slice(b"SQLite format 3\0");
+    bytes[16] = 0x10;
+    bytes[17] = 0x00;
+    bytes[18] = 0x01;
+    bytes[19] = 0x01;
+    bytes[20] = 0x00;
+    bytes[21] = 0x40;
+    bytes[22] = 0x20;
+    bytes[23] = 0x20;
+    bytes[56] = 0x00;
+    bytes[57] = 0x00;
+    bytes[58] = 0x00;
+    bytes[59] = 0x01;
+    bytes
+}
+
+fn minimal_pe(is_dll: bool) -> Vec<u8> {
+    let mut bytes = vec![0u8; 512];
+    bytes[0] = 0x4D;
+    bytes[1] = 0x5A;
+    bytes[0x3C..0x40].copy_from_slice(&(0x80u32).to_le_bytes());
+    bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
+    bytes[0x84..0x86].copy_from_slice(&0x8664u16.to_le_bytes());
+    bytes[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+    bytes[0x94..0x96].copy_from_slice(&0xF0u16.to_le_bytes());
+    let characteristics = if is_dll { 0x2022u16 } else { 0x0022u16 };
+    bytes[0x96..0x98].copy_from_slice(&characteristics.to_le_bytes());
+    bytes[0x98..0x9A].copy_from_slice(&0x20Bu16.to_le_bytes());
+    bytes
+}
+
+fn minimal_docx() -> Vec<u8> {
+    zip_bytes(&[
+        (
+            "[Content_Types].xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>"#,
+        ),
+        (
+            "_rels/.rels",
+            br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#,
+        ),
+        (
+            "word/document.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello FileVault</w:t></w:r></w:p></w:body></w:document>"#,
+        ),
+    ])
+}
+
+fn minimal_xlsx() -> Vec<u8> {
+    zip_bytes(&[
+        (
+            "[Content_Types].xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#,
+        ),
+        (
+            "_rels/.rels",
+            br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#,
+        ),
+        (
+            "xl/workbook.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></sheets></workbook>"#,
+        ),
+        (
+            "xl/worksheets/sheet1.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>FileVault</t></is></c></row></sheetData></worksheet>"#,
+        ),
+    ])
+}
+
+fn minimal_pptx() -> Vec<u8> {
+    zip_bytes(&[
+        (
+            "[Content_Types].xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/></Types>"#,
+        ),
+        (
+            "_rels/.rels",
+            br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>"#,
+        ),
+        (
+            "ppt/presentation.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldMasterIdLst/><p:sldIdLst/><p:sldSz cx="9144000" cy="6858000"/></p:presentation>"#,
+        ),
+    ])
+}
+
+fn deterministic_bytes(len: usize, seed: u64) -> Vec<u8> {
+    let mut state = seed;
+    let mut out = Vec::with_capacity(len);
+    for _ in 0..len {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+        out.push((state >> 32) as u8);
+    }
+    out
+}
+
+fn random_sizes() -> Vec<usize> {
+    let mut sizes = vec![
+        0usize,
+        1,
+        2,
+        3,
+        7,
+        15,
+        127,
+        511,
+        1024,
+        1025,
+        4095,
+        8192,
+        16384,
+        65535,
+        65536,
+        65537,
+        131072,
+        262144 + 17,
+        1_000_000,
+    ];
+    let mut state = 0xC0FFEE_u64;
+    for _ in 0..6 {
+        state = state.wrapping_mul(2862933555777941757).wrapping_add(3037000493);
+        let size = 1 + (state as usize % 300_000);
+        sizes.push(size);
+    }
+    sizes.sort_unstable();
+    sizes.dedup();
+    sizes
+}
+
+fn assert_filevault_roundtrip(
+    env: &TestEnv,
+    work: &std::path::Path,
+    file_name: &str,
+    bytes: &[u8],
+    algo: &str,
+    chunk_size: &str,
+) {
+    let plain = work.join(file_name);
+    let vault = work.join(format!("{file_name}.fv"));
+    let out = work.join(format!("{file_name}.out"));
+    write_case(&plain, bytes);
+
+    run_ok(env.cmd().args([
+        "vault",
+        "enc",
+        plain.to_str().unwrap(),
+        "-o",
+        vault.to_str().unwrap(),
+        "--password",
+        "format-secret",
+        "--algo",
+        algo,
+        "--chunk-size",
+        chunk_size,
+    ]));
+
+    let verify = run_ok(env.cmd().args([
+        "vault",
+        "verify",
+        vault.to_str().unwrap(),
+        "--password",
+        "format-secret",
+        "--json",
+    ]));
+    let verify_json = parse_stdout_json(&verify);
+    assert_eq!(verify_json["status"], "ok", "verify should succeed for {file_name}");
+
+    run_ok(env.cmd().args([
+        "vault",
+        "dec",
+        vault.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+        "--password",
+        "format-secret",
+    ]));
+    assert_eq!(fs::read(&out).unwrap(), bytes, "roundtrip bytes must match for {file_name}");
+}
+
+#[test]
+fn filevault_roundtrips_common_file_formats() {
+    let env = TestEnv::new();
+    let work = make_safe_work_dir("filevault-format-matrix");
+    let cases: Vec<(&str, Vec<u8>)> = vec![
+        ("readme.txt", "FileVault common format coverage\r\n第二行".as_bytes().to_vec()),
+        ("notes.md", b"# FileVault\n\n- streaming\n- recovery\n".to_vec()),
+        ("events.log", b"2026-03-10T00:00:00Z started\n".to_vec()),
+        ("settings.ini", b"[vault]\nversion=13\n".to_vec()),
+        ("config.json", br#"{"name":"filevault","ok":true,"count":13}"#.to_vec()),
+        ("lines.jsonl", b"{\"event\":\"open\"}\n{\"event\":\"close\"}\n".to_vec()),
+        ("settings.toml", b"name = \"filevault\"\nversion = 13\nstreaming = true\n".to_vec()),
+        ("compose.yaml", b"name: filevault\nstreaming: true\nrecovery: first\n".to_vec()),
+        ("pipeline.yml", b"stages:\n  - test\n".to_vec()),
+        ("table.csv", b"name,value\nfilevault,13\nstreaming,1\n".to_vec()),
+        ("table.tsv", b"name\tvalue\nfilevault\t13\n".to_vec()),
+        ("page.html", b"<!doctype html><html><body><h1>FileVault</h1></body></html>".to_vec()),
+        ("diagram.svg", b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"></svg>".to_vec()),
+        ("doc.xml", b"<?xml version=\"1.0\"?><root><item>FileVault</item></root>".to_vec()),
+        ("readme.rtf", b"{\\rtf1\\ansi FileVault}".to_vec()),
+        ("image.png", minimal_png()),
+        ("image.gif", minimal_gif()),
+        ("image.bmp", minimal_bmp()),
+        ("image.tiff", minimal_tiff()),
+        ("photo.jpg", minimal_jpeg()),
+        ("document.pdf", minimal_pdf()),
+        ("audio.wav", minimal_wav()),
+        ("audio.mp3", minimal_mp3()),
+        ("audio.ogg", minimal_ogg()),
+        ("video.mp4", minimal_mp4()),
+        ("database.sqlite", minimal_sqlite()),
+        ("program.exe", minimal_pe(false)),
+        ("library.dll", minimal_pe(true)),
+        (
+            "archive.zip",
+            zip_bytes(&[("hello.txt", b"zip-entry-1"), ("nested/data.bin", &[1, 2, 3, 4, 5])]),
+        ),
+        ("report.docx", minimal_docx()),
+        ("sheet.xlsx", minimal_xlsx()),
+        ("slides.pptx", minimal_pptx()),
+    ];
+
+    for (name, bytes) in cases {
+        assert_filevault_roundtrip(&env, &work, name, &bytes, "aes256-gcm", "65536");
+    }
+
+    cleanup_dir(&work);
+}
+
+#[test]
+fn filevault_roundtrips_random_sized_files() {
+    let env = TestEnv::new();
+    let work = make_safe_work_dir("filevault-random-sizes");
+    let algos = ["aes256-gcm", "xchacha20-poly1305"];
+
+    for (index, size) in random_sizes().into_iter().enumerate() {
+        let algo = algos[index % algos.len()];
+        let ext = match index % 4 {
+            0 => "bin",
+            1 => "dat",
+            2 => "txt",
+            _ => "raw",
+        };
+        let name = format!("random-{index:02}-{size}.{ext}");
+        let bytes = deterministic_bytes(size, 0xABCD_0000 + index as u64);
+        assert_filevault_roundtrip(&env, &work, &name, &bytes, algo, "65536");
+    }
+
+    cleanup_dir(&work);
+}
