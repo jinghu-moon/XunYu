@@ -24,3 +24,6 @@ pub(crate) mod acl;
 
 #[cfg(feature = "crypt")]
 pub(crate) mod efs;
+
+#[cfg(feature = "desktop")]
+pub(crate) mod window_api;

@@ -11,6 +11,7 @@ description = "A Windows-first Rust CLI and local dashboard for paths, proxies, 
 license     = "AGPL-3.0-or-later"
 repository  = "https://github.com/jinghu-moon/XunYu"
 readme      = "README.md"
+default-run = "xun"
 
 [[bin]]
 name = "xun"
@@ -71,6 +72,7 @@ diff = [
     "dep:tree-sitter-rust",
     "dep:tree-sitter-html",
 ]
+desktop = []
 
 [dependencies]
 serde      = { version = "1", features = ["derive"] }
@@ -80,6 +82,7 @@ anyhow = "1"
 thiserror = "1"
 csv = "1"
 chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
 dunce = "1"
 argh       = "0.1"
 dialoguer  = { version = "0.11", default-features = false, features = ["fuzzy-select", "password"] }
@@ -127,6 +130,8 @@ windows-sys = { version = "0.59", features = [
   "Win32_Networking_WinSock",
   "Win32_System_ProcessStatus",
   "Win32_System_Time",
+  "Win32_System_Power",
+  "Win32_System_Registry",
   "Win32_System_Threading",
   "Win32_System_RemoteDesktop",
   "Win32_System_DataExchange",
@@ -138,6 +143,8 @@ windows-sys = { version = "0.59", features = [
   "Win32_Storage_FileSystem",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_Graphics_Gdi",
   "Wdk_Storage_FileSystem",
 ] }
 windows = { version = "0.58", features = [

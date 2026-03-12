@@ -291,6 +291,7 @@ pub(in crate::commands::dashboard) struct WorkspaceCapabilities {
     lock: bool,
     protect: bool,
     redirect: bool,
+    desktop: bool,
     tui: bool,
 }
 
@@ -1142,6 +1143,7 @@ fn capabilities() -> WorkspaceCapabilities {
         lock: cfg!(feature = "lock"),
         protect: cfg!(feature = "protect"),
         redirect: cfg!(feature = "redirect"),
+        desktop: cfg!(feature = "desktop"),
         tui: cfg!(feature = "tui"),
     }
 }
@@ -1216,6 +1218,7 @@ pub(in crate::commands::dashboard) async fn workspace_overview_summary(
             "files-security".to_string(),
             "integration-automation".to_string(),
             "media-conversion".to_string(),
+            "desktop-control".to_string(),
             "statistics-diagnostics".to_string(),
         ],
         capabilities: capabilities(),

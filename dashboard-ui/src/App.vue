@@ -38,6 +38,7 @@ const workspaceComponentMap: Record<WorkspaceKey, Component> = {
   'files-security': loadWorkspaceComponent(() => import('./components/workspaces/FilesSecurityWorkspace.vue')),
   'integration-automation': loadWorkspaceComponent(() => import('./components/workspaces/IntegrationAutomationWorkspace.vue')),
   'media-conversion': loadWorkspaceComponent(() => import('./components/workspaces/MediaConversionWorkspace.vue')),
+  'desktop-control': loadWorkspaceComponent(() => import('./components/workspaces/DesktopControlWorkspace.vue')),
   'statistics-diagnostics': loadWorkspaceComponent(() => import('./components/workspaces/StatisticsDiagnosticsWorkspace.vue')),
 }
 
@@ -123,7 +124,7 @@ onBeforeUnmount(() => {
     <header>
       <div class="header-title">
         <h1>XunYu Local Console</h1>
-        <p>8 个工作台统一承载本地命令、配置、文件、安全与诊断能力。</p>
+        <p>9 个工作台统一承载本地命令、配置、文件、安全与诊断能力。</p>
       </div>
       <CapsuleTabs v-model="workspace" :items="tabItems" />
       <div class="header-controls">

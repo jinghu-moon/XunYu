@@ -6,6 +6,10 @@ pub(crate) mod bak;
 pub(crate) mod bookmarks;
 pub(crate) mod completion;
 pub(crate) mod ctx;
+#[cfg(feature = "desktop")]
+pub(crate) mod desktop;
+#[cfg(all(feature = "desktop", feature = "tui"))]
+pub(crate) mod desktop_tui;
 pub(crate) mod delete;
 pub(crate) mod env;
 pub(crate) mod find;

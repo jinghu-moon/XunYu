@@ -28,6 +28,8 @@ use super::super::protect;
 use super::super::proxy;
 #[cfg(feature = "redirect")]
 use super::super::redirect;
+#[cfg(feature = "desktop")]
+use super::super::desktop;
 use super::super::tree;
 use super::super::video;
 
@@ -91,6 +93,8 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Diff(a) => diff::cmd_diff(a),
         #[cfg(feature = "redirect")]
         SubCommand::Redirect(a) => redirect::cmd_redirect(a),
+        #[cfg(feature = "desktop")]
+        SubCommand::Desktop(a) => desktop::cmd_desktop(a),
         #[cfg(feature = "batch_rename")]
         SubCommand::Brn(a) => batch_rename::cmd_brn(a),
         SubCommand::Video(a) => video::cmd_video(a),

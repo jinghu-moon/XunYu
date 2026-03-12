@@ -30,9 +30,44 @@ pub fn is_elevated() -> bool {
     }
 }
 
+#[cfg(windows)]
+pub fn relaunch_elevated(exe: &str, args: &str) -> Result<(), String> {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let op = to_wide("runas");
+    let file = to_wide(exe);
+    let params = to_wide(args);
+    let params_ptr = if args.trim().is_empty() {
+        std::ptr::null()
+    } else {
+        params.as_ptr()
+    };
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            op.as_ptr(),
+            file.as_ptr(),
+            params_ptr,
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    let code = result as isize;
+    if code <= 32 {
+        return Err(format!("ShellExecuteW failed: {code}"));
+    }
+    Ok(())
+}
+
 #[cfg(not(windows))]
 pub fn is_elevated() -> bool {
     false
+}
+
+#[cfg(not(windows))]
+pub fn relaunch_elevated(_exe: &str, _args: &str) -> Result<(), String> {
+    Err("elevation is Windows-only".to_string())
 }
 
 pub fn requires_elevation(scope: EnvScope) -> bool {
@@ -49,4 +84,9 @@ pub fn elevation_hint(scope: EnvScope) -> String {
         "{} scope write requires Administrator token on Windows. Relaunch shell as Administrator and retry.",
         scope_text
     )
+}
+
+#[cfg(windows)]
+fn to_wide(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(Some(0)).collect()
 }

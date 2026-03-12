@@ -96,3 +96,126 @@ describe('workspace-tools media conversion tasks', () => {
     ])
   })
 })
+
+describe('workspace-tools desktop control tasks', () => {
+  it('covers core desktop control actions', () => {
+    for (const action of [
+      'desktop:daemon-status',
+      'desktop:daemon-start',
+      'desktop:daemon-stop',
+      'desktop:daemon-reload',
+      'desktop:hotkey-list',
+      'desktop:remap-list',
+      'desktop:snippet-list',
+      'desktop:layout-list',
+      'desktop:workspace-list',
+      'desktop:window-focus',
+      'desktop:theme-status',
+      'desktop:awake-status',
+      'desktop:color-pick',
+      'desktop:hosts-add',
+      'desktop:hosts-remove',
+      'desktop:hosts-list',
+      'desktop:app-list',
+      'desktop:run',
+    ]) {
+      expect(findWorkspaceTaskDefinition('desktop-control', action)).not.toBeNull()
+    }
+  })
+
+  it('builds desktop task args for key actions', () => {
+    const hotkeyBind = findWorkspaceTaskDefinition('desktop-control', 'desktop:hotkey-bind')
+    expect(
+      hotkeyBind?.buildRunArgs?.({
+        hotkey: 'ctrl+alt+t',
+        action: 'run:wt.exe',
+        app: 'code.exe',
+      }),
+    ).toEqual(['desktop', 'hotkey', 'bind', 'ctrl+alt+t', 'run:wt.exe', '--app', 'code.exe'])
+
+    const remapAdd = findWorkspaceTaskDefinition('desktop-control', 'desktop:remap-add')
+    expect(remapAdd?.mode).toBe('guarded')
+    expect(
+      remapAdd?.buildPreviewArgs?.({
+        from: 'ctrl+alt+1',
+        to: 'alt+1',
+        app: 'code.exe',
+        exact: true,
+      }),
+    ).toEqual(['desktop', 'remap', 'add', 'ctrl+alt+1', 'alt+1', '--app', 'code.exe', '--exact', '--dry-run'])
+    expect(
+      remapAdd?.buildExecuteArgs?.({
+        from: 'ctrl+alt+1',
+        to: 'alt+1',
+        app: 'code.exe',
+        exact: true,
+      }),
+    ).toEqual(['desktop', 'remap', 'add', 'ctrl+alt+1', 'alt+1', '--app', 'code.exe', '--exact'])
+
+    const layoutNew = findWorkspaceTaskDefinition('desktop-control', 'desktop:layout-new')
+    expect(
+      layoutNew?.buildRunArgs?.({
+        name: 'dev',
+        layout_type: 'grid',
+        rows: '2',
+        cols: '3',
+        gap: '8',
+      }),
+    ).toEqual([
+      'desktop',
+      'layout',
+      'new',
+      'dev',
+      '--layout-type',
+      'grid',
+      '--rows',
+      '2',
+      '--cols',
+      '3',
+      '--gap',
+      '8',
+    ])
+
+    const windowTop = findWorkspaceTaskDefinition('desktop-control', 'desktop:window-top')
+    expect(windowTop?.buildRunArgs?.({ mode: 'enable', app: 'code.exe' })).toEqual([
+      'desktop',
+      'window',
+      'top',
+      '--enable',
+      '--app',
+      'code.exe',
+    ])
+    expect(windowTop?.buildRunArgs?.({ mode: 'disable' })).toEqual(['desktop', 'window', 'top', '--disable'])
+
+    const awakeOn = findWorkspaceTaskDefinition('desktop-control', 'desktop:awake-on')
+    expect(awakeOn?.buildRunArgs?.({ duration: '45m', display_on: true })).toEqual([
+      'desktop',
+      'awake',
+      'on',
+      '--duration',
+      '45m',
+      '--display-on',
+    ])
+
+    const hostsAdd = findWorkspaceTaskDefinition('desktop-control', 'desktop:hosts-add')
+    expect(hostsAdd?.mode).toBe('guarded')
+    expect(hostsAdd?.buildPreviewArgs?.({ host: 'example.com', ip: '127.0.0.1' })).toEqual([
+      'desktop',
+      'hosts',
+      'add',
+      'example.com',
+      '127.0.0.1',
+      '--dry-run',
+    ])
+    expect(hostsAdd?.buildExecuteArgs?.({ host: 'example.com', ip: '127.0.0.1' })).toEqual([
+      'desktop',
+      'hosts',
+      'add',
+      'example.com',
+      '127.0.0.1',
+    ])
+
+    const runCmd = findWorkspaceTaskDefinition('desktop-control', 'desktop:run')
+    expect(runCmd?.buildRunArgs?.({ command: 'wt.exe -d .' })).toEqual(['desktop', 'run', 'wt.exe -d .'])
+  })
+})

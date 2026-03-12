@@ -123,11 +123,83 @@ export interface RedirectConfig {
   profiles: Record<string, RedirectProfile>
 }
 
+export interface DesktopDaemonConfig {
+  quiet: boolean
+  noTray: boolean
+}
+
+export interface DesktopBinding {
+  hotkey: string
+  action: string
+  app?: string | null
+}
+
+export interface DesktopRemap {
+  from: string
+  to: string
+  app?: string | null
+  exact: boolean
+}
+
+export interface DesktopSnippet {
+  trigger: string
+  expand: string
+  app?: string | null
+  immediate: boolean
+  paste?: string | null
+}
+
+export interface DesktopLayoutTemplate {
+  type: string
+  rows?: number | null
+  cols?: number | null
+  gap?: number | null
+}
+
+export interface DesktopLayout {
+  name: string
+  template: DesktopLayoutTemplate
+  bindings: Record<string, number>
+}
+
+export interface DesktopWorkspaceApp {
+  path: string
+  args?: string | null
+  rect?: [number, number, number, number] | null
+}
+
+export interface DesktopWorkspace {
+  name: string
+  apps: DesktopWorkspaceApp[]
+}
+
+export interface DesktopThemeConfig {
+  followNightlight: boolean
+  scheduleLightAt?: string | null
+  scheduleDarkAt?: string | null
+}
+
+export interface DesktopAwakeConfig {
+  defaultDisplayOn: boolean
+}
+
+export interface DesktopConfig {
+  daemon: DesktopDaemonConfig
+  bindings: DesktopBinding[]
+  remaps: DesktopRemap[]
+  snippets: DesktopSnippet[]
+  layouts: DesktopLayout[]
+  workspaces: DesktopWorkspace[]
+  theme: DesktopThemeConfig
+  awake: DesktopAwakeConfig
+}
+
 export interface GlobalConfig {
   tree: TreeConfig
   proxy: ProxyConfig
   protect?: ProtectConfig
   redirect?: RedirectConfig
+  desktop?: DesktopConfig
 }
 
 /* ── Diff ─────────────────────────────────────── */
@@ -468,6 +540,7 @@ export type WorkspaceKey =
   | 'files-security'
   | 'integration-automation'
   | 'media-conversion'
+  | 'desktop-control'
   | 'statistics-diagnostics'
 
 export interface TaskProcessOutput {
@@ -662,6 +735,7 @@ export interface WorkspaceCapabilities {
   lock: boolean
   protect: boolean
   redirect: boolean
+  desktop: boolean
   tui: boolean
 }
 

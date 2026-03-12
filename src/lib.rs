@@ -8,6 +8,8 @@ mod cli;
 mod commands;
 mod config;
 mod ctx_store;
+#[cfg(feature = "desktop")]
+mod desktop;
 mod env_core;
 mod find;
 mod fuzzy;

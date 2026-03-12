@@ -56,6 +56,33 @@ function errorMessage(err: unknown): string {
   return '请求失败，请检查全局错误提示。'
 }
 
+function classifyFailure(message: string): string {
+  const raw = message.trim()
+  if (!raw) return ''
+  const lower = raw.toLowerCase()
+  if (
+    lower.includes('access denied') ||
+    lower.includes('permission denied') ||
+    lower.includes('administrator') ||
+    lower.includes('admin') ||
+    lower.includes('elevated') ||
+    raw.includes('权限') ||
+    raw.includes('管理员')
+  ) {
+    return '可能缺少管理员权限，请以管理员方式运行或使用提权参数。'
+  }
+  if (lower.includes('no matching window')) {
+    return '未找到匹配窗口，请确认目标窗口已打开且标题匹配。'
+  }
+  if (lower.includes('invalid hotkey') || lower.includes('hotkey not allowed') || lower.includes('remap source')) {
+    return '快捷键格式错误或被系统保留，检查输入格式。'
+  }
+  if (lower.includes('hosts file')) {
+    return 'hosts 文件访问失败，可能需要管理员权限。'
+  }
+  return ''
+}
+
 const form = reactive(createInitialState(props.task.fields))
 
 function applyInitialValues() {
@@ -86,9 +113,19 @@ const isSupported = computed(() => {
   return props.capabilities[props.task.feature] !== false
 })
 
+const taskNotices = computed(() => props.task.notices ?? [])
 const actionLabel = computed(() => (props.task.mode === 'guarded' ? '预演并确认' : '运行'))
 const processOutput = computed(() => result.value?.process ?? null)
 const previewOutput = computed(() => preview.value?.process ?? null)
+const failureHint = computed(() => {
+  if (state.value !== 'failed') return ''
+  const raw =
+    requestError.value ||
+    processOutput.value?.stderr ||
+    processOutput.value?.stdout ||
+    ''
+  return classifyFailure(raw)
+})
 const stateLabel = computed(() => {
   switch (state.value) {
     case 'previewing':
@@ -282,6 +319,16 @@ async function confirmTask() {
       </div>
     </header>
 
+    <div v-if="taskNotices.length" class="task-card__notices">
+      <span
+        v-for="notice in taskNotices"
+        :key="notice.text"
+        :class="['task-card__notice', notice.tone === 'warning' ? 'is-warning' : 'is-info']"
+      >
+        {{ notice.text }}
+      </span>
+    </div>
+
     <div v-if="props.task.fields.length" class="task-card__form">
       <label v-for="field in props.task.fields" :key="field.key" class="task-card__field">
         <span class="task-card__label">{{ field.label }}</span>
@@ -336,6 +383,8 @@ async function confirmTask() {
       <span v-else-if="validationError" class="task-card__hint task-card__hint--error">{{ validationError }}</span>
       <span v-else-if="requestError" class="task-card__hint task-card__hint--error">{{ requestError }}</span>
     </div>
+
+    <div v-if="failureHint" class="task-card__hint task-card__hint--warn">{{ failureHint }}</div>
 
     <div v-if="preview && previewOutput" class="task-card__result">
       <div class="task-card__result-meta">
@@ -466,6 +515,33 @@ async function confirmTask() {
   height: fit-content;
 }
 
+.task-card__notices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.task-card__notice {
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-3);
+  border: var(--border);
+  background: var(--ds-background-2);
+  color: var(--text-secondary);
+  font: var(--type-caption);
+}
+
+.task-card__notice.is-warning {
+  border-color: rgba(242, 178, 94, 0.4);
+  background: rgba(255, 233, 200, 0.6);
+  color: #8a5200;
+}
+
+.task-card__notice.is-info {
+  border-color: rgba(120, 150, 200, 0.35);
+  background: rgba(210, 225, 245, 0.5);
+  color: #2f4866;
+}
+
 .task-card__form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -511,6 +587,10 @@ async function confirmTask() {
 
 .task-card__hint--error {
   color: var(--color-danger);
+}
+
+.task-card__hint--warn {
+  color: #8a5200;
 }
 
 .task-card__actions {

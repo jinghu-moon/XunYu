@@ -10,6 +10,9 @@ pub(crate) struct GlobalConfig {
     pub(crate) proxy: ProxyConfig,
     #[serde(default)]
     pub(crate) acl: AclConfig,
+    #[cfg(feature = "desktop")]
+    #[serde(default)]
+    pub(crate) desktop: DesktopConfig,
     #[cfg(feature = "protect")]
     #[serde(default)]
     pub(crate) protect: ProtectConfig,
@@ -171,4 +174,126 @@ pub(crate) struct MatchCondition {
     pub(crate) size: Option<String>,
     #[serde(default)]
     pub(crate) age: Option<String>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Default, Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopConfig {
+    #[serde(default)]
+    pub(crate) daemon: DesktopDaemonConfig,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) bindings: Vec<DesktopBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) remaps: Vec<DesktopRemap>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) snippets: Vec<DesktopSnippet>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) layouts: Vec<DesktopLayout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) workspaces: Vec<DesktopWorkspace>,
+    #[serde(default)]
+    pub(crate) theme: DesktopThemeConfig,
+    #[serde(default)]
+    pub(crate) awake: DesktopAwakeConfig,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Default, Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopDaemonConfig {
+    #[serde(default)]
+    pub(crate) quiet: bool,
+    #[serde(default, rename = "noTray")]
+    pub(crate) no_tray: bool,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopBinding {
+    pub(crate) hotkey: String,
+    pub(crate) action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) app: Option<String>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopRemap {
+    pub(crate) from: String,
+    pub(crate) to: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) app: Option<String>,
+    #[serde(default)]
+    pub(crate) exact: bool,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopSnippet {
+    pub(crate) trigger: String,
+    pub(crate) expand: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) app: Option<String>,
+    #[serde(default)]
+    pub(crate) immediate: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) paste: Option<String>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopLayout {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) template: DesktopLayoutTemplate,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub(crate) bindings: std::collections::BTreeMap<String, usize>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Default, Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopLayoutTemplate {
+    #[serde(default, rename = "type")]
+    pub(crate) layout_type: String,
+    #[serde(default)]
+    pub(crate) rows: Option<u32>,
+    #[serde(default)]
+    pub(crate) cols: Option<u32>,
+    #[serde(default)]
+    pub(crate) gap: Option<u32>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopWorkspace {
+    pub(crate) name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) apps: Vec<DesktopWorkspaceApp>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopWorkspaceApp {
+    pub(crate) path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) args: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) rect: Option<[i32; 4]>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Default, Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopThemeConfig {
+    #[serde(default, rename = "followNightlight")]
+    pub(crate) follow_nightlight: bool,
+    #[serde(default, rename = "scheduleLightAt", skip_serializing_if = "Option::is_none")]
+    pub(crate) schedule_light_at: Option<String>,
+    #[serde(default, rename = "scheduleDarkAt", skip_serializing_if = "Option::is_none")]
+    pub(crate) schedule_dark_at: Option<String>,
+}
+
+#[cfg(feature = "desktop")]
+#[derive(Default, Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct DesktopAwakeConfig {
+    #[serde(default, rename = "defaultDisplayOn")]
+    pub(crate) default_display_on: bool,
 }

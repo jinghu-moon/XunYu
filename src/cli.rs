@@ -11,6 +11,8 @@ mod crypt;
 #[cfg(feature = "cstat")]
 mod cstat;
 mod ctx;
+#[cfg(feature = "desktop")]
+mod desktop;
 #[cfg(feature = "dashboard")]
 mod dashboard;
 mod defaults;
@@ -69,6 +71,26 @@ pub use vault::{
 };
 #[cfg(feature = "cstat")]
 pub use cstat::CstatCmd;
+#[cfg(feature = "desktop")]
+pub use desktop::{
+    DesktopAppCmd, DesktopAppListCmd, DesktopAppSubCommand, DesktopAwakeCmd, DesktopAwakeOffCmd,
+    DesktopAwakeOnCmd, DesktopAwakeStatusCmd, DesktopAwakeSubCommand, DesktopCmd, DesktopColorCmd,
+    DesktopDaemonCmd, DesktopDaemonReloadCmd, DesktopDaemonStartCmd, DesktopDaemonStatusCmd,
+    DesktopDaemonStopCmd, DesktopDaemonSubCommand, DesktopHostsAddCmd, DesktopHostsCmd,
+    DesktopHostsListCmd, DesktopHostsRemoveCmd, DesktopHostsSubCommand, DesktopHotkeyBindCmd,
+    DesktopHotkeyCmd, DesktopHotkeyListCmd, DesktopHotkeySubCommand, DesktopHotkeyUnbindCmd,
+    DesktopLayoutApplyCmd, DesktopLayoutCmd, DesktopLayoutListCmd, DesktopLayoutNewCmd,
+    DesktopLayoutPreviewCmd, DesktopLayoutRemoveCmd, DesktopLayoutSubCommand, DesktopRemapAddCmd,
+    DesktopRemapClearCmd, DesktopRemapCmd, DesktopRemapListCmd, DesktopRemapRemoveCmd,
+    DesktopRemapSubCommand, DesktopRunCmd, DesktopSnippetAddCmd, DesktopSnippetClearCmd,
+    DesktopSnippetCmd, DesktopSnippetListCmd, DesktopSnippetRemoveCmd, DesktopSnippetSubCommand,
+    DesktopSubCommand, DesktopThemeCmd, DesktopThemeScheduleCmd, DesktopThemeSetCmd,
+    DesktopThemeStatusCmd, DesktopThemeSubCommand, DesktopThemeToggleCmd, DesktopWindowCmd,
+    DesktopWindowFocusCmd, DesktopWindowMoveCmd, DesktopWindowResizeCmd, DesktopWindowSubCommand,
+    DesktopWindowTopCmd, DesktopWindowTransparentCmd, DesktopWorkspaceCmd, DesktopWorkspaceLaunchCmd,
+    DesktopWorkspaceListCmd, DesktopWorkspaceRemoveCmd, DesktopWorkspaceSaveCmd,
+    DesktopWorkspaceSubCommand,
+};
 pub use ctx::{
     CtxCmd, CtxDelCmd, CtxListCmd, CtxOffCmd, CtxRenameCmd, CtxSetCmd, CtxShowCmd, CtxSubCommand,
     CtxUseCmd,
@@ -192,6 +214,8 @@ pub enum SubCommand {
     Diff(DiffCmd),
     #[cfg(feature = "redirect")]
     Redirect(RedirectCmd),
+    #[cfg(feature = "desktop")]
+    Desktop(DesktopCmd),
     #[cfg(feature = "cstat")]
     Cstat(CstatCmd),
     #[cfg(feature = "batch_rename")]
@@ -200,3 +224,4 @@ pub enum SubCommand {
     Img(ImgCmd),
     Video(VideoCmd),
 }
+

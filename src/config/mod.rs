@@ -7,6 +7,13 @@ use std::path::PathBuf;
 
 #[allow(unused_imports)]
 pub(crate) use model::{AclConfig, GlobalConfig, ProxyConfig, TreeConfig};
+#[cfg(feature = "desktop")]
+#[allow(unused_imports)]
+pub(crate) use model::{
+    DesktopAwakeConfig, DesktopBinding, DesktopConfig, DesktopDaemonConfig, DesktopLayout,
+    DesktopLayoutTemplate, DesktopRemap, DesktopSnippet, DesktopThemeConfig, DesktopWorkspace,
+    DesktopWorkspaceApp,
+};
 #[cfg(feature = "redirect")]
 #[allow(unused_imports)]
 pub(crate) use model::{
