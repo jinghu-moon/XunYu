@@ -64,6 +64,7 @@ pub fn scan_orphans(root: &Path, recursive: bool, config: &AclConfig) -> Result<
         });
     });
 
+    drop(results_clone);
     let out = Arc::try_unwrap(results).unwrap().into_inner().unwrap();
     Ok(out)
 }

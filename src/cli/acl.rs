@@ -82,6 +82,26 @@ pub struct AclRemoveCmd {
     /// target path
     #[argh(option, short = 'p')]
     pub path: String,
+
+    /// principal name to match (non-interactive)
+    #[argh(option)]
+    pub principal: Option<String>,
+
+    /// raw SID to match (non-interactive)
+    #[argh(option)]
+    pub raw_sid: Option<String>,
+
+    /// rights level: FullControl | Modify | ReadAndExecute | Read | Write
+    #[argh(option)]
+    pub rights: Option<String>,
+
+    /// access type: Allow | Deny
+    #[argh(option)]
+    pub ace_type: Option<String>,
+
+    /// skip confirmation (non-interactive)
+    #[argh(switch, short = 'y')]
+    pub yes: bool,
 }
 
 /// Remove ALL explicit rules for a specific principal.
@@ -303,4 +323,7 @@ pub struct AclConfigCmd {
     /// set a key-value pair: --set KEY VALUE
     #[argh(option)]
     pub set: Vec<String>,
+    /// value for `--set KEY VALUE` when KEY consumes the option value
+    #[argh(positional)]
+    pub set_value: Vec<String>,
 }

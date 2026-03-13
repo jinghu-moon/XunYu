@@ -21,6 +21,10 @@ path = "src/main.rs"
 name = "xyu"
 path = "src/bin/xyu.rs"
 
+[[bin]]
+name = "acl_test"
+path = "src/bin/acl_test.rs"
+
 [features]
 default = ["fs"]
 fs = []

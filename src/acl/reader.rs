@@ -3,7 +3,9 @@ use std::os::windows::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use windows::Win32::Foundation::{HLOCAL, LocalFree};
+use windows::Win32::Foundation::{
+    GetLastError, HLOCAL, LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_NONE_MAPPED,
+};
 use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, GetNamedSecurityInfoW, SE_FILE_OBJECT,
 };
@@ -100,15 +102,20 @@ pub fn get_acl(path: &Path) -> Result<AclSnapshot> {
 
 /// Convert a `PSID` to a resolved account name `DOMAIN\User`.
 ///
-/// Falls back to the raw SID string on failure, and sets `is_orphan = true`
-/// on the returned entry.
+/// Falls back to the raw SID string on failure.
 pub fn resolve_sid(sid: PSID) -> Result<String> {
+    let (name, _) = resolve_sid_with_orphan(sid)?;
+    Ok(name)
+}
+
+/// Convert a `PSID` to a resolved account name and indicate orphaned SIDs.
+pub fn resolve_sid_with_orphan(sid: PSID) -> Result<(String, bool)> {
     if sid.is_invalid() {
-        return Ok("(null SID)".to_string());
+        return Ok(("(null SID)".to_string(), true));
     }
     unsafe {
         if !IsValidSid(sid).as_bool() {
-            return Ok("(invalid SID)".to_string());
+            return Ok(("(invalid SID)".to_string(), true));
         }
 
         let mut name_len: u32 = 0;
@@ -116,7 +123,7 @@ pub fn resolve_sid(sid: PSID) -> Result<String> {
         let mut sid_use = windows::Win32::Security::SID_NAME_USE(0);
 
         // First call to get buffer sizes
-        let _ = LookupAccountSidW(
+        let probe = LookupAccountSidW(
             None,
             sid,
             PWSTR::null(),
@@ -126,14 +133,24 @@ pub fn resolve_sid(sid: PSID) -> Result<String> {
             &mut sid_use,
         );
 
+        if probe.is_err() {
+            let code = GetLastError().0;
+            if code == ERROR_NONE_MAPPED.0 {
+                return sid_to_string(sid).map(|s| (s, true));
+            }
+            if code != ERROR_INSUFFICIENT_BUFFER.0 {
+                return Err(AclError::from_win32(code).into());
+            }
+        }
+
         if name_len == 0 {
-            return sid_to_string(sid);
+            return sid_to_string(sid).map(|s| (s, true));
         }
 
         let mut name_buf = vec![0u16; name_len as usize];
         let mut domain_buf = vec![0u16; domain_len as usize];
 
-        LookupAccountSidW(
+        if LookupAccountSidW(
             None,
             sid,
             PWSTR(name_buf.as_mut_ptr()),
@@ -142,7 +159,14 @@ pub fn resolve_sid(sid: PSID) -> Result<String> {
             &mut domain_len,
             &mut sid_use,
         )
-        .map_err(|_| AclError::last_win32())?;
+        .is_err()
+        {
+            let code = GetLastError().0;
+            if code == ERROR_NONE_MAPPED.0 {
+                return sid_to_string(sid).map(|s| (s, true));
+            }
+            return Err(AclError::from_win32(code).into());
+        }
 
         // Trim null terminators
         let name = OsString::from_wide(
@@ -164,9 +188,9 @@ pub fn resolve_sid(sid: PSID) -> Result<String> {
         .into_owned();
 
         if domain.is_empty() {
-            Ok(name)
+            Ok((name, false))
         } else {
-            Ok(format!("{domain}\\{name}"))
+            Ok((format!("{domain}\\{name}"), false))
         }
     }
 }
@@ -314,11 +338,8 @@ unsafe fn parse_dacl(dacl: *mut windows::Win32::Security::ACL) -> Result<Vec<Ace
 
         let sid = PSID(sid_ptr as *mut _);
         let raw_sid = sid_to_string(sid).unwrap_or_else(|_| "(invalid)".to_string());
-        let principal_result = resolve_sid(sid);
-        let (principal, is_orphan) = match principal_result {
-            Ok(name) => (name, false),
-            Err(_) => (raw_sid.clone(), true),
-        };
+        let (principal, is_orphan) = resolve_sid_with_orphan(sid)
+            .unwrap_or_else(|_| (raw_sid.clone(), true));
 
         entries.push(AceEntry {
             principal,

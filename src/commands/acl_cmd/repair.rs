@@ -128,8 +128,25 @@ pub(super) fn cmd_repair(args: AclRepairCmd) -> CliResult {
         return Ok(());
     }
 
-    let stats =
-        acl::repair::force_repair(path, &cfg.cfg, runtime::is_quiet()).map_err(map_acl_err)?;
+    let stats = match acl::repair::force_repair(path, &cfg.cfg, runtime::is_quiet()) {
+        Ok(s) => s,
+        Err(e) => {
+            if args.export_errors {
+                let dest = acl::export::error_csv_filename(&cfg.export_path, "repair");
+                let mut wtr = csv::Writer::from_path(&dest)
+                    .map_err(|e| map_acl_err(anyhow::Error::new(e)))?;
+                wtr.write_record(["Path", "Error"])
+                    .map_err(|e| map_acl_err(anyhow::Error::new(e)))?;
+                let msg = format!("{e:#}");
+                wtr.write_record([&path.to_string_lossy(), msg.as_str()])
+                    .map_err(|e| map_acl_err(anyhow::Error::new(e)))?;
+                wtr.flush()
+                    .map_err(|e| map_acl_err(anyhow::Error::new(e)))?;
+                ui_println!("Exported 1 errors to {}", dest.display());
+            }
+            return Err(map_acl_err(e));
+        }
+    };
 
     ui_println!("");
     ui_println!("{}", stats.summary());

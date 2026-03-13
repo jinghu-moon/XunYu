@@ -3,16 +3,41 @@ use super::*;
 pub(super) fn cmd_config(args: AclConfigCmd) -> CliResult {
     let mut cfg = load_config();
 
-    if !args.set.is_empty() {
-        if args.set.len() != 2 {
+    let mut set_parts = args.set.clone();
+    if !args.set_value.is_empty() {
+        if args.set.is_empty() {
             return Err(CliError::with_details(
                 2,
                 "--set requires KEY VALUE".to_string(),
                 &["Fix: Use `xun acl config --set throttle_limit 8`."],
             ));
         }
-        let key = args.set[0].as_str();
-        let value = args.set[1].as_str();
+        if args.set.len() != 1 {
+            return Err(CliError::with_details(
+                2,
+                "--set requires KEY VALUE".to_string(),
+                &[
+                    "Fix: Use `xun acl config --set throttle_limit 8`.",
+                    "Alt: Use `xun acl config --set throttle_limit --set 8`.",
+                ],
+            ));
+        }
+        set_parts.extend(args.set_value);
+    }
+
+    if !set_parts.is_empty() {
+        if set_parts.len() != 2 {
+            return Err(CliError::with_details(
+                2,
+                "--set requires KEY VALUE".to_string(),
+                &[
+                    "Fix: Use `xun acl config --set throttle_limit 8`.",
+                    "Alt: Use `xun acl config --set throttle_limit --set 8`.",
+                ],
+            ));
+        }
+        let key = set_parts[0].as_str();
+        let value = set_parts[1].as_str();
         match key {
             "throttle_limit" => {
                 cfg.acl.throttle_limit = value

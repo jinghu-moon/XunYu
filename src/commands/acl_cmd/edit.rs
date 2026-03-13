@@ -128,7 +128,6 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
 }
 
 pub(super) fn cmd_remove(args: AclRemoveCmd) -> CliResult {
-    ensure_interactive("Remove")?;
     let path = Path::new(&args.path);
     let snap = acl::reader::get_acl(path).map_err(map_acl_err)?;
 
@@ -142,6 +141,93 @@ pub(super) fn cmd_remove(args: AclRemoveCmd) -> CliResult {
         ui_println!("No explicit ACE entries to remove.");
         return Ok(());
     }
+
+    let has_filters = args.principal.is_some()
+        || args.raw_sid.is_some()
+        || args.rights.is_some()
+        || args.ace_type.is_some();
+
+    if has_filters {
+        if args.principal.is_none() && args.raw_sid.is_none() {
+            return Err(CliError::with_details(
+                2,
+                "remove requires --principal or --raw-sid for non-interactive mode.".to_string(),
+                &[
+                    "Fix: Provide --principal or --raw-sid (optional: --rights, --ace-type).",
+                ],
+            ));
+        }
+
+        let rights_mask = if let Some(r) = args.rights.as_deref() {
+            Some(acl::parse::parse_rights(r).map_err(map_acl_err)?)
+        } else {
+            None
+        };
+
+        let ace_type = if let Some(t) = args.ace_type.as_deref() {
+            Some(acl::parse::parse_ace_type(t).map_err(map_acl_err)?)
+        } else {
+            None
+        };
+
+        let to_remove: Vec<_> = explicit
+            .iter()
+            .filter(|e| {
+                if let Some(principal) = args.principal.as_deref() {
+                    if !e.principal.eq_ignore_ascii_case(principal) {
+                        return false;
+                    }
+                }
+                if let Some(raw_sid) = args.raw_sid.as_deref() {
+                    if !e.raw_sid.eq_ignore_ascii_case(raw_sid) {
+                        return false;
+                    }
+                }
+                if let Some(mask) = rights_mask {
+                    if e.rights_mask != mask {
+                        return false;
+                    }
+                }
+                if let Some(ref ty) = ace_type {
+                    if &e.ace_type != ty {
+                        return false;
+                    }
+                }
+                true
+            })
+            .cloned()
+            .collect();
+
+        if to_remove.is_empty() {
+            ui_println!("No matching explicit ACE entries.");
+            return Ok(());
+        }
+
+        print_path_header(path);
+        ui_println!("Remove explicit permission entries");
+
+        if !prompt_confirm("Confirm remove?", false, args.yes)? {
+            ui_println!("Cancelled");
+            return Ok(());
+        }
+
+        let removed = acl::writer::remove_rules(path, &to_remove).map_err(map_acl_err)?;
+        ui_println!("Removed {} entries.", removed);
+
+        let cfg = load_acl_runtime_config();
+        let audit = audit_log(&cfg);
+        audit
+            .append(&AuditEntry::ok(
+                "RemovePermission",
+                path.to_string_lossy(),
+                format!("Removed={removed}"),
+            ))
+            .map_err(map_acl_err)?;
+
+        return Ok(());
+    }
+
+    ensure_interactive("Remove")?;
 
     print_path_header(path);
     ui_println!("Remove explicit permission entries");
