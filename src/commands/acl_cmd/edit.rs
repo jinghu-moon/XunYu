@@ -104,7 +104,7 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     };
 
     let principal_start = Instant::now();
-    let _ = acl::writer::lookup_account_sid(&principal).map_err(map_acl_err)?;
+    let principal_sid = acl::writer::lookup_account_sid(&principal).map_err(map_acl_err)?;
     let principal_elapsed = principal_start.elapsed();
 
     let rights_start = Instant::now();
@@ -229,9 +229,9 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
 
     for path in &paths {
         let add_start = Instant::now();
-        let result = acl::writer::add_rule(
+        let result = acl::writer::add_rule_with_sid_bytes(
             path,
-            &principal,
+            &principal_sid,
             rights_mask,
             ace_type.clone(),
             inheritance,

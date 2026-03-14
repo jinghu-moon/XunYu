@@ -28,13 +28,31 @@ pub(super) fn add_rule(
     inheritance: InheritanceFlags,
     propagation: PropagationFlags,
 ) -> Result<()> {
+    let sid_bytes = lookup_account_sid(principal)
+        .with_context(|| format!("failed to resolve principal '{principal}'"))?;
+    add_rule_with_sid_bytes(
+        path,
+        &sid_bytes,
+        rights_mask,
+        ace_type,
+        inheritance,
+        propagation,
+    )
+}
+
+pub(super) fn add_rule_with_sid_bytes(
+    path: &Path,
+    sid_bytes: &[u8],
+    rights_mask: u32,
+    ace_type: AceType,
+    inheritance: InheritanceFlags,
+    propagation: PropagationFlags,
+) -> Result<()> {
     use windows::Win32::Security::ACE_FLAGS;
     use windows::Win32::Security::Authorization::{
         DENY_ACCESS, EXPLICIT_ACCESS_W, SET_ACCESS, SetEntriesInAclW, TRUSTEE_IS_SID, TRUSTEE_W,
     };
 
-    let sid_bytes = lookup_account_sid(principal)
-        .with_context(|| format!("failed to resolve principal '{principal}'"))?;
     let sid = PSID(sid_bytes.as_ptr() as *mut _);
 
     // Build ACE flags from InheritanceFlags + PropagationFlags

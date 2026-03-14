@@ -36,6 +36,24 @@ pub(super) fn add_rule(
     )
 }
 
+pub(super) fn add_rule_with_sid_bytes(
+    path: &Path,
+    sid_bytes: &[u8],
+    rights_mask: u32,
+    ace_type: AceType,
+    inheritance: InheritanceFlags,
+    propagation: PropagationFlags,
+) -> Result<()> {
+    dacl::add_rule_with_sid_bytes(
+        path,
+        sid_bytes,
+        rights_mask,
+        ace_type,
+        inheritance,
+        propagation,
+    )
+}
+
 pub(super) fn remove_rules(path: &Path, to_remove: &[AceEntry]) -> Result<usize> {
     dacl::remove_rules(path, to_remove)
 }
