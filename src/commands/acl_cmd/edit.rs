@@ -222,6 +222,8 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     let mut audit_min: Option<Duration> = None;
     let mut audit_max: Option<Duration> = None;
     let mut audit_flushes = 0usize;
+    let mut audit_rotate_elapsed = Duration::from_millis(0);
+    let mut audit_rotate_count = 0usize;
     let mut pending: Vec<AuditEntry> = Vec::new();
     let audit_batch_size = 64usize;
 
@@ -241,8 +243,12 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
         update_min_max(&mut add_min, &mut add_max, add_dur);
         if let Err(err) = result {
             if !pending.is_empty() {
-                audit.append_many(&pending).map_err(map_acl_err)?;
+                audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
             }
+            let rotate_start = Instant::now();
+            audit.rotate_if_needed().map_err(map_acl_err)?;
+            audit_rotate_elapsed += rotate_start.elapsed();
+            audit_rotate_count += 1;
             return Err(map_acl_err(err));
         }
 
@@ -257,7 +263,7 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
 
         if pending.len() >= audit_batch_size {
             let audit_start = Instant::now();
-            audit.append_many(&pending).map_err(map_acl_err)?;
+            audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
             let audit_dur = audit_start.elapsed();
             audit_elapsed += audit_dur;
             audit_flushes += 1;
@@ -268,12 +274,16 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
 
     if !pending.is_empty() {
         let audit_start = Instant::now();
-        audit.append_many(&pending).map_err(map_acl_err)?;
+        audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
         let audit_dur = audit_start.elapsed();
         audit_elapsed += audit_dur;
         audit_flushes += 1;
         update_min_max(&mut audit_min, &mut audit_max, audit_dur);
     }
+    let rotate_start = Instant::now();
+    audit.rotate_if_needed().map_err(map_acl_err)?;
+    audit_rotate_elapsed += rotate_start.elapsed();
+    audit_rotate_count += 1;
 
     if is_batch {
         ui_println!("Added {} entries", paths.len());
@@ -282,38 +292,40 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     }
 
     if timing_enabled {
-        let add_total_ms = add_elapsed.as_millis();
-        let audit_total_ms = audit_elapsed.as_millis();
-        let add_avg_ms = if add_count == 0 {
+        let add_total_us = add_elapsed.as_micros();
+        let audit_total_us = audit_elapsed.as_micros();
+        let add_avg_us = if add_count == 0 {
             0
         } else {
-            add_total_ms / add_count as u128
+            add_total_us / add_count as u128
         };
-        let audit_avg_ms = if audit_flushes == 0 {
+        let audit_avg_us = if audit_flushes == 0 {
             0
         } else {
-            audit_total_ms / audit_flushes as u128
+            audit_total_us / audit_flushes as u128
         };
         eprintln!(
-            "perf: acl_add paths={} batch={} paths_ms={} principal_ms={} rights_ms={} ace_ms={} inherit_ms={} confirm_ms={} add_ms={} add_min_ms={} add_max_ms={} add_avg_ms={} audit_ms={} audit_flushes={} audit_min_ms={} audit_max_ms={} audit_avg_ms={} total_ms={}",
+            "perf: acl_add paths={} batch={} paths_us={} principal_us={} rights_us={} ace_us={} inherit_us={} confirm_us={} add_us={} add_min_us={} add_max_us={} add_avg_us={} audit_us={} audit_flushes={} audit_min_us={} audit_max_us={} audit_avg_us={} audit_rotate_us={} audit_rotate_count={} total_us={}",
             paths.len(),
             if is_batch { "yes" } else { "no" },
-            paths_elapsed.as_millis(),
-            principal_elapsed.as_millis(),
-            rights_elapsed.as_millis(),
-            ace_elapsed.as_millis(),
-            inherit_elapsed.as_millis(),
-            confirm_elapsed.as_millis(),
-            add_total_ms,
-            add_min.map(|d| d.as_millis()).unwrap_or(0),
-            add_max.map(|d| d.as_millis()).unwrap_or(0),
-            add_avg_ms,
-            audit_total_ms,
+            paths_elapsed.as_micros(),
+            principal_elapsed.as_micros(),
+            rights_elapsed.as_micros(),
+            ace_elapsed.as_micros(),
+            inherit_elapsed.as_micros(),
+            confirm_elapsed.as_micros(),
+            add_total_us,
+            add_min.map(|d| d.as_micros()).unwrap_or(0),
+            add_max.map(|d| d.as_micros()).unwrap_or(0),
+            add_avg_us,
+            audit_total_us,
             audit_flushes,
-            audit_min.map(|d| d.as_millis()).unwrap_or(0),
-            audit_max.map(|d| d.as_millis()).unwrap_or(0),
-            audit_avg_ms,
-            total_start.elapsed().as_millis()
+            audit_min.map(|d| d.as_micros()).unwrap_or(0),
+            audit_max.map(|d| d.as_micros()).unwrap_or(0),
+            audit_avg_us,
+            audit_rotate_elapsed.as_micros(),
+            audit_rotate_count,
+            total_start.elapsed().as_micros()
         );
     }
 
