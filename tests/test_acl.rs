@@ -3,10 +3,13 @@
 mod common;
 
 use common::*;
+use csv::ReaderBuilder;
 use serde_json::Value;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::time::Instant;
 
 fn acl_cmd(env: &TestEnv) -> Command {
     let mut cmd = env.cmd();
@@ -27,6 +30,15 @@ fn setup_acl_dir(env: &TestEnv, name: &str) -> PathBuf {
 
 fn stderr_str(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).to_string()
+}
+
+fn emit_acl_add_perf(out: &Output) {
+    let err = stderr_str(out);
+    for line in err.lines() {
+        if line.contains("perf: acl_add") {
+            eprintln!("{}", line);
+        }
+    }
 }
 
 fn str_path(path: &Path) -> String {
@@ -76,6 +88,166 @@ fn find_csv_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn export_acl_rows(env: &TestEnv, path: &Path, label: &str) -> Vec<Vec<String>> {
+    let dest = env.root.join(format!("{label}.csv"));
+    run_ok(acl_cmd(env).args([
+        "acl",
+        "view",
+        "-p",
+        &str_path(path),
+        "--export",
+        &str_path(&dest),
+    ]));
+
+    let mut rows = Vec::new();
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(&dest)
+        .unwrap();
+    for record in reader.records().flatten() {
+        rows.push(record.iter().map(|v| v.to_string()).collect());
+    }
+    rows
+}
+
+fn read_csv_rows(path: &Path) -> Vec<Vec<String>> {
+    let mut rows = Vec::new();
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(path)
+        .unwrap();
+    for record in reader.records().flatten() {
+        rows.push(record.iter().map(|v| v.to_string()).collect());
+    }
+    rows
+}
+
+fn csv_rows_contain(rows: &[Vec<String>], needle: &str) -> bool {
+    rows.iter()
+        .any(|row| row.iter().any(|cell| cell.contains(needle)))
+}
+
+fn has_acl_row(
+    rows: &[Vec<String>],
+    ace_type: &str,
+    source: &str,
+    principal: &str,
+    rights: &str,
+    inherit: &str,
+    propagation: &str,
+    orphan: &str,
+) -> bool {
+    rows.iter().any(|row| {
+        row.get(0).map(|v| v == ace_type).unwrap_or(false)
+            && row.get(1).map(|v| v == source).unwrap_or(false)
+            && row.get(2).map(|v| v == principal).unwrap_or(false)
+            && row.get(3).map(|v| v == rights).unwrap_or(false)
+            && row.get(5).map(|v| v == inherit).unwrap_or(false)
+            && row.get(6).map(|v| v == propagation).unwrap_or(false)
+            && row.get(7).map(|v| v == orphan).unwrap_or(false)
+    })
+}
+
+fn owner_from_summary(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        if let Some(rest) = line.strip_prefix("Owner: ") {
+            let owner = rest.split(" | ").next().unwrap_or(rest);
+            Some(owner.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn next_seed(seed: &mut u32) -> u32 {
+    *seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+    *seed
+}
+
+fn pick_index(seed: &mut u32, len: usize) -> usize {
+    (next_seed(seed) as usize) % len.max(1)
+}
+
+fn setup_acl_stress_tree(
+    env: &TestEnv,
+    label: &str,
+    files: usize,
+    dirs: usize,
+) -> (PathBuf, Vec<PathBuf>) {
+    let root = env.root.join(label);
+    fs::create_dir_all(&root).unwrap();
+    let dir_count = dirs.max(1);
+    let mut subdirs = Vec::with_capacity(dir_count);
+    for i in 0..dir_count {
+        let dir = root.join(format!("d{:03}", i));
+        fs::create_dir_all(&dir).unwrap();
+        subdirs.push(dir);
+    }
+
+    let files = files.max(1);
+    let mut file_paths = Vec::with_capacity(files);
+    for i in 0..files {
+        let dir = &subdirs[i % dir_count];
+        let file = dir.join(format!("f{:06}.txt", i));
+        fs::write(&file, b"data").unwrap();
+        file_paths.push(file);
+    }
+
+    (root, file_paths)
+}
+
+fn apply_random_acl_rules(env: &TestEnv, paths: &[PathBuf], seed: u32) {
+    let principals = ["S-1-1-0", "S-1-5-32-545", "S-1-5-32-544"];
+    let rights = ["Read", "Write", "Modify"];
+    let mut seed = seed;
+    let mut groups: BTreeMap<(usize, usize), Vec<PathBuf>> = BTreeMap::new();
+
+    for path in paths {
+        let rules = 1 + (next_seed(&mut seed) as usize % 3);
+        let mut selected: HashSet<(usize, usize)> = HashSet::new();
+        while selected.len() < rules {
+            let principal_idx = pick_index(&mut seed, principals.len());
+            let right_idx = pick_index(&mut seed, rights.len());
+            selected.insert((principal_idx, right_idx));
+        }
+        for key in selected {
+            groups.entry(key).or_default().push(path.clone());
+        }
+    }
+
+    let mut batch_idx = 0usize;
+    for ((principal_idx, right_idx), targets) in groups {
+        let principal = principals[principal_idx];
+        let right = rights[right_idx];
+        let list_path = env
+            .root
+            .join(format!("acl_add_batch_{batch_idx}.txt"));
+        batch_idx += 1;
+        let mut content = String::new();
+        for path in targets {
+            content.push_str(&str_path(&path));
+            content.push('\n');
+        }
+        fs::write(&list_path, content).unwrap();
+        let out = run_ok(acl_cmd(env).args([
+            "acl",
+            "add",
+            "--file",
+            &str_path(&list_path),
+            "--principal",
+            principal,
+            "--rights",
+            right,
+            "--ace-type",
+            "Allow",
+            "--inherit",
+            "None",
+            "-y",
+        ]));
+        emit_acl_add_perf(&out);
+    }
 }
 
 #[allow(deprecated)]
@@ -401,6 +573,11 @@ fn acl_orphans_export_delete_both() {
         &str_path(&export),
     ]));
     assert!(export.exists(), "orphans export not created");
+    let rows = read_csv_rows(&export);
+    assert!(
+        csv_rows_contain(&rows, orphan_sid),
+        "orphans export missing orphan sid"
+    );
 
     run_ok(acl_cmd(&env).args([
         "acl",
@@ -415,6 +592,20 @@ fn acl_orphans_export_delete_both() {
     assert!(
         actions.iter().any(|a| a == "PurgeOrphans"),
         "missing PurgeOrphans audit entry"
+    );
+    let rows = export_acl_rows(&env, &dir, "acl_orphans_after_delete");
+    assert!(
+        !has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            orphan_sid,
+            "Read",
+            "None",
+            "None",
+            "是"
+        ),
+        "expected orphan ACE to be removed"
     );
 
     run_ok(acl_cmd(&env).args([
@@ -446,6 +637,11 @@ fn acl_orphans_export_delete_both() {
         "-y",
     ]));
     assert!(export_both.exists(), "orphans both export not created");
+    let rows = read_csv_rows(&export_both);
+    assert!(
+        csv_rows_contain(&rows, orphan_sid),
+        "orphans both export missing orphan sid"
+    );
 }
 
 #[test]
@@ -470,6 +666,21 @@ fn acl_add_and_purge_write_audit() {
         "-y",
     ]));
 
+    let rows = export_acl_rows(&env, &dir, "acl_write_after_add");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Read",
+            "None",
+            "None",
+            "否"
+        ),
+        "missing added ACE in export rows"
+    );
+
     run_ok(acl_cmd(&env).args([
         "acl",
         "purge",
@@ -479,6 +690,21 @@ fn acl_add_and_purge_write_audit() {
         principal,
         "-y",
     ]));
+
+    let rows = export_acl_rows(&env, &dir, "acl_write_after_purge");
+    assert!(
+        !has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Read",
+            "None",
+            "None",
+            "否"
+        ),
+        "expected purged ACE to be absent"
+    );
 
     let actions = read_audit_actions(&env);
     assert!(
@@ -523,6 +749,21 @@ fn acl_add_deny_with_inherit() {
         err.contains("ContainerInherit"),
         "missing inheritance flag: {err}"
     );
+
+    let rows = export_acl_rows(&env, &dir, "acl_add_deny_export");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Deny",
+            "显式",
+            principal,
+            "Write",
+            "ContainerInherit",
+            "None",
+            "是"
+        ),
+        "missing deny ACE in export rows"
+    );
 }
 
 #[test]
@@ -560,6 +801,21 @@ fn acl_remove_non_interactive_by_principal() {
         "Allow",
         "-y",
     ]));
+
+    let rows = export_acl_rows(&env, &dir, "acl_remove_non_interactive_after");
+    assert!(
+        !has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Read",
+            "None",
+            "None",
+            "否"
+        ),
+        "expected removed ACE to be absent"
+    );
 
     let actions = read_audit_actions(&env);
     assert!(
@@ -662,6 +918,13 @@ fn acl_inherit_enable_and_preserve_false() {
         "false",
     ]));
 
+    let out = run_ok(acl_cmd(&env).args(["acl", "view", "-p", &str_path(&dir)]));
+    let err = stderr_str(&out);
+    assert!(
+        err.contains("Inherit: disabled"),
+        "expected inheritance disabled: {err}"
+    );
+
     run_ok(acl_cmd(&env).args([
         "acl",
         "inherit",
@@ -669,6 +932,13 @@ fn acl_inherit_enable_and_preserve_false() {
         &str_path(&dir),
         "--enable",
     ]));
+
+    let out = run_ok(acl_cmd(&env).args(["acl", "view", "-p", &str_path(&dir)]));
+    let err = stderr_str(&out);
+    assert!(
+        err.contains("Inherit: enabled"),
+        "expected inheritance enabled: {err}"
+    );
 
     let actions = read_audit_actions(&env);
     let count = actions.iter().filter(|a| *a == "SetInheritance").count();
@@ -711,6 +981,11 @@ fn acl_batch_orphans_inherit_reset_and_error_csv() {
 
     let err_csv = find_csv_with_prefix(&export_dir, "ACLErrors_inherit-reset_");
     assert!(err_csv.is_some(), "missing inherit-reset error csv");
+    let rows = read_csv_rows(err_csv.as_ref().unwrap());
+    assert!(
+        csv_rows_contain(&rows, "missing_path"),
+        "inherit-reset error csv missing path"
+    );
 }
 
 #[test]
@@ -794,6 +1069,11 @@ fn acl_repair_export_errors_on_failure() {
 
     let err_csv = find_csv_with_prefix(&desktop, "ACLErrors_repair_");
     assert!(err_csv.is_some(), "missing repair error csv");
+    let rows = read_csv_rows(err_csv.as_ref().unwrap());
+    assert!(
+        csv_rows_contain(&rows, "acl_repair_missing"),
+        "repair error csv missing path"
+    );
 }
 
 #[test]
@@ -803,6 +1083,9 @@ fn acl_owner_success_when_admin() {
     }
     let env = TestEnv::new();
     let dir = setup_acl_dir(&env, "acl_owner");
+
+    let before = run_ok(acl_cmd(&env).args(["acl", "view", "-p", &str_path(&dir)]));
+    let before_owner = owner_from_summary(&stderr_str(&before));
 
     let out = run_ok(acl_cmd(&env).args([
         "acl",
@@ -822,6 +1105,18 @@ fn acl_owner_success_when_admin() {
     assert!(
         actions.iter().any(|a| a == "SetOwner"),
         "missing SetOwner audit entry"
+    );
+
+    let after = run_ok(acl_cmd(&env).args(["acl", "view", "-p", &str_path(&dir)]));
+    let after_owner = owner_from_summary(&stderr_str(&after));
+    assert!(
+        before_owner.is_some() && after_owner.is_some(),
+        "missing owner in view output"
+    );
+    assert_eq!(
+        after_owner.unwrap(),
+        "BUILTIN\\Administrators",
+        "owner not updated as expected"
     );
 }
 
@@ -864,5 +1159,122 @@ fn acl_repair_success_when_admin() {
     assert!(
         actions.iter().any(|a| a == "ForceRepair"),
         "missing ForceRepair audit entry"
+    );
+}
+
+#[test]
+fn acl_stress_small_random_rules() {
+    if !env_bool("XUN_TEST_ACL_STRESS", false) {
+        return;
+    }
+    if !is_admin() {
+        return;
+    }
+    let env = TestEnv::new();
+    let files = env_usize("XUN_TEST_ACL_STRESS_FILES", 300);
+    let dirs = env_usize("XUN_TEST_ACL_STRESS_DIRS", 12);
+    let setup_start = Instant::now();
+    let (root, files) = setup_acl_stress_tree(&env, "acl_stress_small", files, dirs);
+    let setup_elapsed = setup_start.elapsed();
+
+    let add_start = Instant::now();
+    apply_random_acl_rules(&env, &files, 0x1234_5678);
+    let add_elapsed = add_start.elapsed();
+
+    let start = Instant::now();
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "orphans",
+        "-p",
+        &str_path(&root),
+        "--action",
+        "none",
+    ]));
+    let elapsed = start.elapsed();
+    eprintln!(
+        "perf: acl_stress_small setup_ms={} add_acl_ms={} orphans_ms={}",
+        setup_elapsed.as_millis(),
+        add_elapsed.as_millis(),
+        elapsed.as_millis()
+    );
+    assert_under_ms(
+        "acl_stress_small_orphans",
+        elapsed,
+        "XUN_TEST_ACL_STRESS_MAX_MS",
+    );
+}
+
+#[test]
+fn acl_stress_large_random_rules() {
+    if !env_bool("XUN_TEST_ACL_STRESS_LARGE", false) {
+        return;
+    }
+    if !is_admin() {
+        return;
+    }
+    let env = TestEnv::new();
+    let files = env_usize("XUN_TEST_ACL_STRESS_LARGE_FILES", 5000);
+    let dirs = env_usize("XUN_TEST_ACL_STRESS_LARGE_DIRS", 40);
+    let setup_start = Instant::now();
+    let (root, files) = setup_acl_stress_tree(&env, "acl_stress_large", files, dirs);
+    let setup_elapsed = setup_start.elapsed();
+
+    let add_start = Instant::now();
+    apply_random_acl_rules(&env, &files, 0x9E37_79B9);
+    let add_elapsed = add_start.elapsed();
+
+    let start = Instant::now();
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "orphans",
+        "-p",
+        &str_path(&root),
+        "--action",
+        "none",
+    ]));
+    let elapsed = start.elapsed();
+    eprintln!(
+        "perf: acl_stress_large setup_ms={} add_acl_ms={} orphans_ms={}",
+        setup_elapsed.as_millis(),
+        add_elapsed.as_millis(),
+        elapsed.as_millis()
+    );
+    assert_under_ms(
+        "acl_stress_large_orphans",
+        elapsed,
+        "XUN_TEST_ACL_STRESS_LARGE_MAX_MS",
+    );
+}
+
+#[test]
+fn acl_write_operations_fail_without_admin() {
+    if is_admin() {
+        return;
+    }
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_non_admin_write");
+
+    let rows_before = export_acl_rows(&env, &dir, "acl_non_admin_before");
+
+    let out = run_err(acl_cmd(&env).args([
+        "acl",
+        "owner",
+        "-p",
+        &str_path(&dir),
+        "--set",
+        "BUILTIN\\Administrators",
+        "-y",
+    ]));
+    let err = stderr_str(&out);
+    assert!(
+        err.contains("access denied") || err.contains("Access"),
+        "expected access denied error: {err}"
+    );
+
+    let rows_after = export_acl_rows(&env, &dir, "acl_non_admin_after");
+    assert_eq!(
+        rows_before.len(),
+        rows_after.len(),
+        "ACL rows changed after non-admin write attempt"
     );
 }

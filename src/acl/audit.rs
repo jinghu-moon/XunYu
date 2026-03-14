@@ -105,6 +105,34 @@ impl AuditLog {
         Ok(())
     }
 
+    /// Append multiple entries as JSON Lines, then rotate once.
+    pub fn append_many(&self, entries: &[AuditEntry]) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("audit: cannot create dir {}", parent.display()))?;
+        }
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .with_context(|| format!("audit: cannot open {}", self.path.display()))?;
+
+        for entry in entries {
+            let line = serde_json::to_string(entry).context("audit: failed to serialize entry")?;
+            writeln!(file, "{}", line)
+                .with_context(|| format!("audit: failed to write to {}", self.path.display()))?;
+        }
+
+        self.rotate_if_needed()
+            .context("audit: rotation failed (log was written)")?;
+
+        Ok(())
+    }
+
     /// Keep only the last `max_lines` lines if the file has grown beyond that.
     ///
     /// Reads the tail of the file, then rewrites the whole file.  Called

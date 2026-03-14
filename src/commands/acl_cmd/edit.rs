@@ -1,12 +1,95 @@
 use super::*;
+use std::time::{Duration, Instant};
+
+fn acl_timing_enabled() -> bool {
+    std::env::var("XUN_ACL_TIMING")
+        .ok()
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            matches!(v.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(false)
+}
+
+fn update_min_max(min: &mut Option<Duration>, max: &mut Option<Duration>, value: Duration) {
+    match min {
+        Some(current) => {
+            if value < *current {
+                *current = value;
+            }
+        }
+        None => {
+            *min = Some(value);
+        }
+    }
+    match max {
+        Some(current) => {
+            if value > *current {
+                *current = value;
+            }
+        }
+        None => {
+            *max = Some(value);
+        }
+    }
+}
 
 pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
-    let path = Path::new(&args.path);
-    print_path_header(path);
+    let timing_enabled = acl_timing_enabled();
+    let total_start = Instant::now();
+    let paths_start = Instant::now();
+    let mut paths: Vec<PathBuf> = Vec::new();
+    if let Some(file) = args.file.as_deref() {
+        let raw = std::fs::read_to_string(file)
+            .map_err(|e| CliError::new(1, format!("Failed to read file: {e}")))?;
+        paths.extend(
+            raw.lines()
+                .map(|l| l.trim())
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .map(PathBuf::from),
+        );
+    }
+    if let Some(list) = args.paths.as_deref() {
+        paths.extend(
+            list.split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from),
+        );
+    }
+    if let Some(path) = args.path.as_deref() {
+        paths.push(PathBuf::from(path));
+    }
+    if paths.is_empty() {
+        return Err(CliError::with_details(
+            2,
+            "add requires --path or --file or --paths".to_string(),
+            &[
+                "Fix: Use `xun acl add -p <path>` or `--file <txt>` or `--paths a,b,c`.",
+            ],
+        ));
+    }
+    let paths_elapsed = paths_start.elapsed();
+
+    let is_batch = args.file.is_some() || args.paths.is_some();
+    if !is_batch {
+        if let Some(path) = paths.first() {
+            print_path_header(path);
+        }
+    }
     ui_println!("Add permission entry");
+    if is_batch {
+        ui_println!("Paths: {}", paths.len());
+    }
 
     let principal = if let Some(p) = args.principal {
         p
+    } else if is_batch {
+        return Err(CliError::with_details(
+            2,
+            "add requires --principal in batch mode.".to_string(),
+            &["Fix: Provide --principal with --file/--paths."],
+        ));
     } else {
         ensure_interactive("Add")?;
         Input::new()
@@ -20,10 +103,19 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
             .map_err(|e| CliError::new(1, format!("Failed to read principal: {e}")))?
     };
 
+    let principal_start = Instant::now();
     let _ = acl::writer::lookup_account_sid(&principal).map_err(map_acl_err)?;
+    let principal_elapsed = principal_start.elapsed();
 
+    let rights_start = Instant::now();
     let rights_mask = if let Some(r) = args.rights {
         acl::parse::parse_rights(&r).map_err(map_acl_err)?
+    } else if is_batch {
+        return Err(CliError::with_details(
+            2,
+            "add requires --rights in batch mode.".to_string(),
+            &["Fix: Provide --rights with --file/--paths."],
+        ));
     } else {
         ensure_interactive("Add")?;
         let descs: Vec<String> = RIGHTS_TABLE
@@ -38,10 +130,12 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
             .map_err(|e| CliError::new(1, format!("Failed to select rights: {e}")))?;
         RIGHTS_TABLE[idx].0
     };
+    let rights_elapsed = rights_start.elapsed();
 
+    let ace_start = Instant::now();
     let ace_type = if let Some(t) = args.ace_type {
         acl::parse::parse_ace_type(&t).map_err(map_acl_err)?
-    } else if !can_interact() {
+    } else if is_batch || !can_interact() {
         AceType::Allow
     } else {
         let ch = ["Allow", "Deny"];
@@ -57,31 +151,42 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
             AceType::Deny
         }
     };
+    let ace_elapsed = ace_start.elapsed();
 
+    let inherit_start = Instant::now();
     let inheritance = if let Some(inh) = args.inherit {
         acl::parse::parse_inheritance(&inh).map_err(map_acl_err)?
-    } else if !path.is_dir() || !can_interact() {
+    } else if is_batch {
         InheritanceFlags::NONE
     } else {
-        let ch = [
-            "BothInherit    - children dirs and files",
-            "ContainerOnly  - directories only",
-            "ObjectOnly     - files only",
-            "None           - no inheritance",
-        ];
-        let idx = Select::new()
-            .with_prompt("Inheritance")
-            .items(&ch)
-            .default(0)
-            .interact()
-            .map_err(|e| CliError::new(1, format!("Failed to select inheritance: {e}")))?;
-        match idx {
-            0 => InheritanceFlags::BOTH,
-            1 => InheritanceFlags::CONTAINER_INHERIT,
-            2 => InheritanceFlags::OBJECT_INHERIT,
-            _ => InheritanceFlags::NONE,
+        let is_dir = paths
+            .first()
+            .map(|p| p.is_dir())
+            .unwrap_or(false);
+        if !is_dir || !can_interact() {
+            InheritanceFlags::NONE
+        } else {
+            let ch = [
+                "BothInherit    - children dirs and files",
+                "ContainerOnly  - directories only",
+                "ObjectOnly     - files only",
+                "None           - no inheritance",
+            ];
+            let idx = Select::new()
+                .with_prompt("Inheritance")
+                .items(&ch)
+                .default(0)
+                .interact()
+                .map_err(|e| CliError::new(1, format!("Failed to select inheritance: {e}")))?;
+            match idx {
+                0 => InheritanceFlags::BOTH,
+                1 => InheritanceFlags::CONTAINER_INHERIT,
+                2 => InheritanceFlags::OBJECT_INHERIT,
+                _ => InheritanceFlags::NONE,
+            }
         }
     };
+    let inherit_elapsed = inherit_start.elapsed();
 
     ui_println!(
         "Will add: {} {}  Rights {}  Inherit {}",
@@ -94,35 +199,123 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
         inheritance
     );
 
-    if !prompt_confirm("Confirm add?", true, args.yes)? {
+    let confirm = if is_batch {
+        format!("Confirm add on {} paths?", paths.len())
+    } else {
+        "Confirm add?".to_string()
+    };
+    let confirm_start = Instant::now();
+    let confirmed = prompt_confirm(&confirm, true, args.yes)?;
+    let confirm_elapsed = confirm_start.elapsed();
+    if !confirmed {
         ui_println!("Cancelled");
         return Ok(());
     }
 
-    acl::writer::add_rule(
-        path,
-        &principal,
-        rights_mask,
-        ace_type.clone(),
-        inheritance,
-        PropagationFlags::NONE,
-    )
-    .map_err(map_acl_err)?;
-
-    ui_println!("Added");
-
     let cfg = load_acl_runtime_config();
     let audit = audit_log(&cfg);
-    audit
-        .append(&AuditEntry::ok(
+    let mut add_elapsed = Duration::from_millis(0);
+    let mut add_min: Option<Duration> = None;
+    let mut add_max: Option<Duration> = None;
+    let mut add_count = 0usize;
+    let mut audit_elapsed = Duration::from_millis(0);
+    let mut audit_min: Option<Duration> = None;
+    let mut audit_max: Option<Duration> = None;
+    let mut audit_flushes = 0usize;
+    let mut pending: Vec<AuditEntry> = Vec::new();
+    let audit_batch_size = 64usize;
+
+    for path in &paths {
+        let add_start = Instant::now();
+        let result = acl::writer::add_rule(
+            path,
+            &principal,
+            rights_mask,
+            ace_type.clone(),
+            inheritance,
+            PropagationFlags::NONE,
+        );
+        let add_dur = add_start.elapsed();
+        add_elapsed += add_dur;
+        add_count += 1;
+        update_min_max(&mut add_min, &mut add_max, add_dur);
+        if let Err(err) = result {
+            if !pending.is_empty() {
+                audit.append_many(&pending).map_err(map_acl_err)?;
+            }
+            return Err(map_acl_err(err));
+        }
+
+        pending.push(AuditEntry::ok(
             "AddPermission",
             path.to_string_lossy(),
             format!(
                 "Principal={principal} Rights={} Type={ace_type} Inherit={inheritance}",
                 acl::types::rights_short(rights_mask)
             ),
-        ))
-        .map_err(map_acl_err)?;
+        ));
+
+        if pending.len() >= audit_batch_size {
+            let audit_start = Instant::now();
+            audit.append_many(&pending).map_err(map_acl_err)?;
+            let audit_dur = audit_start.elapsed();
+            audit_elapsed += audit_dur;
+            audit_flushes += 1;
+            update_min_max(&mut audit_min, &mut audit_max, audit_dur);
+            pending.clear();
+        }
+    }
+
+    if !pending.is_empty() {
+        let audit_start = Instant::now();
+        audit.append_many(&pending).map_err(map_acl_err)?;
+        let audit_dur = audit_start.elapsed();
+        audit_elapsed += audit_dur;
+        audit_flushes += 1;
+        update_min_max(&mut audit_min, &mut audit_max, audit_dur);
+    }
+
+    if is_batch {
+        ui_println!("Added {} entries", paths.len());
+    } else {
+        ui_println!("Added");
+    }
+
+    if timing_enabled {
+        let add_total_ms = add_elapsed.as_millis();
+        let audit_total_ms = audit_elapsed.as_millis();
+        let add_avg_ms = if add_count == 0 {
+            0
+        } else {
+            add_total_ms / add_count as u128
+        };
+        let audit_avg_ms = if audit_flushes == 0 {
+            0
+        } else {
+            audit_total_ms / audit_flushes as u128
+        };
+        eprintln!(
+            "perf: acl_add paths={} batch={} paths_ms={} principal_ms={} rights_ms={} ace_ms={} inherit_ms={} confirm_ms={} add_ms={} add_min_ms={} add_max_ms={} add_avg_ms={} audit_ms={} audit_flushes={} audit_min_ms={} audit_max_ms={} audit_avg_ms={} total_ms={}",
+            paths.len(),
+            if is_batch { "yes" } else { "no" },
+            paths_elapsed.as_millis(),
+            principal_elapsed.as_millis(),
+            rights_elapsed.as_millis(),
+            ace_elapsed.as_millis(),
+            inherit_elapsed.as_millis(),
+            confirm_elapsed.as_millis(),
+            add_total_ms,
+            add_min.map(|d| d.as_millis()).unwrap_or(0),
+            add_max.map(|d| d.as_millis()).unwrap_or(0),
+            add_avg_ms,
+            audit_total_ms,
+            audit_flushes,
+            audit_min.map(|d| d.as_millis()).unwrap_or(0),
+            audit_max.map(|d| d.as_millis()).unwrap_or(0),
+            audit_avg_ms,
+            total_start.elapsed().as_millis()
+        );
+    }
 
     Ok(())
 }

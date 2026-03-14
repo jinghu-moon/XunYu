@@ -50,9 +50,17 @@ pub struct AclViewCmd {
 #[derive(FromArgs)]
 #[argh(subcommand, name = "add")]
 pub struct AclAddCmd {
-    /// target path
+    /// target path (single)
     #[argh(option, short = 'p')]
-    pub path: String,
+    pub path: Option<String>,
+
+    /// TXT file with one path per line
+    #[argh(option)]
+    pub file: Option<String>,
+
+    /// comma-separated path list
+    #[argh(option)]
+    pub paths: Option<String>,
 
     /// principal name, e.g. "BUILTIN\\Users"
     #[argh(option)]

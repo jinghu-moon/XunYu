@@ -93,6 +93,8 @@ pub(super) fn flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&'stati
         ("acl", Some("add")) => &[
             "--path",
             "-p",
+            "--file",
+            "--paths",
             "--principal",
             "--rights",
             "--ace-type",
