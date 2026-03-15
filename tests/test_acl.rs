@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 fn acl_cmd(env: &TestEnv) -> Command {
     let mut cmd = env.cmd();
@@ -64,6 +64,19 @@ fn read_audit_actions(env: &TestEnv) -> Vec<String> {
         .collect()
 }
 
+fn read_audit_paths_for_action(env: &TestEnv, action: &str) -> Vec<String> {
+    let path = acl_audit_path(env);
+    let raw = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    raw.lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|v| v.get("action").and_then(|a| a.as_str()) == Some(action))
+        .filter_map(|v| v.get("path").and_then(|p| p.as_str()).map(|s| s.to_string()))
+        .collect()
+}
+
 fn count_acl_backups(dir: &Path) -> usize {
     let entries = match fs::read_dir(dir) {
         Ok(v) => v,
@@ -112,6 +125,29 @@ fn export_acl_rows(env: &TestEnv, path: &Path, label: &str) -> Vec<Vec<String>> 
     rows
 }
 
+fn backup_acl_to(env: &TestEnv, path: &Path, dest: &Path) {
+    run_ok(acl_cmd(env).args([
+        "acl",
+        "backup",
+        "-p",
+        &str_path(path),
+        "-o",
+        &str_path(dest),
+    ]));
+}
+
+fn restore_acl(env: &TestEnv, path: &Path, backup: &Path) {
+    run_ok(acl_cmd(env).args([
+        "acl",
+        "restore",
+        "-p",
+        &str_path(path),
+        "--from",
+        &str_path(backup),
+        "-y",
+    ]));
+}
+
 fn read_csv_rows(path: &Path) -> Vec<Vec<String>> {
     let mut rows = Vec::new();
     let mut reader = ReaderBuilder::new()
@@ -148,6 +184,81 @@ fn has_acl_row(
             && row.get(6).map(|v| v == propagation).unwrap_or(false)
             && row.get(7).map(|v| v == orphan).unwrap_or(false)
     })
+}
+
+#[derive(Clone, Debug)]
+struct BackupEntry {
+    raw_sid: String,
+    ace_type: String,
+    rights_mask: u32,
+    inheritance: u64,
+    propagation: u64,
+    is_inherited: bool,
+}
+
+fn normalize_rights_mask(mask: u32) -> u32 {
+    mask & !0x0010_0000
+}
+
+fn backup_entries_from_file(path: &Path) -> Vec<BackupEntry> {
+    let raw = fs::read_to_string(path).unwrap();
+    let v: Value = serde_json::from_str(&raw).unwrap();
+    match v
+        .get("acl")
+        .and_then(|acl| acl.get("entries"))
+        .and_then(|entries| entries.as_array())
+    {
+        Some(entries) => entries
+            .iter()
+            .filter_map(|entry| {
+                Some(BackupEntry {
+                    raw_sid: entry.get("raw_sid")?.as_str()?.to_string(),
+                    ace_type: entry.get("ace_type")?.as_str()?.to_string(),
+                    rights_mask: entry.get("rights_mask")?.as_u64()? as u32,
+                    inheritance: entry.get("inheritance")?.as_u64()?,
+                    propagation: entry.get("propagation")?.as_u64()?,
+                    is_inherited: entry.get("is_inherited")?.as_bool()?,
+                })
+            })
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
+fn backup_keys_from_entries(entries: &[BackupEntry]) -> HashSet<String> {
+    entries.iter().map(backup_key_for_entry).collect()
+}
+
+fn backup_key_for_entry(entry: &BackupEntry) -> String {
+    let rights_mask = normalize_rights_mask(entry.rights_mask) as u64;
+    format!(
+        "{}|{}|{}|{}|{}|{}",
+        entry.raw_sid,
+        entry.ace_type,
+        rights_mask,
+        entry.inheritance,
+        entry.propagation,
+        entry.is_inherited
+    )
+}
+
+fn allow_mask_for_sid(entries: &[BackupEntry], raw_sid: &str) -> u32 {
+    entries
+        .iter()
+        .filter(|entry| entry.raw_sid == raw_sid && entry.ace_type == "Allow")
+        .fold(0u32, |acc, entry| {
+            acc | normalize_rights_mask(entry.rights_mask)
+        })
+}
+
+fn rights_mask_for_label(label: &str) -> u32 {
+    let mask = match label {
+        "Read" => 1_179_785,
+        "Write" => 278,
+        "Modify" => 1_245_631,
+        other => panic!("unexpected rights label: {other}"),
+    };
+    mask & !0x0010_0000
 }
 
 fn owner_from_summary(output: &str) -> Option<String> {
@@ -198,11 +309,16 @@ fn setup_acl_stress_tree(
     (root, file_paths)
 }
 
-fn apply_random_acl_rules(env: &TestEnv, paths: &[PathBuf], seed: u32) {
+fn apply_random_acl_rules(
+    env: &TestEnv,
+    paths: &[PathBuf],
+    seed: u32,
+) -> BTreeMap<PathBuf, Vec<String>> {
     let principals = ["S-1-1-0", "S-1-5-32-545", "S-1-5-32-544"];
     let rights = ["Read", "Write", "Modify"];
     let mut seed = seed;
     let mut groups: BTreeMap<(usize, usize), Vec<PathBuf>> = BTreeMap::new();
+    let mut expected: BTreeMap<PathBuf, Vec<String>> = BTreeMap::new();
 
     for path in paths {
         let rules = 1 + (next_seed(&mut seed) as usize % 3);
@@ -212,8 +328,27 @@ fn apply_random_acl_rules(env: &TestEnv, paths: &[PathBuf], seed: u32) {
             let right_idx = pick_index(&mut seed, rights.len());
             selected.insert((principal_idx, right_idx));
         }
-        for key in selected {
-            groups.entry(key).or_default().push(path.clone());
+        let mut final_rights: BTreeMap<usize, usize> = BTreeMap::new();
+        for (principal_idx, right_idx) in selected.iter().copied() {
+            let entry = final_rights
+                .entry(principal_idx)
+                .or_insert(right_idx);
+            if right_idx > *entry {
+                *entry = right_idx;
+            }
+            groups
+                .entry((principal_idx, right_idx))
+                .or_default()
+                .push(path.clone());
+        }
+        for (principal_idx, right_idx) in final_rights {
+            let principal = principals[principal_idx];
+            let right = rights[right_idx];
+            let rights_mask = rights_mask_for_label(right);
+            expected
+                .entry(path.clone())
+                .or_default()
+                .push(format!("{principal}|{rights_mask}"));
         }
     }
 
@@ -248,6 +383,7 @@ fn apply_random_acl_rules(env: &TestEnv, paths: &[PathBuf], seed: u32) {
         ]));
         emit_acl_add_perf(&out);
     }
+    expected
 }
 
 #[allow(deprecated)]
@@ -285,6 +421,59 @@ fn acl_view_detail_and_export_csv() {
     assert!(export.exists(), "export file not created");
     let csv = fs::read_to_string(&export).unwrap();
     assert!(csv.contains("访问类型"), "unexpected export header");
+}
+
+#[test]
+fn acl_view_missing_path_errors() {
+    let env = TestEnv::new();
+    let missing = env.root.join("acl_missing_path");
+
+    let out = run_err(acl_cmd(&env).args(["acl", "view", "-p", &str_path(&missing)]));
+    let err = stderr_str(&out);
+    let err_lower = err.to_lowercase();
+    assert!(
+        err_lower.contains("not found")
+            || err_lower.contains("cannot find")
+            || err.contains("找不到"),
+        "expected missing path error: {err}"
+    );
+}
+
+#[test]
+fn acl_add_path_with_spaces() {
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl space dir");
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        "BUILTIN\\Users",
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    let rows = export_acl_rows(&env, &dir, "acl_space_export");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            "BUILTIN\\Users",
+            "Read",
+            "None",
+            "None",
+            "否"
+        ),
+        "missing allow ACE for path with spaces"
+    );
 }
 
 #[test]
@@ -416,6 +605,60 @@ fn acl_effective_outputs_masks_for_user() {
     assert!(
         err.contains("specified user only"),
         "missing user-only note: {err}"
+    );
+}
+
+#[test]
+fn acl_effective_deny_overrides_allow_cli() {
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_effective_deny");
+    let principal = "BUILTIN\\Users";
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        principal,
+        "--rights",
+        "FullControl",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        principal,
+        "--rights",
+        "0x00010000",
+        "--ace-type",
+        "Deny",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    let out = run_ok(acl_cmd(&env).args([
+        "acl",
+        "effective",
+        "-p",
+        &str_path(&dir),
+        "-u",
+        principal,
+    ]));
+    let err = stderr_str(&out);
+    assert!(
+        err.lines()
+            .any(|line| line.contains("Delete") && line.contains("Deny")),
+        "expected Delete to be Deny in effective output: {err}"
     );
 }
 
@@ -718,6 +961,257 @@ fn acl_add_and_purge_write_audit() {
 }
 
 #[test]
+fn acl_add_invalid_principal_rejected() {
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_add_invalid_principal");
+
+    let out = run_err(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        "S-1-5-XYZ",
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+    let err = stderr_str(&out);
+    assert!(
+        err.contains("invalid principal") || err.contains("cannot resolve"),
+        "unexpected error: {err}"
+    );
+
+    let actions = read_audit_actions(&env);
+    assert!(
+        !actions.iter().any(|a| a == "AddPermission"),
+        "unexpected audit entry for failed add"
+    );
+}
+
+#[test]
+fn acl_add_overwrites_existing_allow_for_same_principal() {
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_add_overwrite");
+    let principal = "S-1-5-21-222222222-333333333-444444444-6666";
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        principal,
+        "--rights",
+        "Write",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        principal,
+        "--rights",
+        "Modify",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    let rows = export_acl_rows(&env, &dir, "acl_add_overwrite_export");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Modify",
+            "None",
+            "None",
+            "是"
+        ),
+        "missing overwritten Modify ACE in export rows"
+    );
+    assert!(
+        !has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Write",
+            "None",
+            "None",
+            "是"
+        ),
+        "expected previous Write ACE to be overwritten"
+    );
+}
+
+#[test]
+fn acl_add_batch_file_writes_audit() {
+    let env = TestEnv::new();
+    let dirs = vec![
+        setup_acl_dir(&env, "acl_add_batch_1"),
+        setup_acl_dir(&env, "acl_add_batch_2"),
+        setup_acl_dir(&env, "acl_add_batch_3"),
+    ];
+
+    let list_path = env.root.join("acl_add_batch.txt");
+    let mut content = String::new();
+    for path in &dirs {
+        content.push_str(&str_path(path));
+        content.push('\n');
+    }
+    fs::write(&list_path, content).unwrap();
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "--file",
+        &str_path(&list_path),
+        "--principal",
+        "BUILTIN\\Users",
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    let add_paths = read_audit_paths_for_action(&env, "AddPermission");
+    assert_eq!(
+        add_paths.len(),
+        dirs.len(),
+        "expected one audit entry per path"
+    );
+    for path in &dirs {
+        let path_str = str_path(path);
+        assert!(
+            add_paths.iter().any(|p| p == &path_str),
+            "missing audit entry for {path_str}"
+        );
+    }
+}
+
+#[test]
+fn acl_add_batch_with_missing_path_reports_error() {
+    let env = TestEnv::new();
+    let dirs = vec![
+        setup_acl_dir(&env, "acl_add_batch_ok_1"),
+        setup_acl_dir(&env, "acl_add_batch_ok_2"),
+    ];
+    let missing = env.root.join("acl_add_batch_missing");
+
+    let list_path = env.root.join("acl_add_batch_missing.txt");
+    let mut content = String::new();
+    for path in &dirs {
+        content.push_str(&str_path(path));
+        content.push('\n');
+    }
+    content.push_str(&str_path(&missing));
+    content.push('\n');
+    fs::write(&list_path, content).unwrap();
+
+    let out = run_err(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "--file",
+        &str_path(&list_path),
+        "--principal",
+        "BUILTIN\\Users",
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    let err = stderr_str(&out);
+    assert!(
+        err.contains("Batch failed") || err.contains("failed"),
+        "expected batch failure message: {err}"
+    );
+
+    let add_paths = read_audit_paths_for_action(&env, "AddPermission");
+    assert_eq!(
+        add_paths.len(),
+        dirs.len(),
+        "expected audit entries for successful paths"
+    );
+    for path in &dirs {
+        let path_str = str_path(path);
+        assert!(
+            add_paths.iter().any(|p| p == &path_str),
+            "missing audit entry for {path_str}"
+        );
+    }
+}
+
+#[test]
+fn acl_add_batch_parallel_audit_consistency() {
+    let env = TestEnv::new();
+    let mut dirs = Vec::new();
+    for i in 0..32 {
+        dirs.push(setup_acl_dir(&env, &format!("acl_add_batch_par_{i}")));
+    }
+
+    let list_path = env.root.join("acl_add_batch_par.txt");
+    let mut content = String::new();
+    for path in &dirs {
+        content.push_str(&str_path(path));
+        content.push('\n');
+    }
+    fs::write(&list_path, content).unwrap();
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "--file",
+        &str_path(&list_path),
+        "--principal",
+        "BUILTIN\\Users",
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "None",
+        "-y",
+    ]));
+
+    let add_paths = read_audit_paths_for_action(&env, "AddPermission");
+    assert_eq!(
+        add_paths.len(),
+        dirs.len(),
+        "expected audit entries for all paths"
+    );
+    for path in &dirs {
+        let path_str = str_path(path);
+        assert!(
+            add_paths.iter().any(|p| p == &path_str),
+            "missing audit entry for {path_str}"
+        );
+    }
+}
+
+#[test]
 fn acl_add_deny_with_inherit() {
     let env = TestEnv::new();
     let dir = setup_acl_dir(&env, "acl_add_deny");
@@ -763,6 +1257,82 @@ fn acl_add_deny_with_inherit() {
             "是"
         ),
         "missing deny ACE in export rows"
+    );
+}
+
+#[test]
+fn acl_add_allow_with_object_inherit() {
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_add_object_inherit");
+    let principal = "S-1-5-21-222222222-333333333-444444444-7777";
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        principal,
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "ObjectOnly",
+        "-y",
+    ]));
+
+    let rows = export_acl_rows(&env, &dir, "acl_add_object_inherit_export");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Read",
+            "ObjectInherit",
+            "None",
+            "是"
+        ),
+        "missing object inherit ACE in export rows"
+    );
+}
+
+#[test]
+fn acl_add_allow_with_both_inherit() {
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_add_both_inherit");
+    let principal = "S-1-5-21-222222222-333333333-444444444-8888";
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "add",
+        "-p",
+        &str_path(&dir),
+        "--principal",
+        principal,
+        "--rights",
+        "Read",
+        "--ace-type",
+        "Allow",
+        "--inherit",
+        "BothInherit",
+        "-y",
+    ]));
+
+    let rows = export_acl_rows(&env, &dir, "acl_add_both_inherit_export");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            principal,
+            "Read",
+            "ContainerInherit|ObjectInherit",
+            "None",
+            "是"
+        ),
+        "missing both inherit ACE in export rows"
     );
 }
 
@@ -1163,6 +1733,51 @@ fn acl_repair_success_when_admin() {
 }
 
 #[test]
+fn acl_repair_sets_owner_and_full_control() {
+    if !is_admin() {
+        return;
+    }
+    let env = TestEnv::new();
+    let dir = setup_acl_dir(&env, "acl_repair_state");
+
+    run_ok(acl_cmd(&env).args([
+        "acl",
+        "repair",
+        "-p",
+        &str_path(&dir),
+        "-y",
+    ]));
+
+    let out = run_ok(acl_cmd(&env).args(["acl", "view", "-p", &str_path(&dir)]));
+    let err = stderr_str(&out);
+    let owner = owner_from_summary(&err);
+    assert_eq!(
+        owner.unwrap_or_default(),
+        "BUILTIN\\Administrators",
+        "owner not set to Administrators after repair"
+    );
+    assert!(
+        err.contains("Inherit: enabled"),
+        "expected inheritance enabled after repair: {err}"
+    );
+
+    let rows = export_acl_rows(&env, &dir, "acl_repair_state_export");
+    assert!(
+        has_acl_row(
+            &rows,
+            "Allow",
+            "显式",
+            "BUILTIN\\Administrators",
+            "FullControl",
+            "ContainerInherit|ObjectInherit",
+            "None",
+            "否"
+        ),
+        "missing FullControl ACE for Administrators after repair"
+    );
+}
+
+#[test]
 fn acl_stress_small_random_rules() {
     if !env_bool("XUN_TEST_ACL_STRESS", false) {
         return;
@@ -1178,7 +1793,7 @@ fn acl_stress_small_random_rules() {
     let setup_elapsed = setup_start.elapsed();
 
     let add_start = Instant::now();
-    apply_random_acl_rules(&env, &files, 0x1234_5678);
+    let _expected = apply_random_acl_rules(&env, &files, 0x1234_5678);
     let add_elapsed = add_start.elapsed();
 
     let start = Instant::now();
@@ -1215,13 +1830,77 @@ fn acl_stress_large_random_rules() {
     let env = TestEnv::new();
     let files = env_usize("XUN_TEST_ACL_STRESS_LARGE_FILES", 5000);
     let dirs = env_usize("XUN_TEST_ACL_STRESS_LARGE_DIRS", 40);
+    let total_start = Instant::now();
     let setup_start = Instant::now();
     let (root, files) = setup_acl_stress_tree(&env, "acl_stress_large", files, dirs);
     let setup_elapsed = setup_start.elapsed();
 
+    let pre_backup_start = Instant::now();
+    let mut pre_records: Vec<(PathBuf, PathBuf, Vec<BackupEntry>)> = Vec::new();
+    for (idx, path) in files.iter().enumerate() {
+        let backup = env
+            .root
+            .join(format!("acl_stress_large_pre_{idx}.json"));
+        backup_acl_to(&env, path, &backup);
+        let pre_entries = backup_entries_from_file(&backup);
+        pre_records.push((path.clone(), backup, pre_entries));
+    }
+    let pre_backup_elapsed = pre_backup_start.elapsed();
+
     let add_start = Instant::now();
-    apply_random_acl_rules(&env, &files, 0x9E37_79B9);
+    let expected = apply_random_acl_rules(&env, &files, 0x9E37_79B9);
     let add_elapsed = add_start.elapsed();
+
+    let expected_principals: HashSet<&str> =
+        ["S-1-1-0", "S-1-5-32-545", "S-1-5-32-544"]
+            .into_iter()
+            .collect();
+    let mut post_backup_elapsed = Duration::from_millis(0);
+    let mut compare_elapsed = Duration::from_millis(0);
+    for (idx, (path, _backup, pre_entries)) in pre_records.iter().enumerate() {
+        let post_backup = env
+            .root
+            .join(format!("acl_stress_large_post_{idx}.json"));
+        let post_backup_start = Instant::now();
+        backup_acl_to(&env, path, &post_backup);
+        let post_entries = backup_entries_from_file(&post_backup);
+        let post_keys = backup_keys_from_entries(&post_entries);
+        let _ = fs::remove_file(&post_backup);
+        post_backup_elapsed += post_backup_start.elapsed();
+
+        let compare_start = Instant::now();
+        for entry in pre_entries {
+            if entry.ace_type == "Allow" && expected_principals.contains(entry.raw_sid.as_str()) {
+                continue;
+            }
+            let key = backup_key_for_entry(entry);
+            assert!(
+                post_keys.contains(&key),
+                "pre ACL entry missing after write: {key}"
+            );
+        }
+
+        let expected_keys = expected.get(path).expect("missing expected keys");
+        for key in expected_keys {
+            let mut parts = key.split('|');
+            let raw_sid = parts.next().unwrap_or_default();
+            let expected_mask: u32 = parts
+                .next()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            let expected_mask = normalize_rights_mask(expected_mask);
+            let pre_mask = allow_mask_for_sid(pre_entries, raw_sid);
+            if (pre_mask & expected_mask) == expected_mask {
+                continue;
+            }
+            let post_mask = allow_mask_for_sid(&post_entries, raw_sid);
+            assert!(
+                (post_mask & expected_mask) == expected_mask,
+                "expected ACL allow mask missing after write: {raw_sid}|Allow|{expected_mask} post_mask={post_mask}"
+            );
+        }
+        compare_elapsed += compare_start.elapsed();
+    }
 
     let start = Instant::now();
     run_ok(acl_cmd(&env).args([
@@ -1234,15 +1913,31 @@ fn acl_stress_large_random_rules() {
     ]));
     let elapsed = start.elapsed();
     eprintln!(
-        "perf: acl_stress_large setup_ms={} add_acl_ms={} orphans_ms={}",
+        "perf: acl_stress_large setup_ms={} pre_backup_ms={} add_acl_ms={} post_backup_ms={} compare_ms={} orphans_ms={}",
         setup_elapsed.as_millis(),
+        pre_backup_elapsed.as_millis(),
         add_elapsed.as_millis(),
+        post_backup_elapsed.as_millis(),
+        compare_elapsed.as_millis(),
         elapsed.as_millis()
     );
     assert_under_ms(
         "acl_stress_large_orphans",
         elapsed,
         "XUN_TEST_ACL_STRESS_LARGE_MAX_MS",
+    );
+
+    let restore_start = Instant::now();
+    for (path, backup, _) in &pre_records {
+        restore_acl(&env, path, backup);
+        let _ = fs::remove_file(backup);
+    }
+    let restore_elapsed = restore_start.elapsed();
+    let total_elapsed = total_start.elapsed();
+    eprintln!(
+        "perf: acl_stress_large restore_ms={} total_ms={}",
+        restore_elapsed.as_millis(),
+        total_elapsed.as_millis()
     );
 }
 

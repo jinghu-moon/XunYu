@@ -1,4 +1,5 @@
 use super::*;
+use rayon::prelude::*;
 use std::time::{Duration, Instant};
 
 fn acl_timing_enabled() -> bool {
@@ -60,6 +61,8 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     if let Some(path) = args.path.as_deref() {
         paths.push(PathBuf::from(path));
     }
+    paths.sort();
+    paths.dedup();
     if paths.is_empty() {
         return Err(CliError::with_details(
             2,
@@ -224,66 +227,140 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     let mut audit_flushes = 0usize;
     let mut audit_rotate_elapsed = Duration::from_millis(0);
     let mut audit_rotate_count = 0usize;
-    let mut pending: Vec<AuditEntry> = Vec::new();
     let audit_batch_size = 64usize;
 
-    for path in &paths {
-        let add_start = Instant::now();
-        let result = acl::writer::add_rule_with_sid_bytes(
-            path,
-            &principal_sid,
-            rights_mask,
-            ace_type.clone(),
-            inheritance,
-            PropagationFlags::NONE,
-        );
-        let add_dur = add_start.elapsed();
-        add_elapsed += add_dur;
-        add_count += 1;
-        update_min_max(&mut add_min, &mut add_max, add_dur);
-        if let Err(err) = result {
-            if !pending.is_empty() {
-                audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
+    if is_batch {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(cfg.cfg.throttle_limit.max(1))
+            .build()
+            .map_err(|e| CliError::new(1, format!("Failed to create thread pool: {e}")))?;
+
+        let results: Vec<(PathBuf, anyhow::Result<()>, Duration)> = pool.install(|| {
+            paths
+                .par_iter()
+                .map(|path| {
+                    let add_start = Instant::now();
+                    let result = acl::writer::add_rule_with_sid_bytes(
+                        path,
+                        &principal_sid,
+                        rights_mask,
+                        ace_type.clone(),
+                        inheritance,
+                        PropagationFlags::NONE,
+                    );
+                    let add_dur = add_start.elapsed();
+                    (path.clone(), result, add_dur)
+                })
+                .collect()
+        });
+
+        let mut failures: Vec<(PathBuf, anyhow::Error)> = Vec::new();
+        let mut success_entries: Vec<AuditEntry> = Vec::new();
+
+        for (path, result, add_dur) in results {
+            add_elapsed += add_dur;
+            add_count += 1;
+            update_min_max(&mut add_min, &mut add_max, add_dur);
+            match result {
+                Ok(()) => {
+                    success_entries.push(AuditEntry::ok(
+                        "AddPermission",
+                        path.to_string_lossy(),
+                        format!(
+                            "Principal={principal} Rights={} Type={ace_type} Inherit={inheritance}",
+                            acl::types::rights_short(rights_mask)
+                        ),
+                    ));
+                }
+                Err(err) => failures.push((path, err)),
             }
-            let rotate_start = Instant::now();
-            audit.rotate_if_needed().map_err(map_acl_err)?;
-            audit_rotate_elapsed += rotate_start.elapsed();
-            audit_rotate_count += 1;
-            return Err(map_acl_err(err));
         }
 
-        pending.push(AuditEntry::ok(
-            "AddPermission",
-            path.to_string_lossy(),
-            format!(
-                "Principal={principal} Rights={} Type={ace_type} Inherit={inheritance}",
-                acl::types::rights_short(rights_mask)
-            ),
-        ));
+        for chunk in success_entries.chunks(audit_batch_size) {
+            let audit_start = Instant::now();
+            audit.append_many_no_rotate(chunk).map_err(map_acl_err)?;
+            let audit_dur = audit_start.elapsed();
+            audit_elapsed += audit_dur;
+            audit_flushes += 1;
+            update_min_max(&mut audit_min, &mut audit_max, audit_dur);
+        }
 
-        if pending.len() >= audit_batch_size {
+        let rotate_start = Instant::now();
+        audit.rotate_if_needed().map_err(map_acl_err)?;
+        audit_rotate_elapsed += rotate_start.elapsed();
+        audit_rotate_count += 1;
+
+        if !failures.is_empty() {
+            let (first_path, first_err) = failures.remove(0);
+            let mut err = map_acl_err(first_err);
+            err.details.push(format!(
+                "Batch failed: {} errors out of {}.",
+                failures.len() + 1,
+                paths.len()
+            ));
+            err.details.push(format!("First failed path: {}", first_path.display()));
+            return Err(err);
+        }
+    } else {
+        let mut pending: Vec<AuditEntry> = Vec::new();
+        for path in &paths {
+            let add_start = Instant::now();
+            let result = acl::writer::add_rule_with_sid_bytes(
+                path,
+                &principal_sid,
+                rights_mask,
+                ace_type.clone(),
+                inheritance,
+                PropagationFlags::NONE,
+            );
+            let add_dur = add_start.elapsed();
+            add_elapsed += add_dur;
+            add_count += 1;
+            update_min_max(&mut add_min, &mut add_max, add_dur);
+            if let Err(err) = result {
+                if !pending.is_empty() {
+                    audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
+                }
+                let rotate_start = Instant::now();
+                audit.rotate_if_needed().map_err(map_acl_err)?;
+                audit_rotate_elapsed += rotate_start.elapsed();
+                audit_rotate_count += 1;
+                return Err(map_acl_err(err));
+            }
+
+            pending.push(AuditEntry::ok(
+                "AddPermission",
+                path.to_string_lossy(),
+                format!(
+                    "Principal={principal} Rights={} Type={ace_type} Inherit={inheritance}",
+                    acl::types::rights_short(rights_mask)
+                ),
+            ));
+
+            if pending.len() >= audit_batch_size {
+                let audit_start = Instant::now();
+                audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
+                let audit_dur = audit_start.elapsed();
+                audit_elapsed += audit_dur;
+                audit_flushes += 1;
+                update_min_max(&mut audit_min, &mut audit_max, audit_dur);
+                pending.clear();
+            }
+        }
+
+        if !pending.is_empty() {
             let audit_start = Instant::now();
             audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
             let audit_dur = audit_start.elapsed();
             audit_elapsed += audit_dur;
             audit_flushes += 1;
             update_min_max(&mut audit_min, &mut audit_max, audit_dur);
-            pending.clear();
         }
+        let rotate_start = Instant::now();
+        audit.rotate_if_needed().map_err(map_acl_err)?;
+        audit_rotate_elapsed += rotate_start.elapsed();
+        audit_rotate_count += 1;
     }
-
-    if !pending.is_empty() {
-        let audit_start = Instant::now();
-        audit.append_many_no_rotate(&pending).map_err(map_acl_err)?;
-        let audit_dur = audit_start.elapsed();
-        audit_elapsed += audit_dur;
-        audit_flushes += 1;
-        update_min_max(&mut audit_min, &mut audit_max, audit_dur);
-    }
-    let rotate_start = Instant::now();
-    audit.rotate_if_needed().map_err(map_acl_err)?;
-    audit_rotate_elapsed += rotate_start.elapsed();
-    audit_rotate_count += 1;
 
     if is_batch {
         ui_println!("Added {} entries", paths.len());

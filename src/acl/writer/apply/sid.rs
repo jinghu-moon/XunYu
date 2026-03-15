@@ -74,3 +74,40 @@ pub(super) fn lookup_account_sid(principal: &str) -> Result<Vec<u8>> {
         Ok(sid_buf)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lookup_account_sid_accepts_valid_sid_string() {
+        let sid = lookup_account_sid("S-1-1-0").expect("expected valid SID");
+        assert!(!sid.is_empty(), "expected non-empty SID bytes");
+    }
+
+    #[test]
+    fn lookup_account_sid_rejects_invalid_sid_string() {
+        let err = lookup_account_sid("S-1-5-XYZ").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("invalid principal"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn lookup_account_sid_rejects_unknown_account() {
+        let err = lookup_account_sid("BUILTIN\\NoSuchAccount_ThisShouldNotExist").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("invalid principal"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn try_parse_string_sid_returns_none_for_non_sid() {
+        let parsed = try_parse_string_sid("BUILTIN\\Users").expect("parse should succeed");
+        assert!(parsed.is_none(), "expected non-SID to return None");
+    }
+}
