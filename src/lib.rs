@@ -15,6 +15,7 @@ mod find;
 mod fuzzy;
 mod model;
 mod output;
+pub mod path_guard;
 mod ports;
 mod proc;
 mod runtime;

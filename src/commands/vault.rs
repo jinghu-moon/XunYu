@@ -25,17 +25,32 @@ pub(crate) fn cmd_vault(args: VaultCmd) -> CliResult {
 }
 
 fn cmd_enc(args: VaultEncCmd) -> CliResult {
+    let mut input_policy = crate::path_guard::PathPolicy::for_read();
+    input_policy.allow_relative = true;
+    let input = validate_path(&args.input, &input_policy, "input")?;
+
+    let output = args
+        .output
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(format!("{}.fv", args.input)));
+    let mut output_policy = crate::path_guard::PathPolicy::for_output();
+    output_policy.allow_relative = true;
+    let output = validate_path(&output.to_string_lossy(), &output_policy, "output")?;
+
+    let emit_recovery_key = if let Some(raw) = args.emit_recovery_key.as_deref() {
+        Some(validate_path(raw, &output_policy, "recovery key output")?)
+    } else {
+        None
+    };
+
     let options = EncryptOptions {
-        input: PathBuf::from(&args.input),
-        output: args
-            .output
-            .as_deref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(format!("{}.fv", args.input))),
+        input,
+        output,
         password: args.password,
         keyfile: args.keyfile.map(PathBuf::from),
         recovery_key: args.recovery_key,
-        emit_recovery_key: args.emit_recovery_key.map(PathBuf::from),
+        emit_recovery_key,
         dpapi: args.dpapi,
         payload_algorithm: PayloadAlgorithm::from_cli(&args.algo).map_err(map_error)?,
         kdf: KdfKind::from_cli(&args.kdf).map_err(map_error)?,
@@ -47,12 +62,18 @@ fn cmd_enc(args: VaultEncCmd) -> CliResult {
 }
 
 fn cmd_dec(args: VaultDecCmd) -> CliResult {
-    let input = PathBuf::from(&args.input);
+    let mut input_policy = crate::path_guard::PathPolicy::for_read();
+    input_policy.allow_relative = true;
+    let input = validate_path(&args.input, &input_policy, "input")?;
+
     let output = args
         .output
         .as_deref()
         .map(PathBuf::from)
         .unwrap_or_else(|| default_decrypt_output(&input));
+    let mut output_policy = crate::path_guard::PathPolicy::for_output();
+    output_policy.allow_relative = true;
+    let output = validate_path(&output.to_string_lossy(), &output_policy, "output")?;
     let value = decrypt_file(&DecryptOptions {
         input,
         output: output.clone(),
@@ -147,9 +168,14 @@ fn cmd_rewrap(args: VaultRewrapCmd) -> CliResult {
 }
 
 fn cmd_recover_key(args: VaultRecoverKeyCmd) -> CliResult {
-    let output = PathBuf::from(&args.output);
+    let mut output_policy = crate::path_guard::PathPolicy::for_output();
+    output_policy.allow_relative = true;
+    let output = validate_path(&args.output, &output_policy, "output")?;
+    let mut input_policy = crate::path_guard::PathPolicy::for_read();
+    input_policy.allow_relative = true;
+    let input = validate_path(&args.path, &input_policy, "input")?;
     let value = recover_key_file(&RecoverKeyOptions {
-        path: PathBuf::from(&args.path),
+        path: input,
         unlock: unlock_options(
             args.unlock_password,
             args.unlock_keyfile.map(PathBuf::from),
@@ -193,6 +219,24 @@ fn emit_result(value: &serde_json::Value, json_mode: bool, human: &str) {
     } else {
         ui_println!("{human}");
     }
+}
+
+fn validate_path(raw: &str, policy: &crate::path_guard::PathPolicy, label: &str) -> CliResult<PathBuf> {
+    let validation = crate::path_guard::validate_paths(vec![raw.to_string()], policy);
+    if !validation.issues.is_empty() {
+        let mut details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid {label} path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push(format!("Fix: Provide a valid {label} path."));
+        return Err(CliError::with_details(2, "Invalid path input.".to_string(), &details));
+    }
+    validation
+        .ok
+        .into_iter()
+        .next()
+        .ok_or_else(|| CliError::new(2, "No valid path provided."))
 }
 
 fn map_error(err: FileVaultError) -> CliError {

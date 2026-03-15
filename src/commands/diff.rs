@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use argh::FromArgs;
 use console::Style;
@@ -7,6 +7,7 @@ use console::Style;
 use crate::diff;
 use crate::diff::types::*;
 use crate::output::{CliError, CliResult};
+use crate::path_guard::{PathIssueKind, PathPolicy, validate_paths};
 
 // ── CLI 子命令定义 ──────────────────────────────────────────────────────────
 
@@ -140,8 +141,10 @@ pub(crate) fn cmd_diff(args: DiffCmd) -> CliResult {
         )
     })?;
 
-    let old_path = Path::new(&args.old);
-    let new_path = Path::new(&args.new);
+    let mut policy = PathPolicy::for_read();
+    policy.allow_relative = true;
+    let old_path = validate_diff_path(&args.old, &policy, "old")?;
+    let new_path = validate_diff_path(&args.new, &policy, "new")?;
 
     // 2. 文件存在性检查
     if !old_path.is_file() {
@@ -158,13 +161,13 @@ pub(crate) fn cmd_diff(args: DiffCmd) -> CliResult {
     }
 
     // 3. 文件大小检查
-    check_file_size(old_path, max_bytes, &args.old)?;
-    check_file_size(new_path, max_bytes, &args.new)?;
+    check_file_size(&old_path, max_bytes, &args.old)?;
+    check_file_size(&new_path, max_bytes, &args.new)?;
 
     // 4. 读取文件
-    let old_bytes = fs::read(old_path)
+    let old_bytes = fs::read(&old_path)
         .map_err(|e| CliError::new(1, format!("failed to read '{}': {e}", args.old)))?;
-    let new_bytes = fs::read(new_path)
+    let new_bytes = fs::read(&new_path)
         .map_err(|e| CliError::new(1, format!("failed to read '{}': {e}", args.new)))?;
 
     // 4.5 UTF-8 验证：非 --text 模式下，非 UTF-8 文件视为 Binary
@@ -190,9 +193,9 @@ pub(crate) fn cmd_diff(args: DiffCmd) -> CliResult {
     let new_text = String::from_utf8_lossy(&new_bytes);
 
     // 5. 推断扩展名（优先 new，fallback old）
-    let ext = extract_ext(new_path);
+    let ext = extract_ext(&new_path);
     let ext = if ext.is_empty() {
-        extract_ext(old_path)
+        extract_ext(&old_path)
     } else {
         ext
     };
@@ -223,6 +226,34 @@ pub(crate) fn cmd_diff(args: DiffCmd) -> CliResult {
     }
 
     Ok(())
+}
+
+fn validate_diff_path(raw: &str, policy: &PathPolicy, label: &str) -> CliResult<PathBuf> {
+    let validation = validate_paths(vec![raw.to_string()], policy);
+    if !validation.issues.is_empty() {
+        let first = &validation.issues[0];
+        if first.kind == PathIssueKind::NotFound {
+            return Err(CliError::new(
+                1,
+                format!("'{}' is not a file or does not exist.", raw),
+            ));
+        }
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid {label} path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            format!("Invalid {label} path."),
+            &details,
+        ));
+    }
+    Ok(validation
+        .ok
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from(raw)))
 }
 
 // ── 文件大小检查 ────────────────────────────────────────────────────────────

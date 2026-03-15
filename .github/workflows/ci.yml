@@ -219,5 +219,51 @@ jobs:
       - name: Run Rust tests
         run: cargo test --locked --features dashboard
 
+  rust-release-check:
+    name: Rust release build (size)
+    runs-on: windows-latest
+    needs:
+      - frontend
+    env:
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: z
+      CARGO_PROFILE_RELEASE_STRIP: symbols
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          rustup default $env:RUST_TOOLCHAIN
+          rustc -V
+          cargo -V
+
+      - name: Download dashboard dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard-ui/dist
+
+      - name: Verify dashboard dist exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dashboard-ui/dist/index.html")) {
+            throw "dashboard-ui/dist/index.html not found"
+          }
+
+      - name: Build release binaries (opt-level=z, strip symbols)
+        run: cargo build --locked --release --features dashboard --bins
 
 

@@ -39,31 +39,29 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     let timing_enabled = acl_timing_enabled();
     let total_start = Instant::now();
     let paths_start = Instant::now();
-    let mut paths: Vec<PathBuf> = Vec::new();
+    let mut raw_paths: Vec<String> = Vec::new();
     if let Some(file) = args.file.as_deref() {
         let raw = std::fs::read_to_string(file)
             .map_err(|e| CliError::new(1, format!("Failed to read file: {e}")))?;
-        paths.extend(
+        raw_paths.extend(
             raw.lines()
                 .map(|l| l.trim())
                 .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .map(PathBuf::from),
+                .map(|l| l.to_string()),
         );
     }
     if let Some(list) = args.paths.as_deref() {
-        paths.extend(
+        raw_paths.extend(
             list.split(',')
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
-                .map(PathBuf::from),
+                .map(|s| s.to_string()),
         );
     }
     if let Some(path) = args.path.as_deref() {
-        paths.push(PathBuf::from(path));
+        raw_paths.push(path.to_string());
     }
-    paths.sort();
-    paths.dedup();
-    if paths.is_empty() {
+    if raw_paths.is_empty() {
         return Err(CliError::with_details(
             2,
             "add requires --path or --file or --paths".to_string(),
@@ -72,6 +70,26 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
             ],
         ));
     }
+    let policy = crate::path_guard::PathPolicy::for_write();
+    let validation = crate::path_guard::validate_paths(raw_paths, &policy);
+    if !validation.issues.is_empty() {
+        let mut details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push(
+            "Fix: Use existing paths and avoid reserved device names or system directories."
+                .to_string(),
+        );
+        return Err(CliError::with_details(
+            2,
+            "Invalid path input.".to_string(),
+            &details,
+        ));
+    }
+
+    let paths = validation.ok;
     let paths_elapsed = paths_start.elapsed();
 
     let is_batch = args.file.is_some() || args.paths.is_some();
@@ -410,7 +428,9 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
 }
 
 pub(super) fn cmd_remove(args: AclRemoveCmd) -> CliResult {
-    let path = Path::new(&args.path);
+    let policy = crate::path_guard::PathPolicy::for_write();
+    let path = validate_acl_path(&args.path, &policy, "target", true)?;
+    let path = path.as_path();
     let snap = acl::reader::get_acl(path).map_err(map_acl_err)?;
 
     let explicit: Vec<_> = snap
@@ -613,8 +633,13 @@ pub(super) fn cmd_purge(args: AclPurgeCmd) -> CliResult {
 }
 
 pub(super) fn cmd_copy(args: AclCopyCmd) -> CliResult {
-    let path = Path::new(&args.path);
-    let reference = Path::new(&args.reference);
+    let target_policy = crate::path_guard::PathPolicy::for_write();
+    let path = validate_acl_path(&args.path, &target_policy, "target", true)?;
+    let path = path.as_path();
+
+    let ref_policy = crate::path_guard::PathPolicy::for_read();
+    let reference = validate_acl_path(&args.reference, &ref_policy, "source", false)?;
+    let reference = reference.as_path();
 
     print_path_header(path);
     ui_println!("Copy ACL from {}", reference.display());
@@ -719,7 +744,9 @@ pub(super) fn cmd_inherit(args: AclInheritCmd) -> CliResult {
 }
 
 pub(super) fn cmd_owner(args: AclOwnerCmd) -> CliResult {
-    let path = Path::new(&args.path);
+    let policy = crate::path_guard::PathPolicy::for_write();
+    let path = validate_acl_path(&args.path, &policy, "target", true)?;
+    let path = path.as_path();
     let snap = acl::reader::get_acl(path).map_err(map_acl_err)?;
 
     print_path_header(path);

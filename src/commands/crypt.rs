@@ -1,21 +1,32 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::cli::{DecryptCmd, EncryptCmd};
 use crate::output::{CliError, CliResult};
 
 pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
-    let path = Path::new(&args.path);
-    if !path.exists() {
-        return Err(CliError::with_details(
-            2,
-            format!("File or directory not found: {}", args.path),
-            &["Hint: Check the path exists before encrypting."],
-        ));
+    let mut input_policy = crate::path_guard::PathPolicy::for_read();
+    input_policy.allow_relative = true;
+    let input_validation =
+        crate::path_guard::validate_paths(vec![args.path.clone()], &input_policy);
+    if !input_validation.issues.is_empty() {
+        let mut details: Vec<String> = input_validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid input path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Hint: Check the path exists before encrypting.".to_string());
+        return Err(CliError::with_details(2, "Invalid input path.".to_string(), &details));
     }
+    let path = input_validation
+        .ok
+        .into_iter()
+        .next()
+        .map(|p| PathBuf::from(p))
+        .unwrap_or_else(|| PathBuf::from(&args.path));
 
     if args.efs {
-        match crate::windows::volume::is_volume_efs_capable(path) {
-            Ok(true) => match crate::windows::efs::encrypt_file(path) {
+        match crate::windows::volume::is_volume_efs_capable(&path) {
+            Ok(true) => match crate::windows::efs::encrypt_file(&path) {
                 Ok(_) => {
                     ui_println!("Successfully encrypted {:?} using Windows EFS.", path);
                     crate::security::audit::audit_log(
@@ -70,6 +81,26 @@ pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
             p.set_file_name(f);
             p
         };
+        let mut out_policy = crate::path_guard::PathPolicy::for_output();
+        out_policy.allow_relative = true;
+        let out_validation = crate::path_guard::validate_paths(
+            vec![out_path.to_string_lossy().to_string()],
+            &out_policy,
+        );
+        if !out_validation.issues.is_empty() {
+            let mut details: Vec<String> = out_validation
+                .issues
+                .iter()
+                .map(|issue| format!("Invalid output path: {} ({})", issue.raw, issue.detail))
+                .collect();
+            details.push("Fix: Use a valid output file path.".to_string());
+            return Err(CliError::with_details(2, "Invalid output path.".to_string(), &details));
+        }
+        let out_path = out_validation
+            .ok
+            .into_iter()
+            .next()
+            .unwrap_or(out_path);
 
         if args.passphrase {
             let pass = dialoguer::Password::new()
@@ -83,7 +114,7 @@ pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
             }
 
             let secret = age::secrecy::SecretString::from(pass);
-            match crate::age_wrapper::encrypt_with_passphrase(path, &out_path, secret) {
+            match crate::age_wrapper::encrypt_with_passphrase(&path, &out_path, secret) {
                 Ok(_) => {
                     ui_println!(
                         "Successfully encrypted to {:?} using age (passphrase).",
@@ -103,7 +134,7 @@ pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
                 }
             }
         } else if !args.to.is_empty() {
-            match crate::age_wrapper::encrypt_to_recipients(path, &out_path, args.to) {
+            match crate::age_wrapper::encrypt_to_recipients(&path, &out_path, args.to) {
                 Ok(_) => {
                     ui_println!(
                         "Successfully encrypted to {:?} using age (recipients).",
@@ -136,17 +167,28 @@ pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
 }
 
 pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
-    let path = Path::new(&args.path);
-    if !path.exists() {
-        return Err(CliError::with_details(
-            2,
-            format!("File or directory not found: {}", args.path),
-            &["Hint: Check the path exists before decrypting."],
-        ));
+    let mut input_policy = crate::path_guard::PathPolicy::for_read();
+    input_policy.allow_relative = true;
+    let input_validation =
+        crate::path_guard::validate_paths(vec![args.path.clone()], &input_policy);
+    if !input_validation.issues.is_empty() {
+        let mut details: Vec<String> = input_validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid input path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Hint: Check the path exists before decrypting.".to_string());
+        return Err(CliError::with_details(2, "Invalid input path.".to_string(), &details));
     }
+    let path = input_validation
+        .ok
+        .into_iter()
+        .next()
+        .map(|p| PathBuf::from(p))
+        .unwrap_or_else(|| PathBuf::from(&args.path));
 
     if args.efs {
-        match crate::windows::efs::decrypt_file(path) {
+        match crate::windows::efs::decrypt_file(&path) {
             Ok(_) => {
                 ui_println!("Successfully decrypted {:?} using Windows EFS.", path);
                 crate::security::audit::audit_log(
@@ -164,7 +206,7 @@ pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
                     "EFS Decryption failed: file is in use by another process.",
                     &[format!(
                         "Hint: Try `xun lock who {}` to find the blocking process.",
-                        path.display()
+                            path.display()
                     )],
                 ));
             }
@@ -195,6 +237,26 @@ pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
             }
             p
         };
+        let mut out_policy = crate::path_guard::PathPolicy::for_output();
+        out_policy.allow_relative = true;
+        let out_validation = crate::path_guard::validate_paths(
+            vec![out_path.to_string_lossy().to_string()],
+            &out_policy,
+        );
+        if !out_validation.issues.is_empty() {
+            let mut details: Vec<String> = out_validation
+                .issues
+                .iter()
+                .map(|issue| format!("Invalid output path: {} ({})", issue.raw, issue.detail))
+                .collect();
+            details.push("Fix: Use a valid output file path.".to_string());
+            return Err(CliError::with_details(2, "Invalid output path.".to_string(), &details));
+        }
+        let out_path = out_validation
+            .ok
+            .into_iter()
+            .next()
+            .unwrap_or(out_path);
 
         if args.passphrase || !args.identity.is_empty() {
             let pass = if args.passphrase {
@@ -210,7 +272,7 @@ pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
                 None
             };
 
-            match crate::age_wrapper::decrypt_file(path, &out_path, pass, args.identity) {
+            match crate::age_wrapper::decrypt_file(&path, &out_path, pass, args.identity) {
                 Ok(_) => {
                     ui_println!("Successfully decrypted to {:?} using age.", out_path);
                     crate::security::audit::audit_log(

@@ -14,6 +14,7 @@ use crate::batch_rename::types::CaseStyle;
 use crate::batch_rename::undo::{UndoRecord, run_undo, write_undo};
 use crate::cli::BrnCmd;
 use crate::output::{CliError, CliResult, apply_pretty_table_style, can_interact, print_table};
+use crate::path_guard::{PathPolicy, validate_paths};
 
 pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     // Handle `xun brn undo`
@@ -24,10 +25,35 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     // Resolve rename mode
     let mode = resolve_mode(&args)?;
 
+    let mut policy = if args.apply {
+        PathPolicy::for_write()
+    } else {
+        PathPolicy::for_read()
+    };
+    policy.allow_relative = true;
+    let validation = validate_paths(vec![args.path.clone()], &policy);
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid input path.".to_string(),
+            &details,
+        ));
+    }
+    let scan_root = validation
+        .ok
+        .first()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| args.path.clone());
+
     // Collect files
-    let files = collect_files(&args.path, &args.ext, args.recursive)?;
+    let files = collect_files(&scan_root, &args.ext, args.recursive)?;
     if files.is_empty() {
-        ui_println!("No matching files found in '{}'.", args.path);
+        ui_println!("No matching files found in '{}'.", scan_root);
         return Ok(());
     }
 

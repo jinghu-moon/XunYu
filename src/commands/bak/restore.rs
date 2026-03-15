@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::BakCmd;
 use crate::output::{CliError, CliResult, can_interact};
+use crate::path_guard::{PathPolicy, validate_paths};
 
 use super::config::BakConfig;
 use super::util::norm;
@@ -34,6 +35,26 @@ pub(crate) fn cmd_bak_restore(
     }
 
     let file = args.file.as_deref().map(PathBuf::from);
+    if let Some(ref rel) = file {
+        let mut policy = PathPolicy::for_output();
+        policy.allow_relative = true;
+        let validation = validate_paths(vec![rel.to_string_lossy().to_string()], &policy);
+        if !validation.issues.is_empty() {
+            let mut details: Vec<String> = validation
+                .issues
+                .iter()
+                .map(|issue| format!("Invalid restore path: {} ({})", issue.raw, issue.detail))
+                .collect();
+            details.push(
+                "Fix: Use a relative path without '..' (e.g. src/main.rs).".to_string(),
+            );
+            return Err(CliError::with_details(
+                2,
+                "Invalid restore path.".to_string(),
+                &details,
+            ));
+        }
+    }
     if let Some(ref rel) = file
         && !is_safe_rel_path(rel)
     {

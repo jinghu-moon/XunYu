@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::cli::RedirectCmd;
 use crate::config as global_config;
 use crate::config::RedirectOnConflict;
@@ -88,6 +90,23 @@ pub(crate) fn cmd_redirect(args: RedirectCmd) -> CliResult {
     }
 
     let source = resolve_source(args.source.as_deref());
+    let mut policy = crate::path_guard::PathPolicy::for_read();
+    policy.allow_relative = true;
+    let validation = crate::path_guard::validate_paths(vec![source], &policy);
+    if !validation.issues.is_empty() {
+        let mut details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid source path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Fix: Provide an existing directory path.".to_string());
+        return Err(CliError::with_details(2, "Invalid source path.".to_string(), &details));
+    }
+    let source = validation
+        .ok
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from("."));
     ensure_source_dir(&source, args.apply.is_some())?;
 
     let format = resolve_format(&args.format)?;

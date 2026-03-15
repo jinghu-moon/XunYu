@@ -1145,23 +1145,18 @@ fn acl_add_batch_with_missing_path_reports_error() {
 
     let err = stderr_str(&out);
     assert!(
-        err.contains("Batch failed") || err.contains("failed"),
+        err.contains("Invalid path input.")
+            || err.contains("Invalid path")
+            || err.contains("Batch failed")
+            || err.contains("failed"),
         "expected batch failure message: {err}"
     );
 
     let add_paths = read_audit_paths_for_action(&env, "AddPermission");
-    assert_eq!(
-        add_paths.len(),
-        dirs.len(),
-        "expected audit entries for successful paths"
+    assert!(
+        add_paths.is_empty(),
+        "expected no audit entries when validation fails"
     );
-    for path in &dirs {
-        let path_str = str_path(path);
-        assert!(
-            add_paths.iter().any(|p| p == &path_str),
-            "missing audit entry for {path_str}"
-        );
-    }
 }
 
 #[test]
@@ -1628,7 +1623,7 @@ fn acl_repair_export_errors_on_failure() {
     let desktop = env.root.join("Desktop");
     fs::create_dir_all(&desktop).unwrap();
 
-    run_ok(acl_cmd(&env).args([
+    let out = run_err(acl_cmd(&env).args([
         "acl",
         "repair",
         "-p",
@@ -1636,14 +1631,14 @@ fn acl_repair_export_errors_on_failure() {
         "--export-errors",
         "-y",
     ]));
+    let err = stderr_str(&out);
+    assert!(
+        err.contains("Invalid path input.") || err.contains("Invalid target path"),
+        "unexpected error: {err}"
+    );
 
     let err_csv = find_csv_with_prefix(&desktop, "ACLErrors_repair_");
-    assert!(err_csv.is_some(), "missing repair error csv");
-    let rows = read_csv_rows(err_csv.as_ref().unwrap());
-    assert!(
-        csv_rows_contain(&rows, "acl_repair_missing"),
-        "repair error csv missing path"
-    );
+    assert!(err_csv.is_none(), "unexpected repair error csv");
 }
 
 #[test]

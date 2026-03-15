@@ -1,5 +1,6 @@
 use super::super::common::ensure_parent_dir;
 use super::*;
+use crate::path_guard::{PathPolicy, validate_paths};
 
 pub(super) fn cmd_set(args: CtxSetCmd) -> CliResult {
     validate_name(&args.name)?;
@@ -19,7 +20,26 @@ pub(super) fn cmd_set(args: CtxSetCmd) -> CliResult {
     }
 
     if let Some(p) = args.path.as_ref() {
-        profile.path = p.clone();
+        let mut policy = PathPolicy::for_output();
+        policy.allow_relative = true;
+        let validation = validate_paths(vec![p.clone()], &policy);
+        if !validation.issues.is_empty() {
+            let details: Vec<String> = validation
+                .issues
+                .iter()
+                .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
+                .collect();
+            return Err(CliError::with_details(
+                2,
+                "Invalid ctx path.".to_string(),
+                &details,
+            ));
+        }
+        if let Some(valid) = validation.ok.first() {
+            profile.path = valid.to_string_lossy().to_string();
+        } else {
+            profile.path = p.clone();
+        }
     }
     if profile.path.trim().is_empty() {
         return Err(CliError::with_details(

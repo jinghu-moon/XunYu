@@ -9,7 +9,6 @@ pub(crate) mod handle_query;
 #[cfg(any(feature = "lock", feature = "fs"))]
 pub(crate) mod reboot_ops;
 
-#[cfg(any(feature = "crypt", feature = "protect", feature = "redirect"))]
 pub(crate) mod safety;
 
 pub(crate) mod ctrlc;

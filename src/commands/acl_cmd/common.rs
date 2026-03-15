@@ -1,4 +1,5 @@
 use super::*;
+use crate::path_guard::{PathIssueKind, PathPolicy};
 
 pub(super) struct AclRuntimeConfig {
     pub(super) cfg: AclConfig,
@@ -116,4 +117,48 @@ pub(super) fn print_acl_summary(snapshot: &acl::types::AclSnapshot) {
         inherited,
         orphan
     );
+}
+
+pub(super) fn validate_acl_path(
+    raw: &str,
+    policy: &PathPolicy,
+    label: &str,
+    open: bool,
+) -> CliResult<PathBuf> {
+    let mut policy = policy.clone();
+    policy.allow_relative = true;
+    let result = crate::path_guard::validate_paths(vec![raw.to_string()], &policy);
+    if !result.issues.is_empty() {
+        let mut details: Vec<String> = result
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid {label} path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Fix: Provide an existing path and avoid reserved device names.".to_string());
+        return Err(CliError::with_details(2, "Invalid path input.".to_string(), &details));
+    }
+    let Some(path) = result.ok.into_iter().next() else {
+        return Err(CliError::new(2, "No valid path provided."));
+    };
+
+    if open {
+        if let Err(kind) = crate::path_guard::winapi::open_path_with_policy(&path, &policy) {
+            let detail = match kind {
+                PathIssueKind::NotFound => "Path not found.",
+                PathIssueKind::AccessDenied => "Access denied.",
+                PathIssueKind::SharingViolation => "Sharing violation.",
+                PathIssueKind::NetworkPathNotFound => "Network path not found.",
+                PathIssueKind::TooLong => "Path too long.",
+                PathIssueKind::SymlinkLoop => "Symlink loop detected.",
+                _ => "I/O error.",
+            };
+            return Err(CliError::with_details(
+                2,
+                "Invalid path input.".to_string(),
+                &[format!("Invalid {label} path: {detail}")],
+            ));
+        }
+    }
+
+    Ok(path)
 }

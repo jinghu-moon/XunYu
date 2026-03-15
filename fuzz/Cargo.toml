@@ -1,0 +1,22 @@
+[package]
+name = "xun-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.xun]
+path = ".."
+
+[[bin]]
+name = "path_guard_check_string"
+path = "fuzz_targets/path_guard_check_string.rs"
+test = false
+doc = false

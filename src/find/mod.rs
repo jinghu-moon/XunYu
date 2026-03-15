@@ -15,6 +15,7 @@ use crate::cli::FindCmd;
 use crate::model::{ListFormat, parse_list_format};
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, format_age, prefer_table_output, print_table};
+use crate::path_guard::{PathPolicy, validate_paths};
 use crate::runtime;
 use filters::compile_filters;
 use matcher::{determine_path_state, rule_matches};
@@ -25,7 +26,7 @@ use walker::{ScanItem, scan, scan_count};
 pub(crate) use rules::{CompiledRules, PatternType, Rule, RuleKind};
 
 pub(crate) fn cmd_find(args: FindCmd) -> CliResult {
-    let base_dirs = if args.paths.is_empty() {
+    let mut base_dirs = if args.paths.is_empty() {
         vec![".".to_string()]
     } else {
         args.paths.clone()
@@ -48,6 +49,27 @@ pub(crate) fn cmd_find(args: FindCmd) -> CliResult {
         }
         return Ok(());
     }
+
+    let mut policy = PathPolicy::for_read();
+    policy.allow_relative = true;
+    let validation = validate_paths(base_dirs.clone(), &policy);
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid base path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid base path.".to_string(),
+            &details,
+        ));
+    }
+    base_dirs = validation
+        .ok
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
 
     let mut format = parse_list_format(&args.format).ok_or_else(|| {
         CliError::with_details(

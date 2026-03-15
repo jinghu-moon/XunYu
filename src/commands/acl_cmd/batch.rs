@@ -191,8 +191,13 @@ pub(super) fn cmd_backup(args: AclBackupCmd) -> CliResult {
 }
 
 pub(super) fn cmd_restore(args: AclRestoreCmd) -> CliResult {
-    let path = Path::new(&args.path);
-    let from = Path::new(&args.from);
+    let target_policy = crate::path_guard::PathPolicy::for_write();
+    let path = validate_acl_path(&args.path, &target_policy, "target", true)?;
+    let path = path.as_path();
+
+    let source_policy = crate::path_guard::PathPolicy::for_read();
+    let from = validate_acl_path(&args.from, &source_policy, "source", false)?;
+    let from = from.as_path();
 
     print_path_header(path);
     ui_println!("Restore ACL from {}", from.display());

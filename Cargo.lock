@@ -4582,6 +4582,7 @@ dependencies = [
  "image",
  "imagequant",
  "imara-diff",
+ "indexmap",
  "indicatif",
  "json5",
  "lazy_static",

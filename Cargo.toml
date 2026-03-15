@@ -50,7 +50,7 @@ redirect = []
 tui = ["dep:ratatui", "dep:crossterm"]
 delete_tui = ["tui"]
 batch_rename = ["tui", "dep:heck", "dep:walkdir"]
-cstat = ["tui", "dep:ignore", "dep:blake3", "dep:memchr"]
+cstat = ["tui", "dep:ignore", "dep:blake3"]
 img = [
     "dep:imagequant",
     "dep:lodepng",
@@ -127,6 +127,7 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_Console",
   "Win32_System_Diagnostics_Debug",
   "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Environment",
   "Win32_System_IO",
   "Win32_System_LibraryLoader",
   "Win32_System_Ioctl",
@@ -181,7 +182,8 @@ walkdir = { version = "2",   optional = true }
 # —— cstat 模块依赖（feature = "cstat"）——
 ignore  = { version = "0.4", optional = true }
 blake3  = { version = "1",   optional = true }
-memchr  = { version = "2",   optional = true }
+memchr  = { version = "2" }
+indexmap = { version = "2", features = ["std"] }
 
 # —— Diff 模块依赖（feature = "diff"）——
 imara-diff             = { version = "0.2",  optional = true }

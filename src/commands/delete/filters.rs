@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use regex::Regex;
 
+use crate::path_guard::string_check::reserved_names as path_guard_reserved_names;
 use crate::output::emit_warning;
 use crate::util::split_csv;
 
@@ -10,39 +11,10 @@ use super::DEFAULT_EXCLUDES;
 use super::scanner;
 
 pub(super) fn reserved_names() -> HashSet<String> {
-    [
-        "con",
-        "prn",
-        "aux",
-        "nul",
-        "com1",
-        "com2",
-        "com3",
-        "com4",
-        "com5",
-        "com6",
-        "com7",
-        "com8",
-        "com9",
-        "com\u{b9}",
-        "com\u{b2}",
-        "com\u{b3}",
-        "lpt1",
-        "lpt2",
-        "lpt3",
-        "lpt4",
-        "lpt5",
-        "lpt6",
-        "lpt7",
-        "lpt8",
-        "lpt9",
-        "lpt\u{b9}",
-        "lpt\u{b2}",
-        "lpt\u{b3}",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect()
+    path_guard_reserved_names()
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 pub(super) fn parse_name_filter(raw: &[String]) -> HashSet<String> {

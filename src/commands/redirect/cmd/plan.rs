@@ -14,8 +14,25 @@ pub(super) fn run_plan(
     profile: &crate::config::RedirectProfile,
     copy: bool,
 ) -> CliResult {
+    let mut policy = crate::path_guard::PathPolicy::for_output();
+    policy.allow_relative = true;
+    let validation = crate::path_guard::validate_paths(vec![plan_path_raw.to_string()], &policy);
+    if !validation.issues.is_empty() {
+        let mut details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid plan path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Fix: Provide a valid plan file path.".to_string());
+        return Err(CliError::with_details(2, "Invalid plan path.".to_string(), &details));
+    }
+    let plan_path = validation
+        .ok
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from(plan_path_raw));
+
     let planned = engine::plan_redirect(source, profile, copy);
-    let plan_path = PathBuf::from(plan_path_raw);
     if let Some(parent) = plan_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

@@ -161,8 +161,8 @@ fn redirect_missing_source_error_includes_hint() {
             .args(["redirect", env.root.join("missing").to_str().unwrap()]),
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("Error: Source directory not found"));
-    assert!(stderr.contains("Hint:"));
+    assert!(stderr.contains("Error: Invalid source path."));
+    assert!(stderr.contains("Fix:"));
 }
 
 #[test]

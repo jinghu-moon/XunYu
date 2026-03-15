@@ -24,3 +24,7 @@ __pycache__/
 /third_party/avif/build/
 /third_party/avif/src/dav1d/
 /third_party/avif/src/libavif/
+/.rustup-fuzz/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/

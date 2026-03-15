@@ -6,6 +6,7 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 
 use crate::cli::{RenameCmd, SaveCmd, SetCmd, TouchCmd};
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
+use crate::path_guard::{PathPolicy, validate_paths};
 use crate::store::{Lock, append_visit, db_path, load, now_secs, save_db};
 use crate::util::parse_tags;
 
@@ -59,6 +60,26 @@ pub(crate) fn cmd_set(args: SetCmd) -> CliResult {
             .to_string_lossy()
             .to_string()
     });
+    let mut policy = PathPolicy::for_output();
+    policy.allow_relative = true;
+    let validation = validate_paths(vec![path.clone()], &policy);
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid bookmark path.".to_string(),
+            &details,
+        ));
+    }
+    let path = validation
+        .ok
+        .first()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(path);
 
     let tags = args.tag.map(|t| parse_tags(&t)).unwrap_or_default();
 

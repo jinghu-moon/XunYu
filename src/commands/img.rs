@@ -13,6 +13,7 @@ use crate::{
         types::{JpegBackend, OutputFormat, ProcessParams, SvgMethod},
     },
     output::{CliError, CliResult},
+    path_guard::{PathIssueKind, PathPolicy, validate_paths},
 };
 
 pub(crate) fn cmd_img(args: ImgCmd) -> CliResult {
@@ -104,19 +105,59 @@ pub(crate) fn cmd_img(args: ImgCmd) -> CliResult {
         ));
     }
 
-    let input_arg = Path::new(&args.input);
-    if !input_arg.exists() {
-        return Err(CliError::new(
-            1,
-            ImgError::InputNotFound {
-                path: args.input.clone(),
-            }
-            .to_string(),
+    let mut input_policy = PathPolicy::for_read();
+    input_policy.allow_relative = true;
+    let input_validation = validate_paths(vec![args.input.clone()], &input_policy);
+    if !input_validation.issues.is_empty() {
+        let first = &input_validation.issues[0];
+        if first.kind == PathIssueKind::NotFound {
+            return Err(CliError::new(
+                1,
+                ImgError::InputNotFound {
+                    path: args.input.clone(),
+                }
+                .to_string(),
+            ));
+        }
+        let details: Vec<String> = input_validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid input path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid input path.".to_string(),
+            &details,
         ));
     }
 
-    let input_path = dunce::canonicalize(input_arg).unwrap_or_else(|_| input_arg.to_path_buf());
-    let output_path = PathBuf::from(&args.output);
+    let input_path = input_validation
+        .ok
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from(&args.input));
+    let input_path = dunce::canonicalize(&input_path).unwrap_or(input_path);
+
+    let mut output_policy = PathPolicy::for_output();
+    output_policy.allow_relative = true;
+    let output_validation = validate_paths(vec![args.output.clone()], &output_policy);
+    if !output_validation.issues.is_empty() {
+        let details: Vec<String> = output_validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid output path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid output path.".to_string(),
+            &details,
+        ));
+    }
+    let output_path = output_validation
+        .ok
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from(&args.output));
 
     let input_root = if input_path.is_dir() {
         input_path.clone()

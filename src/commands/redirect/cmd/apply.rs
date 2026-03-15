@@ -44,7 +44,27 @@ pub(super) fn cmd_redirect_apply(
 
     let format = resolve_format(&args.format)?;
 
-    let plan_path = PathBuf::from(plan_path);
+    let mut policy = crate::path_guard::PathPolicy::for_read();
+    policy.allow_relative = true;
+    let validation = crate::path_guard::validate_paths(vec![plan_path.to_string()], &policy);
+    if !validation.issues.is_empty() {
+        let mut details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid plan path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Fix: Provide an existing plan file path.".to_string());
+        return Err(crate::output::CliError::with_details(
+            2,
+            "Invalid plan path.".to_string(),
+            &details,
+        ));
+    }
+    let plan_path = validation
+        .ok
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| PathBuf::from(plan_path));
     let raw = std::fs::read_to_string(&plan_path).map_err(|e| {
         err2(
             format!("Failed to read plan file: {e}"),

@@ -19,10 +19,32 @@ use crate::cstat::lang::{TMP_EXTENSIONS, TMP_PREFIXES, rules_for_ext};
 use crate::cstat::report::{Issues, LangStat, Report, accumulate, finalize};
 use crate::cstat::scanner::scan_bytes;
 use crate::output::{CliError, CliResult, can_interact};
+use crate::path_guard::{PathPolicy, validate_paths};
 
 pub(crate) fn cmd_cstat(args: CstatCmd) -> CliResult {
+    let mut policy = PathPolicy::for_read();
+    policy.allow_relative = true;
+    let validation = validate_paths(vec![args.path.clone()], &policy);
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid input path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid input path.".to_string(),
+            &details,
+        ));
+    }
+    let scan_root = validation
+        .ok
+        .first()
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(&args.path));
+
     // 1. Collect files
-    let files = collect_files(&args)?;
+    let files = collect_files(&scan_root, &args)?;
 
     if files.is_empty() {
         ui_println!("No supported files found in '{}'.", args.path);
@@ -173,8 +195,8 @@ fn render_issues_if_needed(args: &CstatCmd, issues: &crate::cstat::report::Issue
 
 // ─── File collection ─────────────────────────────────────────────────────────
 
-fn collect_files(args: &CstatCmd) -> CliResult<Vec<PathBuf>> {
-    let mut builder = WalkBuilder::new(&args.path);
+fn collect_files(root: &Path, args: &CstatCmd) -> CliResult<Vec<PathBuf>> {
+    let mut builder = WalkBuilder::new(root);
     builder
         .hidden(false)
         .git_ignore(true)
