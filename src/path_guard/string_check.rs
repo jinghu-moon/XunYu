@@ -40,6 +40,20 @@ const DOT: u16 = b'.' as u16;
 const SPACE: u16 = b' ' as u16;
 const COLON: u16 = b':' as u16;
 const QMARK: u16 = b'?' as u16;
+const SUPERSCRIPT_ONE: u16 = 0x00B9;
+const SUPERSCRIPT_TWO: u16 = 0x00B2;
+const SUPERSCRIPT_THREE: u16 = 0x00B3;
+const C_LOWER: u16 = b'c' as u16;
+const O_LOWER: u16 = b'o' as u16;
+const N_LOWER: u16 = b'n' as u16;
+const P_LOWER: u16 = b'p' as u16;
+const R_LOWER: u16 = b'r' as u16;
+const A_LOWER: u16 = b'a' as u16;
+const U_LOWER: u16 = b'u' as u16;
+const X_LOWER: u16 = b'x' as u16;
+const L_LOWER: u16 = b'l' as u16;
+const T_LOWER: u16 = b't' as u16;
+const M_LOWER: u16 = b'm' as u16;
 
 pub(crate) fn reserved_names() -> &'static [&'static str] {
     &RESERVED_NAMES
@@ -151,10 +165,8 @@ pub(crate) fn check_component(component: &[u16]) -> Option<PathIssueKind> {
         return None;
     }
     let stem = &component[..stem_end];
-    for name in reserved_names() {
-        if eq_ignore_ascii_case_wide(stem, name) {
-            return Some(PathIssueKind::ReservedName);
-        }
+    if is_reserved_stem(stem) {
+        return Some(PathIssueKind::ReservedName);
     }
     None
 }
@@ -238,27 +250,48 @@ fn is_ascii_letter(unit: u16) -> bool {
         || (b'A' as u16..=b'Z' as u16).contains(&unit)
 }
 
-fn eq_ignore_ascii_case_wide(component: &[u16], name: &str) -> bool {
-    let mut iter = name.encode_utf16();
-    for &unit in component {
-        let Some(expected) = iter.next() else {
-            return false;
-        };
-        let unit = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
-            unit + 32
-        } else {
-            unit
-        };
-        let expected = if (b'A' as u16..=b'Z' as u16).contains(&expected) {
-            expected + 32
-        } else {
-            expected
-        };
-        if unit != expected {
-            return false;
+fn is_reserved_stem(stem: &[u16]) -> bool {
+    match stem.len() {
+        3 => {
+            let a = to_ascii_lower(stem[0]);
+            let b = to_ascii_lower(stem[1]);
+            let c = to_ascii_lower(stem[2]);
+            matches!(
+                (a, b, c),
+                (C_LOWER, O_LOWER, N_LOWER)
+                    | (P_LOWER, R_LOWER, N_LOWER)
+                    | (A_LOWER, U_LOWER, X_LOWER)
+                    | (N_LOWER, U_LOWER, L_LOWER)
+            )
         }
+        4 => {
+            let a = to_ascii_lower(stem[0]);
+            let b = to_ascii_lower(stem[1]);
+            let c = to_ascii_lower(stem[2]);
+            let d = stem[3];
+            if matches!((a, b, c), (C_LOWER, O_LOWER, M_LOWER)) {
+                return is_reserved_suffix(d);
+            }
+            if matches!((a, b, c), (L_LOWER, P_LOWER, T_LOWER)) {
+                return is_reserved_suffix(d);
+            }
+            false
+        }
+        _ => false,
     }
-    iter.next().is_none()
+}
+
+fn is_reserved_suffix(unit: u16) -> bool {
+    (b'1' as u16..=b'9' as u16).contains(&unit)
+        || matches!(unit, SUPERSCRIPT_ONE | SUPERSCRIPT_TWO | SUPERSCRIPT_THREE)
+}
+
+fn to_ascii_lower(unit: u16) -> u16 {
+    if (b'A' as u16..=b'Z' as u16).contains(&unit) {
+        unit + 32
+    } else {
+        unit
+    }
 }
 
 #[cfg(test)]

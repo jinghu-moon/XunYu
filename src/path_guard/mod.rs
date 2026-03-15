@@ -2,6 +2,9 @@ use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use indexmap::IndexSet;
 
@@ -26,11 +29,53 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<OsStr>,
 {
-    let raw_inputs: Vec<OsString> = inputs
-        .into_iter()
-        .map(|input| input.as_ref().to_os_string())
-        .collect();
-    parallel::validate_paths(raw_inputs, policy)
+    let trace_start = trace_total_start();
+    let trace_before = trace_snapshot_if_enabled();
+    let iter = inputs.into_iter();
+    let (lower, upper) = iter.size_hint();
+    let mut raw_inputs: Vec<OsString> = Vec::with_capacity(upper.unwrap_or(lower));
+    for input in iter {
+        raw_inputs.push(input.as_ref().to_os_string());
+    }
+    let total_paths = raw_inputs.len();
+    let result = parallel::validate_paths(raw_inputs, policy);
+    trace_report(
+        "validate_paths",
+        total_paths,
+        result.deduped,
+        result.ok.len(),
+        result.issues.len(),
+        trace_start,
+        trace_before,
+    );
+    result
+}
+
+pub fn validate_paths_owned<I, P>(inputs: I, policy: &PathPolicy) -> PathValidationResult
+where
+    I: IntoIterator<Item = P>,
+    P: Into<OsString>,
+{
+    let trace_start = trace_total_start();
+    let trace_before = trace_snapshot_if_enabled();
+    let iter = inputs.into_iter();
+    let (lower, upper) = iter.size_hint();
+    let mut raw_inputs: Vec<OsString> = Vec::with_capacity(upper.unwrap_or(lower));
+    for input in iter {
+        raw_inputs.push(input.into());
+    }
+    let total_paths = raw_inputs.len();
+    let result = parallel::validate_paths(raw_inputs, policy);
+    trace_report(
+        "validate_paths_owned",
+        total_paths,
+        result.deduped,
+        result.ok.len(),
+        result.issues.len(),
+        trace_start,
+        trace_before,
+    );
+    result
 }
 
 pub fn validate_paths_with_info<I, P>(inputs: I, policy: &PathPolicy) -> (Vec<PathInfo>, Vec<PathIssue>)
@@ -38,13 +83,17 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<OsStr>,
 {
-    let raw_inputs: Vec<OsString> = inputs
-        .into_iter()
-        .map(|input| input.as_ref().to_os_string())
-        .collect();
-    let (inputs, _) = dedupe_inputs(raw_inputs);
+    let trace_start = trace_total_start();
+    let trace_before = trace_snapshot_if_enabled();
+    let iter = inputs.into_iter();
+    let (lower, upper) = iter.size_hint();
+    let mut raw_inputs: Vec<OsString> = Vec::with_capacity(upper.unwrap_or(lower));
+    for input in iter {
+        raw_inputs.push(input.as_ref().to_os_string());
+    }
+    let (inputs, deduped) = dedupe_inputs(raw_inputs);
 
-    let mut infos = Vec::new();
+    let mut infos = Vec::with_capacity(inputs.len());
     let mut issues = Vec::new();
     let mut scratch = Vec::with_capacity(512);
     let cwd_snapshot = if policy.allow_relative {
@@ -60,6 +109,61 @@ where
         }
     }
 
+    trace_report(
+        "validate_paths_with_info",
+        infos.len() + issues.len(),
+        deduped,
+        infos.len(),
+        issues.len(),
+        trace_start,
+        trace_before,
+    );
+    (infos, issues)
+}
+
+pub fn validate_paths_with_info_owned<I, P>(
+    inputs: I,
+    policy: &PathPolicy,
+) -> (Vec<PathInfo>, Vec<PathIssue>)
+where
+    I: IntoIterator<Item = P>,
+    P: Into<OsString>,
+{
+    let trace_start = trace_total_start();
+    let trace_before = trace_snapshot_if_enabled();
+    let iter = inputs.into_iter();
+    let (lower, upper) = iter.size_hint();
+    let mut raw_inputs: Vec<OsString> = Vec::with_capacity(upper.unwrap_or(lower));
+    for input in iter {
+        raw_inputs.push(input.into());
+    }
+    let (inputs, deduped) = dedupe_inputs(raw_inputs);
+
+    let mut infos = Vec::with_capacity(inputs.len());
+    let mut issues = Vec::new();
+    let mut scratch = Vec::with_capacity(512);
+    let cwd_snapshot = if policy.allow_relative {
+        policy.cwd_snapshot.clone().or_else(current_dir_safe)
+    } else {
+        None
+    };
+
+    for raw in inputs {
+        match validate_single_inner(raw.as_os_str(), policy, cwd_snapshot.as_ref(), &mut scratch, true) {
+            Ok(info) => infos.push(info),
+            Err(issue) => issues.push(issue),
+        }
+    }
+
+    trace_report(
+        "validate_paths_with_info_owned",
+        infos.len() + issues.len(),
+        deduped,
+        infos.len(),
+        issues.len(),
+        trace_start,
+        trace_before,
+    );
     (infos, issues)
 }
 
@@ -68,18 +172,32 @@ pub fn validate_single(
     policy: &PathPolicy,
     scratch: &mut Vec<u16>,
 ) -> Result<PathInfo, PathIssue> {
+    let trace_start = trace_total_start();
+    let trace_before = trace_snapshot_if_enabled();
     let cwd_snapshot = if policy.allow_relative {
         policy.cwd_snapshot.clone().or_else(current_dir_safe)
     } else {
         None
     };
-    validate_single_inner(raw, policy, cwd_snapshot.as_ref(), scratch, true)
+    let result = validate_single_inner(raw, policy, cwd_snapshot.as_ref(), scratch, true);
+    trace_report(
+        "validate_single",
+        1,
+        0,
+        if result.is_ok() { 1 } else { 0 },
+        if result.is_err() { 1 } else { 0 },
+        trace_start,
+        trace_before,
+    );
+    result
 }
 
 pub(crate) fn validate_paths_serial(
     raw_inputs: Vec<OsString>,
     policy: &PathPolicy,
 ) -> PathValidationResult {
+    let trace_start = trace_total_start();
+    let trace_before = trace_snapshot_if_enabled();
     let (inputs, deduped) = dedupe_inputs(raw_inputs);
     let mut out = PathValidationResult::default();
     out.deduped = deduped;
@@ -104,30 +222,46 @@ pub(crate) fn validate_paths_serial(
         };
 
         if policy.must_exist {
+            let probe_timer = trace_stage_start(TraceStage::Probe);
             match winapi::probe(&path) {
                 Ok(attr) => {
                     if !policy.allow_reparse && winapi::is_reparse_point(attr) {
+                        trace_stage_end(TraceStage::Probe, probe_timer);
                         out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
                         continue;
                     }
                 }
                 Err(kind) => {
+                    trace_stage_end(TraceStage::Probe, probe_timer);
                     out.issues.push(build_issue(raw.as_os_str(), kind));
                     continue;
                 }
             }
+            trace_stage_end(TraceStage::Probe, probe_timer);
         }
 
         if policy.safety_check {
+            let safety_timer = trace_stage_start(TraceStage::Safety);
             if crate::windows::safety::ensure_safe_target(&path).is_err() {
+                trace_stage_end(TraceStage::Safety, safety_timer);
                 out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::AccessDenied));
                 continue;
             }
+            trace_stage_end(TraceStage::Safety, safety_timer);
         }
 
         out.ok.push(path);
     }
 
+    trace_report(
+        "validate_paths_serial",
+        out.ok.len() + out.issues.len(),
+        out.deduped,
+        out.ok.len(),
+        out.issues.len(),
+        trace_start,
+        trace_before,
+    );
     out
 }
 
@@ -151,6 +285,7 @@ fn validate_single_inner(
     };
 
     if probe_any {
+        let probe_timer = trace_stage_start(TraceStage::Probe);
         match winapi::probe_ex(&info.path) {
             Ok(data) => {
                 let attr = data.dwFileAttributes;
@@ -158,20 +293,27 @@ fn validate_single_inner(
                 info.is_directory = Some(winapi::is_directory(attr));
             }
             Err(kind) => {
+                trace_stage_end(TraceStage::Probe, probe_timer);
                 if policy.must_exist {
                     return Err(build_issue(raw, kind));
                 }
                 info.existence_probe = Some(kind);
             }
         }
+        trace_stage_end(TraceStage::Probe, probe_timer);
     } else if policy.must_exist {
+        let probe_timer = trace_stage_start(TraceStage::Probe);
         match winapi::probe(&info.path) {
             Ok(attr) => {
                 info.is_reparse_point = winapi::is_reparse_point(attr);
                 info.is_directory = Some(winapi::is_directory(attr));
             }
-            Err(kind) => return Err(build_issue(raw, kind)),
+            Err(kind) => {
+                trace_stage_end(TraceStage::Probe, probe_timer);
+                return Err(build_issue(raw, kind));
+            }
         }
+        trace_stage_end(TraceStage::Probe, probe_timer);
     }
 
     if policy.must_exist && !policy.allow_reparse && info.is_reparse_point {
@@ -179,17 +321,22 @@ fn validate_single_inner(
     }
 
     if policy.must_exist && policy.allow_reparse {
+        let canonical_timer = trace_stage_start(TraceStage::Canonical);
         if let Ok(handle) = winapi::open_path_with_policy(&info.path, policy) {
             if let Ok(final_path) = winapi::get_final_path(&handle) {
                 info.canonical = Some(final_path);
             }
         }
+        trace_stage_end(TraceStage::Canonical, canonical_timer);
     }
 
     if policy.safety_check {
+        let safety_timer = trace_stage_start(TraceStage::Safety);
         if crate::windows::safety::ensure_safe_target(&info.path).is_err() {
+            trace_stage_end(TraceStage::Safety, safety_timer);
             return Err(build_issue(raw, PathIssueKind::AccessDenied));
         }
+        trace_stage_end(TraceStage::Safety, safety_timer);
     }
 
     Ok(info)
@@ -209,9 +356,12 @@ pub(crate) fn validate_string_stage(
         check_policy.allow_relative = true;
     }
 
+    let string_timer = trace_stage_start(TraceStage::StringCheck);
     if let Some(kind) = string_check::check_string(raw, scratch, &check_policy) {
+        trace_stage_end(TraceStage::StringCheck, string_timer);
         return Err(kind);
     }
+    trace_stage_end(TraceStage::StringCheck, string_timer);
 
     if !policy.expand_env && has_env {
         return Err(PathIssueKind::EnvVarNotAllowed);
@@ -219,11 +369,16 @@ pub(crate) fn validate_string_stage(
 
     let mut current = raw.to_os_string();
     if policy.expand_env && has_env {
+        let expand_timer = trace_stage_start(TraceStage::ExpandEnv);
         current = winapi::expand_env(raw)?;
+        trace_stage_end(TraceStage::ExpandEnv, expand_timer);
         fill_wide(scratch, &current);
+        let string_timer = trace_stage_start(TraceStage::StringCheck);
         if let Some(kind) = string_check::check_string(&current, scratch, policy) {
+            trace_stage_end(TraceStage::StringCheck, string_timer);
             return Err(kind);
         }
+        trace_stage_end(TraceStage::StringCheck, string_timer);
     }
 
     let mut kind = string_check::detect_kind(scratch);
@@ -235,8 +390,10 @@ pub(crate) fn validate_string_stage(
             Some(value) => value,
             None => return Err(PathIssueKind::IoError),
         };
+        let resolve_timer = trace_stage_start(TraceStage::RelativeResolve);
         let joined = base.join(&current);
         let full = winapi::get_full_path(&joined)?;
+        trace_stage_end(TraceStage::RelativeResolve, resolve_timer);
         current = full.into_os_string();
         fill_wide(scratch, &current);
         kind = string_check::detect_kind(scratch);
@@ -252,7 +409,8 @@ pub(crate) fn validate_string_stage(
 }
 
 pub(crate) fn dedupe_inputs(raw_inputs: Vec<OsString>) -> (Vec<OsString>, usize) {
-    let mut seen: IndexSet<Vec<u16>> = IndexSet::new();
+    let dedupe_timer = trace_stage_start(TraceStage::Dedupe);
+    let mut seen: IndexSet<Vec<u16>> = IndexSet::with_capacity(raw_inputs.len());
     let mut out: Vec<OsString> = Vec::new();
     let mut deduped = 0usize;
 
@@ -268,6 +426,7 @@ pub(crate) fn dedupe_inputs(raw_inputs: Vec<OsString>) -> (Vec<OsString>, usize)
         out.push(raw);
     }
 
+    trace_stage_end(TraceStage::Dedupe, dedupe_timer);
     (out, deduped)
 }
 
@@ -361,6 +520,204 @@ fn contains_unit(units: &[u16], target: u16) -> bool {
 pub(crate) fn fill_wide(buf: &mut Vec<u16>, raw: &OsStr) {
     buf.clear();
     buf.extend(raw.encode_wide());
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum TraceStage {
+    Dedupe,
+    StringCheck,
+    ExpandEnv,
+    RelativeResolve,
+    Probe,
+    Safety,
+    Canonical,
+}
+
+#[derive(Clone, Copy)]
+struct TraceSnapshot {
+    dedupe_ns: u64,
+    dedupe_count: u64,
+    string_ns: u64,
+    string_count: u64,
+    expand_ns: u64,
+    expand_count: u64,
+    relative_ns: u64,
+    relative_count: u64,
+    probe_ns: u64,
+    probe_count: u64,
+    safety_ns: u64,
+    safety_count: u64,
+    canonical_ns: u64,
+    canonical_count: u64,
+}
+
+static TRACE_DEDUPE_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_DEDUPE_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_STRING_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_STRING_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_EXPAND_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_EXPAND_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_RELATIVE_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_RELATIVE_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_PROBE_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_PROBE_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_SAFETY_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_SAFETY_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_CANONICAL_NS: AtomicU64 = AtomicU64::new(0);
+static TRACE_CANONICAL_COUNT: AtomicU64 = AtomicU64::new(0);
+static TRACE_ENABLED: OnceLock<bool> = OnceLock::new();
+
+fn trace_enabled() -> bool {
+    *TRACE_ENABLED.get_or_init(|| {
+        std::env::var("XUN_PG_TRACE")
+            .ok()
+            .map(|value| {
+                let value = value.trim().to_ascii_lowercase();
+                matches!(value.as_str(), "1" | "true" | "yes" | "on")
+            })
+            .unwrap_or(false)
+    })
+}
+
+fn trace_snapshot_if_enabled() -> Option<TraceSnapshot> {
+    if !trace_enabled() {
+        return None;
+    }
+    Some(TraceSnapshot {
+        dedupe_ns: TRACE_DEDUPE_NS.load(Ordering::Relaxed),
+        dedupe_count: TRACE_DEDUPE_COUNT.load(Ordering::Relaxed),
+        string_ns: TRACE_STRING_NS.load(Ordering::Relaxed),
+        string_count: TRACE_STRING_COUNT.load(Ordering::Relaxed),
+        expand_ns: TRACE_EXPAND_NS.load(Ordering::Relaxed),
+        expand_count: TRACE_EXPAND_COUNT.load(Ordering::Relaxed),
+        relative_ns: TRACE_RELATIVE_NS.load(Ordering::Relaxed),
+        relative_count: TRACE_RELATIVE_COUNT.load(Ordering::Relaxed),
+        probe_ns: TRACE_PROBE_NS.load(Ordering::Relaxed),
+        probe_count: TRACE_PROBE_COUNT.load(Ordering::Relaxed),
+        safety_ns: TRACE_SAFETY_NS.load(Ordering::Relaxed),
+        safety_count: TRACE_SAFETY_COUNT.load(Ordering::Relaxed),
+        canonical_ns: TRACE_CANONICAL_NS.load(Ordering::Relaxed),
+        canonical_count: TRACE_CANONICAL_COUNT.load(Ordering::Relaxed),
+    })
+}
+
+fn trace_total_start() -> Option<Instant> {
+    if trace_enabled() {
+        Some(Instant::now())
+    } else {
+        None
+    }
+}
+
+pub(crate) fn trace_stage_start(_stage: TraceStage) -> Option<Instant> {
+    if trace_enabled() {
+        Some(Instant::now())
+    } else {
+        None
+    }
+}
+
+pub(crate) fn trace_stage_end(stage: TraceStage, start: Option<Instant>) {
+    let Some(start) = start else {
+        return;
+    };
+    let ns = start
+        .elapsed()
+        .as_nanos()
+        .min(u64::MAX as u128) as u64;
+    match stage {
+        TraceStage::Dedupe => {
+            TRACE_DEDUPE_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_DEDUPE_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+        TraceStage::StringCheck => {
+            TRACE_STRING_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_STRING_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+        TraceStage::ExpandEnv => {
+            TRACE_EXPAND_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_EXPAND_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+        TraceStage::RelativeResolve => {
+            TRACE_RELATIVE_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_RELATIVE_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+        TraceStage::Probe => {
+            TRACE_PROBE_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_PROBE_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+        TraceStage::Safety => {
+            TRACE_SAFETY_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_SAFETY_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+        TraceStage::Canonical => {
+            TRACE_CANONICAL_NS.fetch_add(ns, Ordering::Relaxed);
+            TRACE_CANONICAL_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+fn trace_diff(after: TraceSnapshot, before: TraceSnapshot) -> TraceSnapshot {
+    TraceSnapshot {
+        dedupe_ns: after.dedupe_ns.saturating_sub(before.dedupe_ns),
+        dedupe_count: after.dedupe_count.saturating_sub(before.dedupe_count),
+        string_ns: after.string_ns.saturating_sub(before.string_ns),
+        string_count: after.string_count.saturating_sub(before.string_count),
+        expand_ns: after.expand_ns.saturating_sub(before.expand_ns),
+        expand_count: after.expand_count.saturating_sub(before.expand_count),
+        relative_ns: after.relative_ns.saturating_sub(before.relative_ns),
+        relative_count: after.relative_count.saturating_sub(before.relative_count),
+        probe_ns: after.probe_ns.saturating_sub(before.probe_ns),
+        probe_count: after.probe_count.saturating_sub(before.probe_count),
+        safety_ns: after.safety_ns.saturating_sub(before.safety_ns),
+        safety_count: after.safety_count.saturating_sub(before.safety_count),
+        canonical_ns: after.canonical_ns.saturating_sub(before.canonical_ns),
+        canonical_count: after.canonical_count.saturating_sub(before.canonical_count),
+    }
+}
+
+fn trace_report(
+    label: &str,
+    total_paths: usize,
+    deduped: usize,
+    ok: usize,
+    issues: usize,
+    total_start: Option<Instant>,
+    before: Option<TraceSnapshot>,
+) {
+    if !trace_enabled() {
+        return;
+    }
+    let Some(before) = before else {
+        return;
+    };
+    let after = trace_snapshot_if_enabled().unwrap_or(before);
+    let diff = trace_diff(after, before);
+    let total_ms = total_start.map(|s| s.elapsed().as_millis()).unwrap_or(0);
+
+    println!(
+        "trace:path_guard label={} total_paths={} deduped={} ok={} issues={} total_ms={}",
+        label, total_paths, deduped, ok, issues, total_ms
+    );
+    trace_report_stage("dedupe", diff.dedupe_ns, diff.dedupe_count);
+    trace_report_stage("string_check", diff.string_ns, diff.string_count);
+    trace_report_stage("expand_env", diff.expand_ns, diff.expand_count);
+    trace_report_stage("relative_resolve", diff.relative_ns, diff.relative_count);
+    trace_report_stage("probe", diff.probe_ns, diff.probe_count);
+    trace_report_stage("safety_check", diff.safety_ns, diff.safety_count);
+    trace_report_stage("canonical", diff.canonical_ns, diff.canonical_count);
+}
+
+fn trace_report_stage(name: &str, ns: u64, count: u64) {
+    if count == 0 {
+        return;
+    }
+    let total_us = ns / 1_000;
+    let avg_us = (ns as f64) / (count as f64) / 1_000.0;
+    println!(
+        "trace:path_guard stage={} count={} total_us={} avg_us={:.2}",
+        name, count, total_us, avg_us
+    );
 }
 
 pub(crate) fn with_check_buf<F, R>(f: F) -> R

@@ -25,6 +25,10 @@ path = "src/bin/xyu.rs"
 name = "acl_test"
 path = "src/bin/acl_test.rs"
 
+[[bin]]
+name = "path_guard_bench"
+path = "src/bin/path_guard_bench.rs"
+
 [features]
 default = ["fs"]
 fs = []

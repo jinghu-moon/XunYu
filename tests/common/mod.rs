@@ -409,6 +409,59 @@ pub fn measure_working_set_peak_bytes(mut child: Child, sample_ms: u64) -> u64 {
     peak
 }
 
+pub fn measure_working_set_peak_with_baseline_bytes(
+    mut child: Child,
+    sample_ms: u64,
+    warmup_ms: u64,
+) -> (u64, u64) {
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+
+    let handle = child.as_raw_handle() as HANDLE;
+    let mut baseline_peak = 0u64;
+    let mut peak = 0u64;
+    let warmup_deadline = Instant::now() + Duration::from_millis(warmup_ms);
+
+    let sample = || -> u64 {
+        unsafe {
+            let mut counters: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+            counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+            let ok = GetProcessMemoryInfo(handle, &mut counters as *mut _ as *mut _, counters.cb);
+            if ok == 0 {
+                0
+            } else {
+                counters.WorkingSetSize as u64
+            }
+        }
+    };
+
+    loop {
+        let current = sample();
+        if current > peak {
+            peak = current;
+        }
+        if Instant::now() <= warmup_deadline && current > baseline_peak {
+            baseline_peak = current;
+        }
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(sample_ms));
+    }
+
+    let current = sample();
+    if current > peak {
+        peak = current;
+    }
+    if Instant::now() <= warmup_deadline && current > baseline_peak {
+        baseline_peak = current;
+    }
+    let _ = child.wait();
+    (baseline_peak, peak)
+}
+
 pub fn measure_handle_peak_count(mut child: Child, sample_ms: u64) -> u32 {
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::System::Threading::GetProcessHandleCount;

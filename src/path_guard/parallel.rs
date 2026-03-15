@@ -1,6 +1,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::thread;
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -44,6 +45,7 @@ fn validate_paths_parallel(
     let (inputs, deduped) = dedupe_inputs(raw_inputs);
     let total = inputs.len();
     let inputs = Arc::new(inputs);
+    let use_workers = policy.must_exist || policy.safety_check;
 
     let mut out = PathValidationResult::default();
     out.deduped = deduped;
@@ -54,18 +56,21 @@ fn validate_paths_parallel(
     let (work_tx, work_rx) = unbounded::<WorkItem>();
     let (result_tx, result_rx) = unbounded::<Outcome>();
 
-    let io_threads = io_threads(limit_unc);
-    let mut workers = Vec::with_capacity(io_threads);
-    for _ in 0..io_threads {
-        let rx = work_rx.clone();
-        let tx = result_tx.clone();
-        let policy = policy.clone();
-        let inputs = Arc::clone(&inputs);
-        workers.push(thread::spawn(move || {
-            worker_loop(rx, tx, inputs, policy);
-        }));
+    let mut workers: Vec<thread::JoinHandle<()>> = Vec::new();
+    if use_workers {
+        let io_threads = io_threads(limit_unc);
+        workers.reserve(io_threads);
+        for _ in 0..io_threads {
+            let rx = work_rx.clone();
+            let tx = result_tx.clone();
+            let policy = policy.clone();
+            let inputs = Arc::clone(&inputs);
+            workers.push(thread::spawn(move || {
+                worker_loop(rx, tx, inputs, policy);
+            }));
+        }
+        drop(work_rx);
     }
-    drop(work_rx);
 
     let stage_result_tx = result_tx.clone();
     let stage_work_tx = work_tx.clone();
@@ -165,9 +170,11 @@ fn worker_loop(
             .map(|s| s.as_os_str())
             .unwrap_or_else(|| OsStr::new(""));
         if policy.must_exist {
+            let probe_timer = super::trace_stage_start(super::TraceStage::Probe);
             match winapi::probe(&item.path) {
                 Ok(attr) => {
                     if !policy.allow_reparse && winapi::is_reparse_point(attr) {
+                        super::trace_stage_end(super::TraceStage::Probe, probe_timer);
                         let _ = result_tx.send(Outcome::Issue {
                             idx: item.idx,
                             issue: build_issue(raw, PathIssueKind::ReparsePoint),
@@ -176,6 +183,7 @@ fn worker_loop(
                     }
                 }
                 Err(kind) => {
+                    super::trace_stage_end(super::TraceStage::Probe, probe_timer);
                     let _ = result_tx.send(Outcome::Issue {
                         idx: item.idx,
                         issue: build_issue(raw, kind),
@@ -183,16 +191,20 @@ fn worker_loop(
                     continue;
                 }
             }
+            super::trace_stage_end(super::TraceStage::Probe, probe_timer);
         }
 
         if policy.safety_check {
+            let safety_timer = super::trace_stage_start(super::TraceStage::Safety);
             if crate::windows::safety::ensure_safe_target(&item.path).is_err() {
+                super::trace_stage_end(super::TraceStage::Safety, safety_timer);
                 let _ = result_tx.send(Outcome::Issue {
                     idx: item.idx,
                     issue: build_issue(raw, PathIssueKind::AccessDenied),
                 });
                 continue;
             }
+            super::trace_stage_end(super::TraceStage::Safety, safety_timer);
         }
 
         let _ = result_tx.send(Outcome::Ok {
@@ -216,7 +228,23 @@ fn io_threads(limit_unc: bool) -> usize {
     let avail = thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let max = if limit_unc { 4 } else { 8 };
+    let mut max = if limit_unc { 4 } else { 4 };
+    if let Some(override_threads) = env_io_threads() {
+        max = override_threads;
+    }
+    if limit_unc && max > 4 {
+        max = 4;
+    }
     let threads = std::cmp::min(max, avail);
     threads.max(1)
+}
+
+fn env_io_threads() -> Option<usize> {
+    static OVERRIDE: OnceLock<Option<usize>> = OnceLock::new();
+    *OVERRIDE.get_or_init(|| {
+        std::env::var("XUN_PG_IO_THREADS")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|value| *value > 0)
+    })
 }

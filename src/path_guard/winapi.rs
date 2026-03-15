@@ -8,12 +8,11 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
 use windows_sys::Win32::Foundation::{GetLastError, FILETIME, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, GetFileAttributesExW, GetFileAttributesW, GetFinalPathNameByHandleW,
-    GetFullPathNameW, FILE_ATTRIBUTE_DIRECTORY,
+    CreateFileW, GetFileAttributesW, GetFinalPathNameByHandleW, GetFullPathNameW,
+    FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    GetFileExInfoStandard, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS,
-    WIN32_FILE_ATTRIBUTE_DATA,
+    INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS, WIN32_FILE_ATTRIBUTE_DATA,
 };
 use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
 
@@ -49,32 +48,24 @@ pub(crate) fn probe_ex(path: &Path) -> Result<WIN32_FILE_ATTRIBUTE_DATA, PathIss
         ensure_long_prefix(&mut buf);
         buf.push(0);
 
+        let attr = unsafe { GetFileAttributesW(buf.as_ptr()) };
+        if attr == INVALID_FILE_ATTRIBUTES {
+            let code = unsafe { GetLastError() };
+            return Err(map_error_code(code));
+        }
+
         let zero_time = FILETIME {
             dwLowDateTime: 0,
             dwHighDateTime: 0,
         };
-        let mut data = WIN32_FILE_ATTRIBUTE_DATA {
-            dwFileAttributes: 0,
+        Ok(WIN32_FILE_ATTRIBUTE_DATA {
+            dwFileAttributes: attr,
             ftCreationTime: zero_time,
             ftLastAccessTime: zero_time,
             ftLastWriteTime: zero_time,
             nFileSizeHigh: 0,
             nFileSizeLow: 0,
-        };
-
-        let ok = unsafe {
-            GetFileAttributesExW(
-                buf.as_ptr(),
-                GetFileExInfoStandard,
-                &mut data as *mut _ as *mut _,
-            )
-        };
-        if ok == 0 {
-            let code = unsafe { GetLastError() };
-            return Err(map_error_code(code));
-        }
-
-        Ok(data)
+        })
     })
 }
 
