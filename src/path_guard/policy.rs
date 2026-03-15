@@ -53,6 +53,16 @@ pub struct PathValidationResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PathInfo {
+    pub path: PathBuf,
+    pub kind: PathKind,
+    pub canonical: Option<PathBuf>,
+    pub is_reparse_point: bool,
+    pub is_directory: Option<bool>,
+    pub existence_probe: Option<PathIssueKind>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathPolicy {
     pub must_exist: bool,
     pub allow_relative: bool,

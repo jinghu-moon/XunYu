@@ -1,3 +1,4 @@
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
@@ -6,22 +7,20 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use rayon::prelude::*;
 
 use super::{
-    build_issue, current_dir_safe, dedupe_inputs, string_check, winapi, PathIssue,
-    PathIssueKind, PathKind, PathPolicy, PathValidationResult,
+    build_issue, dedupe_inputs, string_check, winapi, PathIssue, PathIssueKind, PathKind,
+    PathPolicy, PathValidationResult,
 };
 
 const PARALLEL_MIN: usize = 64;
 const UNC_THRESHOLD: usize = 500;
 
-pub(crate) fn validate_paths(raw_inputs: Vec<String>, policy: &PathPolicy) -> PathValidationResult {
+pub(crate) fn validate_paths(raw_inputs: Vec<OsString>, policy: &PathPolicy) -> PathValidationResult {
     let total = raw_inputs.len();
     if total < PARALLEL_MIN {
         return super::validate_paths_serial(raw_inputs, policy);
     }
 
-    let has_unc = raw_inputs
-        .iter()
-        .any(|raw| has_unc_prefix(raw.as_bytes()));
+    let has_unc = raw_inputs.iter().any(|raw| is_unc_path(raw));
 
     let limit_unc = total > UNC_THRESHOLD && has_unc;
     validate_paths_parallel(raw_inputs, policy, limit_unc)
@@ -38,7 +37,7 @@ enum Outcome {
 }
 
 fn validate_paths_parallel(
-    raw_inputs: Vec<String>,
+    raw_inputs: Vec<OsString>,
     policy: &PathPolicy,
     limit_unc: bool,
 ) -> PathValidationResult {
@@ -75,7 +74,7 @@ fn validate_paths_parallel(
         policy_stage
             .cwd_snapshot
             .clone()
-            .or_else(current_dir_safe)
+            .or_else(super::current_dir_safe)
             .map(Arc::new)
     } else {
         None
@@ -125,104 +124,27 @@ fn validate_paths_parallel(
 
 fn process_stage_a(
     idx: usize,
-    raw: &str,
+    raw: &OsString,
     policy: &PathPolicy,
     cwd_snapshot: Option<&PathBuf>,
     work_tx: &Sender<WorkItem>,
     result_tx: &Sender<Outcome>,
 ) {
-    let mut check_policy = policy.clone();
-    if policy.expand_env && raw.contains('%') {
-        check_policy.allow_relative = true;
-    }
-    if let Some(kind) = string_check::check_string(raw, &check_policy) {
-        let _ = result_tx.send(Outcome::Issue {
-            idx,
-            issue: build_issue(raw, kind),
-        });
-        return;
-    }
+    let result = super::with_check_buf(|scratch| {
+        super::validate_string_stage(raw.as_os_str(), policy, cwd_snapshot, scratch)
+    });
 
-    if !policy.expand_env && raw.contains('%') {
-        let _ = result_tx.send(Outcome::Issue {
-            idx,
-            issue: build_issue(raw, PathIssueKind::EnvVarNotAllowed),
-        });
-        return;
-    }
-
-    let mut current = raw.to_string();
-    if policy.expand_env && raw.contains('%') {
-        match winapi::expand_env(raw) {
-            Ok(expanded) => {
-                current = expanded;
-                if let Some(kind) = string_check::check_string(&current, policy) {
-                    let _ = result_tx.send(Outcome::Issue {
-                        idx,
-                        issue: build_issue(raw, kind),
-                    });
-                    return;
-                }
-            }
-            Err(kind) => {
-                let _ = result_tx.send(Outcome::Issue {
-                    idx,
-                    issue: build_issue(raw, kind),
-                });
-                return;
-            }
-        }
-    }
-
-    let mut kind = string_check::detect_kind(&current);
-    if matches!(kind, PathKind::Relative) {
-        if !policy.allow_relative {
+    let (path, _) = match result {
+        Ok(value) => value,
+        Err(kind) => {
             let _ = result_tx.send(Outcome::Issue {
                 idx,
-                issue: build_issue(raw, PathIssueKind::RelativeNotAllowed),
+                issue: build_issue(raw.as_os_str(), kind),
             });
             return;
         }
-        let base = match cwd_snapshot {
-            Some(value) => value,
-            None => {
-                let _ = result_tx.send(Outcome::Issue {
-                    idx,
-                    issue: build_issue(raw, PathIssueKind::IoError),
-                });
-                return;
-            }
-        };
-        let joined = base.join(&current);
-        let full = match winapi::get_full_path(&joined) {
-            Ok(path) => path,
-            Err(kind) => {
-                let _ = result_tx.send(Outcome::Issue {
-                    idx,
-                    issue: build_issue(raw, kind),
-                });
-                return;
-            }
-        };
-        current = full.to_string_lossy().to_string();
-        kind = string_check::detect_kind(&current);
-        if matches!(kind, PathKind::Relative) {
-            let _ = result_tx.send(Outcome::Issue {
-                idx,
-                issue: build_issue(raw, PathIssueKind::RelativeNotAllowed),
-            });
-            return;
-        }
-        if matches!(kind, PathKind::DriveRelative) {
-            let _ = result_tx.send(Outcome::Issue {
-                idx,
-                issue: build_issue(raw, PathIssueKind::DriveRelativeNotAllowed),
-            });
-            return;
-        }
-    }
+    };
 
-    let path = PathBuf::from(&current);
     if policy.must_exist || policy.safety_check {
         let _ = work_tx.send(WorkItem { idx, path });
         return;
@@ -234,11 +156,14 @@ fn process_stage_a(
 fn worker_loop(
     work_rx: Receiver<WorkItem>,
     result_tx: Sender<Outcome>,
-    inputs: Arc<Vec<String>>,
+    inputs: Arc<Vec<OsString>>,
     policy: PathPolicy,
 ) {
     for item in work_rx.iter() {
-        let raw = inputs.get(item.idx).map(|s| s.as_str()).unwrap_or("");
+        let raw = inputs
+            .get(item.idx)
+            .map(|s| s.as_os_str())
+            .unwrap_or_else(|| OsStr::new(""));
         if policy.must_exist {
             match winapi::probe(&item.path) {
                 Ok(attr) => {
@@ -277,9 +202,14 @@ fn worker_loop(
     }
 }
 
-fn has_unc_prefix(bytes: &[u8]) -> bool {
-    matches!(bytes, [b'\\', b'\\', b'?', b'\\', b'U', b'N', b'C', b'\\', ..])
-        || matches!(bytes, [b'\\', b'\\', ..])
+fn is_unc_path(raw: &OsStr) -> bool {
+    super::with_check_buf(|scratch| {
+        super::fill_wide(scratch, raw);
+        matches!(
+            string_check::detect_kind(scratch),
+            PathKind::UNC | PathKind::ExtendedUNC
+        )
+    })
 }
 
 fn io_threads(limit_unc: bool) -> usize {

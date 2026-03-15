@@ -21,7 +21,7 @@ src/path_guard/
   mod.rs          # 公共接口与 re-export
   policy.rs       # PathPolicy / PathKind / PathIssue
   string_check.rs # FSM + 保留名 + ADS + 规则校验
-  winapi.rs       # GetFileAttributesW + 长路径前缀处理（MVP）；GetFullPathNameW 封装（增强阶段）
+  winapi.rs       # GetFileAttributesW/ExW + GetFullPathNameW + CreateFileW + GetFinalPathNameByHandleW
   parallel.rs     # 批量入口与并行策略（可选）
 ```
 
@@ -104,6 +104,24 @@ pub enum PathIssueKind {
 }
 ```
 
+PathIssue / PathInfo：
+```rust
+pub struct PathIssue {
+    pub raw: String,
+    pub kind: PathIssueKind,
+    pub detail: &'static str,
+}
+
+pub struct PathInfo {
+    pub path: PathBuf,
+    pub kind: PathKind,
+    pub canonical: Option<PathBuf>,
+    pub is_reparse_point: bool,
+    pub is_directory: Option<bool>,
+    pub existence_probe: Option<PathIssueKind>,
+}
+```
+
 ## Windows 路径类型策略
 
 默认策略：
@@ -119,25 +137,28 @@ pub enum PathIssueKind {
 - 使用与 `delete` 模块一致的列表，包含 superscript 版本（`COM¹/COM²/COM³`、`LPT¹/LPT²/LPT³`）。
 - 建议将 `reserved_names()` 放入 `path_guard/string_check.rs` 并设为 `pub(crate)`，`delete` 模块复用以保持 DRY。
 
-## 校验顺序（MVP）
+## 校验顺序（核心流程）
 
-1. trim 与分隔符统一（`/` → `\`）。
-2. 非法字符扫描。
-3. FSM 检测 `PathKind`。
-4. ADS 检测与保留设备名检测。
-5. 处理 `allow_relative` 与 `DriveRelative` 特判。
-6. `expand_env` 展开（启用时）并再次校验输出。
-7. 若 `allow_relative=true` 且为相对路径，使用 `cwd_snapshot`（若有）或 `std::env::current_dir()` 拼接为绝对路径。
-8. `GetFileAttributesW` 探测存在性与属性。
-9. `FILE_ATTRIBUTE_REPARSE_POINT` 判断（受 `allow_reparse` 控制）。
-10. `safety_check` 为 true 时调用 `windows::safety::ensure_safe_target`（仅 P0 写路径启用）。
+1. UTF-16 字符检查（控制字符/非法字符）。
+2. FSM 检测 `PathKind`。
+3. ADS 检测与保留设备名检测。
+4. 处理 `allow_relative` 与 `DriveRelative` 特判。
+5. `expand_env` 展开（启用时）并再次校验输出。
+6. 若为相对路径，使用 `cwd_snapshot`（若有）或 `std::env::current_dir()` 拼接并 `GetFullPathNameW` 规范化。
+7. `GetFileAttributesW/ExW` 探测存在性与属性。
+8. `FILE_ATTRIBUTE_REPARSE_POINT` 判断（受 `allow_reparse` 控制）。
+9. `safety_check` 为 true 时调用 `windows::safety::ensure_safe_target`（仅 P0 写路径启用）。
+10. `validate_paths_with_info` 场景可选使用 `open_path_with_policy` + `GetFinalPathNameByHandleW` 获取 canonical。
 
 ## WinAPI 封装（精简版）
 
 推荐接口：
 - 对外：`probe(path: &Path) -> Result<u32, PathIssueKind>`。
-- 对内：`probe_path(wide: &[u16]) -> Result<u32, PathIssueKind>`。
-- `probe` 内部负责 `\\?\` 前缀与 UTF-16 转换；`probe_path` 作为并行阶段复用缓冲区的低层接口。
+- 对外：`probe_ex(path: &Path) -> Result<WIN32_FILE_ATTRIBUTE_DATA, PathIssueKind>`。
+- 对外：`get_full_path(path: &Path) -> Result<PathBuf, PathIssueKind>`。
+- 对外：`open_path_with_policy(path: &Path, policy: &PathPolicy) -> Result<OwnedHandle, PathIssueKind>`。
+- 对外：`get_final_path(handle: &OwnedHandle) -> Result<PathBuf, PathIssueKind>`。
+- 对内：`probe_path(wide: &[u16]) -> Result<u32, PathIssueKind>`（并行阶段复用缓冲区）。
 
 错误映射建议：
 - 2/3 → NotFound
@@ -158,7 +179,8 @@ pub enum PathIssueKind {
 并行注意事项：
 - 阶段 A 纯字符串校验可使用 Rayon。
 - WinAPI 阶段建议独立阻塞线程池，避免 I/O 阻塞 Rayon。
- - 增强阶段可用 `crossbeam-channel` 连接 CPU 阶段与 I/O worker，避免新增依赖。
+- 增强阶段可用 `crossbeam-channel` 连接 CPU 阶段与 I/O worker，避免新增依赖。
+- `mod.rs` 作为唯一公共入口，按阈值与 UNC 判定选择串行或调用 `parallel.rs` 管线，调用方无需感知并行分支。
 
 ## 与系统安全防护的协作
 
@@ -167,23 +189,22 @@ pub enum PathIssueKind {
 - safety 负责“系统目录黑名单保护”。
 - `PathPolicy.safety_check=true` 时在返回 ok 结果前调用 safety。
 
-## MVP 收敛范围
+## 当前落地范围
 
-MVP 仅做：
-- `string_check.rs`：FSM + 保留名 + ADS + 字符规则。
-- `winapi.rs`：GetFileAttributesW + 长路径前缀处理。
-- `validate_paths` 串行入口。
-- 首先接入 `acl add` 的 `--path` 校验。
+- `string_check.rs`：UTF-16 规则校验 + FSM + 保留名 + ADS。
+- `winapi.rs`：`GetFileAttributesW/ExW`、`GetFullPathNameW`、`CreateFileW`、`GetFinalPathNameByHandleW` 封装。
+- `validate_paths` / `validate_paths_with_info` / `validate_single` 入口。
+- 并行管线按阈值自动启用。
+- P0 写路径使用 `open_path_with_policy` 降低 TOCTTOU 风险。
 
-增强阶段：
-- `GetFullPathNameW` 规范化。
-- `open_path_with_policy` 原子打开。
-- 两阶段并行管线。
+可选增强：
+- 更细粒度的错误统计与性能埋点。
+- UNC/SMB 压测与动态并发调节。
 
 ## 去重与顺序保证
 
-- `validate_paths` 内部负责去重（大小写与分隔符归一化）。
-- 返回顺序应明确：MVP 推荐保留输入顺序并稳定去重；如需排序，交由调用方显式处理。
+- `validate_paths` 内部负责去重（UTF-16 层大小写与分隔符归一化）。  
+- 返回顺序保持输入顺序并稳定去重；如需排序，交由调用方显式处理。  
 - 接入 `acl add` 后，删除其内部 `sort/dedup`，避免双重处理与顺序混乱。
 
 ## 性能优化建议（MVP 优先）
