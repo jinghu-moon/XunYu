@@ -21,6 +21,7 @@ const SLASH: u16 = b'\\' as u16;
 const FSLASH: u16 = b'/' as u16;
 const COLON: u16 = b':' as u16;
 const PERCENT: u16 = b'%' as u16;
+pub(crate) const BATCH_PROBE_MIN: usize = 10;
 
 thread_local! {
     static CHECK_BUF: RefCell<Vec<u16>> = RefCell::new(Vec::with_capacity(512));
@@ -201,6 +202,7 @@ pub(crate) fn validate_paths_serial(
     let trace_start = trace_total_start();
     let trace_before = trace_snapshot_if_enabled();
     let (inputs, deduped) = dedupe_inputs(raw_inputs);
+    let total = inputs.len();
     let mut out = PathValidationResult::default();
     out.deduped = deduped;
 
@@ -210,7 +212,9 @@ pub(crate) fn validate_paths_serial(
         None
     };
 
-    for raw in inputs {
+    let mut checked: Vec<(usize, OsString, PathBuf)> = Vec::with_capacity(total);
+
+    for (idx, raw) in inputs.into_iter().enumerate() {
         let result = with_check_buf(|scratch| {
             validate_string_stage(raw.as_os_str(), policy, cwd_snapshot.as_ref(), scratch)
         });
@@ -223,21 +227,52 @@ pub(crate) fn validate_paths_serial(
             }
         };
 
+        checked.push((idx, raw, path));
+    }
+
+    let probe_cache = if policy.must_exist && total >= BATCH_PROBE_MIN {
+        build_probe_cache(
+            checked.iter().map(|(idx, _, path)| (*idx, path)),
+            total,
+            BATCH_PROBE_MIN,
+        )
+    } else {
+        vec![None; total]
+    };
+
+    for (idx, raw, path) in checked {
         if policy.must_exist {
             let probe_timer = trace_stage_start(TraceStage::Probe);
-            match winapi::probe(&path) {
-                Ok(attr) => {
-                    if !policy.allow_reparse && winapi::is_reparse_point(attr) {
+            match probe_cache
+                .get(idx)
+                .and_then(|cached| cached.as_ref())
+            {
+                Some(Ok(attr)) => {
+                    if !policy.allow_reparse && winapi::is_reparse_point(*attr) {
                         trace_stage_end(TraceStage::Probe, probe_timer);
                         out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
                         continue;
                     }
                 }
-                Err(kind) => {
+                Some(Err(kind)) => {
                     trace_stage_end(TraceStage::Probe, probe_timer);
-                    out.issues.push(build_issue(raw.as_os_str(), kind));
+                    out.issues.push(build_issue(raw.as_os_str(), *kind));
                     continue;
                 }
+                None => match winapi::probe(&path) {
+                    Ok(attr) => {
+                        if !policy.allow_reparse && winapi::is_reparse_point(attr) {
+                            trace_stage_end(TraceStage::Probe, probe_timer);
+                            out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
+                            continue;
+                        }
+                    }
+                    Err(kind) => {
+                        trace_stage_end(TraceStage::Probe, probe_timer);
+                        out.issues.push(build_issue(raw.as_os_str(), kind));
+                        continue;
+                    }
+                },
             }
             trace_stage_end(TraceStage::Probe, probe_timer);
         }
@@ -500,6 +535,79 @@ fn hash_units(units: &[u16]) -> u64 {
     hasher.finish()
 }
 
+pub(crate) fn build_probe_cache<'a, I>(
+    items: I,
+    total: usize,
+    min_batch: usize,
+) -> Vec<Option<Result<u32, PathIssueKind>>>
+where
+    I: IntoIterator<Item = (usize, &'a PathBuf)>,
+{
+    let mut cache: Vec<Option<Result<u32, PathIssueKind>>> = vec![None; total];
+    let mut grouped: HashMap<PathBuf, Vec<(usize, Vec<u16>)>> = HashMap::new();
+
+    for (idx, path) in items {
+        let parent = match path.parent() {
+            Some(value) => value,
+            None => continue,
+        };
+        let Some(name) = path.file_name() else {
+            continue;
+        };
+        let Some(norm_name) = ascii_lower_os(name) else {
+            continue;
+        };
+        grouped
+            .entry(parent.to_path_buf())
+            .or_default()
+            .push((idx, norm_name));
+    }
+
+    for (dir, entries) in grouped {
+        if entries.len() < min_batch {
+            continue;
+        }
+
+        let mut targets: HashMap<u64, Vec<(Vec<u16>, usize)>> = HashMap::new();
+        for (idx, name) in &entries {
+            let hash = hash_units(name);
+            targets.entry(hash).or_default().push((name.clone(), *idx));
+        }
+
+        let result = winapi::probe_dir_entries(&dir, |name, attr| {
+            let Some(norm_entry) = ascii_lower_units(name) else {
+                return;
+            };
+            let hash = hash_units(&norm_entry);
+            let Some(candidates) = targets.get(&hash) else {
+                return;
+            };
+            for (candidate, idx) in candidates {
+                if candidate.as_slice() == norm_entry.as_slice() {
+                    cache[*idx] = Some(Ok(attr));
+                }
+            }
+        });
+
+        match result {
+            Ok(()) => {
+                for (idx, _) in entries {
+                    if cache[idx].is_none() {
+                        cache[idx] = Some(Err(PathIssueKind::NotFound));
+                    }
+                }
+            }
+            Err(kind) => {
+                for (idx, _) in entries {
+                    cache[idx] = Some(Err(kind));
+                }
+            }
+        }
+    }
+
+    cache
+}
+
 fn normalized_equals_raw(normalized: &[u16], raw: &OsStr) -> bool {
     with_check_buf(|scratch| {
         fill_wide(scratch, raw);
@@ -578,6 +686,38 @@ fn detail_for(kind: PathIssueKind) -> &'static str {
 
 fn contains_unit(units: &[u16], target: u16) -> bool {
     units.iter().any(|&unit| unit == target)
+}
+
+fn ascii_lower_os(value: &OsStr) -> Option<Vec<u16>> {
+    let mut out: Vec<u16> = Vec::new();
+    for unit in value.encode_wide() {
+        if unit > 0x7f {
+            return None;
+        }
+        let lower = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
+            unit + 32
+        } else {
+            unit
+        };
+        out.push(lower);
+    }
+    Some(out)
+}
+
+fn ascii_lower_units(value: &[u16]) -> Option<Vec<u16>> {
+    let mut out: Vec<u16> = Vec::with_capacity(value.len());
+    for &unit in value {
+        if unit > 0x7f {
+            return None;
+        }
+        let lower = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
+            unit + 32
+        } else {
+            unit
+        };
+        out.push(lower);
+    }
+    Some(out)
 }
 
 pub(crate) fn fill_wide(buf: &mut Vec<u16>, raw: &OsStr) {

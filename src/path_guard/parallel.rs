@@ -32,6 +32,12 @@ struct WorkItem {
     path: PathBuf,
 }
 
+enum StageAResult {
+    Ok(PathBuf),
+    Issue(PathIssue),
+    Work(PathBuf),
+}
+
 enum Outcome {
     Ok { idx: usize, path: PathBuf },
     Issue { idx: usize, issue: PathIssue },
@@ -53,27 +59,9 @@ fn validate_paths_parallel(
         return out;
     }
 
-    let (work_tx, work_rx) = unbounded::<WorkItem>();
-    let (result_tx, result_rx) = unbounded::<Outcome>();
+    let mut ok_slots: Vec<Option<PathBuf>> = vec![None; total];
+    let mut issue_slots: Vec<Option<PathIssue>> = vec![None; total];
 
-    let mut workers: Vec<thread::JoinHandle<()>> = Vec::new();
-    if use_workers {
-        let io_threads = io_threads(limit_unc);
-        workers.reserve(io_threads);
-        for _ in 0..io_threads {
-            let rx = work_rx.clone();
-            let tx = result_tx.clone();
-            let policy = policy.clone();
-            let inputs = Arc::clone(&inputs);
-            workers.push(thread::spawn(move || {
-                worker_loop(rx, tx, inputs, policy);
-            }));
-        }
-        drop(work_rx);
-    }
-
-    let stage_result_tx = result_tx.clone();
-    let stage_work_tx = work_tx.clone();
     let policy_stage = policy.clone();
     let cwd_snapshot = if policy.allow_relative {
         policy_stage
@@ -85,29 +73,80 @@ fn validate_paths_parallel(
         None
     };
 
-    inputs
+    let stage_results: Vec<StageAResult> = inputs
         .par_iter()
-        .enumerate()
-        .for_each(|(idx, raw)| {
-            process_stage_a(
-                idx,
-                raw,
-                &policy_stage,
-                cwd_snapshot.as_deref(),
-                &stage_work_tx,
-                &stage_result_tx,
-            );
-        });
+        .map(|raw| {
+            let result = super::with_check_buf(|scratch| {
+                super::validate_string_stage(raw.as_os_str(), &policy_stage, cwd_snapshot.as_deref(), scratch)
+            });
+            let (path, _) = match result {
+                Ok(value) => value,
+                Err(kind) => {
+                    return StageAResult::Issue(build_issue(raw.as_os_str(), kind));
+                }
+            };
 
-    drop(stage_work_tx);
-    drop(stage_result_tx);
+            if policy_stage.must_exist || policy_stage.safety_check {
+                StageAResult::Work(path)
+            } else {
+                StageAResult::Ok(path)
+            }
+        })
+        .collect();
+
+    let mut work_items: Vec<WorkItem> = Vec::new();
+    work_items.reserve(stage_results.len());
+    for (idx, result) in stage_results.into_iter().enumerate() {
+        match result {
+            StageAResult::Ok(path) => ok_slots[idx] = Some(path),
+            StageAResult::Issue(issue) => issue_slots[idx] = Some(issue),
+            StageAResult::Work(path) => work_items.push(WorkItem { idx, path }),
+        }
+    }
+
+    if !use_workers {
+        out.ok = ok_slots.into_iter().flatten().collect();
+        out.issues = issue_slots.into_iter().flatten().collect();
+        return out;
+    }
+
+    let probe_cache = if policy.must_exist && total >= super::BATCH_PROBE_MIN {
+        super::build_probe_cache(
+            work_items.iter().map(|item| (item.idx, &item.path)),
+            total,
+            super::BATCH_PROBE_MIN,
+        )
+    } else {
+        vec![None; total]
+    };
+
+    let probe_cache = Arc::new(probe_cache);
+    let work_count = work_items.len();
+    let (work_tx, work_rx) = unbounded::<WorkItem>();
+    let (result_tx, result_rx) = unbounded::<Outcome>();
+
+    let mut workers: Vec<thread::JoinHandle<()>> = Vec::new();
+    let io_threads = io_threads(limit_unc);
+    workers.reserve(io_threads);
+    for _ in 0..io_threads {
+        let rx = work_rx.clone();
+        let tx = result_tx.clone();
+        let policy = policy.clone();
+        let inputs = Arc::clone(&inputs);
+        let probe_cache = Arc::clone(&probe_cache);
+        workers.push(thread::spawn(move || {
+            worker_loop(rx, tx, inputs, policy, probe_cache);
+        }));
+    }
+    drop(work_rx);
+
+    for item in work_items {
+        let _ = work_tx.send(item);
+    }
     drop(work_tx);
     drop(result_tx);
 
-    let mut ok_slots: Vec<Option<PathBuf>> = vec![None; total];
-    let mut issue_slots: Vec<Option<PathIssue>> = vec![None; total];
-
-    for _ in 0..total {
+    for _ in 0..work_count {
         let outcome = match result_rx.recv() {
             Ok(value) => value,
             Err(_) => break,
@@ -127,42 +166,12 @@ fn validate_paths_parallel(
     out
 }
 
-fn process_stage_a(
-    idx: usize,
-    raw: &OsString,
-    policy: &PathPolicy,
-    cwd_snapshot: Option<&PathBuf>,
-    work_tx: &Sender<WorkItem>,
-    result_tx: &Sender<Outcome>,
-) {
-    let result = super::with_check_buf(|scratch| {
-        super::validate_string_stage(raw.as_os_str(), policy, cwd_snapshot, scratch)
-    });
-
-    let (path, _) = match result {
-        Ok(value) => value,
-        Err(kind) => {
-            let _ = result_tx.send(Outcome::Issue {
-                idx,
-                issue: build_issue(raw.as_os_str(), kind),
-            });
-            return;
-        }
-    };
-
-    if policy.must_exist || policy.safety_check {
-        let _ = work_tx.send(WorkItem { idx, path });
-        return;
-    }
-
-    let _ = result_tx.send(Outcome::Ok { idx, path });
-}
-
 fn worker_loop(
     work_rx: Receiver<WorkItem>,
     result_tx: Sender<Outcome>,
     inputs: Arc<Vec<OsString>>,
     policy: PathPolicy,
+    probe_cache: Arc<Vec<Option<Result<u32, PathIssueKind>>>>,
 ) {
     for item in work_rx.iter() {
         let raw = inputs
@@ -171,9 +180,12 @@ fn worker_loop(
             .unwrap_or_else(|| OsStr::new(""));
         if policy.must_exist {
             let probe_timer = super::trace_stage_start(super::TraceStage::Probe);
-            match winapi::probe(&item.path) {
-                Ok(attr) => {
-                    if !policy.allow_reparse && winapi::is_reparse_point(attr) {
+            match probe_cache
+                .get(item.idx)
+                .and_then(|cached| cached.as_ref())
+            {
+                Some(Ok(attr)) => {
+                    if !policy.allow_reparse && winapi::is_reparse_point(*attr) {
                         super::trace_stage_end(super::TraceStage::Probe, probe_timer);
                         let _ = result_tx.send(Outcome::Issue {
                             idx: item.idx,
@@ -182,14 +194,34 @@ fn worker_loop(
                         continue;
                     }
                 }
-                Err(kind) => {
+                Some(Err(kind)) => {
                     super::trace_stage_end(super::TraceStage::Probe, probe_timer);
                     let _ = result_tx.send(Outcome::Issue {
                         idx: item.idx,
-                        issue: build_issue(raw, kind),
+                        issue: build_issue(raw, *kind),
                     });
                     continue;
                 }
+                None => match winapi::probe(&item.path) {
+                    Ok(attr) => {
+                        if !policy.allow_reparse && winapi::is_reparse_point(attr) {
+                            super::trace_stage_end(super::TraceStage::Probe, probe_timer);
+                            let _ = result_tx.send(Outcome::Issue {
+                                idx: item.idx,
+                                issue: build_issue(raw, PathIssueKind::ReparsePoint),
+                            });
+                            continue;
+                        }
+                    }
+                    Err(kind) => {
+                        super::trace_stage_end(super::TraceStage::Probe, probe_timer);
+                        let _ = result_tx.send(Outcome::Issue {
+                            idx: item.idx,
+                            issue: build_issue(raw, kind),
+                        });
+                        continue;
+                    }
+                },
             }
             super::trace_stage_end(super::TraceStage::Probe, probe_timer);
         }
