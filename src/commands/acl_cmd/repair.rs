@@ -1,7 +1,9 @@
 use super::*;
 
 pub(super) fn cmd_orphans(args: AclOrphansCmd) -> CliResult {
-    let path = Path::new(&args.path);
+    let policy = crate::path_guard::PathPolicy::for_read();
+    let path = validate_acl_path(&args.path, &policy, "target", true)?;
+    let path = path.as_path();
     let cfg = load_acl_runtime_config();
     let audit = audit_log(&cfg);
 

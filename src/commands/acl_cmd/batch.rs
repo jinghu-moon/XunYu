@@ -1,19 +1,18 @@
 use super::*;
 
 pub(super) fn cmd_batch(args: AclBatchCmd) -> CliResult {
-    let paths: Vec<PathBuf> = if let Some(file) = args.file.as_deref() {
+    let raw_paths: Vec<String> = if let Some(file) = args.file.as_deref() {
         let raw = std::fs::read_to_string(file)
             .map_err(|e| CliError::new(1, format!("Failed to read file: {e}")))?;
         raw.lines()
             .map(|l| l.trim().to_string())
             .filter(|l| !l.is_empty() && !l.starts_with('#'))
-            .map(PathBuf::from)
             .collect()
     } else if let Some(list) = args.paths.as_deref() {
         list.split(',')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
-            .map(PathBuf::from)
+            .map(|s| s.to_string())
             .collect()
     } else {
         return Err(CliError::with_details(
@@ -23,8 +22,31 @@ pub(super) fn cmd_batch(args: AclBatchCmd) -> CliResult {
         ));
     };
 
-    if paths.is_empty() {
+    if raw_paths.is_empty() {
         return Err(CliError::new(2, "No paths provided."));
+    }
+
+    let action = args.action.to_lowercase().replace('-', "");
+    let mut policy = match action.as_str() {
+        "repair" | "inheritreset" | "resetinherit" => crate::path_guard::PathPolicy::for_write(),
+        "backup" | "orphans" => crate::path_guard::PathPolicy::for_read(),
+        _ => crate::path_guard::PathPolicy::for_read(),
+    };
+    policy.allow_relative = true;
+
+    let validation = crate::path_guard::validate_paths(raw_paths.iter(), &policy);
+    if !validation.issues.is_empty() {
+        let mut details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        details.push("Fix: Provide an existing path and avoid reserved device names.".to_string());
+        return Err(CliError::with_details(2, "Invalid path input.".to_string(), &details));
+    }
+    let paths = validation.ok;
+    if paths.is_empty() {
+        return Err(CliError::new(2, "No valid path provided."));
     }
 
     if !prompt_confirm(
@@ -62,8 +84,7 @@ pub(super) fn cmd_batch(args: AclBatchCmd) -> CliResult {
     for path in &paths {
         bar.set_message(acl::parse::truncate(&path.to_string_lossy(), 40));
 
-        let result: anyhow::Result<()> = match args.action.to_lowercase().replace('-', "").as_str()
-        {
+        let result: anyhow::Result<()> = match action.as_str() {
             "repair" => acl::repair::force_repair(path, &cfg.cfg, true).and_then(|s| {
                 if s.total_fail() > 0 {
                     anyhow::bail!("{}", s.summary());

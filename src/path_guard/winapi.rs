@@ -8,8 +8,8 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
 use windows_sys::Win32::Foundation::{GetLastError, FILETIME, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, GetFileAttributesW, GetFinalPathNameByHandleW, GetFullPathNameW,
-    FILE_ATTRIBUTE_DIRECTORY,
+    CreateFileW, GetFileAttributesW, GetFileInformationByHandleEx, GetFinalPathNameByHandleW,
+    GetFullPathNameW, FileAttributeTagInfo, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_TAG_INFO,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
     INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS, WIN32_FILE_ATTRIBUTE_DATA,
@@ -201,6 +201,28 @@ pub(crate) fn open_path_with_policy(
         let owned = unsafe { OwnedHandle::from_raw_handle(handle as *mut _) };
         Ok(owned)
     })
+}
+
+pub(crate) fn get_attribute_tag_info(
+    handle: &OwnedHandle,
+) -> Result<FILE_ATTRIBUTE_TAG_INFO, PathIssueKind> {
+    let mut info = FILE_ATTRIBUTE_TAG_INFO {
+        FileAttributes: 0,
+        ReparseTag: 0,
+    };
+    let ok = unsafe {
+        GetFileInformationByHandleEx(
+            handle.as_raw_handle() as *mut _,
+            FileAttributeTagInfo,
+            &mut info as *mut _ as *mut _,
+            std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+        )
+    };
+    if ok == 0 {
+        let code = unsafe { GetLastError() };
+        return Err(map_error_code(code));
+    }
+    Ok(info)
 }
 
 pub(crate) fn is_reparse_point(attr: u32) -> bool {

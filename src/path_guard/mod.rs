@@ -284,33 +284,55 @@ fn validate_single_inner(
         existence_probe: None,
     };
 
-    if probe_any {
+    let mut handle_for_canonical = None;
+    let mut attr_from_handle = None;
+
+    if probe_any || policy.must_exist {
         let probe_timer = trace_stage_start(TraceStage::Probe);
-        match winapi::probe_ex(&info.path) {
-            Ok(data) => {
-                let attr = data.dwFileAttributes;
-                info.is_reparse_point = winapi::is_reparse_point(attr);
-                info.is_directory = Some(winapi::is_directory(attr));
-            }
-            Err(kind) => {
-                trace_stage_end(TraceStage::Probe, probe_timer);
-                if policy.must_exist {
-                    return Err(build_issue(raw, kind));
+        if policy.must_exist && policy.allow_reparse {
+            if let Ok(handle) = winapi::open_path_with_policy(&info.path, policy) {
+                if let Ok(tag_info) = winapi::get_attribute_tag_info(&handle) {
+                    attr_from_handle = Some(tag_info.FileAttributes);
                 }
-                info.existence_probe = Some(kind);
+                handle_for_canonical = Some(handle);
             }
         }
-        trace_stage_end(TraceStage::Probe, probe_timer);
-    } else if policy.must_exist {
-        let probe_timer = trace_stage_start(TraceStage::Probe);
-        match winapi::probe(&info.path) {
-            Ok(attr) => {
+
+        if probe_any {
+            if let Some(attr) = attr_from_handle {
                 info.is_reparse_point = winapi::is_reparse_point(attr);
                 info.is_directory = Some(winapi::is_directory(attr));
+            } else {
+                match winapi::probe_ex(&info.path) {
+                    Ok(data) => {
+                        let attr = data.dwFileAttributes;
+                        info.is_reparse_point = winapi::is_reparse_point(attr);
+                        info.is_directory = Some(winapi::is_directory(attr));
+                    }
+                    Err(kind) => {
+                        trace_stage_end(TraceStage::Probe, probe_timer);
+                        if policy.must_exist {
+                            return Err(build_issue(raw, kind));
+                        }
+                        info.existence_probe = Some(kind);
+                    }
+                }
             }
-            Err(kind) => {
-                trace_stage_end(TraceStage::Probe, probe_timer);
-                return Err(build_issue(raw, kind));
+        } else if policy.must_exist {
+            if let Some(attr) = attr_from_handle {
+                info.is_reparse_point = winapi::is_reparse_point(attr);
+                info.is_directory = Some(winapi::is_directory(attr));
+            } else {
+                match winapi::probe(&info.path) {
+                    Ok(attr) => {
+                        info.is_reparse_point = winapi::is_reparse_point(attr);
+                        info.is_directory = Some(winapi::is_directory(attr));
+                    }
+                    Err(kind) => {
+                        trace_stage_end(TraceStage::Probe, probe_timer);
+                        return Err(build_issue(raw, kind));
+                    }
+                }
             }
         }
         trace_stage_end(TraceStage::Probe, probe_timer);
@@ -322,7 +344,7 @@ fn validate_single_inner(
 
     if policy.must_exist && policy.allow_reparse {
         let canonical_timer = trace_stage_start(TraceStage::Canonical);
-        if let Ok(handle) = winapi::open_path_with_policy(&info.path, policy) {
+        if let Some(handle) = handle_for_canonical {
             if let Ok(final_path) = winapi::get_final_path(&handle) {
                 info.canonical = Some(final_path);
             }
