@@ -535,6 +535,56 @@ fn hash_units(units: &[u16]) -> u64 {
     hasher.finish()
 }
 
+fn hash_ascii_units(units: &[u16]) -> u64 {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001b3;
+    let mut hash = FNV_OFFSET;
+    for &unit in units {
+        hash ^= unit as u8 as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
+}
+
+fn hash_ascii_folded(units: &[u16]) -> Option<u64> {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001b3;
+    let mut hash = FNV_OFFSET;
+    for &unit in units {
+        if unit > 0x7f {
+            return None;
+        }
+        let lower = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
+            unit + 32
+        } else {
+            unit
+        };
+        hash ^= lower as u8 as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    Some(hash)
+}
+
+fn ascii_eq_folded(entry: &[u16], candidate_lower: &[u16]) -> bool {
+    if entry.len() != candidate_lower.len() {
+        return false;
+    }
+    for (idx, &unit) in entry.iter().enumerate() {
+        if unit > 0x7f {
+            return false;
+        }
+        let lower = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
+            unit + 32
+        } else {
+            unit
+        };
+        if lower != candidate_lower[idx] {
+            return false;
+        }
+    }
+    true
+}
+
 pub(crate) fn build_probe_cache<'a, I>(
     items: I,
     total: usize,
@@ -570,20 +620,19 @@ where
 
         let mut targets: HashMap<u64, Vec<(Vec<u16>, usize)>> = HashMap::new();
         for (idx, name) in &entries {
-            let hash = hash_units(name);
+            let hash = hash_ascii_units(name);
             targets.entry(hash).or_default().push((name.clone(), *idx));
         }
 
         let result = winapi::probe_dir_entries(&dir, |name, attr| {
-            let Some(norm_entry) = ascii_lower_units(name) else {
+            let Some(hash) = hash_ascii_folded(name) else {
                 return;
             };
-            let hash = hash_units(&norm_entry);
             let Some(candidates) = targets.get(&hash) else {
                 return;
             };
             for (candidate, idx) in candidates {
-                if candidate.as_slice() == norm_entry.as_slice() {
+                if ascii_eq_folded(name, candidate) {
                     cache[*idx] = Some(Ok(attr));
                 }
             }
@@ -691,22 +740,6 @@ fn contains_unit(units: &[u16], target: u16) -> bool {
 fn ascii_lower_os(value: &OsStr) -> Option<Vec<u16>> {
     let mut out: Vec<u16> = Vec::new();
     for unit in value.encode_wide() {
-        if unit > 0x7f {
-            return None;
-        }
-        let lower = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
-            unit + 32
-        } else {
-            unit
-        };
-        out.push(lower);
-    }
-    Some(out)
-}
-
-fn ascii_lower_units(value: &[u16]) -> Option<Vec<u16>> {
-    let mut out: Vec<u16> = Vec::with_capacity(value.len());
-    for &unit in value {
         if unit > 0x7f {
             return None;
         }
