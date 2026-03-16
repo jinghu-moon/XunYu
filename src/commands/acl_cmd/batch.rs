@@ -33,6 +33,7 @@ pub(super) fn cmd_batch(args: AclBatchCmd) -> CliResult {
         _ => crate::path_guard::PathPolicy::for_read(),
     };
     policy.allow_relative = true;
+    policy.must_exist = false;
 
     let validation = crate::path_guard::validate_paths(raw_paths.iter(), &policy);
     if !validation.issues.is_empty() {

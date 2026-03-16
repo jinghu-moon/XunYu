@@ -6,7 +6,9 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use indexmap::IndexSet;
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 pub(crate) mod parallel;
 mod policy;
@@ -303,9 +305,8 @@ fn validate_single_inner(
                 info.is_reparse_point = winapi::is_reparse_point(attr);
                 info.is_directory = Some(winapi::is_directory(attr));
             } else {
-                match winapi::probe_ex(&info.path) {
-                    Ok(data) => {
-                        let attr = data.dwFileAttributes;
+                match winapi::probe(&info.path) {
+                    Ok(attr) => {
                         info.is_reparse_point = winapi::is_reparse_point(attr);
                         info.is_directory = Some(winapi::is_directory(attr));
                     }
@@ -432,19 +433,48 @@ pub(crate) fn validate_string_stage(
 
 pub(crate) fn dedupe_inputs(raw_inputs: Vec<OsString>) -> (Vec<OsString>, usize) {
     let dedupe_timer = trace_stage_start(TraceStage::Dedupe);
-    let mut seen: IndexSet<Vec<u16>> = IndexSet::with_capacity(raw_inputs.len());
+    let mut seen: HashMap<u64, usize> = HashMap::with_capacity(raw_inputs.len());
+    let mut collisions: HashMap<u64, Vec<usize>> = HashMap::new();
     let mut out: Vec<OsString> = Vec::new();
     let mut deduped = 0usize;
 
-    for raw in raw_inputs {
-        let key = with_check_buf(|scratch| {
+    'inputs: for raw in raw_inputs {
+        let hash = with_check_buf(|scratch| {
             fill_wide(scratch, &raw);
-            normalize_for_dedupe(scratch)
+            normalize_for_dedupe_in_place(scratch);
+            hash_units(scratch)
         });
-        if !seen.insert(key) {
-            deduped += 1;
+
+        if let Some(&first_idx) = seen.get(&hash) {
+            let current_norm = with_check_buf(|scratch| {
+                fill_wide(scratch, &raw);
+                normalize_for_dedupe_in_place(scratch);
+                scratch.clone()
+            });
+
+            if normalized_equals_raw(&current_norm, &out[first_idx]) {
+                deduped += 1;
+                continue;
+            }
+
+            let entry = collisions.entry(hash).or_insert_with(|| vec![first_idx]);
+            for &idx in entry.iter() {
+                if idx == first_idx {
+                    continue;
+                }
+                if normalized_equals_raw(&current_norm, &out[idx]) {
+                    deduped += 1;
+                    continue 'inputs;
+                }
+            }
+
+            let new_idx = out.len();
+            out.push(raw);
+            entry.push(new_idx);
             continue;
         }
+
+        seen.insert(hash, out.len());
         out.push(raw);
     }
 
@@ -452,19 +482,30 @@ pub(crate) fn dedupe_inputs(raw_inputs: Vec<OsString>) -> (Vec<OsString>, usize)
     (out, deduped)
 }
 
-fn normalize_for_dedupe(units: &[u16]) -> Vec<u16> {
-    let mut out = Vec::with_capacity(units.len());
-    for &unit in units {
-        let unit = if unit == FSLASH { SLASH } else { unit };
-        let unit = if (b'A' as u16..=b'Z' as u16).contains(&unit) {
-            unit + 32
-        } else {
-            unit
-        };
-        out.push(unit);
+fn normalize_for_dedupe_in_place(units: &mut Vec<u16>) {
+    for unit in units.iter_mut() {
+        if *unit == FSLASH {
+            *unit = SLASH;
+        }
+        if (b'A' as u16..=b'Z' as u16).contains(unit) {
+            *unit = *unit + 32;
+        }
     }
-    trim_trailing_backslash(&mut out);
-    out
+    trim_trailing_backslash(units);
+}
+
+fn hash_units(units: &[u16]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    units.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn normalized_equals_raw(normalized: &[u16], raw: &OsStr) -> bool {
+    with_check_buf(|scratch| {
+        fill_wide(scratch, raw);
+        normalize_for_dedupe_in_place(scratch);
+        scratch.as_slice() == normalized
+    })
 }
 
 fn trim_trailing_backslash(raw: &mut Vec<u16>) {

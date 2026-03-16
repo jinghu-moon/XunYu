@@ -12,7 +12,7 @@ use super::{
     PathPolicy, PathValidationResult,
 };
 
-const PARALLEL_MIN: usize = 64;
+const PARALLEL_MIN: usize = 32;
 const UNC_THRESHOLD: usize = 500;
 
 pub(crate) fn validate_paths(raw_inputs: Vec<OsString>, policy: &PathPolicy) -> PathValidationResult {
@@ -228,7 +228,11 @@ fn io_threads(limit_unc: bool) -> usize {
     let avail = thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let mut max = if limit_unc { 4 } else { 4 };
+    let mut max = if limit_unc {
+        4
+    } else {
+        std::cmp::min((avail / 2).max(1), 8)
+    };
     if let Some(override_threads) = env_io_threads() {
         max = override_threads;
     }

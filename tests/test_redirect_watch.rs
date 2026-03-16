@@ -38,6 +38,19 @@ fn wait_for<F: Fn() -> bool>(timeout: Duration, f: F) -> bool {
     false
 }
 
+struct ChildGuard {
+    child: std::process::Child,
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        if self.child.try_wait().ok().flatten().is_none() {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
 #[test]
 fn watch_moves_new_file_into_dest() {
     let env = TestEnv::new();
@@ -57,10 +70,12 @@ fn watch_moves_new_file_into_dest() {
     .env("XUN_REDIRECT_WATCH_MAX_BATCHES", "1")
     .env("XUN_REDIRECT_WATCH_DEBOUNCE_MS", "200")
     .env("XUN_REDIRECT_WATCH_SETTLE_MS", "50")
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped());
+    .stdout(Stdio::null())
+    .stderr(Stdio::null());
 
-    let mut child = cmd.spawn().unwrap();
+    let _guard = ChildGuard {
+        child: cmd.spawn().unwrap(),
+    };
 
     thread::sleep(Duration::from_millis(200));
     fs::write(src.join("a.jpg"), "img").unwrap();
@@ -72,9 +87,6 @@ fn watch_moves_new_file_into_dest() {
             .exists()),
         "expected watcher to move file"
     );
-
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
 #[test]
@@ -105,7 +117,9 @@ fn watch_retries_locked_file_until_ready() {
     .stdout(Stdio::null())
     .stderr(Stdio::null());
 
-    let mut child = cmd.spawn().unwrap();
+    let _guard = ChildGuard {
+        child: cmd.spawn().unwrap(),
+    };
 
     thread::sleep(Duration::from_millis(400));
     drop(holder);
@@ -117,9 +131,6 @@ fn watch_retries_locked_file_until_ready() {
             .exists()),
         "expected watcher to move file after lock released"
     );
-
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
 #[test]
@@ -147,7 +158,9 @@ fn watch_sweeps_empty_parent_dirs_after_move() {
     .stdout(Stdio::null())
     .stderr(Stdio::null());
 
-    let mut child = cmd.spawn().unwrap();
+    let _guard = ChildGuard {
+        child: cmd.spawn().unwrap(),
+    };
 
     thread::sleep(Duration::from_millis(200));
     fs::write(nested.join("a.jpg"), "img").unwrap();
@@ -160,7 +173,4 @@ fn watch_sweeps_empty_parent_dirs_after_move() {
         }),
         "expected watcher to sweep empty dirs after move"
     );
-
-    let _ = child.kill();
-    let _ = child.wait();
 }

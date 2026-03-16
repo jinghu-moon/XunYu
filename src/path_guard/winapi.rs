@@ -6,13 +6,13 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::ffi::OsStringExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
-use windows_sys::Win32::Foundation::{GetLastError, FILETIME, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::{GetLastError, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, GetFileAttributesW, GetFileInformationByHandleEx, GetFinalPathNameByHandleW,
     GetFullPathNameW, FileAttributeTagInfo, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_TAG_INFO,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-    INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS, WIN32_FILE_ATTRIBUTE_DATA,
+    INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS,
 };
 use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
 
@@ -20,13 +20,6 @@ use crate::path_guard::policy::{PathIssueKind, PathPolicy};
 
 thread_local! {
     static WIDE_BUF: RefCell<Vec<u16>> = RefCell::new(Vec::with_capacity(512));
-}
-
-pub(crate) fn to_wide_with_prefix(path: &Path) -> Vec<u16> {
-    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
-    ensure_long_prefix(&mut wide);
-    wide.push(0);
-    wide
 }
 
 pub(crate) fn probe(path: &Path) -> Result<u32, PathIssueKind> {
@@ -37,35 +30,6 @@ pub(crate) fn probe(path: &Path) -> Result<u32, PathIssueKind> {
         ensure_long_prefix(&mut buf);
         buf.push(0);
         probe_path(&buf)
-    })
-}
-
-pub(crate) fn probe_ex(path: &Path) -> Result<WIN32_FILE_ATTRIBUTE_DATA, PathIssueKind> {
-    WIDE_BUF.with(|buf| {
-        let mut buf = buf.borrow_mut();
-        buf.clear();
-        buf.extend(path.as_os_str().encode_wide());
-        ensure_long_prefix(&mut buf);
-        buf.push(0);
-
-        let attr = unsafe { GetFileAttributesW(buf.as_ptr()) };
-        if attr == INVALID_FILE_ATTRIBUTES {
-            let code = unsafe { GetLastError() };
-            return Err(map_error_code(code));
-        }
-
-        let zero_time = FILETIME {
-            dwLowDateTime: 0,
-            dwHighDateTime: 0,
-        };
-        Ok(WIN32_FILE_ATTRIBUTE_DATA {
-            dwFileAttributes: attr,
-            ftCreationTime: zero_time,
-            ftLastAccessTime: zero_time,
-            ftLastWriteTime: zero_time,
-            nFileSizeHigh: 0,
-            nFileSizeLow: 0,
-        })
     })
 }
 
@@ -269,15 +233,21 @@ fn ensure_long_prefix(wide: &mut Vec<u16>) {
             b'C' as u16,
             SLASH,
         ];
-        wide.drain(0..2);
-        wide.reserve(prefix.len());
-        wide.splice(0..0, prefix);
+        let old_len = wide.len().saturating_sub(2);
+        wide.copy_within(2.., 0);
+        wide.truncate(old_len);
+        let old_len = wide.len();
+        wide.resize(old_len + prefix.len(), 0);
+        wide.copy_within(..old_len, prefix.len());
+        wide[..prefix.len()].copy_from_slice(&prefix);
         return;
     }
 
     let prefix = [SLASH, SLASH, QMARK, SLASH];
-    wide.reserve(prefix.len());
-    wide.splice(0..0, prefix);
+    let old_len = wide.len();
+    wide.resize(old_len + prefix.len(), 0);
+    wide.copy_within(..old_len, prefix.len());
+    wide[..prefix.len()].copy_from_slice(&prefix);
 }
 
 #[cfg(test)]
@@ -299,19 +269,27 @@ mod tests {
     }
 
     #[test]
-    fn to_wide_with_prefix_adds_prefix() {
-        let wide = to_wide_with_prefix(Path::new(r"C:\Windows"));
-        assert!(wide.len() >= 5);
+    fn attr_helpers_work() {
+        let attr = FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY;
+        assert!(is_reparse_point(attr));
+        assert!(is_directory(attr));
+    }
+
+    #[test]
+    fn ensure_long_prefix_adds_device_prefix() {
+        let mut wide: Vec<u16> = r"C:\Windows".encode_utf16().collect();
+        ensure_long_prefix(&mut wide);
+        assert!(wide.len() >= 4);
         assert_eq!(wide[0], b'\\' as u16);
         assert_eq!(wide[1], b'\\' as u16);
         assert_eq!(wide[2], b'?' as u16);
         assert_eq!(wide[3], b'\\' as u16);
-        assert_eq!(*wide.last().unwrap(), 0);
     }
 
     #[test]
-    fn to_wide_with_prefix_handles_unc() {
-        let wide = to_wide_with_prefix(Path::new(r"\\server\share"));
+    fn ensure_long_prefix_adds_unc_prefix() {
+        let mut wide: Vec<u16> = r"\\server\share".encode_utf16().collect();
+        ensure_long_prefix(&mut wide);
         let prefix = [
             b'\\' as u16,
             b'\\' as u16,
@@ -323,12 +301,5 @@ mod tests {
             b'\\' as u16,
         ];
         assert!(wide.starts_with(&prefix));
-    }
-
-    #[test]
-    fn attr_helpers_work() {
-        let attr = FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY;
-        assert!(is_reparse_point(attr));
-        assert!(is_directory(attr));
     }
 }
