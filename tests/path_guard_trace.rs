@@ -48,7 +48,9 @@ fn trace_dedupe_hot() {
 
     let policy = PathPolicy::for_output();
     let result = validate_paths(inputs, &policy);
-    assert!(!result.ok.is_empty());
+    let expected_unique = if total > unique { unique + 1 } else { unique };
+    assert_eq!(result.ok.len(), expected_unique);
+    assert_eq!(result.deduped, total - expected_unique);
 }
 
 #[test]
@@ -56,15 +58,16 @@ fn trace_dedupe_hot() {
 fn trace_dedupe_variants() {
     warn_trace_disabled();
     let dir = tempfile::tempdir().expect("tempdir");
-    let base = dir.path().join("MixCase").join("File.TXT");
+    let base = dir.path().join("mixcase").join("file.txt");
     let base_str = path_string(&base);
-    let upper = base_str.to_uppercase().replace('\\', "/");
+    let upper = path_string(&dir.path().join("MIXCASE").join("FILE.TXT"));
+    let forward = base_str.replace('\\', "/");
     let trailing = format!("{base_str}\\");
 
     let policy = PathPolicy::for_output();
-    let result = validate_paths(vec![base_str, upper, trailing], &policy);
+    let result = validate_paths(vec![base_str, upper, forward, trailing], &policy);
     assert_eq!(result.ok.len(), 1);
-    assert_eq!(result.deduped, 2);
+    assert_eq!(result.deduped, 3);
 }
 
 #[test]
