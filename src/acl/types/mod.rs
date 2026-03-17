@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -32,15 +33,19 @@ pub const RIGHTS_TABLE: &[(u32, &str, &str)] = &[
 ];
 
 /// Look up the short display name for a rights mask.
-pub fn rights_short(mask: u32) -> String {
+///
+/// Returns a `&'static str` borrowed from [`RIGHTS_TABLE`] on a hit, or an
+/// owned `String` (via `Cow::Owned`) for unknown masks, avoiding allocation in
+/// the common case.
+pub fn rights_short(mask: u32) -> Cow<'static, str> {
     // Strip Synchronize (0x00100000) before lookup
     let m = mask & !0x00100000;
     for &(k, short, _) in RIGHTS_TABLE {
         if m == (k & !0x00100000) {
-            return short.to_string();
+            return Cow::Borrowed(short);
         }
     }
-    format!("{mask:#010x}")
+    Cow::Owned(format!("{mask:#010x}"))
 }
 
 /// Look up the long description for a rights mask.
@@ -160,6 +165,22 @@ impl std::fmt::Display for PropagationFlags {
     }
 }
 
+// ── Diff key (zero-copy) ─────────────────────────────────────────────────────
+
+/// Zero-copy key for [`AceEntry`] set-difference operations.
+///
+/// Uses borrowed data to avoid allocating a `String` per ACE during
+/// [`diff_acl`](crate::acl::diff::diff_acl) — reduces alloc count from `2n`
+/// to `0` for the key-building phase.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct AceDiffKey<'a> {
+    pub principal: &'a str,
+    pub ace_type: &'a AceType,
+    pub rights_mask: u32,
+    pub inheritance: u32,
+    pub is_inherited: bool,
+}
+
 // ── Core structs ──────────────────────────────────────────────────────────────
 
 /// A single Access Control Entry.
@@ -188,7 +209,7 @@ pub struct AceEntry {
 
 impl AceEntry {
     /// Short display name for the rights mask.
-    pub fn rights_display(&self) -> String {
+    pub fn rights_display(&self) -> Cow<'static, str> {
         rights_short(self.rights_mask)
     }
 
@@ -206,6 +227,20 @@ impl AceEntry {
             "{}|{}|{}|{}|{}",
             self.principal, self.ace_type, self.rights_mask, self.inheritance.0, self.is_inherited,
         )
+    }
+
+    /// Returns a zero-copy key suitable for HashMap lookups in diff operations.
+    ///
+    /// Prefer this over [`diff_key`] when the key is only used for comparison
+    /// and does not need to be stored as an owned `String`.
+    pub fn diff_key_ref(&self) -> AceDiffKey<'_> {
+        AceDiffKey {
+            principal: &self.principal,
+            ace_type: &self.ace_type,
+            rights_mask: self.rights_mask,
+            inheritance: self.inheritance.0,
+            is_inherited: self.is_inherited,
+        }
     }
 }
 

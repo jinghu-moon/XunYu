@@ -19,7 +19,7 @@ pub(super) fn export_diff_csv(diff: &DiffResult, dest: &Path) -> Result<usize> {
         wtr.write_record([
             "仅在A",
             e.principal.as_str(),
-            rights.as_str(),
+            rights.as_ref(),
             ace_type.as_str(),
             src,
             e.raw_sid.as_str(),
@@ -33,7 +33,7 @@ pub(super) fn export_diff_csv(diff: &DiffResult, dest: &Path) -> Result<usize> {
         wtr.write_record([
             "仅在B",
             e.principal.as_str(),
-            rights.as_str(),
+            rights.as_ref(),
             ace_type.as_str(),
             src,
             e.raw_sid.as_str(),
@@ -58,7 +58,7 @@ pub(super) fn export_orphans_csv(orphans: &[OrphanEntry], dest: &Path) -> Result
             path.as_str(),
             o.ace.raw_sid.as_str(),
             ace_type.as_str(),
-            rights.as_str(),
+            rights.as_ref(),
             mask.as_str(),
         ])?;
     }
@@ -111,7 +111,7 @@ pub(super) fn export_acl_csv(snapshot: &AclSnapshot, dest: &Path) -> Result<usiz
             ace_type.as_str(),
             src,
             e.principal.as_str(),
-            rights.as_str(),
+            rights.as_ref(),
             mask.as_str(),
             inheritance.as_str(),
             propagation.as_str(),
