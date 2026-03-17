@@ -124,7 +124,12 @@ pub(super) fn cmd_repair(args: AclRepairCmd) -> CliResult {
     let audit = audit_log(&cfg);
 
     print_path_header(path);
-    ui_println!("Force repair (take ownership + grant FullControl)");
+    if args.reset_clean {
+        ui_println!("Clean reset: break inheritance + wipe ACL + write Administrators+SYSTEM FullControl");
+        ui_println!("WARNING: all existing ACEs (including custom permissions) will be permanently removed.");
+    } else {
+        ui_println!("Force repair (take ownership + grant FullControl)");
+    }
     ui_println!("This operation is destructive and cannot be undone.");
 
     if !prompt_confirm("Confirm repair?", false, args.yes)? {
@@ -132,7 +137,19 @@ pub(super) fn cmd_repair(args: AclRepairCmd) -> CliResult {
         return Ok(());
     }
 
-    let stats = match acl::repair::force_repair(path, &cfg.cfg, runtime::is_quiet()) {
+    let stats = if args.reset_clean {
+        let extra: Vec<String> = args.grant
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        acl::repair::force_reset_clean_v3(path, &cfg.cfg, runtime::is_quiet(), &extra)
+    } else {
+        acl::repair::force_repair(path, &cfg.cfg, runtime::is_quiet())
+    };
+    let stats = match stats {
         Ok(s) => s,
         Err(e) => {
             if args.export_errors {

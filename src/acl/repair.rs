@@ -337,3 +337,222 @@ pub fn set_full_control_reset_inherit(path: &Path, admins_sid: &[u8]) -> Result<
     }
     Ok(())
 }
+
+// ── Clean reset v3 (TreeSetNamedSecurityInfoW + per-object error capture) ────
+
+/// Clean-reset v3: combines V2 kernel-side bulk performance with V1's
+/// per-object error reporting via the `FN_PROGRESS` callback.
+///
+/// # Strategy
+/// 1. Take ownership of root.
+/// 2. Write root DACL: PROTECTED + Administrators + SYSTEM + extras.
+/// 3. `TreeSetNamedSecurityInfoW(TREE_SEC_INFO_RESET)` with `FN_PROGRESS`:
+///    - `status == 0` → count as success
+///    - `status != 0` → record `(path, win32_error)` in shared error list
+pub fn force_reset_clean_v3(
+    root: &Path,
+    _config: &AclConfig,
+    quiet: bool,
+    extra_principals: &[String],
+) -> Result<RepairStats> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Instant;
+    use windows::Win32::Security::{
+        ACE_FLAGS, ACL_REVISION, AddAccessAllowedAceEx, InitializeAcl,
+    };
+    use windows::Win32::Security::Authorization::{
+        ProgressInvokeEveryObject, TreeSetNamedSecurityInfoW, TREE_SEC_INFO_RESET,
+    };
+
+    let t0 = Instant::now();
+
+    enable_repair_privileges().context("force_reset_clean_v3: privilege")?;
+    let t_priv = t0.elapsed();
+
+    let admins_sid = lookup_account_sid(ADMINS_SID_STR)
+        .context("force_reset_clean_v3: Administrators SID")?;
+    let system_sid = lookup_account_sid("S-1-5-18")
+        .context("force_reset_clean_v3: SYSTEM SID")?;
+
+    let extra_sids: Vec<Vec<u8>> = extra_principals
+        .iter()
+        .filter_map(|p| {
+            let name = p.trim();
+            if name.is_empty() { return None; }
+            match lookup_account_sid(name) {
+                Ok(sid) => Some(sid),
+                Err(e) => { eprintln!("[warn] 无法解析账户 '{name}': {e:#}"); None }
+            }
+        })
+        .collect();
+    let t_sid = t0.elapsed();
+
+    let pw: Vec<u16> = root
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+
+    // Shared state passed to FN_PROGRESS callback.
+    // Safety: TreeSetNamedSecurityInfoW invokes the callback synchronously on
+    // the calling thread — no cross-thread aliasing.
+    struct CallbackState {
+        ok_count:  *const AtomicUsize,
+        fail_list: *const Mutex<Vec<(PathBuf, String)>>,
+        bar:       *const ProgressBar,
+    }
+    unsafe impl Send for CallbackState {}
+    unsafe impl Sync for CallbackState {}
+
+    let ok_count  = AtomicUsize::new(0);
+    let fail_list: Mutex<Vec<(PathBuf, String)>> = Mutex::new(Vec::new());
+    let bar = if quiet {
+        ProgressBar::hidden()
+    } else {
+        let b = ProgressBar::new_spinner();
+        b.set_style(
+            ProgressStyle::with_template(
+                "{spinner:.cyan} [{elapsed_precise}] {pos} 对象已处理  {msg}"
+            )
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
+        );
+        b.enable_steady_tick(std::time::Duration::from_millis(100));
+        b.set_message("重置继承中…");
+        b
+    };
+
+    let cb_state = CallbackState {
+        ok_count:  &ok_count  as *const _,
+        fail_list: &fail_list as *const _,
+        bar:       &bar       as *const _,
+    };
+
+    unsafe extern "system" fn progress_cb(
+        name:         windows::core::PCWSTR,
+        status:       u32,
+        _invoke:      *mut windows::Win32::Security::Authorization::PROG_INVOKE_SETTING,
+        args:         *const std::ffi::c_void,
+        security_set: windows::Win32::Foundation::BOOL,
+    ) {
+        // Only process post-set callbacks to avoid double-counting.
+        if args.is_null() || !security_set.as_bool() { return; }
+        unsafe {
+            let state = &*(args as *const CallbackState);
+            if status == 0 {
+                let n = (*state.ok_count).fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                (*state.bar).set_position(n as u64);
+            } else {
+                // Capture path + win32 error message
+                let path = {
+                    let mut len = 0usize;
+                    let ptr = name.0;
+                    while !ptr.add(len).is_null() && *ptr.add(len) != 0 { len += 1; }
+                    PathBuf::from(String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len)))
+                };
+                let err_msg = format!("{}", AclError::from_win32(status));
+                if let Ok(mut g) = (*state.fail_list).lock() {
+                    g.push((path, err_msg));
+                }
+            }
+        }
+    }
+
+    unsafe {
+        let admins = PSID(admins_sid.as_ptr() as *mut _);
+        let system = PSID(system_sid.as_ptr() as *mut _);
+        let ace_flags = ACE_FLAGS(u32::from(OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE));
+
+        // ── Step 1: take ownership of root ────────────────────────────────────
+        let status = SetNamedSecurityInfoW(
+            PCWSTR(pw.as_ptr()),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            admins,
+            PSID::default(),
+            None,
+            None,
+        );
+        check_win32(status, "v3: set root owner")?;
+        let t_owner = t0.elapsed();
+
+        // ── Step 2: build and write clean root DACL ───────────────────────────
+        let sid_len = |sid: PSID| windows::Win32::Security::GetLengthSid(sid);
+        let ace_size = |sl: u32| {
+            std::mem::size_of::<windows::Win32::Security::ACCESS_ALLOWED_ACE>() as u32 + sl - 4
+        };
+        let extra_size: u32 = extra_sids.iter().map(|s| {
+            ace_size(sid_len(PSID(s.as_ptr() as *mut _)))
+        }).sum();
+        let acl_size = std::mem::size_of::<ACL>() as u32
+            + ace_size(sid_len(admins))
+            + ace_size(sid_len(system))
+            + extra_size + 16;
+
+        let mut acl_buf = vec![0u8; acl_size as usize];
+        let new_acl = acl_buf.as_mut_ptr() as *mut ACL;
+        InitializeAcl(new_acl, acl_size, ACL_REVISION)
+            .map_err(|_| AclError::last_win32()).context("v3: InitializeAcl")?;
+        AddAccessAllowedAceEx(new_acl, ACL_REVISION, ace_flags, FULL_CONTROL, admins)
+            .map_err(|_| AclError::last_win32()).context("v3: AddAce Administrators")?;
+        AddAccessAllowedAceEx(new_acl, ACL_REVISION, ace_flags, FULL_CONTROL, system)
+            .map_err(|_| AclError::last_win32()).context("v3: AddAce SYSTEM")?;
+        for (i, s) in extra_sids.iter().enumerate() {
+            let esid = PSID(s.as_ptr() as *mut _);
+            AddAccessAllowedAceEx(new_acl, ACL_REVISION, ace_flags, FULL_CONTROL, esid)
+                .map_err(|_| AclError::last_win32())
+                .with_context(|| format!("v3: AddAce extra[{i}]"))?;
+        }
+
+        let si_root = windows::Win32::Security::OBJECT_SECURITY_INFORMATION(
+            DACL_SECURITY_INFORMATION.0 | OWNER_SECURITY_INFORMATION.0 | 0x8000_0000,
+        );
+        let status = SetNamedSecurityInfoW(
+            PCWSTR(pw.as_ptr()), SE_FILE_OBJECT, si_root,
+            admins, PSID::default(), Some(new_acl), None,
+        );
+        check_win32(status, "v3: write root DACL")?;
+        let t_root = t0.elapsed();
+
+        // ── Step 3: kernel bulk-reset children with per-object error capture ──
+        let tree_status = TreeSetNamedSecurityInfoW(
+            PCWSTR(pw.as_ptr()),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            admins,
+            PSID::default(),
+            None,
+            None,
+            TREE_SEC_INFO_RESET,
+            Some(progress_cb),
+            ProgressInvokeEveryObject,
+            Some(&cb_state as *const _ as *const std::ffi::c_void),
+        );
+        let t_tree = t0.elapsed();
+
+        let ok  = ok_count.load(Ordering::Relaxed);
+        let failures = fail_list.lock().unwrap();
+        bar.finish_with_message(format!(
+            "完成  ✓ {} / ✗ {}", ok, failures.len()
+        ));
+
+        eprintln!("[timing-v3] privilege:  {:>8.2?}", t_priv);
+        eprintln!("[timing-v3] sid_resolve:{:>8.2?}  (+{:.2?})", t_sid,   t_sid   - t_priv);
+        eprintln!("[timing-v3] root_owner: {:>8.2?}  (+{:.2?})", t_owner, t_owner - t_sid);
+        eprintln!("[timing-v3] root_dacl:  {:>8.2?}  (+{:.2?})", t_root,  t_root  - t_owner);
+        eprintln!("[timing-v3] tree_reset: {:>8.2?}  (+{:.2?})", t_tree,  t_tree  - t_root);
+        eprintln!("[timing-v3] total_wall: {:>8.2?}", t_tree);
+
+        // Check overall status after collecting per-object errors
+        check_win32(tree_status, "v3: TreeSetNamedSecurityInfoW")?;
+
+        let total = ok + failures.len();
+        Ok(RepairStats {
+            total,
+            owner_ok: ok,
+            owner_fail: vec![],
+            acl_ok: ok,
+            acl_fail: failures.iter().map(|(p, e)| (p.clone(), e.clone())).collect(),
+        })
+    }
+}
+

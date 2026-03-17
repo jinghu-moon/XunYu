@@ -309,6 +309,18 @@ pub struct AclRepairCmd {
     /// skip confirmation
     #[argh(switch, short = 'y')]
     pub yes: bool,
+
+    /// clean reset: break inheritance on root, wipe all ACEs, write only
+    /// Administrators+SYSTEM FullControl; child objects re-enable inheritance
+    /// with no explicit ACEs. Use for user-data directories only.
+    #[argh(switch)]
+    pub reset_clean: bool,
+
+    /// additional principals to grant FullControl after clean reset
+    /// (comma-separated, e.g. "DOMAIN\\User,BUILTIN\\Users").
+    /// Only used with --reset-clean.
+    #[argh(option)]
+    pub grant: Option<String>,
 }
 
 /// View or export the audit log.
