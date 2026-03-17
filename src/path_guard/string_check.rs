@@ -149,7 +149,7 @@ pub(crate) fn check_chars(units: &[u16]) -> Option<PathIssueKind> {
     None
 }
 
-pub(crate) fn check_component(component: &[u16]) -> Option<PathIssueKind> {
+pub(crate) fn check_component(component: &[u16], allow_colon: bool) -> Option<PathIssueKind> {
     if component.is_empty() {
         return None;
     }
@@ -158,6 +158,11 @@ pub(crate) fn check_component(component: &[u16]) -> Option<PathIssueKind> {
     }
     if matches!(component.last(), Some(&SPACE) | Some(&DOT)) {
         return Some(PathIssueKind::TrailingDotSpace);
+    }
+    // 路径组件内的冒号是非法字符（Windows 不允许文件名含冒号）
+    // allow_colon=true 时跳过（ADS 已被上层允许）
+    if !allow_colon && component.iter().any(|&u| u == COLON) {
+        return Some(PathIssueKind::InvalidChar);
     }
 
     let stem_end = component.iter().position(|&u| u == DOT).unwrap_or(component.len());
@@ -178,7 +183,12 @@ pub(crate) fn check_traversal(base: &Path, joined: &Path) -> Option<PathIssueKin
     None
 }
 
-pub(crate) fn check_string(raw: &OsStr, units: &[u16], policy: &PathPolicy) -> Option<PathIssueKind> {
+pub(crate) fn check_string(
+    raw: &OsStr,
+    units: &[u16],
+    policy: &PathPolicy,
+    allow_relative: bool,
+) -> Option<PathIssueKind> {
     if let Some(issue) = check_chars(units) {
         return Some(issue);
     }
@@ -193,17 +203,25 @@ pub(crate) fn check_string(raw: &OsStr, units: &[u16], policy: &PathPolicy) -> O
         PathKind::NTNamespace => return Some(PathIssueKind::NtNamespaceNotAllowed),
         PathKind::VolumeGuid => return Some(PathIssueKind::VolumeGuidNotAllowed),
         PathKind::DriveRelative => return Some(PathIssueKind::DriveRelativeNotAllowed),
-        PathKind::Relative if !policy.allow_relative => {
+        PathKind::Relative if !allow_relative => {
             return Some(PathIssueKind::RelativeNotAllowed)
         }
         _ => {}
     }
 
     let mut start = 0usize;
-    for (idx, &unit) in units.iter().enumerate() {
+    // 跳过路径中不属于文件名组件的盘符部分，避免冒号被误判为 InvalidChar
+    // DriveAbsolute/DriveRelative: "X:" 占 index 0-1，从 index 2 开始
+    // ExtendedLength + drive prefix (\\?\X:\): "\\?\" 占 index 0-3，"X:" 占 index 4-5，从 index 6 开始
+    if matches!(kind, PathKind::DriveAbsolute | PathKind::DriveRelative) && units.len() >= 2 {
+        start = 2; // 跳过 "X:"
+    } else if matches!(kind, PathKind::ExtendedLength) && is_extended_drive_prefix(units) {
+        start = 6; // 跳过 "\\?\X:"
+    }
+    for (idx, &unit) in units.iter().enumerate().skip(start) {
         if unit == SLASH || unit == FSLASH {
             if idx > start {
-                if let Some(issue) = check_component(&units[start..idx]) {
+                if let Some(issue) = check_component(&units[start..idx], policy.allow_ads) {
                     return Some(issue);
                 }
             }
@@ -211,7 +229,7 @@ pub(crate) fn check_string(raw: &OsStr, units: &[u16], policy: &PathPolicy) -> O
         }
     }
     if start < units.len() {
-        if let Some(issue) = check_component(&units[start..]) {
+        if let Some(issue) = check_component(&units[start..], policy.allow_ads) {
             return Some(issue);
         }
     }
@@ -391,21 +409,21 @@ mod tests {
         let raw = OsStr::new(r"rel\file");
         let wide = to_wide(r"rel\file");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::RelativeNotAllowed)
         );
 
         let raw = OsStr::new(r"C:rel\file");
         let wide = to_wide(r"C:rel\file");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::DriveRelativeNotAllowed)
         );
 
         let raw = OsStr::new(r"file.txt:stream");
         let wide = to_wide(r"file.txt:stream");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::AdsNotAllowed)
         );
 
@@ -414,28 +432,28 @@ mod tests {
         let raw = OsStr::new("NUL.txt");
         let wide = to_wide("NUL.txt");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::ReservedName)
         );
 
         let raw = OsStr::new(r"\\.\COM1");
         let wide = to_wide(r"\\.\COM1");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::DeviceNamespaceNotAllowed)
         );
 
         let raw = OsStr::new(r"\Device\HarddiskVolume1\Windows");
         let wide = to_wide(r"\Device\HarddiskVolume1\Windows");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::NtNamespaceNotAllowed)
         );
 
         let raw = OsStr::new(r"\\?\Volume{1234-5678}\file.txt");
         let wide = to_wide(r"\\?\Volume{1234-5678}\file.txt");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::VolumeGuidNotAllowed)
         );
 
@@ -444,7 +462,7 @@ mod tests {
         let raw = OsStr::new(r"C:\evil\file.txt");
         let wide = to_wide(r"C:\evil\file.txt");
         assert_eq!(
-            check_string(raw, &wide, &policy),
+            check_string(raw, &wide, &policy, policy.allow_relative),
             Some(PathIssueKind::TraversalDetected)
         );
     }
