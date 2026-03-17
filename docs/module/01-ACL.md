@@ -110,7 +110,9 @@ mindmap
 
 ### `xun acl view` — 查看 ACL
 
-**参数：**
+```
+xun acl view -p "D:\Data" --detail
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -139,7 +141,9 @@ flowchart TD
 
 ### `xun acl add` — 添加权限条目
 
-**参数：**
+```
+xun acl add -p "D:\Data" --principal "BUILTIN\Users" --rights ReadAndExecute --ace-type Allow --inherit BothInherit -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -173,7 +177,9 @@ flowchart TD
 
 ### `xun acl remove` — 删除显式 ACE
 
-**参数：**
+```
+xun acl remove -p "D:\Data" --principal "DOMAIN\OldUser" --ace-type Allow -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -202,7 +208,9 @@ flowchart TD
 
 ### `xun acl purge` — 清除指定账户所有 ACE
 
-**参数：**
+```
+xun acl purge -p "D:\Data" --principal "DOMAIN\OldUser" -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -228,7 +236,9 @@ flowchart TD
 
 ### `xun acl diff` — 对比两个路径的 ACL
 
-**参数：**
+```
+xun acl diff -p "D:\Data" -r "D:\Template" -o diff.csv
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -254,7 +264,9 @@ flowchart TD
 
 ### `xun acl effective` — 有效权限计算
 
-**参数：**
+```
+xun acl effective -p "D:\Data" -u "DOMAIN\Alice"
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -281,7 +293,9 @@ flowchart TD
 
 ### `xun acl copy` — 复制 ACL
 
-**参数：**
+```
+xun acl copy -p "D:\Target" -r "D:\Template" -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -303,7 +317,9 @@ flowchart TD
 
 ### `xun acl backup` — 备份 ACL
 
-**参数：**
+```
+xun acl backup -p "D:\Data" -o "D:\backups\data_acl.json"
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -324,7 +340,9 @@ flowchart TD
 
 ### `xun acl restore` — 还原 ACL
 
-**参数：**
+```
+xun acl restore -p "D:\Data" --from "D:\backups\data_acl.json" -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -346,7 +364,9 @@ flowchart TD
 
 ### `xun acl inherit` — 继承开关
 
-**参数：**
+```
+xun acl inherit -p "D:\Data" --disable --preserve true
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -374,7 +394,9 @@ flowchart TD
 
 ### `xun acl owner` — 修改所有者
 
-**参数：**
+```
+xun acl owner -p "D:\Data" --set "BUILTIN\Administrators" -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -398,7 +420,9 @@ flowchart TD
 
 ### `xun acl orphans` — 孤儿 SID 管理
 
-**参数：**
+```
+xun acl orphans -p "D:\Data" --recursive true --action both -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -427,7 +451,9 @@ flowchart TD
 
 ### `xun acl repair` — 强制修复
 
-**参数：**
+```
+xun acl repair -p "D:\Data" --reset-clean --grant "DOMAIN\Alice" -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -458,7 +484,9 @@ flowchart TD
 
 ### `xun acl batch` — 批量操作
 
-**参数：**
+```
+xun acl batch --file paths.txt --principal "BUILTIN\Users" --rights ReadAndExecute --ace-type Allow -y
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -490,7 +518,9 @@ flowchart TD
 
 ### `xun acl audit` — 审计日志
 
-**参数：**
+```
+xun acl audit --tail 50 --export audit.csv
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -524,7 +554,9 @@ AuditEntry
 
 ### `xun acl config` — 配置管理
 
-**参数：**
+```
+xun acl config --set audit_path="D:\logs\acl-audit.jsonl"
+```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
