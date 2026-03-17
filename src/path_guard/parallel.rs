@@ -62,9 +62,9 @@ fn validate_paths_parallel(
     let mut ok_slots: Vec<Option<PathBuf>> = vec![None; total];
     let mut issue_slots: Vec<Option<PathIssue>> = vec![None; total];
 
-    let policy_stage = policy.clone();
+    let policy_arc = Arc::new(policy.clone());
     let cwd_snapshot = if policy.allow_relative {
-        policy_stage
+        policy
             .cwd_snapshot
             .clone()
             .or_else(super::current_dir_safe)
@@ -77,7 +77,7 @@ fn validate_paths_parallel(
         .par_iter()
         .map(|raw| {
             let result = super::with_check_buf(|scratch| {
-                super::validate_string_stage(raw.as_os_str(), &policy_stage, cwd_snapshot.as_deref(), scratch)
+                super::validate_string_stage(raw.as_os_str(), &policy_arc, cwd_snapshot.as_deref(), scratch)
             });
             let (path, _) = match result {
                 Ok(value) => value,
@@ -86,7 +86,7 @@ fn validate_paths_parallel(
                 }
             };
 
-            if policy_stage.must_exist || policy_stage.safety_check {
+            if policy_arc.must_exist || policy_arc.safety_check {
                 StageAResult::Work(path)
             } else {
                 StageAResult::Ok(path)
@@ -131,7 +131,7 @@ fn validate_paths_parallel(
     for _ in 0..io_threads {
         let rx = work_rx.clone();
         let tx = result_tx.clone();
-        let policy = policy.clone();
+        let policy = Arc::clone(&policy_arc);
         let inputs = Arc::clone(&inputs);
         let probe_cache = Arc::clone(&probe_cache);
         workers.push(thread::spawn(move || {
@@ -170,7 +170,7 @@ fn worker_loop(
     work_rx: Receiver<WorkItem>,
     result_tx: Sender<Outcome>,
     inputs: Arc<Vec<OsString>>,
-    policy: PathPolicy,
+    policy: Arc<PathPolicy>,
     probe_cache: Arc<Vec<Option<Result<u32, PathIssueKind>>>>,
 ) {
     for item in work_rx.iter() {

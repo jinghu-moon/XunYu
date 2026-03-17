@@ -7,8 +7,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
 pub(crate) mod parallel;
 mod policy;
@@ -409,13 +407,15 @@ pub(crate) fn validate_string_stage(
     fill_wide(scratch, raw);
     let has_env = contains_unit(scratch, PERCENT);
 
-    let mut check_policy = policy.clone();
-    if policy.expand_env && has_env {
-        check_policy.allow_relative = true;
-    }
+    // 仅在 expand_env && has_env 时允许相对路径（避免 policy.clone()）
+    let allow_relative_first = if policy.expand_env && has_env {
+        true
+    } else {
+        policy.allow_relative
+    };
 
     let string_timer = trace_stage_start(TraceStage::StringCheck);
-    if let Some(kind) = string_check::check_string(raw, scratch, &check_policy) {
+    if let Some(kind) = string_check::check_string(raw, scratch, policy, allow_relative_first) {
         trace_stage_end(TraceStage::StringCheck, string_timer);
         return Err(kind);
     }
@@ -432,7 +432,7 @@ pub(crate) fn validate_string_stage(
         trace_stage_end(TraceStage::ExpandEnv, expand_timer);
         fill_wide(scratch, &current);
         let string_timer = trace_stage_start(TraceStage::StringCheck);
-        if let Some(kind) = string_check::check_string(&current, scratch, policy) {
+        if let Some(kind) = string_check::check_string(&current, scratch, policy, policy.allow_relative) {
             trace_stage_end(TraceStage::StringCheck, string_timer);
             return Err(kind);
         }
@@ -539,9 +539,14 @@ fn normalize_for_dedupe_in_place(units: &mut Vec<u16>) {
 }
 
 fn hash_units(units: &[u16]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    units.hash(&mut hasher);
-    hasher.finish()
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001b3;
+    let mut hash = FNV_OFFSET;
+    for &unit in units {
+        hash ^= unit as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
 }
 
 fn hash_ascii_units(units: &[u16]) -> u64 {
@@ -627,10 +632,10 @@ where
             continue;
         }
 
-        let mut targets: HashMap<u64, Vec<(Vec<u16>, usize)>> = HashMap::new();
+        let mut targets: HashMap<u64, Vec<(&Vec<u16>, usize)>> = HashMap::new();
         for (idx, name) in &entries {
             let hash = hash_ascii_units(name);
-            targets.entry(hash).or_default().push((name.clone(), *idx));
+            targets.entry(hash).or_default().push((name, *idx));
         }
 
         let result = winapi::probe_dir_entries(&dir, |name, attr| {

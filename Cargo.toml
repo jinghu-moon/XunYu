@@ -225,3 +225,8 @@ predicates = "3.1"
 tempfile = "3.10"
 serial_test = "3.0"
 tower = "0.5"
+divan = "0.1.21"
+
+[[bench]]
+name = "path_guard_bench_divan"
+harness = false
