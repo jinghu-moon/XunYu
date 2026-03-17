@@ -19,7 +19,23 @@ use super::types::{TreeFilters, TreeOutput};
 
 pub(crate) fn cmd_tree(args: TreeCmd) -> CliResult {
     let root = match &args.path {
-        Some(p) => PathBuf::from(p),
+        Some(p) => {
+            let mut policy = crate::path_guard::PathPolicy::for_read();
+            policy.must_exist = false;
+            let validation = crate::path_guard::validate_paths(vec![p.clone()], &policy);
+            if !validation.issues.is_empty() {
+                let details: Vec<String> = validation
+                    .issues
+                    .iter()
+                    .map(|i| format!("{} ({})", i.raw, i.detail))
+                    .collect();
+                return Err(CliError::with_details(2, "Invalid path.".to_string(), &details));
+            }
+            match validation.ok.into_iter().next() {
+                Some(pb) => pb,
+                None => PathBuf::from(p),
+            }
+        }
         None => std::env::current_dir().unwrap(),
     };
     if !root.is_dir() {

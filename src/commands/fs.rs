@@ -1,5 +1,4 @@
 use crate::cli::RmCmd;
-use std::path::Path;
 
 #[cfg(feature = "lock")]
 use crate::commands::lock::unlock_and_retry;
@@ -10,14 +9,26 @@ pub(crate) fn cmd_rm(args: RmCmd) -> CliResult {
     #[cfg(not(feature = "lock"))]
     let _ = args.yes;
     let _ = &args.format;
-    let path = Path::new(&args.path);
-    if !path.exists() {
+
+    let mut policy = crate::path_guard::PathPolicy::for_write();
+    policy.must_exist = true;
+    let validation = crate::path_guard::validate_paths(vec![args.path.clone()], &policy);
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|i| format!("{} ({})", i.raw, i.detail))
+            .collect();
+        return Err(CliError::with_details(2, "Invalid path.".to_string(), &details));
+    }
+    let Some(path_buf) = validation.ok.into_iter().next() else {
         return Err(CliError::with_details(
             2,
             format!("File or directory not found: {}", args.path),
             &["Hint: Check the path exists, or run from the correct directory."],
         ));
-    }
+    };
+    let path = path_buf.as_path();
 
     #[cfg(feature = "protect")]
     if let Err(msg) =

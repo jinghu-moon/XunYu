@@ -4,6 +4,21 @@ use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, emit_warning, print_table};
 use comfy_table::{Attribute, Cell, Color, Table};
 
+fn validate_protect_path(raw: &str) -> CliResult<()> {
+    let mut policy = crate::path_guard::PathPolicy::for_read();
+    policy.must_exist = false;
+    let validation = crate::path_guard::validate_paths(vec![raw.to_string()], &policy);
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|i| format!("{} ({})", i.raw, i.detail))
+            .collect();
+        return Err(CliError::with_details(2, "Invalid path.".to_string(), &details));
+    }
+    Ok(())
+}
+
 pub(crate) fn cmd_protect(args: ProtectCmd) -> CliResult {
     match args.cmd {
         ProtectSubCommand::Set(a) => cmd_set(a),
@@ -13,6 +28,7 @@ pub(crate) fn cmd_protect(args: ProtectCmd) -> CliResult {
 }
 
 fn cmd_set(args: ProtectSetCmd) -> CliResult {
+    validate_protect_path(&args.path)?;
     let mut cfg = load_config();
 
     let denys: Vec<String> = args
@@ -78,6 +94,7 @@ fn cmd_set(args: ProtectSetCmd) -> CliResult {
 }
 
 fn cmd_clear(args: ProtectClearCmd) -> CliResult {
+    validate_protect_path(&args.path)?;
     let mut cfg = load_config();
     let path_str = args.path.replace('\\', "/").to_lowercase();
 

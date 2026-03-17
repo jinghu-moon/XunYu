@@ -1,7 +1,7 @@
 #[macro_use]
 mod macros;
 
-mod acl;
+pub mod acl;
 #[cfg(feature = "alias")]
 mod alias;
 mod cli;

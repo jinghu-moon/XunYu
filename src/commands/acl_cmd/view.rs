@@ -1,7 +1,9 @@
 use super::*;
 
 pub(super) fn cmd_view(args: AclViewCmd) -> CliResult {
-    let path = Path::new(&args.path);
+    let policy = crate::path_guard::PathPolicy::for_read();
+    let path = validate_acl_path(&args.path, &policy, "target", true)?;
+    let path = path.as_path();
     let snap = acl::reader::get_acl(path).map_err(map_acl_err)?;
 
     print_path_header(path);
@@ -79,8 +81,11 @@ pub(super) fn cmd_view(args: AclViewCmd) -> CliResult {
 }
 
 pub(super) fn cmd_diff(args: AclDiffCmd) -> CliResult {
-    let path = Path::new(&args.path);
-    let reference = Path::new(&args.reference);
+    let policy = crate::path_guard::PathPolicy::for_read();
+    let path = validate_acl_path(&args.path, &policy, "target", true)?;
+    let path = path.as_path();
+    let reference = validate_acl_path(&args.reference, &policy, "reference", true)?;
+    let reference = reference.as_path();
 
     let snap_a = acl::reader::get_acl(path).map_err(map_acl_err)?;
     let snap_b = acl::reader::get_acl(reference).map_err(map_acl_err)?;
@@ -126,7 +131,9 @@ pub(super) fn cmd_diff(args: AclDiffCmd) -> CliResult {
 }
 
 pub(super) fn cmd_effective(args: AclEffectiveCmd) -> CliResult {
-    let path = Path::new(&args.path);
+    let policy = crate::path_guard::PathPolicy::for_read();
+    let path = validate_acl_path(&args.path, &policy, "target", true)?;
+    let path = path.as_path();
     let snap = acl::reader::get_acl(path).map_err(map_acl_err)?;
 
     let (sids, label) = if let Some(u) = args.user.as_deref() {

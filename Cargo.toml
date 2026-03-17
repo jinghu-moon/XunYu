@@ -230,3 +230,7 @@ divan = "0.1.21"
 [[bench]]
 name = "path_guard_bench_divan"
 harness = false
+
+[[bench]]
+name = "acl_bench_divan"
+harness = false

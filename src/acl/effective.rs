@@ -250,4 +250,67 @@ mod tests {
         let ea = compute_effective_access(&s, &["S-1-5-99-user".to_string(), SID_B.to_string()]);
         assert_eq!(ea.read, TriState::Allow);
     }
+
+    #[test]
+    fn empty_snapshot_all_no_rule() {
+        // 空快照：所有权限均无规则
+        let s = snapshot(vec![]);
+        let ea = compute_effective_access(&s, &[SID_A.to_string()]);
+        assert_eq!(ea.read, TriState::NoRule);
+        assert_eq!(ea.write, TriState::NoRule);
+        assert_eq!(ea.execute, TriState::NoRule);
+        assert_eq!(ea.delete, TriState::NoRule);
+        assert_eq!(ea.effective_mask, 0);
+    }
+
+    #[test]
+    fn empty_sid_list_all_no_rule() {
+        // 空 SID 列表：即使 ACL 有规则，也不匹配任何主体
+        let s = snapshot(vec![make_ace(SID_A, RIGHT_READ_DATA | RIGHT_DELETE, AceType::Allow)]);
+        let ea = compute_effective_access(&s, &[]);
+        assert_eq!(ea.read, TriState::NoRule);
+        assert_eq!(ea.delete, TriState::NoRule);
+        assert_eq!(ea.effective_mask, 0);
+    }
+
+    #[test]
+    fn cross_sid_deny_takes_precedence_over_allow() {
+        // 设计决策验证：SID_A deny Delete，SID_B allow Delete
+        // 用户同时属于两组 → deny 优先（classify 先检查 deny_mask）
+        let s = snapshot(vec![
+            make_ace(SID_A, RIGHT_DELETE, AceType::Deny),
+            make_ace(SID_B, RIGHT_DELETE, AceType::Allow),
+        ]);
+        let ea = compute_effective_access(&s, &[SID_A.to_string(), SID_B.to_string()]);
+        assert_eq!(ea.effective_mask & RIGHT_DELETE, 0, "effective mask should have DELETE cleared");
+        assert_eq!(ea.deny_mask & RIGHT_DELETE, RIGHT_DELETE, "deny mask should include DELETE");
+        assert_eq!(ea.delete, TriState::Deny,
+            "deny from SID_A should take precedence over allow from SID_B");
+    }
+
+    #[test]
+    fn deny_only_ace_no_allow() {
+        // 仅有 Deny ACE，无 Allow：Deny 位应为 Deny，其余为 NoRule
+        let s = snapshot(vec![make_ace(SID_A, RIGHT_DELETE, AceType::Deny)]);
+        let ea = compute_effective_access(&s, &[SID_A.to_string()]);
+        assert_eq!(ea.delete, TriState::Deny);
+        assert_eq!(ea.read, TriState::NoRule);
+        assert_eq!(ea.effective_mask, 0);
+        assert_eq!(ea.allow_mask, 0);
+    }
+
+    #[test]
+    fn multiple_allow_aces_union() {
+        // 同一用户多条 Allow：权限取并集
+        let s = snapshot(vec![
+            make_ace(SID_A, RIGHT_READ_DATA, AceType::Allow),
+            make_ace(SID_A, RIGHT_WRITE_DATA, AceType::Allow),
+        ]);
+        let ea = compute_effective_access(&s, &[SID_A.to_string()]);
+        assert_eq!(ea.read, TriState::Allow);
+        assert_eq!(ea.write, TriState::Allow);
+        assert_eq!(ea.execute, TriState::NoRule);
+        assert_eq!(ea.effective_mask & (RIGHT_READ_DATA | RIGHT_WRITE_DATA),
+            RIGHT_READ_DATA | RIGHT_WRITE_DATA);
+    }
 }

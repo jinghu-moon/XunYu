@@ -361,33 +361,33 @@ mod tests {
 
     #[test]
     fn check_component_rejects_reserved_and_trailing() {
-        assert_eq!(check_component(&to_wide(".")), None);
-        assert_eq!(check_component(&to_wide("..")), None);
+        assert_eq!(check_component(&to_wide("."), false), None);
+        assert_eq!(check_component(&to_wide(".."), false), None);
         assert_eq!(
-            check_component(&to_wide("file ")),
+            check_component(&to_wide("file "), false),
             Some(PathIssueKind::TrailingDotSpace)
         );
         assert_eq!(
-            check_component(&to_wide("file.")),
+            check_component(&to_wide("file."), false),
             Some(PathIssueKind::TrailingDotSpace)
         );
         assert_eq!(
-            check_component(&to_wide("CON")),
+            check_component(&to_wide("CON"), false),
             Some(PathIssueKind::ReservedName)
         );
         assert_eq!(
-            check_component(&to_wide("NUL.txt")),
+            check_component(&to_wide("NUL.txt"), false),
             Some(PathIssueKind::ReservedName)
         );
         assert_eq!(
-            check_component(&to_wide("COM\u{b9}")),
+            check_component(&to_wide("COM\u{b9}"), false),
             Some(PathIssueKind::ReservedName)
         );
         assert_eq!(
-            check_component(&to_wide("LPT\u{b2}.log")),
+            check_component(&to_wide("LPT\u{b2}.log"), false),
             Some(PathIssueKind::ReservedName)
         );
-        assert_eq!(check_component(&to_wide("normal.txt")), None);
+        assert_eq!(check_component(&to_wide("normal.txt"), false), None);
     }
 
     #[test]
