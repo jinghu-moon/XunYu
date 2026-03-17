@@ -1,77 +1,43 @@
-# ACL 模块详解
+# ACL 模块
 
-> **xun** 的 ACL 模块提供 Windows NTFS 权限的读取、分析、编辑、修复与批量管理能力，共 16 条子命令。
-
----
-
-## 模块目录结构
-
-```
-src/acl/
-├── mod.rs                 # 模块入口，统一导出
-├── types/
-│   └── mod.rs             # 核心数据类型
-├── reader/
-│   └── mod.rs             # DACL 读取 → AclSnapshot
-├── writer/
-│   ├── mod.rs
-│   └── apply/
-│       ├── mod.rs
-│       └── dacl.rs        # SetNamedSecurityInfoW 封装
-├── diff.rs                # 快照集合差（AceDiffKey 零拷贝）
-├── effective.rs           # 有效权限计算（TriState）
-├── repair.rs              # 强制修复 / clean-reset V3
-├── orphan.rs              # 孤儿 SID 扫描与清除
-├── export/
-│   ├── mod.rs
-│   └── format.rs          # CSV 导出
-├── audit.rs               # 操作审计日志（JSONL）
-├── privilege.rs           # Windows 特权激活
-└── error.rs               # AclError / Win32 错误包装
-```
+> **xun acl** 提供 Windows NTFS 权限的读取、分析、编辑、修复与批量管理能力，共 16 条子命令。
 
 ---
 
-## 核心数据类型
+## 概述
 
-```
-AceEntry
-├── principal: String          # 账户名（DOMAIN\User）
-├── raw_sid: String            # 原始 SID 字符串
-├── rights_mask: u32           # FileSystemRights 位掩码
-├── ace_type: AceType          # Allow | Deny
-├── inheritance: InheritanceFlags
-│   ├── None        (0x0)      # 仅此对象
-│   ├── ObjectInherit    (0x1) # 子文件继承
-│   ├── ContainerInherit (0x2) # 子目录继承
-│   └── Both        (0x3)      # OI+CI
-├── propagation: PropagationFlags
-│   ├── None             (0x0) # 正常传播
-│   ├── NoPropagateInherit(0x1)# 不再向下传播
-│   └── InheritOnly      (0x2) # 仅继承，不应用于当前对象
-├── is_inherited: bool         # 继承自父容器
-└── is_orphan: bool            # SID 无法解析
+### 职责边界
 
-AclSnapshot
-├── path: PathBuf
-├── owner: String
-├── is_protected: bool         # true = 已断开继承
-└── entries: Vec<AceEntry>
+| 能力 | 说明 |
+|------|------|
+| 读取 | 获取路径的 DACL、Owner、继承标志，构建 `AclSnapshot` |
+| 分析 | 差异对比（diff）、有效权限计算（effective）、孤儿 SID 扫描 |
+| 编辑 | 添加/删除/清除 ACE、修改所有者、切换继承 |
+| 修复 | 强制夺权 + 赋权（force_repair）、干净重置（force_reset_clean_v3） |
+| 批量 | 多路径同类操作、备份/还原 ACL |
+| 审计 | 所有写操作记录到 JSONL 审计日志 |
 
-DiffResult
-├── only_in_a: Vec<AceEntry>
-├── only_in_b: Vec<AceEntry>
-├── common_count: usize
-├── owner_diff: Option<(String, String)>
-└── inherit_diff: Option<(bool, bool)>
+### 前置条件
 
-RepairStats
-├── total: usize
-├── owner_ok: usize
-├── owner_fail: Vec<(PathBuf, String)>
-├── acl_ok: usize
-└── acl_fail: Vec<(PathBuf, String)>
-```
+- **平台**：仅限 Windows（依赖 Win32 Security API）
+- **权限**：大多数读取操作仅需普通用户权限；写入、修复操作需要管理员权限
+- **依赖特权**：`repair` 子命令在执行前自动启用 `SeRestorePrivilege`、`SeBackupPrivilege`、`SeTakeOwnershipPrivilege`
+
+---
+
+## 权限要求
+
+| 命令 | 最低权限 | 说明 |
+|------|----------|------|
+| `view` / `diff` / `effective` / `audit` | 普通用户 | 只读操作 |
+| `add` / `remove` / `purge` / `copy` / `inherit` / `owner` | 管理员 | 需要对目标对象的写权限 |
+| `backup` | 普通用户 | 读快照 + 写 JSON 文件 |
+| `restore` | 管理员 | 恢复 DACL + Owner |
+| `orphans` (export/none) | 普通用户 | 只读扫描 |
+| `orphans` (delete/both) | 管理员 | 写 ACL |
+| `repair` | 管理员 + 三项特权 | 自动激活 Restore/Backup/TakeOwnership |
+| `batch` | 取决于子操作 | 同对应单路径命令 |
+| `config` | 普通用户 | 读写本地配置文件 |
 
 ---
 
@@ -106,6 +72,27 @@ mindmap
 
 ---
 
+## 配置
+
+配置文件存放在 `%APPDATA%\xun\acl_config.toml`（自动创建，缺省值如下）。
+
+| 键名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `throttle_limit` | `usize` | `8` | 并行线程数上限（force_repair 使用） |
+| `export_path` | `String` | `%APPDATA%\xun\exports` | CSV / JSON 导出默认目录 |
+| `audit_path` | `String` | `%APPDATA%\xun\audit.jsonl` | 审计日志文件路径 |
+| `audit_retain_days` | `u32` | `90` | 日志保留天数（超期条目在下次写入时清除） |
+
+使用 `xun acl config` 命令查看当前值；使用 `--set KEY VALUE` 修改单项：
+
+```
+xun acl config
+xun acl config --set audit_path "D:\logs\acl-audit.jsonl"
+xun acl config --set throttle_limit 16
+```
+
+---
+
 ## 命令详解
 
 ### `xun acl view` — 查看 ACL
@@ -120,6 +107,20 @@ xun acl view -p "D:\Data" --detail
 | `--detail` | switch | 显示每条 ACE 完整信息 |
 | `--export <csv>` | 可选 | 导出 ACL 条目到 CSV |
 
+**预期输出（简洁模式）：**
+
+```
+Path   : D:\Data
+Owner  : BUILTIN\Administrators
+Inherit: Enabled
+
+Type    Source    Principal                Rights
+------  --------  -----------------------  ---------------
+Allow   Explicit  BUILTIN\Administrators   FullControl
+Allow   Explicit  NT AUTHORITY\SYSTEM      FullControl
+Allow   Inherited BUILTIN\Users            ReadAndExecute
+```
+
 ```mermaid
 flowchart TD
     A([用户输入路径]) --> B[path_guard 路径验证]
@@ -128,7 +129,7 @@ flowchart TD
     C --> D[GetNamedSecurityInfoW\nDACL + Owner + 继承标志]
     D --> E[构建 AclSnapshot\n每条 ACE 解析 SID → 账户名]
     E --> F{--detail?}
-    F --> |否| G[简洁表格输出\nType / Source / Principal / Rights]
+    F --> |否| G[简洁表格输出]
     F --> |是| H[详细输出\n每条 ACE 完整字段]
     G --> I{--export?}
     H --> I
@@ -156,6 +157,12 @@ xun acl add -p "D:\Data" --principal "BUILTIN\Users" --rights ReadAndExecute --a
 | `--inherit` | 可选 | BothInherit/ContainerOnly/ObjectOnly/None |
 | `-y` | switch | 跳过确认 |
 
+**预期输出：**
+
+```
+Added ACE: Allow BUILTIN\Users ReadAndExecute [BothInherit] on D:\Data
+```
+
 ```mermaid
 flowchart TD
     A([输入]) --> B{路径来源}
@@ -164,12 +171,12 @@ flowchart TD
     B --> |--paths| E[解析逗号列表]
     C & D & E --> F[path_guard 验证每条路径]
     F --> G{参数完整?}
-    G --> |否| H[交互向导\n依次询问 principal/rights/type/inherit]
+    G --> |否| H[交互向导]
     G --> |是| I[直接执行]
     H & I --> J[prompt_confirm\n除非 -y]
-    J --> |确认| K[writer::add_rule\nAddAccessAllowedAceEx / AddAccessDeniedAceEx]
+    J --> |确认| K[writer::add_rule]
     J --> |取消| Z([已取消])
-    K --> L[audit_log 记录]
+    K --> L[audit_log]
     L --> M([完成])
 ```
 
@@ -189,6 +196,12 @@ xun acl remove -p "D:\Data" --principal "DOMAIN\OldUser" --ace-type Allow -y
 | `--rights` | 可选 | 按权限级别匹配 |
 | `--ace-type` | 可选 | Allow \| Deny |
 | `-y` | switch | 跳过确认 |
+
+**预期输出：**
+
+```
+Removed 1 ACE(s) from D:\Data
+```
 
 ```mermaid
 flowchart TD
@@ -218,6 +231,12 @@ xun acl purge -p "D:\Data" --principal "DOMAIN\OldUser" -y
 | `--principal` | 可选 | 目标账户，省略则交互选择 |
 | `-y` | switch | 跳过确认 |
 
+**预期输出：**
+
+```
+Purged all ACEs for DOMAIN\OldUser from D:\Data
+```
+
 ```mermaid
 flowchart TD
     A([输入]) --> B[get_acl]
@@ -246,14 +265,24 @@ xun acl diff -p "D:\Data" -r "D:\Template" -o diff.csv
 | `-r <ref>` | 必填 | 参考路径（B） |
 | `-o <csv>` | 可选 | 输出差异 CSV |
 
+**预期输出：**
+
+```
+Only in A : 1
+Only in B : 0
+Common    : 3
+Owner     : same
+Inherit   : same
+```
+
 ```mermaid
 flowchart TD
     A([路径A + 路径B]) --> B[get_acl A] & C[get_acl B]
     B & C --> D[diff_acl]
-    D --> E[构建 HashMap\nAceDiffKey 零拷贝键\nprincipal+type+mask+inherit]
+    D --> E[构建 HashMap\nAceDiffKey 零拷贝键]
     E --> F[遍历 B 条目\n命中 → common_count\n未命中 → only_in_b]
     F --> G[剩余 A → only_in_a]
-    G --> H[输出摘要\nOnlyA / OnlyB / Common\n所有者差异 / 继承差异]
+    G --> H[输出摘要]
     H --> I{-o 指定?}
     I --> |是| J[export_diff_csv]
     I --> |否| K([完成])
@@ -273,19 +302,33 @@ xun acl effective -p "D:\Data" -u "DOMAIN\Alice"
 | `-p <path>` | 必填 | 目标路径 |
 | `-u <user>` | 可选 | 指定用户（默认：当前用户） |
 
+**预期输出：**
+
+```
+Effective permissions for DOMAIN\Alice on D:\Data
+
+Right            State
+---------------  ------
+Read             Allow
+Write            Allow
+Execute          Allow
+Delete           Allow
+ChangePerms      Deny
+TakeOwnership    Deny
+```
+
 ```mermaid
 flowchart TD
     A([输入]) --> B[get_acl]
     B --> C{指定 -u?}
-    C --> |是| D[resolve_user_sid\n解析指定用户 SID]
-    C --> |否| E[get_current_user_sids\n当前进程 token 所有 SID]
+    C --> |是| D[resolve_user_sid]
+    C --> |否| E[get_current_user_sids]
     D & E --> F[compute_effective_access]
-    F --> G[遍历 ACE entries\n按 Deny 优先语义]
+    F --> G[遍历 ACE entries\nDeny 优先语义]
     G --> H[累积 allow_mask / deny_mask]
     H --> I[effective_mask = allow & ~deny]
-    I --> J[per-right TriState
-    Read/Write/Execute/Delete/ChangePerms/TakeOwnership]
-    J --> K[输出权限表格\nAllow / Deny / NoRule]
+    I --> J[per-right TriState\nRead/Write/Execute/Delete/ChangePerms/TakeOwnership]
+    J --> K[输出权限表格]
     K --> L([完成])
 ```
 
@@ -302,6 +345,14 @@ xun acl copy -p "D:\Target" -r "D:\Template" -y
 | `-p <path>` | 必填 | 目标路径 |
 | `-r <ref>` | 必填 | 参考路径（ACL 来源） |
 | `-y` | switch | 跳过确认 |
+
+> **注意**：此操作会完全替换目标路径的 DACL 和 Owner，原有 ACE 将全部丢失。
+
+**预期输出：**
+
+```
+Copied ACL from D:\Template to D:\Target
+```
 
 ```mermaid
 flowchart TD
@@ -325,6 +376,12 @@ xun acl backup -p "D:\Data" -o "D:\backups\data_acl.json"
 |------|------|------|
 | `-p <path>` | 必填 | 目标路径 |
 | `-o <file>` | 可选 | 输出 JSON 文件（省略则自动命名） |
+
+**预期输出：**
+
+```
+ACL backed up to D:\backups\data_acl.json
+```
 
 ```mermaid
 flowchart TD
@@ -350,6 +407,14 @@ xun acl restore -p "D:\Data" --from "D:\backups\data_acl.json" -y
 | `--from <file>` | 必填 | 备份 JSON 文件 |
 | `-y` | switch | 跳过确认 |
 
+> **注意**：还原操作会覆盖目标路径的当前 DACL、Owner 和继承标志。
+
+**预期输出：**
+
+```
+ACL restored to D:\Data from D:\backups\data_acl.json
+```
+
 ```mermaid
 flowchart TD
     A([路径 + JSON 文件]) --> B[读取并反序列化 AclSnapshot]
@@ -374,6 +439,12 @@ xun acl inherit -p "D:\Data" --disable --preserve true
 | `--disable` | switch | 断开继承 |
 | `--enable` | switch | 恢复继承 |
 | `--preserve` | bool | 断开时保留继承 ACE 为显式副本（默认 true） |
+
+**预期输出：**
+
+```
+Inheritance disabled on D:\Data (inherited ACEs preserved as explicit)
+```
 
 ```mermaid
 flowchart TD
@@ -404,6 +475,12 @@ xun acl owner -p "D:\Data" --set "BUILTIN\Administrators" -y
 | `--set <principal>` | 可选 | 新所有者，省略则交互输入 |
 | `-y` | switch | 跳过确认 |
 
+**预期输出：**
+
+```
+Owner of D:\Data set to BUILTIN\Administrators
+```
+
 ```mermaid
 flowchart TD
     A([输入]) --> B{指定 --set?}
@@ -431,6 +508,17 @@ xun acl orphans -p "D:\Data" --recursive true --action both -y
 | `--action` | 枚举 | none / export / delete / both |
 | `--output <csv>` | 可选 | 导出路径 |
 | `-y` | switch | 跳过确认 |
+
+**预期输出：**
+
+```
+Found 3 orphan SIDs
+  SID: S-1-5-21-...  Allow  D:\Data\subdir
+  SID: S-1-5-21-...  Deny   D:\Data\file.txt
+  ...
+Exported 3 rows to D:\exports\ACLOrphans_20260318_120000.csv
+Removed 3 / Failed 0
+```
 
 ```mermaid
 flowchart TD
@@ -461,7 +549,32 @@ xun acl repair -p "D:\Data" --reset-clean --grant "DOMAIN\Alice" -y
 | `--export-errors` | switch | 失败时导出错误 CSV |
 | `-y` | switch | 跳过确认 |
 | `--reset-clean` | switch | 干净重置模式（见下方流程） |
-| `--grant <list>` | 可选 | 额外授权账户（逗号分隔），仅与 --reset-clean 配合使用 |
+| `--grant <list>` | 可选 | 额外授权账户（逗号分隔），仅与 `--reset-clean` 配合使用 |
+
+> ⚠️ **破坏性操作**：`--reset-clean` 会永久清除目标路径及所有子对象的自定义 ACE，仅保留 Administrators + SYSTEM（+ grant 列表）的 FullControl。此操作不可撤销，建议先执行 `xun acl backup`。
+
+**预期输出（标准修复）：**
+
+```
+Path: D:\Data
+Force repair (take ownership + grant FullControl)
+This operation is destructive and cannot be undone.
+Confirm repair? [y/N] y
+
+Total: 265  Owner OK: 265  ACL OK: 265  Fail: 0
+```
+
+**预期输出（干净重置）：**
+
+```
+Path: D:\Data
+Clean reset: break inheritance + wipe ACL + write Administrators+SYSTEM FullControl
+WARNING: all existing ACEs (including custom permissions) will be permanently removed.
+This operation is destructive and cannot be undone.
+Confirm repair? [y/N] y
+
+Total: 265  Owner OK: 265  ACL OK: 265  Fail: 0
+```
 
 ```mermaid
 flowchart TD
@@ -470,9 +583,9 @@ flowchart TD
     C --> |否 标准修复| D[force_repair\nPhase1: 并行夺权 → Administrators\nPhase2: 并行赋权 FullControl + 重置继承]
     C --> |是 干净重置| E[force_reset_clean_v3]
     E --> E1[Step1: SetNamedSecurityInfoW\n夺取 root 所有权]
-    E1 --> E2[Step2: 构建干净 ACL\nAdministrators + SYSTEM + extra\nPROTECTED 断继承写入 root]
+    E1 --> E2[Step2: 构建干净 ACL\nAdministrators+SYSTEM+extra\nPROTECTED 断继承写入 root]
     E2 --> E3[Step3: TreeSetNamedSecurityInfoW\nTREE_SEC_INFO_RESET\n内核批量重置所有子对象]
-    E3 --> E4[FN_PROGRESS 回调\nstatus==0 → ok_count++\nstatus!=0 → fail_list记录]
+    E3 --> E4[FN_PROGRESS 回调\nsecurity_set==TRUE → ok_count++\nstatus!=0 → fail_list 记录]
     D & E4 --> F[输出 RepairStats]
     F --> G{有失败?}
     G --> |是且 --export-errors| H[export_repair_errors_csv]
@@ -485,7 +598,7 @@ flowchart TD
 ### `xun acl batch` — 批量操作
 
 ```
-xun acl batch --file paths.txt --principal "BUILTIN\Users" --rights ReadAndExecute --ace-type Allow -y
+xun acl batch --file paths.txt --action repair -y
 ```
 
 | 参数 | 类型 | 说明 |
@@ -495,6 +608,14 @@ xun acl batch --file paths.txt --principal "BUILTIN\Users" --rights ReadAndExecu
 | `--action` | 必填 | repair / backup / orphans / inherit-reset |
 | `--output <dir>` | 可选 | 导出输出目录 |
 | `-y` | switch | 跳过确认 |
+
+**预期输出：**
+
+```
+Processed 5 paths
+  OK : 4
+  Fail: 1 (see D:\exports\batch_errors_20260318.csv)
+```
 
 ```mermaid
 flowchart TD
@@ -527,6 +648,15 @@ xun acl audit --tail 50 --export audit.csv
 | `--tail <n>` | 数字 | 显示最后 N 条（默认 30） |
 | `--export <csv>` | 可选 | 导出审计日志到 CSV |
 
+**预期输出：**
+
+```
+Timestamp                Action         Path         Result  Detail
+-----------------------  -------------  -----------  ------  -------------------
+2026-03-18T12:00:00+08   ForceRepair    D:\Data      ok      Total=265 Fail=0
+2026-03-18T11:30:00+08   AddAce         D:\Docs      ok      Allow BUILTIN\Users
+```
+
 ```mermaid
 flowchart TD
     A([输入]) --> B[读取审计日志 JSONL]
@@ -538,29 +668,30 @@ flowchart TD
     F --> G
 ```
 
-**审计条目结构：**
-
-```
-AuditEntry
-├── timestamp: RFC3339
-├── action: String        # ForceRepair / AddAce / PurgeOrphans …
-├── path: String
-├── result: ok | fail
-├── detail: String
-└── user: String
-```
-
 ---
 
 ### `xun acl config` — 配置管理
 
 ```
-xun acl config --set audit_path="D:\logs\acl-audit.jsonl"
+xun acl config --set audit_path "D:\logs\acl-audit.jsonl"
 ```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `--set KEY VALUE` | 键值对 | 设置配置项 |
+| `--set KEY VALUE` | 键值对 | 设置配置项（可重复多次） |
+
+**预期输出：**
+
+```
+# 查看当前配置
+throttle_limit    = 8
+export_path       = C:\Users\Alice\AppData\Roaming\xun\exports
+audit_path        = C:\Users\Alice\AppData\Roaming\xun\audit.jsonl
+audit_retain_days = 90
+
+# 设置后
+Set audit_path = D:\logs\acl-audit.jsonl
+```
 
 ```mermaid
 flowchart TD
@@ -573,14 +704,48 @@ flowchart TD
     C --> G
 ```
 
-**可配置项：**
+---
 
-| Key | 说明 |
-|-----|------|
-| `throttle_limit` | 并行线程数上限 |
-| `export_path` | CSV 导出默认目录 |
-| `audit_path` | 审计日志存放目录 |
-| `audit_retain_days` | 日志保留天数 |
+## 核心数据类型
+
+```
+AceEntry
+├── principal: String          # 账户名（DOMAIN\User）
+├── raw_sid: String            # 原始 SID 字符串
+├── rights_mask: u32           # FileSystemRights 位掩码
+├── ace_type: AceType          # Allow | Deny
+├── inheritance: InheritanceFlags
+│   ├── None             (0x0) # 仅此对象
+│   ├── ObjectInherit    (0x1) # 子文件继承
+│   ├── ContainerInherit (0x2) # 子目录继承
+│   └── Both             (0x3) # OI+CI
+├── propagation: PropagationFlags
+│   ├── None              (0x0) # 正常传播
+│   ├── NoPropagateInherit(0x1) # 不再向下传播
+│   └── InheritOnly       (0x2) # 仅继承，不应用于当前对象
+├── is_inherited: bool         # 继承自父容器
+└── is_orphan: bool            # SID 无法解析
+
+AclSnapshot
+├── path: PathBuf
+├── owner: String
+├── is_protected: bool
+└── entries: Vec<AceEntry>
+
+DiffResult
+├── only_in_a: Vec<AceEntry>
+├── only_in_b: Vec<AceEntry>
+├── common_count: usize
+├── owner_diff: Option<(String, String)>
+└── inherit_diff: Option<(bool, bool)>
+
+RepairStats
+├── total: usize
+├── owner_ok: usize
+├── owner_fail: Vec<(PathBuf, String)>
+├── acl_ok: usize
+└── acl_fail: Vec<(PathBuf, String)>
+```
 
 ---
 
@@ -596,6 +761,34 @@ flowchart TD
 | Write | 278 | 可创建/修改文件，不含读取 |
 
 > 计算时自动屏蔽 `Synchronize`（0x00100000）位以避免误匹配。
+
+---
+
+## 模块目录结构
+
+```
+src/acl/
+├── mod.rs                 # 模块入口，统一导出
+├── types/
+│   └── mod.rs             # 核心数据类型
+├── reader/
+│   └── mod.rs             # DACL 读取 → AclSnapshot
+├── writer/
+│   ├── mod.rs
+│   └── apply/
+│       ├── mod.rs
+│       └── dacl.rs        # SetNamedSecurityInfoW 封装
+├── diff.rs                # 快照集合差（AceDiffKey 零拷贝）
+├── effective.rs           # 有效权限计算（TriState）
+├── repair.rs              # 强制修复 / clean-reset V3
+├── orphan.rs              # 孤儿 SID 扫描与清除
+├── export/
+│   ├── mod.rs
+│   └── format.rs          # CSV 导出
+├── audit.rs               # 操作审计日志（JSONL）
+├── privilege.rs           # Windows 特权激活
+└── error.rs               # AclError / Win32 错误包装
+```
 
 ---
 
@@ -622,3 +815,11 @@ AclError
 
 所有公开函数返回 `anyhow::Result<T>`，错误链保留完整调用上下文。
 
+---
+
+## 注意事项
+
+- `repair --reset-clean` 使用内核级 `TreeSetNamedSecurityInfoW(TREE_SEC_INFO_RESET)`，适用于用户数据目录；**不要在系统目录（如 `C:\Windows`、`C:\Program Files`）上使用**。
+- `orphans --action delete` 会永久移除孤儿 SID，删除前建议先用 `--action export` 保存记录。
+- 审计日志为追加写入，超期条目在**下次写入时**清除；若长期未执行命令，旧条目不会自动删除。
+- `batch` 当前为串行逐路径执行；大规模批量建议改用 `repair` 的内置并行模式。
