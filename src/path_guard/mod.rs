@@ -474,17 +474,26 @@ pub(crate) fn dedupe_inputs(raw_inputs: Vec<OsString>) -> (Vec<OsString>, usize)
     let mut deduped = 0usize;
 
     'inputs: for raw in raw_inputs {
-        let hash = with_check_buf(|scratch| {
+        let (hash, first_idx, current_norm) = with_check_buf(|scratch| {
             fill_wide(scratch, &raw);
             normalize_for_dedupe_in_place(scratch);
-            hash_units(scratch)
+            let hash = hash_units(scratch);
+            let first_idx = seen.get(&hash).copied();
+            let current_norm = if first_idx.is_some() {
+                Some(scratch.clone())
+            } else {
+                None
+            };
+            (hash, first_idx, current_norm)
         });
 
-        if let Some(&first_idx) = seen.get(&hash) {
-            let current_norm = with_check_buf(|scratch| {
-                fill_wide(scratch, &raw);
-                normalize_for_dedupe_in_place(scratch);
-                scratch.clone()
+        if let Some(first_idx) = first_idx {
+            let current_norm = current_norm.unwrap_or_else(|| {
+                with_check_buf(|scratch| {
+                    fill_wide(scratch, &raw);
+                    normalize_for_dedupe_in_place(scratch);
+                    scratch.clone()
+                })
             });
 
             if normalized_equals_raw(&current_norm, &out[first_idx]) {
