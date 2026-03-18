@@ -11,7 +11,7 @@ const EMBEDDED_SHIM_TEMPLATE: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/alias_shim_template.bin"));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ShimKind {
+pub enum ShimKind {
     Exe {
         path: String,
         fixed_args: Option<String>,
@@ -22,17 +22,17 @@ pub(crate) enum ShimKind {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SyncEntry {
-    pub(crate) name: String,
-    pub(crate) shim_content: String,
-    pub(crate) use_gui_template: bool,
+pub struct SyncEntry {
+    pub name: String,
+    pub shim_content: String,
+    pub use_gui_template: bool,
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct SyncReport {
-    pub(crate) created: Vec<String>,
-    pub(crate) removed: Vec<String>,
-    pub(crate) errors: Vec<(String, String)>,
+pub struct SyncReport {
+    pub created: Vec<String>,
+    pub removed: Vec<String>,
+    pub errors: Vec<(String, String)>,
 }
 
 mod classify;
@@ -42,9 +42,9 @@ mod render;
 mod sync;
 mod template;
 
-pub(crate) use render::{app_alias_to_shim, shell_alias_to_shim};
-pub(crate) use sync::{config_to_sync_entries, remove_shim, sync_all};
-pub(crate) use template::deploy_shim_templates;
+pub use render::{app_alias_to_shim, shell_alias_to_shim};
+pub use sync::{config_to_sync_entries, remove_shim, sync_all};
+pub use template::deploy_shim_templates;
 
 #[cfg(test)]
 mod tests {

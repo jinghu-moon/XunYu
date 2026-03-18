@@ -1,4 +1,4 @@
-pub(crate) fn fuzzy_score(name: &str, command: &str, desc: &str, keyword: &str) -> i32 {
+pub fn fuzzy_score(name: &str, command: &str, desc: &str, keyword: &str) -> i32 {
     let kw = keyword.trim().to_ascii_lowercase();
     if kw.is_empty() {
         return 0;
@@ -24,7 +24,7 @@ pub(crate) fn fuzzy_score(name: &str, command: &str, desc: &str, keyword: &str) 
     score
 }
 
-pub(crate) fn parse_selection(input: &str, max: usize) -> Vec<usize> {
+pub fn parse_selection(input: &str, max: usize) -> Vec<usize> {
     let trimmed = input.trim().to_ascii_lowercase();
     if trimmed.is_empty() {
         return Vec::new();

@@ -7,16 +7,16 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub(crate) struct Config {
+pub struct Config {
     #[serde(default)]
-    pub(crate) alias: BTreeMap<String, ShellAlias>,
+    pub alias: BTreeMap<String, ShellAlias>,
     #[serde(default)]
-    pub(crate) app: BTreeMap<String, AppAlias>,
+    pub app: BTreeMap<String, AppAlias>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum AliasMode {
+pub enum AliasMode {
     #[default]
     Auto,
     Exe,
@@ -39,29 +39,29 @@ impl std::str::FromStr for AliasMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ShellAlias {
-    pub(crate) command: String,
+pub struct ShellAlias {
+    pub command: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) desc: Option<String>,
+    pub desc: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) tags: Vec<String>,
+    pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) shells: Vec<String>,
+    pub shells: Vec<String>,
     #[serde(default)]
-    pub(crate) mode: AliasMode,
+    pub mode: AliasMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct AppAlias {
-    pub(crate) exe: String,
+pub struct AppAlias {
+    pub exe: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) args: Option<String>,
+    pub args: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) desc: Option<String>,
+    pub desc: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) tags: Vec<String>,
+    pub tags: Vec<String>,
     #[serde(default = "default_true")]
-    pub(crate) register_apppaths: bool,
+    pub register_apppaths: bool,
 }
 
 const fn default_true() -> bool {

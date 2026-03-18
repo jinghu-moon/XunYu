@@ -234,3 +234,7 @@ harness = false
 [[bench]]
 name = "acl_bench_divan"
 harness = false
+
+[[bench]]
+name = "alias_bench_divan"
+harness = false

@@ -1,7 +1,7 @@
 use super::classify::classify_mode;
 use super::*;
 
-pub(crate) fn shell_alias_to_shim(alias: &ShellAlias) -> String {
+pub fn shell_alias_to_shim(alias: &ShellAlias) -> String {
     match classify_mode(&alias.command, alias.mode) {
         ShimKind::Exe { path, fixed_args } => {
             let mut out = format!("type = exe\npath = {}\n", path);
@@ -18,7 +18,7 @@ pub(crate) fn shell_alias_to_shim(alias: &ShellAlias) -> String {
     }
 }
 
-pub(crate) fn app_alias_to_shim(alias: &AppAlias) -> String {
+pub fn app_alias_to_shim(alias: &AppAlias) -> String {
     let mut out = format!("type = exe\npath = {}\n", alias.exe);
     if let Some(args) = alias.args.as_deref() {
         let args = args.trim();

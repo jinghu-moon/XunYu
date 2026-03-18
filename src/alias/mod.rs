@@ -1,10 +1,10 @@
 pub(crate) mod apppaths;
-pub(crate) mod config;
+pub mod config;
 pub(crate) mod error;
-pub(crate) mod output;
+pub mod output;
 pub(crate) mod scanner;
 pub(crate) mod shell;
-pub(crate) mod shim_gen;
+pub mod shim_gen;
 
 mod app_alias_cmd;
 mod context;

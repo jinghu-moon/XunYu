@@ -2,7 +2,7 @@ use super::io::{atomic_write_bytes, files_equal, link_template};
 use super::render::{is_gui_exe_path, shell_alias_to_shim_with_template};
 use super::*;
 
-pub(crate) fn config_to_sync_entries(cfg: &Config) -> Vec<SyncEntry> {
+pub fn config_to_sync_entries(cfg: &Config) -> Vec<SyncEntry> {
     let mut entries = Vec::with_capacity(cfg.alias.len() + cfg.app.len());
     for (name, alias) in &cfg.alias {
         let (shim_content, use_gui_template) = shell_alias_to_shim_with_template(alias);
@@ -68,7 +68,7 @@ pub(crate) fn create_shim(
     Ok(())
 }
 
-pub(crate) fn remove_shim(shims_dir: &Path, name: &str) -> Result<()> {
+pub fn remove_shim(shims_dir: &Path, name: &str) -> Result<()> {
     let exe = shims_dir.join(format!("{name}.exe"));
     let shim = shims_dir.join(format!("{name}.shim"));
     if exe.exists() {
@@ -80,7 +80,7 @@ pub(crate) fn remove_shim(shims_dir: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn sync_all(
+pub fn sync_all(
     entries: &[SyncEntry],
     shims_dir: &Path,
     template_console: &Path,

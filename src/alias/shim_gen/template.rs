@@ -2,7 +2,7 @@ use super::io::atomic_write_bytes;
 use super::pe_patch::patch_subsystem_gui;
 use super::*;
 
-pub(crate) fn deploy_shim_templates(dest_console: &Path, dest_gui: &Path) -> Result<()> {
+pub fn deploy_shim_templates(dest_console: &Path, dest_gui: &Path) -> Result<()> {
     if let Some(parent) = dest_console.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create template dir: {}", parent.display()))?;

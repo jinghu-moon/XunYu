@@ -3,7 +3,7 @@ mod macros;
 
 pub mod acl;
 #[cfg(feature = "alias")]
-mod alias;
+pub mod alias;
 mod cli;
 mod commands;
 mod config;
