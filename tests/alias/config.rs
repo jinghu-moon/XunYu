@@ -233,3 +233,73 @@ fn alias_import_force_overwrites_existing() {
     let toml = read_toml(&env);
     assert!(toml.contains("git status"), "force import should overwrite");
 }
+
+// ── 名称校验 ──────────────────────────────────────────────────────────────────
+
+#[test]
+fn alias_add_rejects_name_with_space() {
+    let env = TestEnv::new();
+    do_setup(&env);
+    let out = alias_cmd(&env)
+        .args(["alias", "add", "hello world", "echo hi"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "should reject name with space");
+    assert!(
+        combined_str(&out).contains("space"),
+        "error message should mention space"
+    );
+}
+
+#[test]
+fn alias_add_rejects_name_with_slash() {
+    let env = TestEnv::new();
+    do_setup(&env);
+    let out = alias_cmd(&env)
+        .args(["alias", "add", "bad/name", "echo hi"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "should reject name with slash");
+    assert!(
+        combined_str(&out).contains("invalid character"),
+        "error message should mention invalid character"
+    );
+}
+
+#[test]
+fn alias_add_rejects_name_starting_with_dot() {
+    let env = TestEnv::new();
+    do_setup(&env);
+    let out = alias_cmd(&env)
+        .args(["alias", "add", ".hidden", "echo hi"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "should reject name starting with dot");
+}
+
+#[test]
+fn alias_add_accepts_valid_names() {
+    let env = TestEnv::new();
+    do_setup(&env);
+    run_ok(alias_cmd(&env).args(["alias", "add", "valid-name_123", "echo hi"]));
+    run_ok(alias_cmd(&env).args(["alias", "add", "héllo", "echo hi"]));
+    let toml = read_toml(&env);
+    assert!(toml.contains("valid-name_123"));
+    assert!(toml.contains("héllo"));
+}
+
+#[test]
+fn app_add_rejects_invalid_name() {
+    let env = TestEnv::new();
+    do_setup(&env);
+    let exe = make_fake_exe(&env, "myapp");
+    let out = alias_cmd(&env)
+        .args(["alias", "app", "add", "bad:name", exe.to_str().unwrap(), "--no-apppaths"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "app add should reject name with colon");
+    assert!(
+        combined_str(&out).contains("invalid character"),
+        "error message should mention invalid character"
+    );
+}

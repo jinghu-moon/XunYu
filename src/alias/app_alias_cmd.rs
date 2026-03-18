@@ -3,6 +3,7 @@ use super::*;
 
 pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddCmd) -> Result<()> {
     let mut cfg = ctx.load()?;
+    config::validate_alias_name(&args.name)?;
     if cfg.name_exists(&args.name) && !args.force {
         bail!("Alias already exists: {} (use --force)", args.name);
     }

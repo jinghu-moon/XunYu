@@ -24,6 +24,7 @@ pub(super) fn cmd_setup(ctx: &AliasCtx, args: AliasSetupCmd) -> Result<()> {
 
 pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
     let mut cfg = ctx.load()?;
+    config::validate_alias_name(&args.name)?;
     if cfg.name_exists(&args.name) && !args.force {
         bail!(
             "Alias already exists: {} (use --force to overwrite)",

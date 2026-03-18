@@ -74,6 +74,40 @@ impl ShellAlias {
     }
 }
 
+/// Windows 文件名非法字符
+const INVALID_NAME_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
+/// 校验别名名称合法性：
+/// - 不能为空
+/// - 不能包含 Windows 文件名非法字符（/ \ : * ? " < > |）
+/// - 不能包含空格（shim 文件名和 shell profile 中均有歧义）
+/// - 不能以点开头或结尾（Windows 保留）
+pub fn validate_alias_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        bail!("Alias name cannot be empty.");
+    }
+    if let Some(ch) = name.chars().find(|c| INVALID_NAME_CHARS.contains(c)) {
+        bail!(
+            "Alias name {:?} contains invalid character {:?}. \
+             Characters / \\ : * ? \" < > | are not allowed.",
+            name, ch
+        );
+    }
+    if name.contains(' ') {
+        bail!(
+            "Alias name {:?} contains a space. Spaces are not allowed in alias names.",
+            name
+        );
+    }
+    if name.starts_with('.') || name.ends_with('.') {
+        bail!(
+            "Alias name {:?} cannot start or end with a dot.",
+            name
+        );
+    }
+    Ok(())
+}
+
 impl Config {
     pub(crate) fn name_exists(&self, name: &str) -> bool {
         self.alias.contains_key(name) || self.app.contains_key(name)
