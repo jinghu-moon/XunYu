@@ -31,6 +31,7 @@ pub fn is_elevated() -> bool {
 }
 
 #[cfg(windows)]
+#[allow(dead_code)]
 pub fn relaunch_elevated(exe: &str, args: &str) -> Result<(), String> {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
@@ -87,6 +88,7 @@ pub fn elevation_hint(scope: EnvScope) -> String {
 }
 
 #[cfg(windows)]
+#[allow(dead_code)]
 fn to_wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
 }

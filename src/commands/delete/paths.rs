@@ -3,6 +3,7 @@ use std::path::{Component, Path, PathBuf};
 use super::types::PathKind;
 use super::winapi;
 
+#[allow(dead_code)] // 被 handle_query/target.rs 通过不同路径调用
 pub(super) fn absolute_path(raw: &str) -> PathBuf {
     let p = PathBuf::from(raw);
     if p.is_absolute() {

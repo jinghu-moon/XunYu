@@ -35,6 +35,7 @@ fn update_min_max(min: &mut Option<Duration>, max: &mut Option<Duration>, value:
     }
 }
 
+#[allow(unused_assignments)] // audit_rotate_count 在错误路径赋值后 return，但在正常路径 perf log 中读取
 pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     let timing_enabled = acl_timing_enabled();
     let total_start = Instant::now();

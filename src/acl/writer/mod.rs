@@ -13,6 +13,7 @@ pub fn lookup_account_sid(principal: &str) -> Result<Vec<u8>> {
     apply::lookup_account_sid(principal)
 }
 
+#[allow(dead_code)] // 仅在 #[tokio::test] 中使用
 pub fn add_rule(
     path: &Path,
     principal: &str,
