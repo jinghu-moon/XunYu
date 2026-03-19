@@ -65,24 +65,24 @@ pub(crate) fn read_or_empty(path: &Path) -> Result<String> {
     fs::read_to_string(path).with_context(|| format!("Failed to read file: {}", path.display()))
 }
 
-pub(crate) fn atomic_write(path: &Path, content: &str) -> Result<()> {
+pub(crate) fn atomic_write_if_changed(
+    path: &Path,
+    current_content: &str,
+    new_content: &str,
+) -> Result<bool> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create dir: {}", parent.display()))?;
     }
-    if path.exists()
-        && fs::read_to_string(path)
-            .map(|old| old == content)
-            .unwrap_or(false)
-    {
-        return Ok(());
+    if current_content == new_content {
+        return Ok(false);
     }
     let tmp = path.with_extension("tmp");
-    fs::write(&tmp, content.as_bytes())
+    fs::write(&tmp, new_content.as_bytes())
         .with_context(|| format!("Failed to write temp file: {}", tmp.display()))?;
     fs::rename(&tmp, path)
         .with_context(|| format!("Failed to replace file: {}", path.display()))?;
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(feature = "alias-shell-extra")]

@@ -41,7 +41,11 @@ pub fn shell_alias_to_sync_entry(name: &str, alias: &ShellAlias) -> SyncEntry {
 }
 
 pub fn app_alias_to_sync_entry(name: &str, alias: &AppAlias) -> SyncEntry {
-    app_alias_to_sync_entry_with_gui(name, alias, is_gui_exe_path(&alias.exe))
+    app_alias_to_sync_entry_with_gui(name, alias, app_alias_uses_gui_template(alias))
+}
+
+pub fn app_alias_uses_gui_template(alias: &AppAlias) -> bool {
+    is_gui_exe_path(&alias.exe)
 }
 
 pub fn app_alias_to_sync_entry_with_gui(

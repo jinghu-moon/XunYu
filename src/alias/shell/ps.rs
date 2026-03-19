@@ -4,7 +4,8 @@ use anyhow::Result;
 
 use crate::alias::config::Config;
 use crate::alias::shell::{
-    MARKER_END, MARKER_START, ShellBackend, UpdateResult, atomic_write, inject_block, read_or_empty,
+    MARKER_END, MARKER_START, ShellBackend, UpdateResult, atomic_write_if_changed, inject_block,
+    read_or_empty,
 };
 
 pub(crate) struct PsBackend {
@@ -42,7 +43,7 @@ impl ShellBackend for PsBackend {
         let content = read_or_empty(&path)?;
         let block = self.generate_block(cfg);
         let updated = inject_block(&content, &block, MARKER_START, MARKER_END);
-        atomic_write(&path, &updated)?;
+        atomic_write_if_changed(&path, &content, &updated)?;
         Ok(UpdateResult::Written { path })
     }
 
@@ -72,7 +73,7 @@ pub(crate) fn detect_ps_profile() -> Option<PathBuf> {
 }
 
 fn generate_ps_block(cfg: &Config) -> String {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(cfg.alias.len() + cfg.app.len() + 2);
     lines.push(MARKER_START.to_string());
     for (name, alias) in &cfg.alias {
         if !alias.applies_to_shell("ps") {

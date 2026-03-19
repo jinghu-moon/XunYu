@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 
 use crate::alias::config::Config;
 use crate::alias::shell::{
-    CMD_MARKER_END, CMD_MARKER_START, ShellBackend, UpdateResult, atomic_write, inject_block,
-    read_or_empty,
+    CMD_MARKER_END, CMD_MARKER_START, ShellBackend, UpdateResult, atomic_write_if_changed,
+    inject_block, read_or_empty,
 };
 
 const CMD_AUTORUN_KEY: &str = r"Software\Microsoft\Command Processor";
@@ -44,7 +44,7 @@ impl ShellBackend for CmdBackend {
         let content = read_or_empty(&self.macrofile_path)?;
         let block = self.generate_block(cfg);
         let updated = inject_block(&content, &block, CMD_MARKER_START, CMD_MARKER_END);
-        atomic_write(&self.macrofile_path, &updated)?;
+        atomic_write_if_changed(&self.macrofile_path, &content, &updated)?;
         install_autorun_merged(&self.macrofile_path)?;
         Ok(UpdateResult::Written {
             path: self.macrofile_path.clone(),
@@ -57,7 +57,7 @@ impl ShellBackend for CmdBackend {
 }
 
 fn generate_macrofile(cfg: &Config) -> String {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(cfg.alias.len() + cfg.app.len() + 2);
     lines.push(CMD_MARKER_START.to_string());
     for (name, alias) in &cfg.alias {
         if !alias.applies_to_shell("cmd") {

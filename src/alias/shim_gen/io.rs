@@ -6,6 +6,11 @@ pub(super) fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create dir: {}", parent.display()))?;
     }
+    if !path.exists() {
+        fs::write(path, bytes)
+            .with_context(|| format!("Failed to write file: {}", path.display()))?;
+        return Ok(());
+    }
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, bytes)
         .with_context(|| format!("Failed to write temp file: {}", tmp.display()))?;

@@ -164,39 +164,30 @@ pub(crate) fn save(path: &Path, cfg: &Config) -> Result<()> {
         })?;
     }
 
+    if path.exists()
+        && fs::read_to_string(path)
+            .map(|old| old == text)
+            .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
     let tmp = path.with_extension("toml.tmp");
     let bak = path.with_extension("toml.bak");
     fs::write(&tmp, text.as_bytes())
         .with_context(|| format!("Failed to write temp file: {}", tmp.display()))?;
 
-    let mut backup_available = false;
-    if path.exists() {
-        match fs::copy(path, &bak) {
-            Ok(_) => backup_available = true,
-            Err(err) => eprintln!(
-                "Warning: failed to create aliases config backup {}: {err}",
-                bak.display()
-            ),
-        }
+    if path.exists()
+        && let Err(err) = fs::copy(path, &bak)
+    {
+        eprintln!(
+            "Warning: failed to create aliases config backup {}: {err}",
+            bak.display()
+        );
     }
 
     replace_file(&tmp, path)
         .with_context(|| format!("Failed to replace aliases config: {}", path.display()))?;
-
-    // 回读校验，失败回滚 .bak
-    let read_back = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read back aliases config: {}", path.display()))?;
-    if toml::from_str::<Config>(&read_back).is_err() {
-        if backup_available && bak.exists() {
-            if fs::copy(&bak, path).is_ok() {
-                bail!("Aliases config validation failed after write, restored backup.");
-            }
-            bail!(
-                "Aliases config validation failed after write; backup exists but restore failed."
-            );
-        }
-        bail!("Aliases config validation failed after write; backup may not be available.");
-    }
     Ok(())
 }
 
