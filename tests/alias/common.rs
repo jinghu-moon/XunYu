@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
@@ -19,18 +20,26 @@ pub fn alias_cmd(env: &TestEnv) -> Command {
 
 /// 返回测试环境中的 aliases.toml 路径
 pub fn aliases_toml(env: &TestEnv) -> PathBuf {
-    env.root
-        .join("AppData")
-        .join("xun")
-        .join("aliases.toml")
+    env.root.join("AppData").join("xun").join("aliases.toml")
 }
 
 /// 返回测试环境中的 shims 目录
 pub fn shims_dir(env: &TestEnv) -> PathBuf {
+    env.root.join("AppData").join("xun").join("shims")
+}
+
+pub fn cmd_macrofile(env: &TestEnv) -> PathBuf {
     env.root
         .join("AppData")
         .join("xun")
-        .join("shims")
+        .join("cmd_aliases.doskey")
+}
+
+pub fn powershell_profile(env: &TestEnv) -> PathBuf {
+    env.root
+        .join("Documents")
+        .join("WindowsPowerShell")
+        .join("Microsoft.PowerShell_profile.ps1")
 }
 
 /// 运行 `xun alias setup --core-only`
@@ -53,6 +62,32 @@ pub fn make_fake_exe(env: &TestEnv, name: &str) -> PathBuf {
 /// 读取 aliases.toml 文本内容，失败返回空字符串
 pub fn read_toml(env: &TestEnv) -> String {
     fs::read_to_string(aliases_toml(env)).unwrap_or_default()
+}
+
+pub fn read_text(path: &Path) -> String {
+    fs::read_to_string(path).unwrap_or_else(|_| panic!("cannot read text file: {}", path.display()))
+}
+
+pub fn assert_file_contains(path: &Path, needle: &str) {
+    let content = read_text(path);
+    assert!(
+        content.contains(needle),
+        "file {} should contain {:?}\nactual:\n{}",
+        path.display(),
+        needle,
+        content
+    );
+}
+
+pub fn assert_file_not_contains(path: &Path, needle: &str) {
+    let content = read_text(path);
+    assert!(
+        !content.contains(needle),
+        "file {} should not contain {:?}\nactual:\n{}",
+        path.display(),
+        needle,
+        content
+    );
 }
 
 /// 断言 shim .exe 和 .shim 文件均存在

@@ -39,8 +39,14 @@ fn alias_add_persists_to_toml() {
     do_setup(&env);
 
     run_ok(alias_cmd(&env).args([
-        "alias", "add", "gs", "git status",
-        "--desc", "git status", "--tag", "git",
+        "alias",
+        "add",
+        "gs",
+        "git status",
+        "--desc",
+        "git status",
+        "--tag",
+        "git",
     ]));
 
     let toml = read_toml(&env);
@@ -54,9 +60,7 @@ fn alias_add_mode_stored_correctly() {
     let env = TestEnv::new();
     do_setup(&env);
 
-    run_ok(alias_cmd(&env).args([
-        "alias", "add", "piped", "git log | head", "--mode", "cmd",
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "add", "piped", "git log | head", "--mode", "cmd"]));
 
     let toml = read_toml(&env);
     assert!(toml.contains("mode = \"cmd\""), "mode not persisted");
@@ -94,10 +98,7 @@ fn alias_add_shell_filter_stored() {
     let env = TestEnv::new();
     do_setup(&env);
 
-    run_ok(alias_cmd(&env).args([
-        "alias", "add", "psonly", "Get-Process",
-        "--shell", "ps",
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "add", "psonly", "Get-Process", "--shell", "ps"]));
 
     let toml = read_toml(&env);
     assert!(toml.contains("shells"), "shells field missing");
@@ -150,13 +151,13 @@ fn alias_export_produces_valid_toml() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
 
     let out_path = env.root.join("export.toml");
-    run_ok(alias_cmd(&env).args([
-        "alias", "export", "-o",
-        out_path.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "export", "-o", out_path.to_str().unwrap()]));
 
     let content = std::fs::read_to_string(&out_path).unwrap();
-    assert!(content.contains("[alias.gs]"), "exported TOML missing alias");
+    assert!(
+        content.contains("[alias.gs]"),
+        "exported TOML missing alias"
+    );
 }
 
 #[test]
@@ -167,17 +168,11 @@ fn alias_import_adds_entries() {
     run_ok(alias_cmd(&src_env).args(["alias", "add", "gp", "git push"]));
 
     let export_path = src_env.root.join("export.toml");
-    run_ok(alias_cmd(&src_env).args([
-        "alias", "export", "-o",
-        export_path.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&src_env).args(["alias", "export", "-o", export_path.to_str().unwrap()]));
 
     let dst_env = TestEnv::new();
     do_setup(&dst_env);
-    run_ok(alias_cmd(&dst_env).args([
-        "alias", "import",
-        export_path.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&dst_env).args(["alias", "import", export_path.to_str().unwrap()]));
 
     let toml = read_toml(&dst_env);
     assert!(toml.contains("[alias.gs]"));
@@ -191,22 +186,19 @@ fn alias_import_skips_duplicates_without_force() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
 
     let export_path = env.root.join("export.toml");
-    run_ok(alias_cmd(&env).args([
-        "alias", "export", "-o",
-        export_path.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "export", "-o", export_path.to_str().unwrap()]));
 
     // 再修改 gs
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git stash", "--force"]));
 
     // import 不带 --force，gs 应保留 git stash
-    run_ok(alias_cmd(&env).args([
-        "alias", "import",
-        export_path.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "import", export_path.to_str().unwrap()]));
 
     let toml = read_toml(&env);
-    assert!(toml.contains("git stash"), "import should skip existing entry");
+    assert!(
+        toml.contains("git stash"),
+        "import should skip existing entry"
+    );
 }
 
 #[test]
@@ -216,19 +208,12 @@ fn alias_import_force_overwrites_existing() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
 
     let export_path = env.root.join("export.toml");
-    run_ok(alias_cmd(&env).args([
-        "alias", "export", "-o",
-        export_path.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "export", "-o", export_path.to_str().unwrap()]));
 
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git stash", "--force"]));
 
     // import --force 应用 export 中的旧值
-    run_ok(alias_cmd(&env).args([
-        "alias", "import",
-        export_path.to_str().unwrap(),
-        "--force",
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "import", export_path.to_str().unwrap(), "--force"]));
 
     let toml = read_toml(&env);
     assert!(toml.contains("git status"), "force import should overwrite");
@@ -274,7 +259,10 @@ fn alias_add_rejects_name_starting_with_dot() {
         .args(["alias", "add", ".hidden", "echo hi"])
         .output()
         .unwrap();
-    assert!(!out.status.success(), "should reject name starting with dot");
+    assert!(
+        !out.status.success(),
+        "should reject name starting with dot"
+    );
 }
 
 #[test]
@@ -294,10 +282,20 @@ fn app_add_rejects_invalid_name() {
     do_setup(&env);
     let exe = make_fake_exe(&env, "myapp");
     let out = alias_cmd(&env)
-        .args(["alias", "app", "add", "bad:name", exe.to_str().unwrap(), "--no-apppaths"])
+        .args([
+            "alias",
+            "app",
+            "add",
+            "bad:name",
+            exe.to_str().unwrap(),
+            "--no-apppaths",
+        ])
         .output()
         .unwrap();
-    assert!(!out.status.success(), "app add should reject name with colon");
+    assert!(
+        !out.status.success(),
+        "app add should reject name with colon"
+    );
     assert!(
         combined_str(&out).contains("invalid character"),
         "error message should mention invalid character"

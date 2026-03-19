@@ -21,7 +21,10 @@ fn alias_ls_shows_added_entry() {
     let out = run_ok(alias_cmd(&env).args(["alias", "ls"]));
     let combined = combined_str(&out);
     assert!(combined.contains("gs"), "alias name missing in ls output");
-    assert!(combined.contains("git status"), "command missing in ls output");
+    assert!(
+        combined.contains("git status"),
+        "command missing in ls output"
+    );
 }
 
 #[test]
@@ -32,7 +35,10 @@ fn alias_ls_type_cmd_filter() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
     let exe = make_fake_exe(&env, "appfoo");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "appfoo",
+        "alias",
+        "app",
+        "add",
+        "appfoo",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -41,7 +47,10 @@ fn alias_ls_type_cmd_filter() {
     let combined = combined_str(&out);
     assert!(combined.contains("gs"));
     // app 条目不应出现
-    assert!(!combined.contains("appfoo"), "app entry leaked into cmd filter");
+    assert!(
+        !combined.contains("appfoo"),
+        "app entry leaked into cmd filter"
+    );
 }
 
 #[test]
@@ -125,7 +134,10 @@ fn alias_find_scores_exact_name_higher_than_partial() {
     // "gs" 行应在 "gstatus" 行之前（分数更高）
     let gs_pos = combined.find("gs ").unwrap_or(usize::MAX);
     let gst_pos = combined.find("gstatus").unwrap_or(usize::MAX);
-    assert!(gs_pos < gst_pos, "exact match should appear before prefix match");
+    assert!(
+        gs_pos < gst_pos,
+        "exact match should appear before prefix match"
+    );
 }
 
 // ── which ─────────────────────────────────────────────────────────────────────
@@ -140,7 +152,10 @@ fn alias_which_shows_shim_path() {
     let combined = combined_str(&out);
     assert!(combined.contains("gs"), "name missing in which output");
     assert!(combined.contains("git status"), "target missing");
-    assert!(combined.contains(".shim") || combined.contains("shim"), "shim path missing");
+    assert!(
+        combined.contains(".shim") || combined.contains("shim"),
+        "shim path missing"
+    );
 }
 
 #[test]
@@ -165,7 +180,10 @@ fn alias_which_shows_shim_content() {
     let out = run_ok(alias_cmd(&env).args(["alias", "which", "gs"]));
     let combined = combined_str(&out);
     // .shim 内容应包含 type = cmd
-    assert!(combined.contains("type = cmd"), "shim content missing in which");
+    assert!(
+        combined.contains("type = cmd"),
+        "shim content missing in which"
+    );
 }
 
 // ── sync ──────────────────────────────────────────────────────────────────────
@@ -194,11 +212,7 @@ fn alias_sync_multiple_aliases() {
     do_setup(&env);
 
     for i in 0..5 {
-        run_ok(alias_cmd(&env).args([
-            "alias", "add",
-            &format!("a{i}"),
-            &format!("cmd{i}"),
-        ]));
+        run_ok(alias_cmd(&env).args(["alias", "add", &format!("a{i}"), &format!("cmd{i}")]));
     }
     run_ok(alias_cmd(&env).args(["alias", "sync"]));
     for i in 0..5 {

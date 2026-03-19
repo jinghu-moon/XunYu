@@ -12,9 +12,13 @@ fn app_add_persists_to_toml() {
 
     let exe = make_fake_exe(&env, "myapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "myapp",
+        "alias",
+        "app",
+        "add",
+        "myapp",
         exe.to_str().unwrap(),
-        "--desc", "My App",
+        "--desc",
+        "My App",
         "--no-apppaths",
     ]));
 
@@ -30,13 +34,19 @@ fn app_add_rejects_duplicate_without_force() {
 
     let exe = make_fake_exe(&env, "dupapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "dupapp",
+        "alias",
+        "app",
+        "add",
+        "dupapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
 
     let out = run_err(alias_cmd(&env).args([
-        "alias", "app", "add", "dupapp",
+        "alias",
+        "app",
+        "add",
+        "dupapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -55,12 +65,18 @@ fn app_add_force_overwrites() {
     let exe1 = make_fake_exe(&env, "app_v1");
     let exe2 = make_fake_exe(&env, "app_v2");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "myapp",
+        "alias",
+        "app",
+        "add",
+        "myapp",
         exe1.to_str().unwrap(),
         "--no-apppaths",
     ]));
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "myapp",
+        "alias",
+        "app",
+        "add",
+        "myapp",
         exe2.to_str().unwrap(),
         "--no-apppaths",
         "--force",
@@ -78,9 +94,13 @@ fn app_add_with_args_persisted() {
 
     let exe = make_fake_exe(&env, "argapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "argapp",
+        "alias",
+        "app",
+        "add",
+        "argapp",
         exe.to_str().unwrap(),
-        "--args", "--verbose",
+        "--args",
+        "--verbose",
         "--no-apppaths",
     ]));
 
@@ -95,9 +115,13 @@ fn app_add_with_tags_persisted() {
 
     let exe = make_fake_exe(&env, "tagapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "tagapp",
+        "alias",
+        "app",
+        "add",
+        "tagapp",
         exe.to_str().unwrap(),
-        "--tag", "editor,tools",
+        "--tag",
+        "editor,tools",
         "--no-apppaths",
     ]));
 
@@ -114,7 +138,10 @@ fn app_rm_removes_entry_and_shim() {
 
     let exe = make_fake_exe(&env, "rmapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "rmapp",
+        "alias",
+        "app",
+        "add",
+        "rmapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -142,7 +169,10 @@ fn app_rm_multiple_names() {
     for name in ["app1", "app2", "app3"] {
         let exe = make_fake_exe(&env, name);
         run_ok(alias_cmd(&env).args([
-            "alias", "app", "add", name,
+            "alias",
+            "app",
+            "add",
+            name,
             exe.to_str().unwrap(),
             "--no-apppaths",
         ]));
@@ -164,9 +194,13 @@ fn app_ls_shows_added_entry() {
 
     let exe = make_fake_exe(&env, "lsapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "lsapp",
+        "alias",
+        "app",
+        "add",
+        "lsapp",
         exe.to_str().unwrap(),
-        "--desc", "List App",
+        "--desc",
+        "List App",
         "--no-apppaths",
     ]));
 
@@ -183,7 +217,10 @@ fn app_ls_json_output_is_valid() {
 
     let exe = make_fake_exe(&env, "jsonapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "jsonapp",
+        "alias",
+        "app",
+        "add",
+        "jsonapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -204,7 +241,10 @@ fn app_which_shows_exe_and_shim() {
 
     let exe = make_fake_exe(&env, "whichapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "whichapp",
+        "alias",
+        "app",
+        "add",
+        "whichapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -213,7 +253,10 @@ fn app_which_shows_exe_and_shim() {
     let combined = combined_str(&out);
     assert!(combined.contains("whichapp"), "name missing");
     assert!(combined.contains(exe.to_str().unwrap()), "exe path missing");
-    assert!(combined.contains(".shim") || combined.contains("shim"), "shim missing");
+    assert!(
+        combined.contains(".shim") || combined.contains("shim"),
+        "shim missing"
+    );
 }
 
 #[test]
@@ -238,7 +281,10 @@ fn app_sync_rebuilds_shims() {
 
     let exe = make_fake_exe(&env, "syncapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "syncapp",
+        "alias",
+        "app",
+        "add",
+        "syncapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -259,11 +305,7 @@ fn app_scan_json_returns_array() {
     do_setup(&env);
 
     // scan --json 不交互，直接输出 JSON
-    let out = run_ok(alias_cmd(&env).args([
-        "alias", "app", "scan",
-        "--source", "path",
-        "--json",
-    ]));
+    let out = run_ok(alias_cmd(&env).args(["alias", "app", "scan", "--source", "path", "--json"]));
     let stdout = stdout_str(&out);
     // 应是 JSON 数组
     let v: serde_json::Value = serde_json::from_str(&stdout)
@@ -278,9 +320,13 @@ fn app_scan_filter_reduces_results() {
 
     // 用极不可能存在的关键词过滤，结果应为空数组
     let out = run_ok(alias_cmd(&env).args([
-        "alias", "app", "scan",
-        "--source", "path",
-        "--filter", "xyzzy_no_such_app_ever",
+        "alias",
+        "app",
+        "scan",
+        "--source",
+        "path",
+        "--filter",
+        "xyzzy_no_such_app_ever",
         "--json",
     ]));
     let stdout = stdout_str(&out);
@@ -302,7 +348,10 @@ fn alias_rm_removes_app_alias_too() {
 
     let exe = make_fake_exe(&env, "crossrm");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "crossrm",
+        "alias",
+        "app",
+        "add",
+        "crossrm",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -312,6 +361,9 @@ fn alias_rm_removes_app_alias_too() {
     run_ok(alias_cmd(&env).args(["alias", "rm", "crossrm"]));
 
     let toml = read_toml(&env);
-    assert!(!toml.contains("[app.crossrm]"), "app entry not removed by alias rm");
+    assert!(
+        !toml.contains("[app.crossrm]"),
+        "app entry not removed by alias rm"
+    );
     assert_shim_absent(&env, "crossrm");
 }

@@ -43,9 +43,7 @@ fn shim_mode_cmd_forced_produces_cmd_type() {
     let env = TestEnv::new();
     do_setup(&env);
 
-    run_ok(alias_cmd(&env).args([
-        "alias", "add", "notepad", "notepad.exe", "--mode", "cmd",
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "add", "notepad", "notepad.exe", "--mode", "cmd"]));
 
     assert_shim_contains(&env, "notepad", "type = cmd");
     assert_shim_contains(&env, "notepad", "wait = true");
@@ -58,9 +56,12 @@ fn shim_mode_exe_with_absolute_path_produces_exe_type() {
 
     let exe = make_fake_exe(&env, "mytool");
     run_ok(alias_cmd(&env).args([
-        "alias", "add", "mytool",
+        "alias",
+        "add",
+        "mytool",
         exe.to_str().unwrap(),
-        "--mode", "exe",
+        "--mode",
+        "exe",
     ]));
 
     assert_shim_contains(&env, "mytool", "type = exe");
@@ -73,10 +74,7 @@ fn shim_auto_mode_absolute_exe_path_detected() {
     do_setup(&env);
 
     let exe = make_fake_exe(&env, "autotool");
-    run_ok(alias_cmd(&env).args([
-        "alias", "add", "autotool",
-        exe.to_str().unwrap(),
-    ]));
+    run_ok(alias_cmd(&env).args(["alias", "add", "autotool", exe.to_str().unwrap()]));
 
     assert_shim_contains(&env, "autotool", "type = exe");
 }
@@ -88,9 +86,12 @@ fn shim_exe_with_fixed_args_stored() {
 
     let exe = make_fake_exe(&env, "tool_args");
     run_ok(alias_cmd(&env).args([
-        "alias", "add", "tool_args",
+        "alias",
+        "add",
+        "tool_args",
         &format!("{} --verbose", exe.to_str().unwrap()),
-        "--mode", "exe",
+        "--mode",
+        "exe",
     ]));
 
     assert_shim_contains(&env, "tool_args", "args = --verbose");
@@ -152,7 +153,15 @@ fn shim_content_updated_on_force_overwrite() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status", "--mode", "cmd"]));
     assert_shim_contains(&env, "gs", "git status");
 
-    run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git stash", "--mode", "cmd", "--force"]));
+    run_ok(alias_cmd(&env).args([
+        "alias",
+        "add",
+        "gs",
+        "git stash",
+        "--mode",
+        "cmd",
+        "--force",
+    ]));
     assert_shim_contains(&env, "gs", "git stash");
 }
 
@@ -165,7 +174,10 @@ fn app_shim_type_exe_with_path() {
 
     let exe = make_fake_exe(&env, "myapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "myapp",
+        "alias",
+        "app",
+        "add",
+        "myapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
@@ -182,9 +194,13 @@ fn app_shim_with_fixed_args() {
 
     let exe = make_fake_exe(&env, "appargs");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "appargs",
+        "alias",
+        "app",
+        "add",
+        "appargs",
         exe.to_str().unwrap(),
-        "--args", "--flag",
+        "--args",
+        "--flag",
         "--no-apppaths",
     ]));
 
@@ -198,7 +214,10 @@ fn app_shim_removed_on_app_rm() {
 
     let exe = make_fake_exe(&env, "rmapp");
     run_ok(alias_cmd(&env).args([
-        "alias", "app", "add", "rmapp",
+        "alias",
+        "app",
+        "add",
+        "rmapp",
         exe.to_str().unwrap(),
         "--no-apppaths",
     ]));
