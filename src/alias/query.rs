@@ -9,10 +9,24 @@ pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
     if args.json {
         let mut out = serde_json::Map::new();
         if show_cmd {
-            out.insert("alias".to_string(), serde_json::to_value(&cfg.alias)?);
+            let filtered: std::collections::BTreeMap<_, _> = cfg.alias.iter()
+                .filter(|(_, a)| {
+                    args.tag.as_deref()
+                        .map(|t| a.tags.iter().any(|tag| tag == t))
+                        .unwrap_or(true)
+                })
+                .collect();
+            out.insert("alias".to_string(), serde_json::to_value(&filtered)?);
         }
         if show_app {
-            out.insert("app".to_string(), serde_json::to_value(&cfg.app)?);
+            let filtered: std::collections::BTreeMap<_, _> = cfg.app.iter()
+                .filter(|(_, a)| {
+                    args.tag.as_deref()
+                        .map(|t| a.tags.iter().any(|tag| tag == t))
+                        .unwrap_or(true)
+                })
+                .collect();
+            out.insert("app".to_string(), serde_json::to_value(&filtered)?);
         }
         out_println!("{}", serde_json::Value::Object(out));
         return Ok(());
