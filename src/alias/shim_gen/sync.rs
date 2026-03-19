@@ -2,6 +2,43 @@ use super::io::{atomic_write_bytes, files_equal, link_template};
 use super::render::{is_gui_exe_path, shell_alias_to_shim_with_template};
 use super::*;
 
+pub fn sync_shell_alias(
+    shims_dir: &Path,
+    template_console: &Path,
+    template_gui: &Path,
+    name: &str,
+    alias: &ShellAlias,
+) -> Result<()> {
+    let (shim_content, use_gui_template) = shell_alias_to_shim_with_template(alias);
+    create_shim(
+        shims_dir,
+        template_console,
+        template_gui,
+        name,
+        &shim_content,
+        use_gui_template,
+    )
+}
+
+pub fn sync_app_alias(
+    shims_dir: &Path,
+    template_console: &Path,
+    template_gui: &Path,
+    name: &str,
+    alias: &AppAlias,
+) -> Result<()> {
+    let shim_content = app_alias_to_shim(alias);
+    let use_gui_template = is_gui_exe_path(&alias.exe);
+    create_shim(
+        shims_dir,
+        template_console,
+        template_gui,
+        name,
+        &shim_content,
+        use_gui_template,
+    )
+}
+
 pub fn config_to_sync_entries(cfg: &Config) -> Vec<SyncEntry> {
     let mut entries = Vec::with_capacity(cfg.alias.len() + cfg.app.len());
     for (name, alias) in &cfg.alias {

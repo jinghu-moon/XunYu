@@ -88,6 +88,31 @@ fn app_add_force_overwrites() {
 }
 
 #[test]
+fn app_add_force_replaces_existing_shell_alias() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "switcher", "git status"]));
+
+    let exe = make_fake_exe(&env, "switcher_app");
+    run_ok(alias_cmd(&env).args([
+        "alias",
+        "app",
+        "add",
+        "switcher",
+        exe.to_str().unwrap(),
+        "--no-apppaths",
+        "--force",
+    ]));
+
+    let toml = read_toml(&env);
+    assert!(toml.contains("[app.switcher]"), "app alias missing after force replace");
+    assert!(!toml.contains("[alias.switcher]"), "shell alias should be removed after force replace");
+    assert_shim_exists(&env, "switcher");
+    assert_file_contains(&cmd_macrofile(&env), "doskey switcher=");
+}
+
+#[test]
 fn app_add_with_args_persisted() {
     let env = TestEnv::new();
     do_setup(&env);

@@ -50,6 +50,26 @@ impl AliasCtx {
         Ok(())
     }
 
+    pub(super) fn sync_shell_alias_shim(&self, name: &str, alias: &ShellAlias) -> Result<()> {
+        shim_gen::sync_shell_alias(
+            &self.shims_dir,
+            &self.template_path,
+            &self.template_gui_path,
+            name,
+            alias,
+        )
+    }
+
+    pub(super) fn sync_app_alias_shim(&self, name: &str, alias: &AppAlias) -> Result<()> {
+        shim_gen::sync_app_alias(
+            &self.shims_dir,
+            &self.template_path,
+            &self.template_gui_path,
+            name,
+            alias,
+        )
+    }
+
     pub(super) fn sync_shells(&self, cfg: &Config, setup: Option<&AliasSetupCmd>) -> Result<()> {
         let mut skip_cmd = false;
         let mut skip_ps = false;

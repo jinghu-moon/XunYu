@@ -31,9 +31,14 @@ pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
             args.name
         );
     }
+    if let Some(old_app) = cfg.app.remove(&args.name)
+        && old_app.register_apppaths
+    {
+        let _ = apppaths::unregister(&args.name);
+    }
     let mode = args.mode.parse::<AliasMode>().map_err(anyhow::Error::msg)?;
     cfg.alias.insert(
-        args.name,
+        args.name.clone(),
         ShellAlias {
             command: args.command,
             desc: args.desc,
@@ -43,7 +48,9 @@ pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
         },
     );
     ctx.save(&cfg)?;
-    ctx.sync_shims(&cfg)?;
+    if let Some(alias) = cfg.alias.get(&args.name) {
+        ctx.sync_shell_alias_shim(&args.name, alias)?;
+    }
     ctx.sync_shells(&cfg, None)?;
     ui_println!("Alias added.");
     Ok(())

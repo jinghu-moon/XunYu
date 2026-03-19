@@ -144,6 +144,10 @@ $runtimeStats = Get-MetricStats -Values $runtimeValues
 $commit = ""
 try {
     $commit = (git rev-parse HEAD).Trim()
+    $gitStatus = git status --porcelain
+    if ($gitStatus) {
+        $commit = "$commit-dirty"
+    }
 } catch {
     $commit = ""
 }

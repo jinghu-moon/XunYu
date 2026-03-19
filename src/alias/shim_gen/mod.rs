@@ -43,7 +43,7 @@ mod sync;
 mod template;
 
 pub use render::{app_alias_to_shim, shell_alias_to_shim};
-pub use sync::{config_to_sync_entries, remove_shim, sync_all};
+pub use sync::{config_to_sync_entries, remove_shim, sync_all, sync_app_alias, sync_shell_alias};
 pub use template::deploy_shim_templates;
 
 #[cfg(test)]

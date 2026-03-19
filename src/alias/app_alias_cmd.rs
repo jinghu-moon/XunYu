@@ -7,6 +7,8 @@ pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddCmd) -> Result<()> {
     if cfg.name_exists(&args.name) && !args.force {
         bail!("Alias already exists: {} (use --force)", args.name);
     }
+    let previous_app = cfg.app.remove(&args.name);
+    cfg.alias.remove(&args.name);
     cfg.app.insert(
         args.name.clone(),
         AppAlias {
@@ -18,7 +20,12 @@ pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddCmd) -> Result<()> {
         },
     );
     ctx.save(&cfg)?;
-    ctx.sync_shims(&cfg)?;
+    if let Some(alias) = cfg.app.get(&args.name) {
+        ctx.sync_app_alias_shim(&args.name, alias)?;
+    }
+    if previous_app.as_ref().is_some_and(|alias| alias.register_apppaths) && args.no_apppaths {
+        let _ = apppaths::unregister(&args.name);
+    }
     if !args.no_apppaths {
         let _ = apppaths::register(&args.name, &args.exe);
     }

@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests\test_alias.rs (target\debug\deps\test_alias-dc8f598ba8e77fe2.exe)
+perf: app sync 12 aliases = 26ms
+perf: batch add 200 aliases = 7359ms
+perf: batch app add 20 = 892ms
+perf: export 200 aliases = 29ms
+perf: import 200 aliases = 881ms
+perf: filtered add in 64 aliases = 33ms
+perf: find in 200 aliases = 42ms
+perf: force overwrite in 64 aliases = 33ms
+perf: import force duplicates 32 aliases = 86ms
+perf: mixed import shell=64 app=12 = 372ms
+perf: import skip duplicates 32 aliases = 84ms
+perf: ls 200 aliases = 29ms
+perf: ls --json 200 aliases = 26ms
+perf: single add = 29ms
+perf: rm in 64 aliases = 29ms
+perf: sync 200 aliases = 299ms
+perf: sync idempotent first=351ms second=295ms
+perf: sync with 64 aliases and 24 orphans = 180ms
