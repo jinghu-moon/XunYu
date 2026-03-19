@@ -50,6 +50,19 @@ impl AliasCtx {
         Ok(())
     }
 
+    pub(super) fn sync_selected_shims(&self, entries: &[shim_gen::SyncEntry]) -> Result<()> {
+        let report = shim_gen::sync_entries(
+            entries,
+            &self.shims_dir,
+            &self.template_path,
+            &self.template_gui_path,
+        )?;
+        for (name, err) in report.errors {
+            ui_println!("Warning: shim sync failed [{name}]: {err}");
+        }
+        Ok(())
+    }
+
     pub(super) fn sync_shell_alias_shim(&self, name: &str, alias: &ShellAlias) -> Result<()> {
         shim_gen::sync_shell_alias(
             &self.shims_dir,

@@ -14,7 +14,20 @@ pub(super) fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn files_equal(path_a: &Path, path_b: &Path) -> bool {
+pub(super) fn files_equal(path_a: &Path, bytes_b: &[u8]) -> bool {
+    let Ok(meta_a) = fs::metadata(path_a) else {
+        return false;
+    };
+    if meta_a.len() != bytes_b.len() as u64 {
+        return false;
+    }
+    let Ok(bytes_a) = fs::read(path_a) else {
+        return false;
+    };
+    bytes_a == bytes_b
+}
+
+pub(super) fn files_equal_path(path_a: &Path, path_b: &Path) -> bool {
     let Ok(meta_a) = fs::metadata(path_a) else {
         return false;
     };

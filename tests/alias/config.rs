@@ -325,3 +325,66 @@ fn app_add_rejects_invalid_name() {
         "error message should mention invalid character"
     );
 }
+#[test]
+fn alias_import_force_replaces_existing_app_alias() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    let exe = make_fake_exe(&env, "import_switch_app");
+    run_ok(alias_cmd(&env).args([
+        "alias",
+        "app",
+        "add",
+        "switcher",
+        exe.to_str().unwrap(),
+        "--no-apppaths",
+    ]));
+
+    let import_path = env.root.join("import_force_shell.toml");
+    std::fs::write(
+        &import_path,
+        "[alias.switcher]\ncommand = \"git status\"\nmode = \"auto\"\n",
+    )
+    .unwrap();
+
+    run_ok(alias_cmd(&env).args([
+        "alias",
+        "import",
+        import_path.to_str().unwrap(),
+        "--force",
+    ]));
+
+    let toml = read_toml(&env);
+    assert!(toml.contains("[alias.switcher]"));
+    assert!(!toml.contains("[app.switcher]"));
+}
+
+#[test]
+fn alias_import_force_replaces_existing_shell_alias_with_app() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "switcher", "git status"]));
+
+    let exe = make_fake_exe(&env, "import_switcher_app");
+    let import_path = env.root.join("import_force_app.toml");
+    std::fs::write(
+        &import_path,
+        format!(
+            "[app.switcher]\nexe = \"{}\"\nregister_apppaths = false\n",
+            exe.to_str().unwrap().replace('\\', "\\\\")
+        ),
+    )
+    .unwrap();
+
+    run_ok(alias_cmd(&env).args([
+        "alias",
+        "import",
+        import_path.to_str().unwrap(),
+        "--force",
+    ]));
+
+    let toml = read_toml(&env);
+    assert!(toml.contains("[app.switcher]"));
+    assert!(!toml.contains("[alias.switcher]"));
+}

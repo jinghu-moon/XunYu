@@ -1,0 +1,42 @@
+﻿
+running 17 tests
+test alias::perf::perf_app_sync_after_batch_app_add ... ok
+test alias::perf::perf_batch_add_shell_aliases ... ok
+test alias::perf::perf_batch_app_add ... ok
+test alias::perf::perf_export_import_roundtrip ... ok
+test alias::perf::perf_filtered_add_in_large_alias_set ... ok
+test alias::perf::perf_find_in_large_alias_set ... ok
+test alias::perf::perf_force_overwrite_existing_alias ... ok
+test alias::perf::perf_import_force_over_many_duplicates ... ok
+test alias::perf::perf_import_mixed_alias_and_app_roundtrip ... ok
+test alias::perf::perf_import_skips_many_duplicates ... ok
+test alias::perf::perf_ls_after_batch_add ... ok
+test alias::perf::perf_ls_json_after_batch_add ... ok
+test alias::perf::perf_single_add_under_500ms ... ok
+test alias::perf::perf_single_rm_in_large_alias_set ... ok
+test alias::perf::perf_sync_after_batch_add ... ok
+test alias::perf::perf_sync_idempotent_second_run_faster ... ok
+test alias::perf::perf_sync_with_orphan_cleanup ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 67.61s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests\test_alias.rs (target\debug\deps\test_alias-dc8f598ba8e77fe2.exe)
+perf: app sync 12 aliases = 25ms
+perf: batch add 200 aliases = 6837ms
+perf: batch app add 20 = 574ms
+perf: export 200 aliases = 27ms
+perf: import 200 aliases = 920ms
+perf: filtered add in 64 aliases = 31ms
+perf: find in 200 aliases = 29ms
+perf: force overwrite in 64 aliases = 31ms
+perf: import force duplicates 32 aliases = 78ms
+perf: mixed import shell=64 app=12 = 507ms
+perf: import skip duplicates 32 aliases = 23ms
+perf: ls 200 aliases = 29ms
+perf: ls --json 200 aliases = 25ms
+perf: single add = 28ms
+perf: rm in 64 aliases = 29ms
+perf: sync 200 aliases = 289ms
+perf: sync idempotent first=285ms second=287ms
+perf: sync with 64 aliases and 24 orphans = 178ms

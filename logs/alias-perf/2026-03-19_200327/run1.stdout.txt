@@ -1,0 +1,22 @@
+
+running 17 tests
+test alias::perf::perf_app_sync_after_batch_app_add ... ok
+test alias::perf::perf_batch_add_shell_aliases ... ok
+test alias::perf::perf_batch_app_add ... ok
+test alias::perf::perf_export_import_roundtrip ... ok
+test alias::perf::perf_filtered_add_in_large_alias_set ... ok
+test alias::perf::perf_find_in_large_alias_set ... ok
+test alias::perf::perf_force_overwrite_existing_alias ... ok
+test alias::perf::perf_import_force_over_many_duplicates ... ok
+test alias::perf::perf_import_mixed_alias_and_app_roundtrip ... ok
+test alias::perf::perf_import_skips_many_duplicates ... ok
+test alias::perf::perf_ls_after_batch_add ... ok
+test alias::perf::perf_ls_json_after_batch_add ... ok
+test alias::perf::perf_single_add_under_500ms ... ok
+test alias::perf::perf_single_rm_in_large_alias_set ... ok
+test alias::perf::perf_sync_after_batch_add ... ok
+test alias::perf::perf_sync_idempotent_second_run_faster ... ok
+test alias::perf::perf_sync_with_orphan_cleanup ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 68.67s
+

@@ -102,13 +102,18 @@ pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
     let mut dst = ctx.load()?;
     let mut added = 0usize;
     let mut skipped = 0usize;
+    let mut touched_entries = Vec::new();
 
     for (name, alias) in src.alias {
         if dst.name_exists(&name) && !args.force {
             skipped += 1;
             continue;
         }
-        dst.alias.insert(name, alias);
+        dst.app.remove(&name);
+        dst.alias.insert(name.clone(), alias);
+        if let Some(alias) = dst.alias.get(&name) {
+            touched_entries.push(shim_gen::shell_alias_to_sync_entry(&name, alias));
+        }
         added += 1;
     }
     for (name, app) in src.app {
@@ -116,11 +121,21 @@ pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
             skipped += 1;
             continue;
         }
-        dst.app.insert(name, app);
+        dst.alias.remove(&name);
+        dst.app.insert(name.clone(), app);
+        if let Some(alias) = dst.app.get(&name) {
+            touched_entries.push(shim_gen::app_alias_to_sync_entry(&name, alias));
+        }
         added += 1;
     }
+
+    if added == 0 {
+        ui_println!("Imported aliases: added={added}, skipped={skipped}");
+        return Ok(());
+    }
+
     ctx.save(&dst)?;
-    ctx.sync_shims(&dst)?;
+    ctx.sync_selected_shims(&touched_entries)?;
     ctx.sync_shells(&dst, None)?;
     ui_println!("Imported aliases: added={added}, skipped={skipped}");
     Ok(())

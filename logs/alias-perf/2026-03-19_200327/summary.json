@@ -1,0 +1,452 @@
+﻿{
+    "generatedAt":  "2026-03-19T20:09:56.9042287+08:00",
+    "dir":  "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_200327",
+    "commit":  "a4e640597a37d0f66a6154b2c5efdf996ac9c684-dirty",
+    "command":  "cargo test --test test_alias perf_ --features alias -- --nocapture --test-threads=1",
+    "runFiles":  [
+                     "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_200327\\run1.txt",
+                     "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_200327\\run2.txt",
+                     "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_200327\\run3.txt",
+                     "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_200327\\run4.txt",
+                     "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_200327\\run5.txt"
+                 ],
+    "totalRuntimeSeconds":  {
+                                "runs":  {
+                                             "run1":  68.67,
+                                             "run2":  75.56,
+                                             "run3":  68.66,
+                                             "run4":  67.61,
+                                             "run5":  67.52
+                                         },
+                                "min":  67.52,
+                                "median":  68.66,
+                                "mean":  69.6,
+                                "max":  75.56
+                            },
+    "metrics":  [
+                    {
+                        "name":  "app sync 12 aliases",
+                        "runs":  {
+                                     "run1":  26,
+                                     "run2":  27,
+                                     "run3":  25,
+                                     "run4":  25,
+                                     "run5":  24
+                                 },
+                        "min":  24,
+                        "median":  25,
+                        "mean":  25.4,
+                        "max":  27
+                    },
+                    {
+                        "name":  "batch add 200 aliases",
+                        "runs":  {
+                                     "run1":  6819,
+                                     "run2":  7379,
+                                     "run3":  6970,
+                                     "run4":  6837,
+                                     "run5":  6828
+                                 },
+                        "min":  6819,
+                        "median":  6837,
+                        "mean":  6966.6,
+                        "max":  7379
+                    },
+                    {
+                        "name":  "batch app add 20",
+                        "runs":  {
+                                     "run1":  573,
+                                     "run2":  632,
+                                     "run3":  565,
+                                     "run4":  574,
+                                     "run5":  576
+                                 },
+                        "min":  565,
+                        "median":  574,
+                        "mean":  584,
+                        "max":  632
+                    },
+                    {
+                        "name":  "export 200 aliases",
+                        "runs":  {
+                                     "run1":  28,
+                                     "run2":  29,
+                                     "run3":  28,
+                                     "run4":  27,
+                                     "run5":  28
+                                 },
+                        "min":  27,
+                        "median":  28,
+                        "mean":  28,
+                        "max":  29
+                    },
+                    {
+                        "name":  "import 200 aliases",
+                        "runs":  {
+                                     "run1":  875,
+                                     "run2":  1171,
+                                     "run3":  985,
+                                     "run4":  920,
+                                     "run5":  862
+                                 },
+                        "min":  862,
+                        "median":  920,
+                        "mean":  962.6,
+                        "max":  1171
+                    },
+                    {
+                        "name":  "filtered add in 64 aliases",
+                        "runs":  {
+                                     "run1":  31,
+                                     "run2":  32,
+                                     "run3":  36,
+                                     "run4":  31,
+                                     "run5":  31
+                                 },
+                        "min":  31,
+                        "median":  31,
+                        "mean":  32.2,
+                        "max":  36
+                    },
+                    {
+                        "name":  "find in 200 aliases",
+                        "runs":  {
+                                     "run1":  29,
+                                     "run2":  32,
+                                     "run3":  28,
+                                     "run4":  29,
+                                     "run5":  28
+                                 },
+                        "min":  28,
+                        "median":  29,
+                        "mean":  29.2,
+                        "max":  32
+                    },
+                    {
+                        "name":  "force overwrite in 64 aliases",
+                        "runs":  {
+                                     "run1":  31,
+                                     "run2":  43,
+                                     "run3":  33,
+                                     "run4":  31,
+                                     "run5":  34
+                                 },
+                        "min":  31,
+                        "median":  33,
+                        "mean":  34.4,
+                        "max":  43
+                    },
+                    {
+                        "name":  "import force duplicates 32 aliases",
+                        "runs":  {
+                                     "run1":  76,
+                                     "run2":  76,
+                                     "run3":  75,
+                                     "run4":  78,
+                                     "run5":  85
+                                 },
+                        "min":  75,
+                        "median":  76,
+                        "mean":  78,
+                        "max":  85
+                    },
+                    {
+                        "name":  "mixed import shell=64 app=12",
+                        "runs":  {
+                                     "run1":  416,
+                                     "run2":  383,
+                                     "run3":  393,
+                                     "run4":  507,
+                                     "run5":  281
+                                 },
+                        "min":  281,
+                        "median":  393,
+                        "mean":  396,
+                        "max":  507
+                    },
+                    {
+                        "name":  "import skip duplicates 32 aliases",
+                        "runs":  {
+                                     "run1":  23,
+                                     "run2":  24,
+                                     "run3":  25,
+                                     "run4":  23,
+                                     "run5":  23
+                                 },
+                        "min":  23,
+                        "median":  23,
+                        "mean":  23.6,
+                        "max":  25
+                    },
+                    {
+                        "name":  "ls 200 aliases",
+                        "runs":  {
+                                     "run1":  28,
+                                     "run2":  30,
+                                     "run3":  29,
+                                     "run4":  29,
+                                     "run5":  28
+                                 },
+                        "min":  28,
+                        "median":  29,
+                        "mean":  28.8,
+                        "max":  30
+                    },
+                    {
+                        "name":  "ls --json 200 aliases",
+                        "runs":  {
+                                     "run1":  26,
+                                     "run2":  33,
+                                     "run3":  26,
+                                     "run4":  25,
+                                     "run5":  26
+                                 },
+                        "min":  25,
+                        "median":  26,
+                        "mean":  27.2,
+                        "max":  33
+                    },
+                    {
+                        "name":  "single add",
+                        "runs":  {
+                                     "run1":  29,
+                                     "run2":  33,
+                                     "run3":  28,
+                                     "run4":  28,
+                                     "run5":  28
+                                 },
+                        "min":  28,
+                        "median":  28,
+                        "mean":  29.2,
+                        "max":  33
+                    },
+                    {
+                        "name":  "rm in 64 aliases",
+                        "runs":  {
+                                     "run1":  30,
+                                     "run2":  34,
+                                     "run3":  31,
+                                     "run4":  29,
+                                     "run5":  31
+                                 },
+                        "min":  29,
+                        "median":  31,
+                        "mean":  31,
+                        "max":  34
+                    },
+                    {
+                        "name":  "sync 200 aliases",
+                        "runs":  {
+                                     "run1":  295,
+                                     "run2":  294,
+                                     "run3":  285,
+                                     "run4":  289,
+                                     "run5":  290
+                                 },
+                        "min":  285,
+                        "median":  290,
+                        "mean":  290.6,
+                        "max":  295
+                    },
+                    {
+                        "name":  "sync idempotent first",
+                        "runs":  {
+                                     "run1":  333,
+                                     "run2":  295,
+                                     "run3":  292,
+                                     "run4":  285,
+                                     "run5":  291
+                                 },
+                        "min":  285,
+                        "median":  292,
+                        "mean":  299.2,
+                        "max":  333
+                    },
+                    {
+                        "name":  "sync idempotent second",
+                        "runs":  {
+                                     "run1":  323,
+                                     "run2":  285,
+                                     "run3":  282,
+                                     "run4":  287,
+                                     "run5":  288
+                                 },
+                        "min":  282,
+                        "median":  287,
+                        "mean":  293,
+                        "max":  323
+                    },
+                    {
+                        "name":  "sync with 64 aliases and 24 orphans",
+                        "runs":  {
+                                     "run1":  190,
+                                     "run2":  121,
+                                     "run3":  202,
+                                     "run4":  178,
+                                     "run5":  225
+                                 },
+                        "min":  121,
+                        "median":  190,
+                        "mean":  183.2,
+                        "max":  225
+                    }
+                ],
+    "comparison":  {
+                       "previousDir":  "D:\\100_Projects\\110_Daily\\XunYu\\logs\\alias-perf\\2026-03-19_193029",
+                       "basis":  "median",
+                       "metrics":  [
+                                       {
+                                           "name":  "app sync 12 aliases",
+                                           "previousMedian":  26,
+                                           "currentMedian":  25,
+                                           "deltaMs":  -1,
+                                           "deltaPct":  -3.85,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "batch add 200 aliases",
+                                           "previousMedian":  6939,
+                                           "currentMedian":  6837,
+                                           "deltaMs":  -102,
+                                           "deltaPct":  -1.47,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "batch app add 20",
+                                           "previousMedian":  579,
+                                           "currentMedian":  574,
+                                           "deltaMs":  -5,
+                                           "deltaPct":  -0.86,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "export 200 aliases",
+                                           "previousMedian":  28,
+                                           "currentMedian":  28,
+                                           "deltaMs":  0,
+                                           "deltaPct":  0,
+                                           "trend":  "flat"
+                                       },
+                                       {
+                                           "name":  "import 200 aliases",
+                                           "previousMedian":  1004,
+                                           "currentMedian":  920,
+                                           "deltaMs":  -84,
+                                           "deltaPct":  -8.37,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "filtered add in 64 aliases",
+                                           "previousMedian":  31,
+                                           "currentMedian":  31,
+                                           "deltaMs":  0,
+                                           "deltaPct":  0,
+                                           "trend":  "flat"
+                                       },
+                                       {
+                                           "name":  "find in 200 aliases",
+                                           "previousMedian":  28,
+                                           "currentMedian":  29,
+                                           "deltaMs":  1,
+                                           "deltaPct":  3.57,
+                                           "trend":  "slower"
+                                       },
+                                       {
+                                           "name":  "force overwrite in 64 aliases",
+                                           "previousMedian":  33,
+                                           "currentMedian":  33,
+                                           "deltaMs":  0,
+                                           "deltaPct":  0,
+                                           "trend":  "flat"
+                                       },
+                                       {
+                                           "name":  "import force duplicates 32 aliases",
+                                           "previousMedian":  79,
+                                           "currentMedian":  76,
+                                           "deltaMs":  -3,
+                                           "deltaPct":  -3.8,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "mixed import shell=64 app=12",
+                                           "previousMedian":  338,
+                                           "currentMedian":  393,
+                                           "deltaMs":  55,
+                                           "deltaPct":  16.27,
+                                           "trend":  "slower"
+                                       },
+                                       {
+                                           "name":  "import skip duplicates 32 aliases",
+                                           "previousMedian":  71,
+                                           "currentMedian":  23,
+                                           "deltaMs":  -48,
+                                           "deltaPct":  -67.61,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "ls 200 aliases",
+                                           "previousMedian":  29,
+                                           "currentMedian":  29,
+                                           "deltaMs":  0,
+                                           "deltaPct":  0,
+                                           "trend":  "flat"
+                                       },
+                                       {
+                                           "name":  "ls --json 200 aliases",
+                                           "previousMedian":  26,
+                                           "currentMedian":  26,
+                                           "deltaMs":  0,
+                                           "deltaPct":  0,
+                                           "trend":  "flat"
+                                       },
+                                       {
+                                           "name":  "single add",
+                                           "previousMedian":  28,
+                                           "currentMedian":  28,
+                                           "deltaMs":  0,
+                                           "deltaPct":  0,
+                                           "trend":  "flat"
+                                       },
+                                       {
+                                           "name":  "rm in 64 aliases",
+                                           "previousMedian":  30,
+                                           "currentMedian":  31,
+                                           "deltaMs":  1,
+                                           "deltaPct":  3.33,
+                                           "trend":  "slower"
+                                       },
+                                       {
+                                           "name":  "sync 200 aliases",
+                                           "previousMedian":  304,
+                                           "currentMedian":  290,
+                                           "deltaMs":  -14,
+                                           "deltaPct":  -4.61,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "sync idempotent first",
+                                           "previousMedian":  304,
+                                           "currentMedian":  292,
+                                           "deltaMs":  -12,
+                                           "deltaPct":  -3.95,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "sync idempotent second",
+                                           "previousMedian":  295,
+                                           "currentMedian":  287,
+                                           "deltaMs":  -8,
+                                           "deltaPct":  -2.71,
+                                           "trend":  "faster"
+                                       },
+                                       {
+                                           "name":  "sync with 64 aliases and 24 orphans",
+                                           "previousMedian":  180,
+                                           "currentMedian":  190,
+                                           "deltaMs":  10,
+                                           "deltaPct":  5.56,
+                                           "trend":  "slower"
+                                       }
+                                   ]
+                   }
+}

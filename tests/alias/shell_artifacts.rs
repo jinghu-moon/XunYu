@@ -193,3 +193,27 @@ fn alias_sync_does_not_rewrite_shell_artifacts_when_unchanged() {
         "powershell profile should not be rewritten"
     );
 }
+#[test]
+fn alias_import_without_changes_does_not_rewrite_shell_artifacts() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
+
+    let export_path = env.root.join("import_same.toml");
+    run_ok(alias_cmd(&env).args(["alias", "export", "-o", export_path.to_str().unwrap()]));
+
+    let cmd_path = cmd_macrofile(&env);
+    let ps_path = powershell_profile(&env);
+    let cmd_mtime_1 = fs::metadata(&cmd_path).unwrap().modified().unwrap();
+    let ps_mtime_1 = fs::metadata(&ps_path).unwrap().modified().unwrap();
+
+    thread::sleep(Duration::from_millis(50));
+    run_ok(alias_cmd(&env).args(["alias", "import", export_path.to_str().unwrap()]));
+
+    let cmd_mtime_2 = fs::metadata(&cmd_path).unwrap().modified().unwrap();
+    let ps_mtime_2 = fs::metadata(&ps_path).unwrap().modified().unwrap();
+
+    assert_eq!(cmd_mtime_1, cmd_mtime_2, "cmd macrofile should not be rewritten on noop import");
+    assert_eq!(ps_mtime_1, ps_mtime_2, "powershell profile should not be rewritten on noop import");
+}
