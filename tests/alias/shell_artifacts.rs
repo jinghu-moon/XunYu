@@ -165,6 +165,53 @@ fn alias_import_mixed_entries_rebuilds_shell_artifacts() {
     );
 }
 
+
+#[test]
+fn alias_import_duplicate_app_targets_rebuilds_both_shell_entries() {
+    let src_env = TestEnv::new();
+    do_setup(&src_env);
+
+    let exe = make_fake_exe(&src_env, "dup_code_like");
+    let exe_str = exe.to_str().unwrap();
+    run_ok(alias_cmd(&src_env).args([
+        "alias",
+        "app",
+        "add",
+        "code",
+        exe_str,
+        "--args",
+        "--reuse-window",
+        "--no-apppaths",
+    ]));
+    run_ok(alias_cmd(&src_env).args([
+        "alias",
+        "app",
+        "add",
+        "editor",
+        exe_str,
+        "--args",
+        "--reuse-window",
+        "--no-apppaths",
+    ]));
+
+    let export_path = src_env.root.join("duplicate_app_export.toml");
+    run_ok(alias_cmd(&src_env).args(["alias", "export", "-o", export_path.to_str().unwrap()]));
+
+    let dst_env = TestEnv::new();
+    do_setup(&dst_env);
+    run_ok(alias_cmd(&dst_env).args(["alias", "import", export_path.to_str().unwrap()]));
+
+    let toml = read_toml(&dst_env);
+    assert!(toml.contains("[app.code]"), "code app alias missing after import");
+    assert!(toml.contains("[app.editor]"), "editor app alias missing after import");
+    assert_shim_exists(&dst_env, "code");
+    assert_shim_exists(&dst_env, "editor");
+    assert_file_contains(&cmd_macrofile(&dst_env), "doskey code=");
+    assert_file_contains(&cmd_macrofile(&dst_env), "doskey editor=");
+    assert_file_contains(&powershell_profile(&dst_env), "function code { Start-Process '");
+    assert_file_contains(&powershell_profile(&dst_env), "function editor { Start-Process '");
+}
+
 #[test]
 fn alias_sync_does_not_rewrite_shell_artifacts_when_unchanged() {
     let env = TestEnv::new();
