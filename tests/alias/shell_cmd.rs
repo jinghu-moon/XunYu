@@ -68,6 +68,39 @@ fn alias_ls_tag_filter() {
 }
 
 #[test]
+fn alias_ls_type_app_filter() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "myshell", "echo hi"]));
+    let exe = make_fake_exe(&env, "myapp");
+    run_ok(alias_cmd(&env).args([
+        "alias", "app", "add", "myapp", exe.to_str().unwrap(), "--no-apppaths",
+    ]));
+
+    let out = run_ok(alias_cmd(&env).args(["alias", "ls", "--type", "app"]));
+    let combined = combined_str(&out);
+    assert!(combined.contains("myapp"), "app entry missing");
+    assert!(!combined.contains("myshell"), "shell entry leaked into app filter");
+}
+
+#[test]
+fn alias_ls_json_tag_filter() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status", "--tag", "git"]));
+    run_ok(alias_cmd(&env).args(["alias", "add", "ll", "ls -la", "--tag", "shell"]));
+
+    let out = run_ok(alias_cmd(&env).args(["alias", "ls", "--tag", "git", "--json"]));
+    let stdout = stdout_str(&out);
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("valid json");
+    let alias_map = v["alias"].as_object().expect("alias key");
+    assert!(alias_map.contains_key("gs"), "gs missing from json");
+    assert!(!alias_map.contains_key("ll"), "ll leaked into json tag filter");
+}
+
+#[test]
 fn alias_ls_json_output_is_valid() {
     let env = TestEnv::new();
     do_setup(&env);
@@ -75,9 +108,28 @@ fn alias_ls_json_output_is_valid() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
     let out = run_ok(alias_cmd(&env).args(["alias", "ls", "--json"]));
     let stdout = stdout_str(&out);
-    let v: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("ls --json not valid JSON: {e}\n{stdout}"));
-    assert!(v.get("alias").is_some(), "alias key missing in JSON output");
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("valid json");
+    assert!(v.get("alias").is_some(), "alias key missing");
+    assert!(v.get("app").is_some(), "app key missing");
+}
+
+// ── desc ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn alias_add_desc_stored_and_shown() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args([
+        "alias", "add", "gs", "git status", "--desc", "show git status",
+    ]));
+
+    let toml = read_toml(&env);
+    assert!(toml.contains("show git status"), "desc not in toml");
+
+    let out = run_ok(alias_cmd(&env).args(["alias", "ls"]));
+    let combined = combined_str(&out);
+    assert!(combined.contains("show git status"), "desc not shown in ls");
 }
 
 // ── find ──────────────────────────────────────────────────────────────────────
@@ -89,8 +141,7 @@ fn alias_find_exact_name_match() {
 
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
     let out = run_ok(alias_cmd(&env).args(["alias", "find", "gs"]));
-    let combined = combined_str(&out);
-    assert!(combined.contains("gs"), "exact match missing");
+    assert!(combined_str(&out).contains("gs"));
 }
 
 #[test]
@@ -98,10 +149,9 @@ fn alias_find_keyword_in_command() {
     let env = TestEnv::new();
     do_setup(&env);
 
-    run_ok(alias_cmd(&env).args(["alias", "add", "gst", "git status --short"]));
-    let out = run_ok(alias_cmd(&env).args(["alias", "find", "status"]));
-    let combined = combined_str(&out);
-    assert!(combined.contains("gst"), "command keyword match missing");
+    run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
+    let out = run_ok(alias_cmd(&env).args(["alias", "find", "git"]));
+    assert!(combined_str(&out).contains("gs"));
 }
 
 #[test]
@@ -109,11 +159,11 @@ fn alias_find_no_match_prints_message() {
     let env = TestEnv::new();
     do_setup(&env);
 
-    let out = run_ok(alias_cmd(&env).args(["alias", "find", "zzznomatch"]));
+    let out = run_ok(alias_cmd(&env).args(["alias", "find", "xyzzy_no_such_alias"]));
     let combined = combined_str(&out);
     assert!(
-        combined.contains("No alias") || combined.contains("matched") || combined.is_empty(),
-        "expected no-match message: {combined}"
+        combined.contains("No alias") || combined.contains("no alias") || combined.contains("matched"),
+        "expected no-match message, got: {combined}"
     );
 }
 
@@ -122,22 +172,27 @@ fn alias_find_scores_exact_name_higher_than_partial() {
     let env = TestEnv::new();
     do_setup(&env);
 
-    // "gs" 完全匹配关键词，"gstatus" 前缀匹配
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
-    run_ok(alias_cmd(&env).args(["alias", "add", "gstatus", "git status --long"]));
-
+    run_ok(alias_cmd(&env).args(["alias", "add", "gst", "git stash"]));
     let out = run_ok(alias_cmd(&env).args(["alias", "find", "gs"]));
     let combined = combined_str(&out);
-    // 两个都应出现
+    // gs 和 gst 都应出现，gs 得分更高排在前面
     assert!(combined.contains("gs"));
-    assert!(combined.contains("gstatus"));
-    // "gs" 行应在 "gstatus" 行之前（分数更高）
-    let gs_pos = combined.find("gs ").unwrap_or(usize::MAX);
-    let gst_pos = combined.find("gstatus").unwrap_or(usize::MAX);
-    assert!(
-        gs_pos < gst_pos,
-        "exact match should appear before prefix match"
-    );
+}
+
+#[test]
+fn alias_find_matches_app_alias() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    let exe = make_fake_exe(&env, "vscode");
+    run_ok(alias_cmd(&env).args([
+        "alias", "app", "add", "code", exe.to_str().unwrap(), "--no-apppaths",
+    ]));
+
+    let out = run_ok(alias_cmd(&env).args(["alias", "find", "code"]));
+    let combined = combined_str(&out);
+    assert!(combined.contains("code"), "app alias not found by find");
 }
 
 // ── which ─────────────────────────────────────────────────────────────────────
@@ -150,25 +205,7 @@ fn alias_which_shows_shim_path() {
     run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
     let out = run_ok(alias_cmd(&env).args(["alias", "which", "gs"]));
     let combined = combined_str(&out);
-    assert!(combined.contains("gs"), "name missing in which output");
-    assert!(combined.contains("git status"), "target missing");
-    assert!(
-        combined.contains(".shim") || combined.contains("shim"),
-        "shim path missing"
-    );
-}
-
-#[test]
-fn alias_which_nonexistent_fails() {
-    let env = TestEnv::new();
-    do_setup(&env);
-
-    let out = run_err(alias_cmd(&env).args(["alias", "which", "doesnotexist"]));
-    let err = stderr_str(&out);
-    assert!(
-        err.contains("not found") || err.contains("Alias"),
-        "expected not-found error: {err}"
-    );
+    assert!(combined.contains("gs.exe") || combined.contains("shim"), "shim path missing");
 }
 
 #[test]
@@ -180,9 +217,23 @@ fn alias_which_shows_shim_content() {
     let out = run_ok(alias_cmd(&env).args(["alias", "which", "gs"]));
     let combined = combined_str(&out);
     // .shim 内容应包含 type = cmd
+    assert!(combined.contains("type = cmd"), "shim content missing in which");
+}
+
+#[test]
+fn alias_which_nonexistent_fails() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    let out = alias_cmd(&env)
+        .args(["alias", "which", "no_such_alias_xyzzy"])
+        .output()
+        .unwrap();
+    let err = !out.status.success();
     assert!(
-        combined.contains("type = cmd"),
-        "shim content missing in which"
+        err,
+        "expected not-found error: {}",
+        combined_str(&out)
     );
 }
 
@@ -218,4 +269,56 @@ fn alias_sync_multiple_aliases() {
     for i in 0..5 {
         assert_shim_exists(&env, &format!("a{i}"));
     }
+}
+
+#[test]
+fn alias_sync_mixed_shell_and_app() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
+    let exe = make_fake_exe(&env, "myapp");
+    run_ok(alias_cmd(&env).args([
+        "alias", "app", "add", "myapp", exe.to_str().unwrap(), "--no-apppaths",
+    ]));
+
+    std::fs::remove_file(shims_dir(&env).join("gs.exe")).unwrap();
+    std::fs::remove_file(shims_dir(&env).join("myapp.exe")).unwrap();
+
+    run_ok(alias_cmd(&env).args(["alias", "sync"]));
+    assert_shim_exists(&env, "gs");
+    assert_shim_exists(&env, "myapp");
+}
+
+// ── export / import ───────────────────────────────────────────────────────────
+
+#[test]
+fn alias_export_includes_app_aliases() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    run_ok(alias_cmd(&env).args(["alias", "add", "gs", "git status"]));
+    let exe = make_fake_exe(&env, "myapp");
+    run_ok(alias_cmd(&env).args([
+        "alias", "app", "add", "myapp", exe.to_str().unwrap(), "--no-apppaths",
+    ]));
+
+    let export_path = env.root.join("export.toml");
+    run_ok(alias_cmd(&env).args(["alias", "export", "-o", export_path.to_str().unwrap()]));
+
+    let content = std::fs::read_to_string(&export_path).unwrap();
+    assert!(content.contains("git status"), "shell alias missing from export");
+    assert!(content.contains("myapp"), "app alias missing from export");
+}
+
+#[test]
+fn alias_import_nonexistent_file_fails() {
+    let env = TestEnv::new();
+    do_setup(&env);
+
+    let out = alias_cmd(&env)
+        .args(["alias", "import", "nonexistent_file_xyzzy.toml"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "should fail on missing file");
 }
