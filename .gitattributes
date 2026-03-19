@@ -1,1 +1,84 @@
+# =========================
+# 全局策略（Windows Only）
+# =========================
 * text=auto eol=crlf
+
+# =========================
+# 明确文本文件（防止误判）
+# =========================
+*.c text
+*.cpp text
+*.h text
+*.hpp text
+*.rs text
+*.ts text
+*.js text
+*.vue text
+*.html text
+*.css text
+*.scss text
+*.xml text
+*.svg text
+
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+*.md text
+*.txt text
+*.lock text
+
+# Windows 脚本
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Unix Shell 脚本：即使在 Windows 上，也建议 LF
+*.sh text eol=lf
+
+# =========================
+# 二进制文件（完整覆盖）
+# =========================
+
+# 图片
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.webp binary
+
+# 视频 / 音频
+*.mp4 binary
+*.mkv binary
+*.avi binary
+*.mov binary
+*.mp3 binary
+*.wav binary
+*.flac binary
+
+# 压缩包
+*.zip binary
+*.7z binary
+*.rar binary
+*.tar binary
+*.gz binary
+
+# 可执行 / 动态库
+*.exe binary
+*.dll binary
+*.lib binary
+*.pdb binary
+
+# 字体
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+
+# 文档
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
