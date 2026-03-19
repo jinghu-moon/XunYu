@@ -44,8 +44,9 @@ mod template;
 
 pub use render::{app_alias_to_shim, shell_alias_to_shim};
 pub use sync::{
-    app_alias_to_sync_entry, config_to_sync_entries, remove_shim, shell_alias_to_sync_entry,
-    sync_all, sync_app_alias, sync_entries, sync_shell_alias,
+    app_alias_to_sync_entry, app_alias_to_sync_entry_with_gui, config_to_sync_entries,
+    remove_shim, shell_alias_to_sync_entry, sync_all, sync_app_alias, sync_entries,
+    sync_shell_alias,
 };
 pub use template::deploy_shim_templates;
 

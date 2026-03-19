@@ -103,6 +103,7 @@ pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
     let mut added = 0usize;
     let mut skipped = 0usize;
     let mut touched_entries = Vec::new();
+    let mut app_gui_cache = std::collections::HashMap::new();
 
     for (name, alias) in src.alias {
         if dst.name_exists(&name) && !args.force {
@@ -124,7 +125,17 @@ pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
         dst.alias.remove(&name);
         dst.app.insert(name.clone(), app);
         if let Some(alias) = dst.app.get(&name) {
-            touched_entries.push(shim_gen::app_alias_to_sync_entry(&name, alias));
+            let use_gui_template = *app_gui_cache
+                .entry(alias.exe.clone())
+                .or_insert_with(|| {
+                    let entry = shim_gen::app_alias_to_sync_entry(&name, alias);
+                    entry.use_gui_template
+                });
+            touched_entries.push(shim_gen::app_alias_to_sync_entry_with_gui(
+                &name,
+                alias,
+                use_gui_template,
+            ));
         }
         added += 1;
     }

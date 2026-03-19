@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::io::{atomic_write_bytes, files_equal, files_equal_path, link_template};
 use super::render::{is_gui_exe_path, shell_alias_to_shim_with_template};
 use super::*;
@@ -39,10 +41,18 @@ pub fn shell_alias_to_sync_entry(name: &str, alias: &ShellAlias) -> SyncEntry {
 }
 
 pub fn app_alias_to_sync_entry(name: &str, alias: &AppAlias) -> SyncEntry {
+    app_alias_to_sync_entry_with_gui(name, alias, is_gui_exe_path(&alias.exe))
+}
+
+pub fn app_alias_to_sync_entry_with_gui(
+    name: &str,
+    alias: &AppAlias,
+    use_gui_template: bool,
+) -> SyncEntry {
     SyncEntry {
         name: name.to_string(),
         shim_content: app_alias_to_shim(alias),
-        use_gui_template: is_gui_exe_path(&alias.exe),
+        use_gui_template,
     }
 }
 
@@ -53,9 +63,6 @@ fn create_shim_with_cache(
     shim_content: &str,
     use_gui_template: bool,
 ) -> Result<()> {
-    fs::create_dir_all(shims_dir)
-        .with_context(|| format!("Failed to create shims dir: {}", shims_dir.display()))?;
-
     let exe_path = shims_dir.join(format!("{name}.exe"));
     let shim_path = shims_dir.join(format!("{name}.shim"));
     let template = if use_gui_template && templates.gui.path.is_file() {
@@ -169,11 +176,15 @@ pub fn sync_app_alias(
 
 pub fn config_to_sync_entries(cfg: &Config) -> Vec<SyncEntry> {
     let mut entries = Vec::with_capacity(cfg.alias.len() + cfg.app.len());
+    let mut gui_cache = HashMap::new();
     for (name, alias) in &cfg.alias {
         entries.push(shell_alias_to_sync_entry(name, alias));
     }
     for (name, alias) in &cfg.app {
-        entries.push(app_alias_to_sync_entry(name, alias));
+        let use_gui_template = *gui_cache
+            .entry(alias.exe.clone())
+            .or_insert_with(|| is_gui_exe_path(&alias.exe));
+        entries.push(app_alias_to_sync_entry_with_gui(name, alias, use_gui_template));
     }
     entries
 }
@@ -186,6 +197,8 @@ pub fn sync_entries(
 ) -> Result<SyncReport> {
     let cache = load_template_cache(template_console, template_gui)?;
     let mut report = SyncReport::default();
+    fs::create_dir_all(shims_dir)
+        .with_context(|| format!("Failed to create shims dir: {}", shims_dir.display()))?;
 
     for entry in entries {
         match create_shim_with_cache(
