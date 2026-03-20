@@ -10,13 +10,13 @@ use crate::runtime;
 use crate::store::now_secs;
 
 #[derive(Debug, Clone)]
-pub(crate) struct CliError {
+pub struct CliError {
     pub(crate) code: i32,
     pub(crate) message: String,
     pub(crate) details: Vec<String>,
 }
 
-pub(crate) type CliResult<T = ()> = Result<T, CliError>;
+pub type CliResult<T = ()> = Result<T, CliError>;
 
 impl CliError {
     pub(crate) fn new(code: i32, message: impl Into<String>) -> Self {

@@ -3,7 +3,7 @@
 // Conflict resolution strategies for rename operations.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::batch_rename::types::RenameOp;
 use crate::output::{CliError, CliResult};
@@ -91,7 +91,7 @@ fn apply_rename_seq(ops: Vec<RenameOp>, existing: &HashSet<PathBuf>) -> Vec<Rena
         .collect()
 }
 
-fn make_unique(path: &PathBuf, seen: &HashSet<PathBuf>) -> PathBuf {
+fn make_unique(path: &Path, seen: &HashSet<PathBuf>) -> PathBuf {
     let parent = path.parent().unwrap_or(std::path::Path::new(""));
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let ext = path.extension().and_then(|e| e.to_str())

@@ -153,7 +153,7 @@ pub enum SortBy {
 
 /// Sort a file list in-place according to `by`.
 /// Files whose metadata cannot be read fall back to name ordering.
-pub fn sort_files_by(files: &mut Vec<PathBuf>, by: SortBy) {
+pub fn sort_files_by(files: &mut [PathBuf], by: SortBy) {
     use crate::batch_rename::natural_sort::natural_cmp;
     match by {
         SortBy::Name => {
