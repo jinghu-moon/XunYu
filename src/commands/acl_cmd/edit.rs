@@ -94,11 +94,10 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     let paths_elapsed = paths_start.elapsed();
 
     let is_batch = args.file.is_some() || args.paths.is_some();
-    if !is_batch {
-        if let Some(path) = paths.first() {
+    if !is_batch
+        && let Some(path) = paths.first() {
             print_path_header(path);
         }
-    }
     ui_println!("Add permission entry");
     if is_batch {
         ui_println!("Paths: {}", paths.len());
@@ -476,26 +475,22 @@ pub(super) fn cmd_remove(args: AclRemoveCmd) -> CliResult {
         let to_remove: Vec<_> = explicit
             .iter()
             .filter(|e| {
-                if let Some(principal) = args.principal.as_deref() {
-                    if !e.principal.eq_ignore_ascii_case(principal) {
+                if let Some(principal) = args.principal.as_deref()
+                    && !e.principal.eq_ignore_ascii_case(principal) {
                         return false;
                     }
-                }
-                if let Some(raw_sid) = args.raw_sid.as_deref() {
-                    if !e.raw_sid.eq_ignore_ascii_case(raw_sid) {
+                if let Some(raw_sid) = args.raw_sid.as_deref()
+                    && !e.raw_sid.eq_ignore_ascii_case(raw_sid) {
                         return false;
                     }
-                }
-                if let Some(mask) = rights_mask {
-                    if e.rights_mask != mask {
+                if let Some(mask) = rights_mask
+                    && e.rights_mask != mask {
                         return false;
                     }
-                }
-                if let Some(ref ty) = ace_type {
-                    if &e.ace_type != ty {
+                if let Some(ref ty) = ace_type
+                    && &e.ace_type != ty {
                         return false;
                     }
-                }
                 true
             })
             .cloned()

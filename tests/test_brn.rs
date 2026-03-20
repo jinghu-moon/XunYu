@@ -490,17 +490,13 @@ fn ph0_2_apply_writes_undo_file() {
         from: dir.path().join("b.txt").to_string_lossy().into_owned(),
         to: dir.path().join("a.txt").to_string_lossy().into_owned(),
     }];
-    brn::write_undo(dir.path(), &records).unwrap();
+    brn::push_undo(dir.path(), &records).unwrap();
 
-    let undo_path = dir.path().join(".xun-brn-undo.json");
+    let undo_path = dir.path().join(".xun-brn-undo.log");
     assert!(undo_path.exists(), "undo file must be written");
-    let content = fs::read_to_string(&undo_path).unwrap();
-    let parsed: Vec<serde_json::Value> = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed.len(), 1);
-    assert_eq!(
-        parsed[0]["from"].as_str().unwrap(),
-        dir.path().join("b.txt").to_str().unwrap()
-    );
+    let history = brn::read_undo_history(dir.path()).unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].ops[0].from, dir.path().join("b.txt").to_str().unwrap());
 }
 
 #[test]
@@ -516,12 +512,13 @@ fn ph0_2_second_apply_overwrites_undo_file() {
         UndoRecord { from: "d.txt".to_owned(), to: "c.txt".to_owned() },
         UndoRecord { from: "f.txt".to_owned(), to: "e.txt".to_owned() },
     ];
-    brn::write_undo(dir.path(), &records1).unwrap();
-    brn::write_undo(dir.path(), &records2).unwrap();
+    brn::push_undo(dir.path(), &records1).unwrap();
+    brn::push_undo(dir.path(), &records2).unwrap();
 
-    let content = fs::read_to_string(dir.path().join(".xun-brn-undo.json")).unwrap();
-    let parsed: Vec<serde_json::Value> = serde_json::from_str(&content).unwrap();
-    assert_eq!(parsed.len(), 2, "second write must overwrite first");
+    let history = brn::read_undo_history(dir.path()).unwrap();
+    assert_eq!(history.len(), 2, "second push must append, not overwrite");
+    assert_eq!(history[0].ops.len(), 1);
+    assert_eq!(history[1].ops.len(), 2);
 }
 
 #[test]
@@ -537,7 +534,7 @@ fn ph0_2_undo_restores_files() {
         from: renamed.to_string_lossy().into_owned(),
         to: original.to_string_lossy().into_owned(),
     }];
-    brn::write_undo(dir.path(), &records).unwrap();
+    brn::push_undo(dir.path(), &records).unwrap();
     brn::run_undo(dir.path().to_str().unwrap()).unwrap();
 
     assert!(original.exists(), "original must be restored");
@@ -560,7 +557,7 @@ fn ph0_2_undo_missing_file_gives_friendly_error() {
 #[test]
 fn ph0_2_undo_corrupt_file_gives_error() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join(".xun-brn-undo.json"), b"not json!").unwrap();
+    fs::write(dir.path().join(".xun-brn-undo.log"), b"not json!\n").unwrap();
     let result = brn::run_undo(dir.path().to_str().unwrap());
     assert!(result.is_err());
 }
@@ -1751,13 +1748,15 @@ fn ph5_8_undo_steps_reverses_last_n() {
     fs::write(&b, b"from_a").unwrap(); // after first rename a->b
     fs::write(&d, b"from_c").unwrap(); // after second rename c->d
 
-    // Record history: batch1 renamed a->b, batch2 renamed c->d
-    let r1 = vec![UndoRecord { from: a.to_string_lossy().into(), to: b.to_string_lossy().into() }];
+    // Record history: UndoRecord { from: 新名, to: 旧名 }
+    // batch1: a->b => undo record { from: b, to: a }
+    let r1 = vec![UndoRecord { from: b.to_string_lossy().into(), to: a.to_string_lossy().into() }];
     brn::append_undo(dir.path(), &r1).unwrap();
-    let r2 = vec![UndoRecord { from: c.to_string_lossy().into(), to: d.to_string_lossy().into() }];
+    // batch2: c->d => undo record { from: d, to: c }
+    let r2 = vec![UndoRecord { from: d.to_string_lossy().into(), to: c.to_string_lossy().into() }];
     brn::append_undo(dir.path(), &r2).unwrap();
 
-    // Undo last 1 step: reverse c->d (i.e., rename d back to c)
+    // Undo last 1 step: rename d back to c
     brn::run_undo_steps(dir.path().to_str().unwrap(), 1).unwrap();
 
     assert!(c.exists(), "c.txt should be restored");
@@ -1780,6 +1779,92 @@ fn ph5_8_undo_steps_exceeds_history() {
     // steps=5 but only 1 in history → undo all, no error
     let result = brn::run_undo_steps(dir.path().to_str().unwrap(), 5);
     assert!(result.is_ok(), "exceeding steps should not error: {:?}", result);
+}
+
+#[test]
+fn ph5_8_redo_after_undo_restores() {
+    use xun::batch_rename::undo::UndoRecord;
+
+    let dir = TempDir::new().unwrap();
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    fs::write(&b, b"").unwrap(); // 初始状态：b 存在（已重命名）
+
+    // 模拟 apply：a→b（undo 记录：from=b, to=a，即 undo 会把 b 改回 a）
+    let r = vec![UndoRecord {
+        from: b.to_string_lossy().into(),
+        to: a.to_string_lossy().into(),
+    }];
+    brn::push_undo(dir.path(), &r).unwrap();
+
+    // undo：b → a
+    brn::run_undo_steps(dir.path().to_str().unwrap(), 1).unwrap();
+    assert!(a.exists(), "a.txt should exist after undo");
+    assert!(!b.exists(), "b.txt should be gone after undo");
+
+    // redo：a → b（恢复原重命名）
+    brn::run_redo_steps(dir.path().to_str().unwrap(), 1).unwrap();
+    assert!(b.exists(), "b.txt should be restored after redo");
+    assert!(!a.exists(), "a.txt should be gone after redo");
+}
+
+#[test]
+fn ph5_8_new_apply_clears_redo_stack() {
+    use xun::batch_rename::undo::UndoRecord;
+
+    let dir = TempDir::new().unwrap();
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    let c = dir.path().join("c.txt");
+    fs::write(&b, b"").unwrap();
+
+    // 第一次 apply：push undo batch 1
+    let r1 = vec![UndoRecord { from: b.to_string_lossy().into(), to: a.to_string_lossy().into() }];
+    brn::push_undo(dir.path(), &r1).unwrap();
+
+    // undo → redo 栈有内容
+    brn::run_undo_steps(dir.path().to_str().unwrap(), 1).unwrap();
+
+    // 第二次 apply（新操作）：应清空 redo 栈
+    fs::rename(&a, &c).unwrap();
+    let r2 = vec![UndoRecord { from: c.to_string_lossy().into(), to: a.to_string_lossy().into() }];
+    brn::push_undo(dir.path(), &r2).unwrap();
+
+    // redo 栈应为空
+    let result = brn::run_redo_steps(dir.path().to_str().unwrap(), 1);
+    assert!(result.is_ok()); // "Nothing to redo" 不是错误
+    // c 仍存在（redo 没有执行任何操作）
+    assert!(c.exists(), "c.txt should still exist; redo stack was cleared");
+}
+
+#[test]
+fn ph5_8_partial_undo_then_redo() {
+    use xun::batch_rename::undo::UndoRecord;
+
+    let dir = TempDir::new().unwrap();
+    let a = dir.path().join("a.txt");
+    let b = dir.path().join("b.txt");
+    let c = dir.path().join("c.txt");
+    let d = dir.path().join("d.txt");
+    fs::write(&b, b"").unwrap();
+    fs::write(&d, b"").unwrap();
+
+    // batch1: b→a, batch2: d→c
+    let r1 = vec![UndoRecord { from: b.to_string_lossy().into(), to: a.to_string_lossy().into() }];
+    let r2 = vec![UndoRecord { from: d.to_string_lossy().into(), to: c.to_string_lossy().into() }];
+    brn::push_undo(dir.path(), &r1).unwrap();
+    brn::push_undo(dir.path(), &r2).unwrap();
+
+    // undo 1 步（只撤销 batch2：d→c）
+    brn::run_undo_steps(dir.path().to_str().unwrap(), 1).unwrap();
+    assert!(c.exists(), "c should be restored");
+    assert!(!d.exists(), "d should be gone");
+    assert!(b.exists(), "b should still exist (batch1 not undone)");
+
+    // redo 1 步（重新执行 batch2：c→d）
+    brn::run_redo_steps(dir.path().to_str().unwrap(), 1).unwrap();
+    assert!(d.exists(), "d should be restored by redo");
+    assert!(!c.exists(), "c should be gone after redo");
 }
 
 // ─── 多操作组合 (chain) ───────────────────────────────────────────────────────
@@ -1988,4 +2073,55 @@ fn chain_from_keeps_original() {
     let ops = brn::compute_ops_chain(&files, &steps).unwrap();
     assert_eq!(ops[0].from, files[0], "from must be original file");
     assert_eq!(ops[0].to.file_name().unwrap(), "step2_step1_original.txt");
+}
+
+// ─── Ph0-2 补充：旧格式迁移 ──────────────────────────────────────────────────
+
+#[test]
+fn ph0_2_legacy_migration() {
+    use xun::batch_rename::undo::UndoRecord;
+
+    let dir = TempDir::new().unwrap();
+    // 写一个旧 Vec<UndoBatch> JSON 格式文件
+    let legacy_json = r#"[{"ts":1000,"ops":[{"from":"b.txt","to":"a.txt"}]}]"#;
+    fs::write(dir.path().join(".xun-brn-undo.json"), legacy_json.as_bytes()).unwrap();
+
+    // push_undo 入口应自动迁移
+    let r = vec![UndoRecord { from: "d.txt".into(), to: "c.txt".into() }];
+    brn::push_undo(dir.path(), &r).unwrap();
+
+    // 旧文件应已被删除
+    assert!(!dir.path().join(".xun-brn-undo.json").exists(), "legacy file must be removed");
+    // 新 .log 文件必须存在
+    assert!(dir.path().join(".xun-brn-undo.log").exists(), "new undo log must exist");
+    // undo 栈应包含 2 个 batch（迁移 1 + 新 push 1）
+    let history = brn::read_undo_history(dir.path()).unwrap();
+    assert_eq!(history.len(), 2, "undo stack should have 2 batches after migration + push");
+}
+
+// ─── Ph5-8 补充：历史上限 100 ─────────────────────────────────────────────────
+
+#[test]
+fn ph5_8_history_cap_at_100() {
+    use xun::batch_rename::undo::UndoRecord;
+
+    let dir = TempDir::new().unwrap();
+    // push 101 次
+    for i in 0u32..101 {
+        let r = vec![UndoRecord {
+            from: format!("file_{}.txt", i),
+            to: format!("renamed_{}.txt", i),
+        }];
+        brn::push_undo(dir.path(), &r).unwrap();
+    }
+    // undo 栈最多保留 100 条
+    let history = brn::read_undo_history(dir.path()).unwrap();
+    assert!(
+        history.len() <= 100,
+        "undo history must be capped at 100, got {}",
+        history.len()
+    );
+    // 最新的 batch 必须还在（最旧的被丢弃）
+    let last = &history[history.len() - 1];
+    assert_eq!(last.ops[0].from, "file_100.txt", "latest batch must be preserved");
 }

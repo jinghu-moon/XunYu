@@ -19,7 +19,7 @@ use ratatui::{
 };
 
 use crate::batch_rename::types::RenameOp;
-use crate::batch_rename::undo::{UndoRecord, write_undo};
+use crate::batch_rename::undo::{UndoRecord, push_undo};
 use crate::output::{CliError, CliResult};
 
 // ─── Public entry ────────────────────────────────────────────────────────────
@@ -166,7 +166,7 @@ impl App {
         }
 
         if !records.is_empty() {
-            let _ = write_undo(&self.scan_root, &records);
+            let _ = push_undo(&self.scan_root, &records);
         }
 
         self.message = Some((

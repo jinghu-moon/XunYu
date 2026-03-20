@@ -59,8 +59,8 @@ pub mod testing {
         super::compute::compute_ops_chain(files, steps).map_err(|e| e.message)
     }
 
-    pub fn write_undo(dir: &Path, records: &[super::undo::UndoRecord]) -> Result<(), String> {
-        super::undo::write_undo(dir, records).map_err(|e| e.message)
+    pub fn push_undo(dir: &Path, records: &[super::undo::UndoRecord]) -> Result<(), String> {
+        super::undo::push_undo(dir, records).map_err(|e| e.message)
     }
 
     pub fn append_undo(dir: &Path, records: &[super::undo::UndoRecord]) -> Result<(), String> {
@@ -77,6 +77,15 @@ pub mod testing {
 
     pub fn run_undo_steps(dir: &str, steps: usize) -> Result<(), String> {
         super::undo::run_undo_steps(dir, steps).map_err(|e| e.message)
+    }
+
+    pub fn run_redo_steps(dir: &str, steps: usize) -> Result<(), String> {
+        super::undo::run_redo_steps(dir, steps).map_err(|e| e.message)
+    }
+
+    /// 兼容旧测试：write_undo 内部改为 push_undo（追加语义）。
+    pub fn write_undo(dir: &Path, records: &[super::undo::UndoRecord]) -> Result<(), String> {
+        super::undo::push_undo(dir, records).map_err(|e| e.message)
     }
 
     pub fn apply_conflict_strategy(

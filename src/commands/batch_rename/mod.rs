@@ -12,7 +12,7 @@ use crate::batch_rename::compute::{RenameMode, ReplacePair, compute_ops, compute
 use crate::batch_rename::conflict::{ConflictInfo, ConflictKind, detect_conflicts};
 use crate::batch_rename::output_format::{ops_to_csv, ops_to_json};
 use crate::batch_rename::types::CaseStyle;
-use crate::batch_rename::undo::{UndoRecord, run_undo, run_undo_steps, write_undo};
+use crate::batch_rename::undo::{UndoRecord, push_undo, run_redo_steps, run_undo_steps};
 use crate::cli::BrnCmd;
 use crate::output::{CliError, CliResult, apply_pretty_table_style, can_interact, print_table};
 use crate::path_guard::{PathPolicy, validate_paths};
@@ -34,11 +34,12 @@ macro_rules! t_print {
 pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     // Handle `xun brn --undo [N]`
     if let Some(steps) = args.undo {
-        return if steps <= 1 {
-            run_undo(&args.path)
-        } else {
-            run_undo_steps(&args.path, steps)
-        };
+        return run_undo_steps(&args.path, steps.max(1));
+    }
+
+    // Handle `xun brn --redo [N]`
+    if let Some(steps) = args.redo {
+        return run_redo_steps(&args.path, steps.max(1));
     }
 
     let t_total = std::time::Instant::now();
@@ -78,7 +79,7 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     // Collect files (with optional filter/exclude/depth)
     let t0 = std::time::Instant::now();
     let depth = args.depth.map(|d| if d == 0 { 1 } else { d })
-        .or_else(|| if args.recursive { None } else { Some(1) });
+        .or(if args.recursive { None } else { Some(1) });
     let mut files = if args.filter.is_some() || args.exclude.is_some() || args.depth.is_some() {
         collect_files_depth(
             &scan_root,
@@ -618,7 +619,7 @@ fn apply_renames(ops: &[crate::batch_rename::types::RenameOp], scan_root: &std::
     }
 
     if !records.is_empty() {
-        write_undo(scan_root, &records)?;
+        push_undo(scan_root, &records)?;
     }
 
     if fmt == "json" {

@@ -140,11 +140,10 @@ pub(crate) fn check_chars(units: &[u16]) -> Option<PathIssueKind> {
         }
     }
 
-    if qmark_count > 0 {
-        if !has_extended_prefix || qmark_count != 1 || units.get(2) != Some(&QMARK) {
+    if qmark_count > 0
+        && (!has_extended_prefix || qmark_count != 1 || units.get(2) != Some(&QMARK)) {
             return Some(PathIssueKind::InvalidChar);
         }
-    }
 
     None
 }
@@ -161,7 +160,7 @@ pub(crate) fn check_component(component: &[u16], allow_colon: bool) -> Option<Pa
     }
     // 路径组件内的冒号是非法字符（Windows 不允许文件名含冒号）
     // allow_colon=true 时跳过（ADS 已被上层允许）
-    if !allow_colon && component.iter().any(|&u| u == COLON) {
+    if !allow_colon && component.contains(&COLON) {
         return Some(PathIssueKind::InvalidChar);
     }
 
@@ -220,19 +219,17 @@ pub(crate) fn check_string(
     }
     for (idx, &unit) in units.iter().enumerate().skip(start) {
         if unit == SLASH || unit == FSLASH {
-            if idx > start {
-                if let Some(issue) = check_component(&units[start..idx], policy.allow_ads) {
+            if idx > start
+                && let Some(issue) = check_component(&units[start..idx], policy.allow_ads) {
                     return Some(issue);
                 }
-            }
             start = idx + 1;
         }
     }
-    if start < units.len() {
-        if let Some(issue) = check_component(&units[start..], policy.allow_ads) {
+    if start < units.len()
+        && let Some(issue) = check_component(&units[start..], policy.allow_ads) {
             return Some(issue);
         }
-    }
 
     if let Some(base) = &policy.base {
         let joined = base.join(Path::new(raw));

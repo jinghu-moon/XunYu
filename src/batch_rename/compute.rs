@@ -355,15 +355,14 @@ fn mode_strip_brackets(files: &[PathBuf], round: bool, square: bool, curly: bool
 
 /// Remove the first matching bracket pair and content, plus surrounding spaces.
 fn remove_bracket_pair(s: &str, open: char, close: char) -> String {
-    if let Some(start) = s.find(open) {
-        if let Some(end) = s[start..].find(close) {
+    if let Some(start) = s.find(open)
+        && let Some(end) = s[start..].find(close) {
             let end_abs = start + end + close.len_utf8();
             // Also consume leading/trailing spaces around the bracket
             let before = s[..start].trim_end();
             let after = s[end_abs..].trim_start();
             return format!("{} {}", before, after).trim().to_owned();
         }
-    }
     s.to_owned()
 }
 

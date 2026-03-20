@@ -175,4 +175,8 @@ pub struct BrnCmd {
     /// undo the last N rename operations in the target directory (default: 1)
     #[argh(option)]
     pub undo: Option<usize>,
+
+    /// redo the last N undone rename operations in the target directory (default: 1)
+    #[argh(option)]
+    pub redo: Option<usize>,
 }

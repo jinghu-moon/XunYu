@@ -163,10 +163,9 @@ fn gen_tmp_name(base: &str, avoid: &HashSet<String>, cycle_idx: usize) -> String
     }
     // Preserve the directory part of base if present
     let base_path = PathBuf::from(base);
-    if let Some(parent) = base_path.parent() {
-        if parent != std::path::Path::new("") {
+    if let Some(parent) = base_path.parent()
+        && parent != std::path::Path::new("") {
             return parent.join(&candidate).to_string_lossy().into_owned();
         }
-    }
     candidate
 }

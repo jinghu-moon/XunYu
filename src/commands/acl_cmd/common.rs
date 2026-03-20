@@ -141,8 +141,8 @@ pub(super) fn validate_acl_path(
         return Err(CliError::new(2, "No valid path provided."));
     };
 
-    if open {
-        if let Err(kind) = crate::path_guard::winapi::open_path_with_policy(&path, &policy) {
+    if open
+        && let Err(kind) = crate::path_guard::winapi::open_path_with_policy(&path, &policy) {
             let detail = match kind {
                 PathIssueKind::NotFound => "Path not found.",
                 PathIssueKind::AccessDenied => "Access denied.",
@@ -158,7 +158,6 @@ pub(super) fn validate_acl_path(
                 &[format!("Invalid {label} path: {detail}")],
             ));
         }
-    }
 
     Ok(path)
 }
