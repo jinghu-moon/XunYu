@@ -17,7 +17,7 @@ pub(crate) fn collect_files(
 
     let max_depth = if recursive { usize::MAX } else { 1 };
 
-    let mut files: Vec<PathBuf> = WalkDir::new(&root)
+    let files: Vec<PathBuf> = WalkDir::new(&root)
         .min_depth(1)
         .max_depth(max_depth)
         .follow_links(false)
@@ -29,7 +29,6 @@ pub(crate) fn collect_files(
         .filter(|p| ext_matches(p, exts))
         .collect();
 
-    files.sort();
     Ok(files)
 }
 

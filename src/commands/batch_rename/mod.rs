@@ -16,15 +16,34 @@ use crate::cli::BrnCmd;
 use crate::output::{CliError, CliResult, apply_pretty_table_style, can_interact, print_table};
 use crate::path_guard::{PathPolicy, validate_paths};
 
+/// 当 `XUN_BRN_TIMING=1` 时输出各环节耗时到 stderr
+#[inline]
+fn timing_enabled() -> bool {
+    std::env::var("XUN_BRN_TIMING").as_deref() == Ok("1")
+}
+
+macro_rules! t_print {
+    ($($arg:tt)*) => {
+        if timing_enabled() {
+            eprintln!("[timing] {}", format_args!($($arg)*));
+        }
+    }
+}
+
 pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
-    // Handle `xun brn undo`
-    if args.path == "undo" {
-        return cmd_brn_undo();
+    // Handle `xun brn --undo`
+    if args.undo {
+        return cmd_brn_undo(&args.path);
     }
 
-    // Resolve rename mode
-    let mode = resolve_mode(&args)?;
+    let t_total = std::time::Instant::now();
 
+    // Resolve rename mode
+    let t0 = std::time::Instant::now();
+    let mode = resolve_mode(&args)?;
+    t_print!("resolve_mode: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
+
+    let t0 = std::time::Instant::now();
     let mut policy = if args.apply {
         PathPolicy::for_write()
     } else {
@@ -32,6 +51,7 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     };
     policy.allow_relative = true;
     let validation = validate_paths(vec![args.path.clone()], &policy);
+    t_print!("validate_path: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
     if !validation.issues.is_empty() {
         let details: Vec<String> = validation
             .issues
@@ -51,24 +71,42 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
         .unwrap_or_else(|| args.path.clone());
 
     // Collect files
+    let t0 = std::time::Instant::now();
     let files = collect_files(&scan_root, &args.ext, args.recursive)?;
+    t_print!("collect_files: {:.2}ms (n={})", t0.elapsed().as_secs_f64() * 1000.0, files.len());
     if files.is_empty() {
         ui_println!("No matching files found in '{}'.", scan_root);
         return Ok(());
     }
 
     // Compute rename operations
+    let t0 = std::time::Instant::now();
     let ops = compute_ops(&files, &mode)?;
+    t_print!("compute_ops: {:.2}ms (n={})", t0.elapsed().as_secs_f64() * 1000.0, ops.len());
 
     // Filter out no-ops (from == to)
-    let ops: Vec<_> = ops.into_iter().filter(|o| o.from != o.to).collect();
+    let t0 = std::time::Instant::now();
+    let (effective_ops, noop_ops): (Vec<_>, Vec<_>) = ops.into_iter().partition(|o| o.from != o.to);
+    let ops = effective_ops;
+    t_print!("filter_noop: {:.2}ms (effective={} skipped={})", t0.elapsed().as_secs_f64() * 1000.0, ops.len(), noop_ops.len());
+
+    // Warn about strip_prefix no-ops
+    if matches!(mode, RenameMode::StripPrefix(_)) && !noop_ops.is_empty() {
+        ui_println!("Warning: {} file(s) did not have the prefix and were skipped:", noop_ops.len());
+        for op in &noop_ops {
+            ui_println!("  {}", op.from.file_name().and_then(|n| n.to_str()).unwrap_or("?"));
+        }
+    }
+
     if ops.is_empty() {
         ui_println!("All files already match the target pattern. Nothing to rename.");
         return Ok(());
     }
 
     // Conflict detection
-    let conflicts = detect_conflicts(&ops);
+    let t0 = std::time::Instant::now();
+    let conflicts = detect_conflicts(&ops, args.apply);
+    t_print!("detect_conflicts: {:.2}ms (conflicts={})", t0.elapsed().as_secs_f64() * 1000.0, conflicts.len());
     if !conflicts.is_empty() {
         ui_println!("Conflicts detected:");
         for c in &conflicts {
@@ -86,21 +124,29 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
                 return Ok(());
             }
         }
-        apply_renames(&ops)
+        let t0 = std::time::Instant::now();
+        let r = apply_renames(&ops, std::path::Path::new(&scan_root));
+        t_print!("apply_renames: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
+        t_print!("cmd_brn total: {:.2}ms", t_total.elapsed().as_secs_f64() * 1000.0);
+        r
     } else {
         #[cfg(feature = "tui")]
         {
             if can_interact() {
-                return tui::run_brn_tui(ops);
+                t_print!("cmd_brn total (pre-tui): {:.2}ms", t_total.elapsed().as_secs_f64() * 1000.0);
+                return tui::run_brn_tui(ops, std::path::PathBuf::from(&scan_root));
             }
         }
+        let t0 = std::time::Instant::now();
         preview_table(&ops, false);
+        t_print!("preview_table: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
+        t_print!("cmd_brn total: {:.2}ms", t_total.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
 }
 
-pub(crate) fn cmd_brn_undo() -> CliResult {
-    run_undo()
+pub(crate) fn cmd_brn_undo(dir: &str) -> CliResult {
+    run_undo(dir)
 }
 
 // ─── Mode resolution ─────────────────────────────────────────────────────────
@@ -192,6 +238,13 @@ fn preview_table(ops: &[crate::batch_rename::types::RenameOp], will_apply: bool)
         );
     }
 
+    const MAX_PREVIEW_ROWS: usize = 200;
+    let display_ops = if ops.len() > MAX_PREVIEW_ROWS {
+        &ops[..MAX_PREVIEW_ROWS]
+    } else {
+        ops
+    };
+
     let mut table = Table::new();
     apply_pretty_table_style(&mut table);
     table.set_header(vec![
@@ -200,7 +253,7 @@ fn preview_table(ops: &[crate::batch_rename::types::RenameOp], will_apply: bool)
         Cell::new("To").fg(Color::Cyan),
     ]);
 
-    for op in ops {
+    for op in display_ops {
         let from_name = filename_str(&op.from);
         let to_name = filename_str(&op.to);
         table.add_row(vec![
@@ -211,6 +264,15 @@ fn preview_table(ops: &[crate::batch_rename::types::RenameOp], will_apply: bool)
     }
 
     print_table(&table);
+
+    if ops.len() > MAX_PREVIEW_ROWS {
+        ui_println!(
+            "... and {} more (showing first {} of {}). Use --apply -y to execute all.",
+            ops.len() - MAX_PREVIEW_ROWS,
+            MAX_PREVIEW_ROWS,
+            ops.len()
+        );
+    }
 
     if !will_apply {
         ui_println!("\nRun with --apply to execute.");
@@ -231,7 +293,7 @@ fn confirm_apply(count: usize) -> CliResult<bool> {
 
 // ─── Apply ───────────────────────────────────────────────────────────────────
 
-fn apply_renames(ops: &[crate::batch_rename::types::RenameOp]) -> CliResult {
+fn apply_renames(ops: &[crate::batch_rename::types::RenameOp], scan_root: &std::path::Path) -> CliResult {
     let mut records: Vec<UndoRecord> = Vec::new();
     let mut success = 0usize;
     let mut errors = 0usize;
@@ -254,12 +316,12 @@ fn apply_renames(ops: &[crate::batch_rename::types::RenameOp]) -> CliResult {
     }
 
     if !records.is_empty() {
-        write_undo(&records)?;
+        write_undo(scan_root, &records)?;
     }
 
     ui_println!("\n{} renamed, {} failed.", success, errors);
     if !records.is_empty() {
-        ui_println!("Undo: xun brn undo");
+        ui_println!("Undo: xun brn {} --undo", scan_root.display());
     }
 
     if errors > 0 {

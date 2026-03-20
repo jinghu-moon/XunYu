@@ -7,13 +7,15 @@ use std::path::PathBuf;
 
 use crate::batch_rename::types::RenameOp;
 
-pub(crate) fn detect_conflicts(ops: &[RenameOp]) -> Vec<String> {
+/// 检测冲突。
+/// - `check_existing`：是否检查目标文件已存在（apply 模式需要，dry-run 可跳过以减少 stat 调用）
+pub(crate) fn detect_conflicts(ops: &[RenameOp], check_existing: bool) -> Vec<String> {
     let mut errors = Vec::new();
     let mut seen_targets: HashSet<&PathBuf> = HashSet::new();
     let sources: HashSet<&PathBuf> = ops.iter().map(|o| &o.from).collect();
 
     for op in ops {
-        if op.to.exists() && !sources.contains(&op.to) {
+        if check_existing && op.to.exists() && !sources.contains(&op.to) {
             errors.push(format!(
                 "Target already exists: {} (would overwrite)",
                 op.to.display()

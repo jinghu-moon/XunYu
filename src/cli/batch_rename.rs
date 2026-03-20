@@ -66,4 +66,8 @@ pub struct BrnCmd {
     /// skip confirmation prompt (requires --apply)
     #[argh(switch, short = 'y')]
     pub yes: bool,
+
+    /// undo the last rename operation in the target directory
+    #[argh(switch)]
+    pub undo: bool,
 }

@@ -1,5 +1,7 @@
 // batch_rename/undo.rs
 
+use std::path::Path;
+
 use crate::output::{CliError, CliResult};
 use serde::{Deserialize, Serialize};
 
@@ -11,19 +13,28 @@ pub(crate) struct UndoRecord {
     pub to: String,
 }
 
-pub(crate) fn write_undo(records: &[UndoRecord]) -> CliResult {
+/// 将 undo 记录写入指定目录下的 undo 文件
+pub(crate) fn write_undo(dir: &Path, records: &[UndoRecord]) -> CliResult {
+    let path = dir.join(UNDO_FILE);
     let json = serde_json::to_string_pretty(records)
         .map_err(|e| CliError::new(1, format!("Failed to serialize undo: {}", e)))?;
-    std::fs::write(UNDO_FILE, json)
-        .map_err(|e| CliError::new(1, format!("Failed to write {}: {}", UNDO_FILE, e)))?;
+    std::fs::write(&path, json)
+        .map_err(|e| CliError::new(1, format!("Failed to write {}: {}", path.display(), e)))?;
     Ok(())
 }
 
-pub(crate) fn run_undo() -> CliResult {
-    let data = std::fs::read_to_string(UNDO_FILE).map_err(|_| {
+/// 从指定目录下读取 undo 文件并执行回滚
+pub(crate) fn run_undo(dir: &str) -> CliResult {
+    let undo_path = if dir == "." {
+        std::path::PathBuf::from(UNDO_FILE)
+    } else {
+        std::path::Path::new(dir).join(UNDO_FILE)
+    };
+
+    let data = std::fs::read_to_string(&undo_path).map_err(|_| {
         CliError::new(
             1,
-            format!("Undo file '{}' not found. Nothing to undo.", UNDO_FILE),
+            format!("Undo file '{}' not found. Nothing to undo.", undo_path.display()),
         )
     })?;
     let records: Vec<UndoRecord> = serde_json::from_str(&data)
@@ -54,7 +65,7 @@ pub(crate) fn run_undo() -> CliResult {
     ui_println!("\n{} restored, {} failed.", success, errors);
 
     if errors == 0 {
-        let _ = std::fs::remove_file(UNDO_FILE);
+        let _ = std::fs::remove_file(&undo_path);
         ui_println!("Undo file removed.");
     }
 

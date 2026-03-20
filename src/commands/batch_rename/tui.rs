@@ -24,7 +24,7 @@ use crate::output::{CliError, CliResult};
 
 // ─── Public entry ────────────────────────────────────────────────────────────
 
-pub(crate) fn run_brn_tui(ops: Vec<RenameOp>) -> CliResult {
+pub(crate) fn run_brn_tui(ops: Vec<RenameOp>, scan_root: std::path::PathBuf) -> CliResult {
     enable_raw_mode().map_err(|e| CliError::new(1, format!("TUI init: {}", e)))?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen)
@@ -33,7 +33,7 @@ pub(crate) fn run_brn_tui(ops: Vec<RenameOp>) -> CliResult {
     let mut term =
         Terminal::new(backend).map_err(|e| CliError::new(1, format!("TUI init: {}", e)))?;
 
-    let result = App::new(ops).run(&mut term);
+    let result = App::new(ops, scan_root).run(&mut term);
 
     let _ = disable_raw_mode();
     let _ = execute!(term.backend_mut(), LeaveAlternateScreen);
@@ -50,10 +50,11 @@ struct App {
     list_state: ListState,
     show_confirm: bool,
     message: Option<(String, bool)>,
+    scan_root: std::path::PathBuf,
 }
 
 impl App {
-    fn new(ops: Vec<RenameOp>) -> Self {
+    fn new(ops: Vec<RenameOp>, scan_root: std::path::PathBuf) -> Self {
         let n = ops.len();
         let mut list_state = ListState::default();
         if n > 0 {
@@ -65,6 +66,7 @@ impl App {
             list_state,
             show_confirm: false,
             message: None,
+            scan_root,
         }
     }
 
@@ -164,11 +166,11 @@ impl App {
         }
 
         if !records.is_empty() {
-            let _ = write_undo(&records);
+            let _ = write_undo(&self.scan_root, &records);
         }
 
         self.message = Some((
-            format!("{} renamed, {} failed. Undo: xun brn undo", success, errors),
+            format!("{} renamed, {} failed. Undo: xun brn {} --undo", success, errors, self.scan_root.display()),
             errors > 0,
         ));
     }
