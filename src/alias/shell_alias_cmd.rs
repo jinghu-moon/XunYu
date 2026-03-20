@@ -23,6 +23,7 @@ pub(super) fn cmd_setup(ctx: &AliasCtx, args: AliasSetupCmd) -> Result<()> {
 }
 
 pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
+    let t_total = std::time::Instant::now();
     let mut cfg = ctx.load()?;
     config::validate_alias_name(&args.name)?;
     if cfg.name_exists(&args.name) && !args.force {
@@ -52,6 +53,7 @@ pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
         ctx.sync_shell_alias_shim(&args.name, alias)?;
     }
     ctx.sync_shells(&cfg, None)?;
+    context::t_print_total("cmd_add", t_total);
     ui_println!("Alias added.");
     Ok(())
 }
@@ -95,6 +97,7 @@ pub(super) fn cmd_export(ctx: &AliasCtx, args: AliasExportCmd) -> Result<()> {
 }
 
 pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
+    let t_total = std::time::Instant::now();
     let text =
         fs::read_to_string(&args.file).with_context(|| format!("Failed to read {}", args.file))?;
     let src: Config =
@@ -147,6 +150,7 @@ pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
     ctx.save(&dst)?;
     ctx.sync_selected_shims(&touched_entries)?;
     ctx.sync_shells(&dst, None)?;
+    context::t_print_total("cmd_import", t_total);
     ui_println!("Imported aliases: added={added}, skipped={skipped}");
     Ok(())
 }

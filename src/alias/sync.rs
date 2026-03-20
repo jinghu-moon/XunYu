@@ -2,10 +2,12 @@ use super::context::AliasCtx;
 use super::*;
 
 pub(super) fn cmd_sync(ctx: &AliasCtx) -> Result<()> {
+    let t_total = std::time::Instant::now();
     let cfg = ctx.load()?;
     ctx.sync_shims(&cfg)?;
     ctx.sync_shells(&cfg, None)?;
     let (registered, removed) = apppaths::sync_apppaths(&cfg)?;
+    context::t_print_total("cmd_sync", t_total);
     ui_println!("App Paths synced: +{registered} / -{removed}");
     Ok(())
 }

@@ -1,5 +1,27 @@
 use super::*;
 
+/// 当 `XUN_ALIAS_TIMING=1` 时输出计时信息到 stderr
+#[inline]
+fn timing_enabled() -> bool {
+    std::env::var("XUN_ALIAS_TIMING").as_deref() == Ok("1")
+}
+
+macro_rules! t_print {
+    ($($arg:tt)*) => {
+        if timing_enabled() {
+            eprintln!("[timing] {}", format_args!($($arg)*));
+        }
+    }
+}
+
+/// 供同级模块调用的总耗时打印
+#[inline]
+pub(super) fn t_print_total(label: &str, t0: std::time::Instant) {
+    if timing_enabled() {
+        eprintln!("[timing] {label}: total={:.1}ms", t0.elapsed().as_secs_f64() * 1000.0);
+    }
+}
+
 pub(super) struct AliasCtx {
     pub(super) config_path: PathBuf,
     pub(super) shims_dir: PathBuf,
@@ -29,21 +51,43 @@ impl AliasCtx {
     }
 
     pub(super) fn load(&self) -> Result<Config> {
-        config::load(&self.config_path)
+        let t0 = std::time::Instant::now();
+        let r = config::load(&self.config_path);
+        t_print!("load: total={:.1}ms", t0.elapsed().as_secs_f64() * 1000.0);
+        r
     }
 
     pub(super) fn save(&self, cfg: &Config) -> Result<()> {
-        config::save(&self.config_path, cfg)
+        let t0 = std::time::Instant::now();
+        let r = config::save(&self.config_path, cfg);
+        t_print!("save: total={:.1}ms", t0.elapsed().as_secs_f64() * 1000.0);
+        r
     }
 
     pub(super) fn sync_shims(&self, cfg: &Config) -> Result<()> {
+        let t0 = std::time::Instant::now();
         let entries = shim_gen::config_to_sync_entries(cfg);
+        let t_entries = t0.elapsed();
+
+        let t1 = std::time::Instant::now();
         let report = shim_gen::sync_all(
             &entries,
             &self.shims_dir,
             &self.template_path,
             &self.template_gui_path,
         )?;
+        let t_sync = t1.elapsed();
+
+        t_print!(
+            "sync_shims: entries={:.1}ms sync={:.1}ms total={:.1}ms (n={} created={} removed={} errors={})",
+            t_entries.as_secs_f64() * 1000.0,
+            t_sync.as_secs_f64() * 1000.0,
+            t0.elapsed().as_secs_f64() * 1000.0,
+            entries.len(),
+            report.created.len(),
+            report.removed.len(),
+            report.errors.len()
+        );
         for (name, err) in report.errors {
             ui_println!("Warning: shim sync failed [{name}]: {err}");
         }
@@ -51,12 +95,21 @@ impl AliasCtx {
     }
 
     pub(super) fn sync_selected_shims(&self, entries: &[shim_gen::SyncEntry]) -> Result<()> {
+        let t0 = std::time::Instant::now();
         let report = shim_gen::sync_entries(
             entries,
             &self.shims_dir,
             &self.template_path,
             &self.template_gui_path,
         )?;
+        t_print!(
+            "sync_selected_shims: total={:.1}ms (n={} created={} removed={} errors={})",
+            t0.elapsed().as_secs_f64() * 1000.0,
+            entries.len(),
+            report.created.len(),
+            report.removed.len(),
+            report.errors.len()
+        );
         for (name, err) in report.errors {
             ui_println!("Warning: shim sync failed [{name}]: {err}");
         }
@@ -110,11 +163,15 @@ impl AliasCtx {
             let _ = (skip_bash, skip_nu);
         }
 
+        let t_shells = std::time::Instant::now();
         for (enabled, backend) in backends {
             if !enabled {
                 continue;
             }
-            match backend.update(cfg) {
+            let t_b = std::time::Instant::now();
+            let result = backend.update(cfg);
+            t_print!("sync_shells: {}={:.1}ms", backend.name(), t_b.elapsed().as_secs_f64() * 1000.0);
+            match result {
                 Ok(shell::UpdateResult::Written { path }) => {
                     ui_println!("Updated {} profile: {}", backend.name(), path.display());
                 }
@@ -126,6 +183,7 @@ impl AliasCtx {
                 }
             }
         }
+        t_print!("sync_shells: total={:.1}ms", t_shells.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
 }

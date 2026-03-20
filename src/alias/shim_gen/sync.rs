@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::io::{atomic_write_bytes, files_equal, files_equal_path, link_template};
+use super::io::{atomic_write_bytes, files_equal, files_equal_path, link_template, same_file_index};
 use super::render::{is_gui_exe_path, shell_alias_to_shim_with_template};
 use super::*;
 
@@ -80,7 +80,7 @@ fn create_shim_with_cache(
         && fs::read_to_string(&shim_path)
             .map(|v| v == shim_content)
             .unwrap_or(false)
-        && files_equal(&exe_path, template.bytes.as_slice())
+        && (same_file_index(&exe_path, template.path) || files_equal(&exe_path, template.bytes.as_slice()))
     {
         return Ok(());
     }

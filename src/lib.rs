@@ -43,7 +43,7 @@ mod diff;
 mod cstat;
 
 #[cfg(feature = "batch_rename")]
-mod batch_rename;
+pub mod batch_rename;
 
 #[cfg(feature = "img")]
 mod img;
