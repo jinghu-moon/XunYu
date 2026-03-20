@@ -193,3 +193,43 @@ pub fn sort_files_by(files: &mut Vec<PathBuf>, by: SortBy) {
         }
     }
 }
+
+/// Collect directories (non-recursively or up to `depth`) matching filter/exclude globs.
+/// When `include_files` is false, returns only directories; when true, returns both.
+pub fn collect_dirs_depth(
+    path: &str,
+    depth: Option<usize>,
+    filter: Option<&str>,
+    exclude: Option<&str>,
+) -> CliResult<Vec<PathBuf>> {
+    let root = dunce::canonicalize(path)
+        .map_err(|e| CliError::new(1, format!("Cannot access directory '{}': {}", path, e)))?;
+
+    let max_depth = depth.unwrap_or(1);
+
+    let filter_matcher: Option<GlobMatcher> = filter
+        .map(|pat| Glob::new(pat).map(|g| g.compile_matcher()))
+        .transpose()
+        .map_err(|e| CliError::new(1, format!("Invalid filter glob: {}", e)))?;
+
+    let exclude_matcher: Option<GlobMatcher> = exclude
+        .map(|pat| Glob::new(pat).map(|g| g.compile_matcher()))
+        .transpose()
+        .map_err(|e| CliError::new(1, format!("Invalid exclude glob: {}", e)))?;
+
+    let mut dirs: Vec<PathBuf> = WalkDir::new(&root)
+        .min_depth(1)
+        .max_depth(max_depth)
+        .follow_links(false)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_dir())
+        .map(|e| e.into_path())
+        .filter(|p| glob_filter(p, &filter_matcher))
+        .filter(|p| !glob_exclude(p, &exclude_matcher))
+        .collect();
+
+    dirs.sort_unstable();
+    Ok(dirs)
+}

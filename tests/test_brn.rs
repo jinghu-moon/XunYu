@@ -1852,3 +1852,140 @@ fn chain_three_steps() {
     assert_eq!(ops.len(), 1);
     assert_eq!(ops[0].to.file_name().unwrap(), "NEW_REPORT.txt");
 }
+
+#[test]
+fn chain_regex_then_prefix() {
+    // regex replace digits then prefix: "photo123.jpg" → "photo" → "img_photo.jpg"
+    use std::path::PathBuf;
+    let files = vec![PathBuf::from("/dir/photo123.jpg")];
+    let steps = vec![
+        RenameMode::Regex { pattern: r"\d+".into(), replace: "".into() },
+        RenameMode::Prefix("img_".into()),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "img_photo.jpg");
+}
+
+#[test]
+fn chain_trim_then_snake() {
+    // trim spaces then snake case: "  My Document  .txt" → "My Document" → "my_document.txt"
+    use std::path::PathBuf;
+    let files = vec![PathBuf::from("/dir/  My Document  .txt")];
+    let steps = vec![
+        RenameMode::Trim { chars: None },
+        RenameMode::Case(CaseStyle::Snake),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "my_document.txt");
+}
+
+#[test]
+fn chain_strip_brackets_then_trim_then_kebab() {
+    // real-world: "Song Title (2024) [Official].mp3" → "Song Title  " → "Song Title" → "song-title.mp3"
+    use std::path::PathBuf;
+    let files = vec![PathBuf::from("/dir/Song Title (2024) [Official].mp3")];
+    let steps = vec![
+        RenameMode::StripBrackets { round: true, square: true, curly: false },
+        RenameMode::Trim { chars: None },
+        RenameMode::Case(CaseStyle::Kebab),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "song-title.mp3");
+}
+
+#[test]
+fn chain_multi_replace() {
+    // two replace steps: spaces→underscore, then parentheses→empty
+    // "my file (copy).txt" → "my_file_(copy)" → "my_file_.txt"
+    use std::path::PathBuf;
+    use xun::batch_rename::compute::ReplacePair;
+    let files = vec![PathBuf::from("/dir/my file (copy).txt")];
+    let steps = vec![
+        RenameMode::Replace(vec![ReplacePair { from: " ".into(), to: "_".into() }]),
+        RenameMode::Replace(vec![
+            ReplacePair { from: "(".into(), to: "".into() },
+            ReplacePair { from: ")".into(), to: "".into() },
+            ReplacePair { from: "copy".into(), to: "".into() },
+        ]),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "my_file_.txt");
+}
+
+#[test]
+fn chain_ext_case_with_case() {
+    // case kebab on stem + ext_case lower: "MyPhoto.JPG" → "my-photo.JPG" → "my-photo.jpg"
+    use std::path::PathBuf;
+    let files = vec![PathBuf::from("/dir/MyPhoto.JPG")];
+    let steps = vec![
+        RenameMode::Case(CaseStyle::Kebab),
+        RenameMode::ExtCase(CaseStyle::Lower),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "my-photo.jpg");
+}
+
+#[test]
+fn chain_seq_with_prefix() {
+    // seq then prefix: ["a.txt","b.txt"] → ["a_001","b_002"] → ["img_a_001","img_b_002"]
+    use std::path::PathBuf;
+    let files = vec![
+        PathBuf::from("/dir/a.txt"),
+        PathBuf::from("/dir/b.txt"),
+    ];
+    let steps = vec![
+        RenameMode::SeqExt { start: 1, pad: 3, prefix: false, only: false },
+        RenameMode::Prefix("img_".into()),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "img_a_001.txt");
+    assert_eq!(ops[1].to.file_name().unwrap(), "img_b_002.txt");
+}
+
+#[test]
+fn chain_noop_step_passthrough() {
+    // a noop step (replace non-existent string) should pass through unchanged
+    use std::path::PathBuf;
+    use xun::batch_rename::compute::ReplacePair;
+    let files = vec![PathBuf::from("/dir/hello.txt")];
+    let steps = vec![
+        RenameMode::Replace(vec![ReplacePair { from: "NOTFOUND".into(), to: "x".into() }]),
+        RenameMode::Suffix("_end".into()),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "hello_end.txt");
+}
+
+#[test]
+fn chain_multiple_files_independent() {
+    // each file processed independently through all steps
+    use std::path::PathBuf;
+    use xun::batch_rename::compute::ReplacePair;
+    let files = vec![
+        PathBuf::from("/dir/file one.txt"),
+        PathBuf::from("/dir/file two.txt"),
+        PathBuf::from("/dir/file three.txt"),
+    ];
+    let steps = vec![
+        RenameMode::Replace(vec![ReplacePair { from: " ".into(), to: "-".into() }]),
+        RenameMode::Case(CaseStyle::Upper),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].to.file_name().unwrap(), "FILE-ONE.txt");
+    assert_eq!(ops[1].to.file_name().unwrap(), "FILE-TWO.txt");
+    assert_eq!(ops[2].to.file_name().unwrap(), "FILE-THREE.txt");
+}
+
+#[test]
+fn chain_from_keeps_original() {
+    // chain should always keep original `from`, not intermediate path
+    use std::path::PathBuf;
+    let files = vec![PathBuf::from("/dir/original.txt")];
+    let steps = vec![
+        RenameMode::Prefix("step1_".into()),
+        RenameMode::Prefix("step2_".into()),
+    ];
+    let ops = brn::compute_ops_chain(&files, &steps).unwrap();
+    assert_eq!(ops[0].from, files[0], "from must be original file");
+    assert_eq!(ops[0].to.file_name().unwrap(), "step2_step1_original.txt");
+}
