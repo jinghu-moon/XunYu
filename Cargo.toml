@@ -53,7 +53,7 @@ dashboard = ["crypt", "dep:axum", "dep:tokio", "dep:rust-embed", "dep:mime_guess
 redirect = []
 tui = ["dep:ratatui", "dep:crossterm"]
 delete_tui = ["tui"]
-batch_rename = ["tui", "dep:heck", "dep:walkdir"]
+batch_rename = ["tui", "dep:heck", "dep:walkdir", "dep:globset", "dep:unicode-normalization"]
 cstat = ["tui", "dep:ignore", "dep:blake3"]
 img = [
     "dep:imagequant",
@@ -183,6 +183,8 @@ crossterm = { version = "0.28", optional = true }
 # —— batch_rename 模块依赖（feature = "batch_rename"）——
 heck    = { version = "0.5", optional = true }
 walkdir = { version = "2",   optional = true }
+globset = { version = "0.4", optional = true }
+unicode-normalization = { version = "0.1", optional = true }
 
 # —— cstat 模块依赖（feature = "cstat"）——
 ignore  = { version = "0.4", optional = true }
@@ -238,3 +240,8 @@ harness = false
 [[bench]]
 name = "alias_bench_divan"
 harness = false
+
+[[bench]]
+name = "brn_bench_divan"
+harness = false
+required-features = ["batch_rename"]

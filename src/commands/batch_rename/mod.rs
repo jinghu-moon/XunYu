@@ -202,9 +202,11 @@ fn resolve_mode(args: &BrnCmd) -> CliResult<RenameMode> {
         return Ok(RenameMode::StripPrefix(s.clone()));
     }
     if args.seq {
-        return Ok(RenameMode::Seq {
+        return Ok(RenameMode::SeqExt {
             start: args.start,
             pad: args.pad,
+            prefix: false,
+            only: false,
         });
     }
 

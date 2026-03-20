@@ -1,19 +1,22 @@
 // batch_rename/types.rs
 
 use std::path::PathBuf;
+use serde::Serialize;
 
 /// One rename operation: original path → new path.
-pub(crate) struct RenameOp {
+#[derive(Clone, Serialize)]
+pub struct RenameOp {
     pub from: PathBuf,
     pub to: PathBuf,
 }
 
 /// Naming convention styles.
 #[derive(Clone, Debug)]
-pub(crate) enum CaseStyle {
+pub enum CaseStyle {
     Kebab,
     Snake,
     Pascal,
     Upper,
     Lower,
+    Title,
 }
