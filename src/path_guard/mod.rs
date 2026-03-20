@@ -201,8 +201,7 @@ pub(crate) fn validate_paths_serial(
     let trace_before = trace_snapshot_if_enabled();
     let (inputs, deduped) = dedupe_inputs(raw_inputs);
     let total = inputs.len();
-    let mut out = PathValidationResult::default();
-    out.deduped = deduped;
+    let mut out = PathValidationResult { deduped, ..Default::default() };
 
     let cwd_snapshot = if policy.allow_relative {
         policy.cwd_snapshot.clone().or_else(current_dir_safe)
@@ -324,14 +323,13 @@ fn validate_single_inner(
 
     if probe_any || policy.must_exist {
         let probe_timer = trace_stage_start(TraceStage::Probe);
-        if policy.must_exist && policy.allow_reparse {
-            if let Ok(handle) = winapi::open_path_with_policy(&info.path, policy) {
+        if policy.must_exist && policy.allow_reparse
+            && let Ok(handle) = winapi::open_path_with_policy(&info.path, policy) {
                 if let Ok(tag_info) = winapi::get_attribute_tag_info(&handle) {
                     attr_from_handle = Some(tag_info.FileAttributes);
                 }
                 handle_for_canonical = Some(handle);
             }
-        }
 
         if probe_any {
             if let Some(attr) = attr_from_handle {
@@ -378,11 +376,10 @@ fn validate_single_inner(
 
     if policy.must_exist && policy.allow_reparse {
         let canonical_timer = trace_stage_start(TraceStage::Canonical);
-        if let Some(handle) = handle_for_canonical {
-            if let Ok(final_path) = winapi::get_final_path(&handle) {
+        if let Some(handle) = handle_for_canonical
+            && let Ok(final_path) = winapi::get_final_path(&handle) {
                 info.canonical = Some(final_path);
             }
-        }
         trace_stage_end(TraceStage::Canonical, canonical_timer);
     }
 
@@ -532,7 +529,7 @@ fn normalize_for_dedupe_in_place(units: &mut Vec<u16>) {
             *unit = SLASH;
         }
         if (b'A' as u16..=b'Z' as u16).contains(unit) {
-            *unit = *unit + 32;
+            *unit += 32;
         }
     }
     trim_trailing_backslash(units);
@@ -748,7 +745,7 @@ fn detail_for(kind: PathIssueKind) -> &'static str {
 }
 
 fn contains_unit(units: &[u16], target: u16) -> bool {
-    units.iter().any(|&unit| unit == target)
+    units.contains(&target)
 }
 
 fn ascii_lower_os(value: &OsStr) -> Option<Vec<u16>> {

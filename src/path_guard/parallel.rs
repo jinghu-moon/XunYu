@@ -53,8 +53,7 @@ fn validate_paths_parallel(
     let inputs = Arc::new(inputs);
     let use_workers = policy.must_exist || policy.safety_check;
 
-    let mut out = PathValidationResult::default();
-    out.deduped = deduped;
+    let mut out = PathValidationResult { deduped, ..Default::default() };
     if total == 0 {
         return out;
     }
@@ -94,8 +93,7 @@ fn validate_paths_parallel(
         })
         .collect();
 
-    let mut work_items: Vec<WorkItem> = Vec::new();
-    work_items.reserve(stage_results.len());
+    let mut work_items: Vec<WorkItem> = Vec::with_capacity(stage_results.len());
     for (idx, result) in stage_results.into_iter().enumerate() {
         match result {
             StageAResult::Ok(path) => ok_slots[idx] = Some(path),
