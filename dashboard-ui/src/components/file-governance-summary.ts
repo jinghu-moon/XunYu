@@ -1,6 +1,6 @@
 ﻿import type { TaskProcessOutput } from '../types'
 
-import type { TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
+import type { TaskFormState, WorkspaceTaskDefinition } from '../features/tasks'
 
 
 

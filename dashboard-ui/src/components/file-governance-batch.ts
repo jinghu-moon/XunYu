@@ -6,8 +6,8 @@
   StatisticsWorkspaceLinkPayload,
   TaskProcessOutput,
 } from '../types'
-import type { TaskFieldDefinition, TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
-import { filesSecurityTaskGroups } from '../workspace-tools'
+import type { TaskFieldDefinition, TaskFormState, WorkspaceTaskDefinition } from '../features/tasks'
+import { filesSecurityTaskGroups } from '../features/tasks'
 import { resolveDiagnosticsGovernanceFamilyFromAction } from './statistics-diagnostics-focus'
 
 export type BatchGovernanceActionId =

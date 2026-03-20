@@ -1,53 +1,30 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
-import type { RecentTasksFocusRequest, StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
-import { desktopControlTaskGroups } from '../../workspace-tools'
+import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
+import { desktopControlTaskGroups } from '../../features/tasks'
+import { useRecentTasksBridge } from '../../features/workspaces/use-recent-tasks-bridge'
+import type { TaskPresetMap } from '../../features/workspaces/task-presets'
+import { useTaskToolboxPresets } from '../../features/workspaces/use-task-toolbox-presets'
 import RecentTasksPanel from '../RecentTasksPanel.vue'
 import RecipePanel from '../RecipePanel.vue'
 import TaskToolbox from '../TaskToolbox.vue'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
 
-type TaskPresetMap = Record<string, Partial<Record<string, string | boolean>>>
-
 const emit = defineEmits<{
   (event: 'link-panel', payload: StatisticsWorkspaceLinkPayload): void
 }>()
 
-const recentTasksFocus = ref<RecentTasksFocusRequest | null>(null)
-const recentTasksFocusKey = ref(0)
-const recentTasksAnchor = ref<HTMLElement | null>(null)
-const toolboxAnchor = ref<HTMLElement | null>(null)
-const taskPresets = ref<TaskPresetMap | null>(null)
-const presetVersion = ref(0)
+const { recentTasksAnchor, recentTasksFocus, handleRecentTasksLink } = useRecentTasksBridge()
+const { toolboxAnchor, taskPresets, presetVersion, applyTaskPresets } =
+  useTaskToolboxPresets<TaskPresetMap>()
 
 defineProps<{
   capabilities?: WorkspaceCapabilities | null
 }>()
 
-function nextFocusKey() {
-  recentTasksFocusKey.value += 1
-  return recentTasksFocusKey.value
-}
-
-async function focusRecentTasks(request: Omit<RecentTasksFocusRequest, 'key'>) {
-  recentTasksFocus.value = { key: nextFocusKey(), ...request }
-  await nextTick()
-  recentTasksAnchor.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-}
-
 async function handleWorkspaceLink(payload: StatisticsWorkspaceLinkPayload) {
-  if (payload.panel === 'recent-tasks') {
-    await focusRecentTasks(payload.request)
-    return
-  }
-  emit('link-panel', payload)
-}
-
-async function applyTaskPresets(presets: TaskPresetMap) {
-  taskPresets.value = presets
-  presetVersion.value += 1
-  await nextTick()
-  toolboxAnchor.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  await handleRecentTasksLink(payload, (nextPayload) => {
+    emit('link-panel', nextPayload)
+  })
 }
 </script>
 

@@ -8,8 +8,8 @@
 
 - **Problem**: The dashboard needs a declarative catalog of tasks that can run CLI commands with validated inputs.
 - **Role**: Provide workspace tabs, task groups, and argument builders used by the UI task runner.
-- **Split status**: Consider splitting (multiple workspaces and domains in one file).
-- **Collaborators**: `dashboard-ui/src/components/TaskToolCard.vue` (validation + execution), `dashboard-ui/src/api.ts` (run/guarded API), `dashboard-ui/src/types.ts` (capabilities + workspace keys), `src/commands/dashboard/handlers/workspaces.rs` (CLI runner)
+- **Split status**: In progress; `workspace-tools.ts` is now a compatibility export, task catalogs live under `features/tasks/`, pure helper logic is being extracted into dedicated core modules, files-security workspace UI is being decomposed into summary/sidebar/task-zone assemblies, and `TaskToolCard` is being reduced into header/actions/result/receipt/confirm assemblies.
+- **Collaborators**: `dashboard-ui/src/features/tasks/use-task-execution.ts` (runtime orchestration), `dashboard-ui/src/features/tasks/task-execution-core.ts` (form defaults + support/state/failure rules), `dashboard-ui/src/features/tasks/task-link-payloads.ts` (statistics jump payload builders), `dashboard-ui/src/features/files-security/use-files-security-context.ts` (workspace sync), `dashboard-ui/src/features/files-security/files-security-context-core.ts` (preset builders), `dashboard-ui/src/components/TaskToolFields.vue` (task form field rendering), `dashboard-ui/src/components/TaskCardHeader.vue` (task card header + notices), `dashboard-ui/src/components/TaskCardActions.vue` (task card action bar + hints), `dashboard-ui/src/components/TaskConfirmDialog.vue` (task confirm dialog assembly), `dashboard-ui/src/components/TaskProcessResultPanel.vue` (shared preview / execute result rendering), `dashboard-ui/src/components/TaskReceiptSection.vue` (task receipt assembly + links), `dashboard-ui/src/features/tasks/task-card-core.ts` (task card action-state core), `dashboard-ui/src/features/tasks/use-task-card-links.ts` (task card link bridge), `dashboard-ui/src/components/FilesSecurityContextBridgePanel.vue` (files workspace context bridge + batch queue), `dashboard-ui/src/components/FilesSecuritySidebar.vue` (files workspace side-panel assembly), `dashboard-ui/src/components/FilesSecuritySummaryChips.vue` (files workspace summary chips), `dashboard-ui/src/components/FilesSecurityTaskZone.vue` (files workspace task toolbox assembly), `dashboard-ui/src/api.ts` (run/guarded API), `dashboard-ui/src/types.ts` (capabilities + workspace keys), `src/commands/dashboard/handlers/workspaces.rs` (CLI runner)
 
 ## Architecture
 
@@ -96,6 +96,7 @@ export interface WorkspaceTabDefinition {
 
 ### Exported Catalogs
 
+- `workspace-tools.ts` re-exports from `features/tasks/index.ts` for backward compatibility.
 - `workspaceTabs: WorkspaceTabDefinition[]`
 - `pathsContextTaskGroups: WorkspaceTaskGroup[]`
 - `networkProxyTaskGroups: WorkspaceTaskGroup[]`

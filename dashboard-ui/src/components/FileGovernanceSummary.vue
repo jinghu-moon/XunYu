@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed } from 'vue'
 import type { TaskProcessOutput, WorkspaceTaskDetails } from '../types'
-import type { TaskFormState, WorkspaceTaskDefinition } from '../workspace-tools'
+import type { TaskFormState, WorkspaceTaskDefinition } from '../features/tasks'
 import { buildFileGovernanceSummary } from './file-governance-summary'
 import AclDiffDetails from './AclDiffDetails.vue'
 

@@ -1,5 +1,5 @@
 import type { RecentTaskRecord, TaskProcessOutput, WorkspaceTaskDetails } from '../types'
-import { findWorkspaceTaskDefinition, type TaskFormState, type WorkspaceTaskDefinition } from '../workspace-tools'
+import { findWorkspaceTaskDefinition, type TaskFormState, type WorkspaceTaskDefinition } from '../features/tasks'
 
 export interface RecentTaskGovernanceContext {
   task: WorkspaceTaskDefinition

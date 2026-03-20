@@ -7,7 +7,7 @@ import type {
   StatisticsWorkspaceLinkPayload,
   WorkspaceCapabilities,
 } from '../types'
-import type { TaskFieldDefinition, TaskFieldValue, TaskFormState } from '../workspace-tools'
+import type { TaskFieldDefinition, TaskFieldValue, TaskFormState } from '../features/tasks'
 import {
   buildBatchGovernancePlan,
   createAuditLinkFromBatchReceipt,

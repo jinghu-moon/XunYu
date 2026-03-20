@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { TaskPresetMap } from '../features/workspaces/task-presets'
 
 type ShellKind = 'powershell' | 'bash' | 'zsh'
-type TaskPresetMap = Record<string, Partial<Record<string, string | boolean>>>
 
 const emit = defineEmits<{
   (event: 'apply-task-presets', presets: TaskPresetMap): void

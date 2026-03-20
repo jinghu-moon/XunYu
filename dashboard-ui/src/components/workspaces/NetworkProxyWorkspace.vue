@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../../types'
-import { networkProxyTaskGroups } from '../../workspace-tools'
+import { networkProxyTaskGroups } from '../../features/tasks'
 import PortsPanel from '../PortsPanel.vue'
 import ProxyPanel from '../ProxyPanel.vue'
 import RecipePanel from '../RecipePanel.vue'

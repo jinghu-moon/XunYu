@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities } from '../types'
-import type { WorkspaceTaskDefinition } from '../workspace-tools'
+import type { WorkspaceTaskDefinition } from '../features/tasks'
 import TaskToolCard from './TaskToolCard.vue'
 
 const emit = defineEmits<{
