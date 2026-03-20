@@ -58,6 +58,25 @@ export const brnCaseOptions: TaskFieldOption[] = [
   { label: 'lower', value: 'lower' },
 ]
 
+export const brnExtCaseOptions: TaskFieldOption[] = [
+  { label: '不转换', value: '' },
+  { label: 'upper', value: 'upper' },
+  { label: 'lower', value: 'lower' },
+]
+
+export const brnSortByOptions: TaskFieldOption[] = [
+  { label: 'name（默认）', value: '' },
+  { label: 'mtime（修改时间）', value: 'mtime' },
+  { label: 'ctime（创建时间）', value: 'ctime' },
+]
+
+export const brnBracketOptions: TaskFieldOption[] = [
+  { label: 'all（全部）', value: 'all' },
+  { label: 'round ()', value: 'round' },
+  { label: 'square []', value: 'square' },
+  { label: 'curly {}', value: 'curly' },
+]
+
 export const imgFormatOptions: TaskFieldOption[] = [
   { label: 'webp', value: 'webp' },
   { label: 'jpeg', value: 'jpeg' },

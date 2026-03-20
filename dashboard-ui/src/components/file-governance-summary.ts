@@ -1133,6 +1133,108 @@ function buildCryptSummary(
 
 
 
+interface BrnOp { from: string; to: string }
+
+interface BrnPreviewOutput { total: number; effective: number; skipped: number; ops: BrnOp[] }
+interface BrnExecuteOutput { total: number; success: number; failed: number; ops: BrnOp[] }
+type BrnJsonOutput = BrnPreviewOutput | BrnExecuteOutput
+
+function buildBrnSummary(
+
+  phase: 'preview' | 'execute',
+
+  target: string,
+
+  process: TaskProcessOutput,
+
+): GovernanceSummaryModel {
+
+  const raw = process.stdout || ''
+
+  const parsed = parseJson<BrnJsonOutput>(raw)
+
+  const items: GovernanceSummaryItem[] = [
+
+    { label: '扫描目录', value: target || '-' },
+
+  ]
+
+  if (parsed) {
+
+    if (phase === 'execute' && 'success' in parsed) {
+
+      items.push(
+
+        { label: '文件总数', value: String(parsed.total) },
+
+        { label: '成功改名', value: String(parsed.success) },
+
+        { label: '失败', value: String(parsed.failed) },
+
+      )
+
+    } else if ('effective' in parsed) {
+
+      items.push(
+
+        { label: '文件总数', value: String(parsed.total) },
+
+        { label: '有效改名', value: String(parsed.effective) },
+
+        { label: '跳过（无变化）', value: String(parsed.skipped) },
+
+      )
+
+    }
+
+    if (parsed.ops.length > 0) {
+
+      const preview = parsed.ops.slice(0, 5)
+
+      const more = parsed.ops.length - preview.length
+
+      const opLines = preview.map(op => {
+
+        const from = op.from.replace(/\\/g, '/').split('/').pop() ?? op.from
+
+        const to = op.to.replace(/\\/g, '/').split('/').pop() ?? op.to
+
+        return `${from} → ${to}`
+
+      })
+
+      if (more > 0) opLines.push(`... 还有 ${more} 项`)
+
+      items.push({ label: phase === 'execute' ? '已改名列表' : '改名预览', value: opLines.join('\n') })
+
+    }
+
+  } else {
+
+    items.push({ label: '输出', value: raw.slice(0, 200) || '（无输出）' })
+
+  }
+
+  const note = phase === 'preview'
+
+    ? '当前为预演（dry-run），不会真正改写文件。确认后点击执行。'
+
+    : process.success ? '改名已执行完成。' : '执行失败，请检查输出。'
+
+  return {
+
+    title: phase === 'preview' ? '改名预演摘要' : '改名执行摘要',
+
+    note,
+
+    items,
+
+  }
+
+}
+
+
+
 export function buildFileGovernanceSummary(
 
   task: Pick<WorkspaceTaskDefinition, 'workspace' | 'action'>,
@@ -1204,6 +1306,14 @@ export function buildFileGovernanceSummary(
     case 'decrypt':
 
       return buildCryptSummary(task.action, phase, target, form, process)
+
+    case 'brn-clean':
+
+    case 'brn-transform':
+
+    case 'brn-decorate':
+
+      return buildBrnSummary(phase, target, process)
 
     default:
 

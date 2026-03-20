@@ -30,7 +30,7 @@ const diffDetails = computed(() =>
     <dl class="governance-summary__grid">
       <div v-for="item in summary.items" :key="item.label" class="governance-summary__item">
         <dt>{{ item.label }}</dt>
-        <dd>{{ item.value }}</dd>
+        <dd :class="{ 'governance-summary__dd--multiline': item.value.includes('\n') }">{{ item.value }}</dd>
       </div>
     </dl>
     <AclDiffDetails v-if="diffDetails" :details="diffDetails" />
@@ -97,5 +97,9 @@ const diffDetails = computed(() =>
   color: var(--text-primary);
   font: var(--type-body-sm);
   word-break: break-word;
+}
+
+.governance-summary__dd--multiline {
+  white-space: pre-wrap;
 }
 </style>

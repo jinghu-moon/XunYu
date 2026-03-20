@@ -23,6 +23,9 @@ import {
   aliasShellOptions,
   dedupModeOptions,
   brnCaseOptions,
+  brnExtCaseOptions,
+  brnSortByOptions,
+  brnBracketOptions,
   imgFormatOptions,
   imgSvgMethodOptions,
   imgJpegBackendOptions,
@@ -338,63 +341,233 @@ export const integrationAutomationTaskGroups: WorkspaceTaskGroup[] = [
   {
     id: 'rename-tools',
     title: '批量改名',
-    description: 'brn 默认 dry-run，执行时统一走 guarded。',
+    description: 'brn 默认 dry-run，执行时统一走 guarded。步骤可组合叠加。',
     tasks: [
       guardedTask({
-        id: 'brn',
+        id: 'brn-clean',
         workspace: 'integration-automation',
-        title: '批量重命名',
-        description: '支持 regex / case / prefix / suffix / strip-prefix / seq。默认先预览。',
+        title: '清洗文件名',
+        description: '去除多余字符：空白、括号内容、前后缀、指定字符、字面量替换。',
         action: 'brn',
         tone: 'danger',
         feature: 'batch_rename',
         fields: [
           { key: 'path', label: '扫描目录', type: 'text', defaultValue: '.' },
-          { key: 'regex', label: 'Regex', type: 'text', placeholder: '可选' },
-          { key: 'replace', label: 'Replace', type: 'text', placeholder: '用于 --regex' },
-          { key: 'case', label: 'Case', type: 'select', defaultValue: '', options: brnCaseOptions },
-          { key: 'prefix', label: '前缀', type: 'text', placeholder: '可选' },
-          { key: 'suffix', label: '后缀', type: 'text', placeholder: '可选' },
+          { key: 'trim', label: '去首尾空白', type: 'checkbox', defaultValue: false },
+          { key: 'trimChars', label: '指定去除字符', type: 'text', placeholder: '留空=空白' },
+          { key: 'stripBrackets', label: '去括号内容', type: 'select', defaultValue: '', options: [{ label: '不处理', value: '' }, ...brnBracketOptions] },
           { key: 'stripPrefix', label: '移除前缀', type: 'text', placeholder: '可选' },
-          { key: 'seq', label: '追加序号', type: 'checkbox', defaultValue: false },
-          { key: 'start', label: '起始值', type: 'number', defaultValue: '1' },
-          { key: 'pad', label: '补零位数', type: 'number', defaultValue: '3' },
-          { key: 'ext', label: '扩展名过滤', type: 'text', placeholder: 'ts,tsx,vue' },
+          { key: 'stripSuffix', label: '移除后缀', type: 'text', placeholder: '可选' },
+          { key: 'removeChars', label: '删除字符集', type: 'text', placeholder: '如：_-.' },
+          { key: 'from', label: '查找文本', type: 'text', placeholder: '字面量' },
+          { key: 'to', label: '替换为', type: 'text', placeholder: '留空=删除' },
+          { key: 'ext', label: '扩展名过滤', type: 'text', placeholder: 'ts,vue' },
+          { key: 'filter', label: '文件名 glob', type: 'text', placeholder: 'IMG_*' },
+          { key: 'exclude', label: '排除 glob', type: 'text', placeholder: '*.bak' },
           { key: 'recursive', label: '递归扫描', type: 'checkbox', defaultValue: false },
+          { key: 'depth', label: '递归深度', type: 'number', placeholder: '留空=无限' },
+          { key: 'includeDirs', label: '包含目录', type: 'checkbox', defaultValue: false },
         ],
         target: (values) => readText(values, 'path') || '.',
         buildPreviewArgs: (values) => {
+          const args = ['brn', readText(values, 'path') || '.', '--output-format', 'json']
+          if (readBool(values, 'trim')) args.push('--trim')
+          pushOption(args, '--trim-chars', readText(values, 'trimChars'))
+          pushOption(args, '--strip-brackets', readText(values, 'stripBrackets'))
+          pushOption(args, '--strip-prefix', readText(values, 'stripPrefix'))
+          pushOption(args, '--strip-suffix', readText(values, 'stripSuffix'))
+          pushOption(args, '--remove-chars', readText(values, 'removeChars'))
+          pushOption(args, '--from', readText(values, 'from'))
+          pushOption(args, '--to', readText(values, 'to'))
+          pushRepeatableOption(args, '--ext', readText(values, 'ext'))
+          pushOption(args, '--filter', readText(values, 'filter'))
+          pushOption(args, '--exclude', readText(values, 'exclude'))
+          if (readBool(values, 'recursive')) args.push('-r')
+          pushOption(args, '--depth', readText(values, 'depth'))
+          if (readBool(values, 'includeDirs')) args.push('--include-dirs')
+          return args
+        },
+        buildExecuteArgs: (values) => {
           const args = ['brn', readText(values, 'path') || '.']
+          if (readBool(values, 'trim')) args.push('--trim')
+          pushOption(args, '--trim-chars', readText(values, 'trimChars'))
+          pushOption(args, '--strip-brackets', readText(values, 'stripBrackets'))
+          pushOption(args, '--strip-prefix', readText(values, 'stripPrefix'))
+          pushOption(args, '--strip-suffix', readText(values, 'stripSuffix'))
+          pushOption(args, '--remove-chars', readText(values, 'removeChars'))
+          pushOption(args, '--from', readText(values, 'from'))
+          pushOption(args, '--to', readText(values, 'to'))
+          pushRepeatableOption(args, '--ext', readText(values, 'ext'))
+          pushOption(args, '--filter', readText(values, 'filter'))
+          pushOption(args, '--exclude', readText(values, 'exclude'))
+          if (readBool(values, 'recursive')) args.push('-r')
+          pushOption(args, '--depth', readText(values, 'depth'))
+          if (readBool(values, 'includeDirs')) args.push('--include-dirs')
+          args.push('--apply', '-y')
+          return args
+        },
+        previewSummary: (values) => `清洗文件名 ${readText(values, 'path') || '.'}`,
+      }),
+      guardedTask({
+        id: 'brn-transform',
+        workspace: 'integration-automation',
+        title: '转换文件名',
+        description: '命名规范转换、正则替换、扩展名处理、Unicode 规范化。',
+        action: 'brn',
+        tone: 'danger',
+        feature: 'batch_rename',
+        fields: [
+          { key: 'path', label: '扫描目录', type: 'text', defaultValue: '.' },
+          { key: 'regex', label: 'Regex 匹配', type: 'text', placeholder: '正则表达式' },
+          { key: 'replace', label: 'Regex 替换', type: 'text', placeholder: '支持 $1 $2' },
+          { key: 'regexFlags', label: 'Regex 标志', type: 'text', placeholder: 'i=不区分大小写' },
+          { key: 'case', label: '命名风格', type: 'select', defaultValue: '', options: brnCaseOptions },
+          { key: 'extCase', label: '扩展名大小写', type: 'select', defaultValue: '', options: brnExtCaseOptions },
+          { key: 'renameExt', label: '改扩展名', type: 'text', placeholder: 'jpeg:jpg' },
+          { key: 'normalizeUnicode', label: 'Unicode 规范', type: 'text', placeholder: 'nfc/nfd/nfkc/nfkd' },
+          { key: 'ext', label: '扩展名过滤', type: 'text', placeholder: 'ts,vue' },
+          { key: 'filter', label: '文件名 glob', type: 'text', placeholder: 'IMG_*' },
+          { key: 'exclude', label: '排除 glob', type: 'text', placeholder: '*.bak' },
+          { key: 'recursive', label: '递归扫描', type: 'checkbox', defaultValue: false },
+          { key: 'depth', label: '递归深度', type: 'number', placeholder: '留空=无限' },
+          { key: 'includeDirs', label: '包含目录', type: 'checkbox', defaultValue: false },
+        ],
+        target: (values) => readText(values, 'path') || '.',
+        buildPreviewArgs: (values) => {
+          const args = ['brn', readText(values, 'path') || '.', '--output-format', 'json']
           pushOption(args, '--regex', readText(values, 'regex'))
           pushOption(args, '--replace', readText(values, 'replace'))
+          pushOption(args, '--regex-flags', readText(values, 'regexFlags'))
           pushOption(args, '--case', readText(values, 'case'))
-          pushOption(args, '--prefix', readText(values, 'prefix'))
-          pushOption(args, '--suffix', readText(values, 'suffix'))
-          pushOption(args, '--strip-prefix', readText(values, 'stripPrefix'))
-          if (readBool(values, 'seq')) args.push('--seq')
-          if (readBool(values, 'seq')) pushOption(args, '--start', readText(values, 'start') || '1')
-          if (readBool(values, 'seq')) pushOption(args, '--pad', readText(values, 'pad') || '3')
+          pushOption(args, '--ext-case', readText(values, 'extCase'))
+          pushOption(args, '--rename-ext', readText(values, 'renameExt'))
+          pushOption(args, '--normalize-unicode', readText(values, 'normalizeUnicode'))
           pushRepeatableOption(args, '--ext', readText(values, 'ext'))
+          pushOption(args, '--filter', readText(values, 'filter'))
+          pushOption(args, '--exclude', readText(values, 'exclude'))
           if (readBool(values, 'recursive')) args.push('-r')
+          pushOption(args, '--depth', readText(values, 'depth'))
+          if (readBool(values, 'includeDirs')) args.push('--include-dirs')
           return args
         },
         buildExecuteArgs: (values) => {
           const args = ['brn', readText(values, 'path') || '.']
           pushOption(args, '--regex', readText(values, 'regex'))
           pushOption(args, '--replace', readText(values, 'replace'))
+          pushOption(args, '--regex-flags', readText(values, 'regexFlags'))
           pushOption(args, '--case', readText(values, 'case'))
-          pushOption(args, '--prefix', readText(values, 'prefix'))
-          pushOption(args, '--suffix', readText(values, 'suffix'))
-          pushOption(args, '--strip-prefix', readText(values, 'stripPrefix'))
-          if (readBool(values, 'seq')) args.push('--seq')
-          if (readBool(values, 'seq')) pushOption(args, '--start', readText(values, 'start') || '1')
-          if (readBool(values, 'seq')) pushOption(args, '--pad', readText(values, 'pad') || '3')
+          pushOption(args, '--ext-case', readText(values, 'extCase'))
+          pushOption(args, '--rename-ext', readText(values, 'renameExt'))
+          pushOption(args, '--normalize-unicode', readText(values, 'normalizeUnicode'))
           pushRepeatableOption(args, '--ext', readText(values, 'ext'))
+          pushOption(args, '--filter', readText(values, 'filter'))
+          pushOption(args, '--exclude', readText(values, 'exclude'))
           if (readBool(values, 'recursive')) args.push('-r')
+          pushOption(args, '--depth', readText(values, 'depth'))
+          if (readBool(values, 'includeDirs')) args.push('--include-dirs')
           args.push('--apply', '-y')
           return args
         },
-        previewSummary: (values) => `批量重命名 ${readText(values, 'path') || '.'}`,
+        previewSummary: (values) => `转换文件名 ${readText(values, 'path') || '.'}`,
+      }),
+      guardedTask({
+        id: 'brn-decorate',
+        workspace: 'integration-automation',
+        title: '装饰文件名',
+        description: '添加前后缀、序号、模板、日期、规范化序号。',
+        action: 'brn',
+        tone: 'danger',
+        feature: 'batch_rename',
+        fields: [
+          { key: 'path', label: '扫描目录', type: 'text', defaultValue: '.' },
+          { key: 'prefix', label: '前缀', type: 'text', placeholder: '可选' },
+          { key: 'suffix', label: '后缀', type: 'text', placeholder: '可选' },
+          { key: 'seq', label: '追加序号', type: 'checkbox', defaultValue: false },
+          { key: 'start', label: '序号起始', type: 'number', defaultValue: '1' },
+          { key: 'pad', label: '补零位数', type: 'number', defaultValue: '3' },
+          { key: 'template', label: '模板', type: 'text', placeholder: '{n:03}_{stem}' },
+          { key: 'templateStart', label: '模板序号起始', type: 'number', defaultValue: '1' },
+          { key: 'templatePad', label: '模板补零位数', type: 'number', defaultValue: '3' },
+          { key: 'insertDate', label: '插入日期', type: 'text', placeholder: 'prefix:%Y%m%d' },
+          { key: 'normalizeSeq', label: '规范化序号宽度', type: 'number', placeholder: '如：3' },
+          { key: 'sortBy', label: '排序依据', type: 'select', defaultValue: '', options: brnSortByOptions },
+          { key: 'ext', label: '扩展名过滤', type: 'text', placeholder: 'ts,vue' },
+          { key: 'filter', label: '文件名 glob', type: 'text', placeholder: 'IMG_*' },
+          { key: 'exclude', label: '排除 glob', type: 'text', placeholder: '*.bak' },
+          { key: 'recursive', label: '递归扫描', type: 'checkbox', defaultValue: false },
+          { key: 'depth', label: '递归深度', type: 'number', placeholder: '留空=无限' },
+          { key: 'includeDirs', label: '包含目录', type: 'checkbox', defaultValue: false },
+        ],
+        target: (values) => readText(values, 'path') || '.',
+        buildPreviewArgs: (values) => {
+          const args = ['brn', readText(values, 'path') || '.', '--output-format', 'json']
+          pushOption(args, '--prefix', readText(values, 'prefix'))
+          pushOption(args, '--suffix', readText(values, 'suffix'))
+          if (readBool(values, 'seq')) {
+            args.push('--seq')
+            pushOption(args, '--start', readText(values, 'start') || '1')
+            pushOption(args, '--pad', readText(values, 'pad') || '3')
+          }
+          pushOption(args, '--template', readText(values, 'template'))
+          pushOption(args, '--template-start', readText(values, 'templateStart'))
+          pushOption(args, '--template-pad', readText(values, 'templatePad'))
+          pushOption(args, '--insert-date', readText(values, 'insertDate'))
+          const normSeq = readText(values, 'normalizeSeq')
+          if (normSeq) pushOption(args, '--normalize-seq', normSeq)
+          pushOption(args, '--sort-by', readText(values, 'sortBy'))
+          pushRepeatableOption(args, '--ext', readText(values, 'ext'))
+          pushOption(args, '--filter', readText(values, 'filter'))
+          pushOption(args, '--exclude', readText(values, 'exclude'))
+          if (readBool(values, 'recursive')) args.push('-r')
+          pushOption(args, '--depth', readText(values, 'depth'))
+          if (readBool(values, 'includeDirs')) args.push('--include-dirs')
+          return args
+        },
+        buildExecuteArgs: (values) => {
+          const args = ['brn', readText(values, 'path') || '.']
+          pushOption(args, '--prefix', readText(values, 'prefix'))
+          pushOption(args, '--suffix', readText(values, 'suffix'))
+          if (readBool(values, 'seq')) {
+            args.push('--seq')
+            pushOption(args, '--start', readText(values, 'start') || '1')
+            pushOption(args, '--pad', readText(values, 'pad') || '3')
+          }
+          pushOption(args, '--template', readText(values, 'template'))
+          pushOption(args, '--template-start', readText(values, 'templateStart'))
+          pushOption(args, '--template-pad', readText(values, 'templatePad'))
+          pushOption(args, '--insert-date', readText(values, 'insertDate'))
+          const normSeq = readText(values, 'normalizeSeq')
+          if (normSeq) pushOption(args, '--normalize-seq', normSeq)
+          pushOption(args, '--sort-by', readText(values, 'sortBy'))
+          pushRepeatableOption(args, '--ext', readText(values, 'ext'))
+          pushOption(args, '--filter', readText(values, 'filter'))
+          pushOption(args, '--exclude', readText(values, 'exclude'))
+          if (readBool(values, 'recursive')) args.push('-r')
+          pushOption(args, '--depth', readText(values, 'depth'))
+          if (readBool(values, 'includeDirs')) args.push('--include-dirs')
+          args.push('--apply', '-y')
+          return args
+        },
+        previewSummary: (values) => `装饰文件名 ${readText(values, 'path') || '.'}`,
+      }),
+      runTask({
+        id: 'brn-undo',
+        workspace: 'integration-automation',
+        title: '撤销重命名',
+        description: '回退最近 N 步批量重命名操作（基于 undo 历史）。',
+        action: 'brn:undo',
+        feature: 'batch_rename',
+        fields: [
+          { key: 'path', label: '目录', type: 'text', defaultValue: '.' },
+          { key: 'steps', label: '回退步数', type: 'number', defaultValue: '1', placeholder: '默认 1' },
+        ],
+        target: (values) => readText(values, 'path') || '.',
+        buildRunArgs: (values) => {
+          const args = ['brn', readText(values, 'path') || '.', '--undo']
+          const steps = readText(values, 'steps')
+          if (steps && steps !== '1') args.push(steps)
+          return args
+        },
       }),
     ],
   },
