@@ -8,10 +8,6 @@ pub struct BakCmd {
     #[argh(positional)]
     pub op_args: Vec<String>,
 
-    /// for restore: restore a single file (relative path)
-    #[argh(option)]
-    pub file: Option<String>,
-
     /// backup description
     #[argh(option, short = 'm')]
     pub msg: Option<String>,
@@ -39,7 +35,7 @@ pub struct BakCmd {
     #[argh(option)]
     pub exclude: Vec<String>,
 
-    /// skip prompts
-    #[argh(switch, short = 'y')]
-    pub yes: bool,
+    /// incremental backup: only copy new/modified files
+    #[argh(switch)]
+    pub incremental: bool,
 }

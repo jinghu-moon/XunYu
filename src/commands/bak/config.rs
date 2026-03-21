@@ -54,19 +54,31 @@ impl Default for NamingCfg {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(default)]
 pub(crate) struct RetentionCfg {
     #[serde(rename = "maxBackups")]
     pub(crate) max_backups: usize,
     #[serde(rename = "deleteCount")]
     pub(crate) delete_count: usize,
+    /// 每天最多保留几个备份（0=不限）
+    #[serde(rename = "keepDaily", default)]
+    pub(crate) keep_daily: usize,
+    /// 每周最多保留几个备份（0=不限）
+    #[serde(rename = "keepWeekly", default)]
+    pub(crate) keep_weekly: usize,
+    /// 每月最多保留几个备份（0=不限）
+    #[serde(rename = "keepMonthly", default)]
+    pub(crate) keep_monthly: usize,
 }
 impl Default for RetentionCfg {
     fn default() -> Self {
         Self {
             max_backups: 50,
             delete_count: 10,
+            keep_daily: 0,
+            keep_weekly: 0,
+            keep_monthly: 0,
         }
     }
 }
@@ -135,11 +147,22 @@ const DEFAULT_CONFIG_JSON: &str = r#"{
   \"useGitignore\": false
 }"#;
 
+pub(crate) const CONFIG_FILE: &str = ".xun-bak.json";
+const CONFIG_FILE_LEGACY: &str = ".svconfig.json";
+
 pub(crate) fn load_config(root: &Path) -> BakConfig {
-    let cfg_path = root.join(".svconfig.json");
+    let cfg_path = root.join(CONFIG_FILE);
+    let legacy_path = root.join(CONFIG_FILE_LEGACY);
+
+    // 自动迁移旧配置文件名
+    if !cfg_path.exists() && legacy_path.exists()
+        && fs::rename(&legacy_path, &cfg_path).is_ok() {
+            ui_println!("ℹ Migrated config: .svconfig.json → .xun-bak.json");
+        }
+
     if !cfg_path.exists() {
         let _ = fs::write(&cfg_path, DEFAULT_CONFIG_JSON);
-        ui_println!("ℹ Auto-created default config: .svconfig.json");
+        ui_println!("ℹ Auto-created default config: .xun-bak.json");
     }
     match fs::read_to_string(&cfg_path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or_default(),

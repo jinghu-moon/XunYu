@@ -7,6 +7,8 @@ use comfy_table::{Attribute, Cell, Color, Table};
 use crate::output::{CliResult, apply_pretty_table_style, print_table};
 
 use super::config::BakConfig;
+use super::time_fmt::fmt_unix_ts;
+use super::util::dir_size;
 
 pub(crate) fn cmd_bak_list(root: &Path, cfg: &BakConfig) -> CliResult {
     let backups_root = root.join(&cfg.storage.backups_dir);
@@ -18,20 +20,6 @@ pub(crate) fn cmd_bak_list(root: &Path, cfg: &BakConfig) -> CliResult {
         is_zip: bool,
         mtime: u64,
         size: u64,
-    }
-
-    fn dir_size(dir: &Path) -> u64 {
-        let mut sum = 0u64;
-        let Ok(rd) = fs::read_dir(dir) else { return 0 };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                sum = sum.saturating_add(dir_size(&p));
-            } else {
-                sum = sum.saturating_add(e.metadata().ok().map(|m| m.len()).unwrap_or(0));
-            }
-        }
-        sum
     }
 
     let mut items: Vec<Item> = Vec::new();
@@ -64,7 +52,7 @@ pub(crate) fn cmd_bak_list(root: &Path, cfg: &BakConfig) -> CliResult {
             });
         }
     }
-    items.sort_by(|a, b| b.mtime.cmp(&a.mtime).then_with(|| a.name.cmp(&b.name)));
+    items.sort_by(|a, b| a.mtime.cmp(&b.mtime).then_with(|| a.name.cmp(&b.name)));
 
     if items.is_empty() {
         ui_println!("No backups found: {}", backups_root.display());
@@ -91,7 +79,7 @@ pub(crate) fn cmd_bak_list(root: &Path, cfg: &BakConfig) -> CliResult {
         table.add_row(vec![
             Cell::new(it.name).fg(Color::Cyan),
             Cell::new(if it.is_zip { "zip" } else { "dir" }).fg(Color::Yellow),
-            Cell::new(it.mtime).fg(Color::Magenta),
+            Cell::new(fmt_unix_ts(it.mtime)).fg(Color::Magenta),
             Cell::new(it.size).fg(Color::Green),
         ]);
     }

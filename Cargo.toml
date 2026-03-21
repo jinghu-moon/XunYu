@@ -32,6 +32,7 @@ path = "src/bin/path_guard_bench.rs"
 [features]
 default = ["fs"]
 fs = []
+bak = ["dep:blake3"]
 lock = []
 protect = []
 crypt = [
@@ -245,3 +246,7 @@ harness = false
 name = "brn_bench_divan"
 harness = false
 required-features = ["batch_rename"]
+
+[[bench]]
+name = "bak_bench_divan"
+harness = false

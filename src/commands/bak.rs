@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::time::Instant;
 
 use console::Style;
 
@@ -12,16 +13,22 @@ use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
 
 #[path = "bak/baseline.rs"]
 mod baseline;
+#[path = "bak/checksum.rs"]
+mod checksum;
 #[path = "bak/config.rs"]
-mod config;
+pub(crate) mod config;
 #[path = "bak/diff.rs"]
 mod diff;
+#[path = "bak/find.rs"]
+mod find;
 #[path = "bak/list.rs"]
 mod list;
+#[path = "bak/meta.rs"]
+mod meta;
 #[path = "bak/report.rs"]
 mod report;
 #[path = "bak/restore.rs"]
-mod restore;
+pub(crate) mod restore;
 #[path = "bak/retention.rs"]
 mod retention;
 #[path = "bak/scan.rs"]
@@ -30,12 +37,17 @@ mod scan;
 mod time_fmt;
 #[path = "bak/util.rs"]
 mod util;
+#[path = "bak/verify.rs"]
+mod verify;
 #[path = "bak/version.rs"]
 mod version;
 #[path = "bak/zip.rs"]
 mod zip;
 
 pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
+    let t_total = Instant::now();
+    let timing = std::env::var_os("XUN_BAK_TIMING").is_some();
+
     let root = match &args.dir {
         Some(d) => PathBuf::from(d),
         None => std::env::current_dir()
@@ -47,15 +59,19 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
         let op = args.op_args[0].as_str();
         match op.to_ascii_lowercase().as_str() {
             "list" => return list::cmd_bak_list(&root, &cfg),
-            "restore" => {
+            "verify" => {
                 let Some(name) = args.op_args.get(1).map(|s| s.as_str()) else {
                     return Err(CliError::with_details(
                         2,
                         "Missing backup name.".to_string(),
-                        &["Fix: Use `xun bak restore <name>` (from `xun bak list`)."],
+                        &["Fix: Use `xun bak verify <name>`."],
                     ));
                 };
-                return restore::cmd_bak_restore(&root, &cfg, name, &args);
+                return verify::cmd_bak_verify(&root, &cfg, name);
+            }
+            "find" => {
+                let tag = args.op_args.get(1).map(|s| s.as_str());
+                return find::cmd_bak_find(&root, &cfg, tag, None, None);
             }
             _ => {
                 return Err(CliError::with_details(
@@ -64,7 +80,9 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
                     &[
                         "Fix: Use `xun bak` to create a backup.",
                         "Fix: Use `xun bak list` to list backups.",
-                        "Fix: Use `xun bak restore <name>` to restore.",
+                        "Fix: Use `xun bak verify <name>` to verify integrity.",
+                        "Fix: Use `xun bak find [tag]` to search backups.",
+                        "Fix: Use `xun restore <name>` to restore a backup.",
                     ],
                 ));
             }
@@ -106,7 +124,6 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     } else {
         cfg.storage.compress
     };
-    let max_backups = args.retain.unwrap_or(cfg.retention.max_backups);
 
     // 1. Version scanning
     let backups_root = root.join(&cfg.storage.backups_dir);
@@ -126,7 +143,7 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     // 2. Get description
     let desc = if let Some(ref m) = args.msg {
         m.clone()
-    } else if args.yes || !can_interact() {
+    } else if !can_interact() {
         cfg.naming.default_desc.clone()
     } else {
         eprint!("Description [{}] ", cfg.naming.default_desc);
@@ -143,9 +160,10 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
 
     // 3. Build folder name
     let date_str = time_fmt::format_now(&cfg.naming.date_format);
+    let incr_suffix = if args.incremental { "-incr" } else { "" };
     let folder_name = format!(
-        "{}{}-{}_{}",
-        cfg.naming.prefix, ver.next_version, desc, date_str
+        "{}{}-{}_{}{}",
+        cfg.naming.prefix, ver.next_version, desc, date_str, incr_suffix
     );
     let dest_dir = backups_root.join(&folder_name);
     if !args.dry_run {
@@ -156,22 +174,83 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     eprintln!("\n{}", dim.apply_to("Analysis & Backup..."));
     eprintln!("{}", dim.apply_to("--------------------"));
 
+    // scan spinner（交互模式下显示）
+    let scan_spinner = if can_interact() && !timing {
+        let sp = indicatif::ProgressBar::new_spinner();
+        sp.set_style(
+            indicatif::ProgressStyle::default_spinner()
+                .template("{spinner:.dim} Scanning {msg}")
+                .unwrap(),
+        );
+        sp.enable_steady_tick(std::time::Duration::from_millis(80));
+        Some(sp)
+    } else {
+        None
+    };
+
+    let t_scan = Instant::now();
     let current = scan::scan_files(&root, &include_roots, &exclude_patterns, &include_patterns);
+    let elapsed_scan = t_scan.elapsed();
+    if let Some(ref sp) = scan_spinner {
+        sp.finish_and_clear();
+    }
+    if timing {
+        eprintln!("{}", dim.apply_to(format!("  [scan]  {:>6} files  {:>5}ms", current.len(), elapsed_scan.as_millis())));
+    }
+
+    let t_baseline = Instant::now();
     let mut baseline = match &ver.prev_path {
         Some(p) => baseline::read_baseline(p),
         None => HashMap::new(),
     };
-    let copy = !args.dry_run;
-    let skip_unchanged = !compress;
-    let show_unchanged = runtime::is_verbose() && skip_unchanged;
-    let stats = diff::diff_copy_and_print(
-        &current,
-        &mut baseline,
-        &dest_dir,
-        copy,
-        skip_unchanged,
-        show_unchanged,
-    );
+    if timing {
+        eprintln!("{}", dim.apply_to(format!("  [baseline] {:>5}ms", t_baseline.elapsed().as_millis())));
+    }
+
+    // 增量模式只追踪变更文件；全量模式（含目录备份）需追踪所有文件
+    let skip_unchanged = args.incremental;
+    let show_unchanged = runtime::is_verbose() && !skip_unchanged;
+    let t_diff = Instant::now();
+    let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
+    if timing {
+        eprintln!("{}", dim.apply_to(format!("  [diff]   {:>6} entries  {:>5}ms", diff_entries.len(), t_diff.elapsed().as_millis())));
+    }
+    diff::print_diff(&diff_entries, show_unchanged);
+
+    let t_copy = Instant::now();
+    let stats = if !args.dry_run {
+        // copy 进度：显示文件数
+        let copy_bar = if can_interact() && !timing {
+            let total = diff_entries.iter()
+                .filter(|e| matches!(e.kind, diff::DiffKind::New | diff::DiffKind::Modified | diff::DiffKind::Unchanged))
+                .count() as u64;
+            if total > 0 {
+                let pb = indicatif::ProgressBar::new(total);
+                pb.set_style(
+                    indicatif::ProgressStyle::default_bar()
+                        .template("{spinner:.dim} Copying [{bar:30.cyan/blue}] {pos}/{len} files")
+                        .unwrap()
+                        .progress_chars("=>-"),
+                );
+                pb.enable_steady_tick(std::time::Duration::from_millis(100));
+                Some(pb)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let result = diff::apply_diff(&diff_entries, &dest_dir, args.incremental);
+        if let Some(ref pb) = copy_bar {
+            pb.finish_and_clear();
+        }
+        result
+    } else {
+        diff::DiffStats { new: 0, modified: 0, deleted: 0 }
+    };
+    if timing {
+        eprintln!("{}", dim.apply_to(format!("  [copy]   +{}~{}-{}  {:>5}ms", stats.new, stats.modified, stats.deleted, t_copy.elapsed().as_millis())));
+    }
 
     eprintln!("{}", dim.apply_to("--------------------"));
 
@@ -192,15 +271,38 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     let mut final_path = dest_dir.clone();
     let is_zip;
     if compress {
-        eprintln!("{}", dim.apply_to("Archiving to .zip..."));
+        let zip_spinner = if can_interact() && !timing {
+            let sp = indicatif::ProgressBar::new_spinner();
+            sp.set_style(
+                indicatif::ProgressStyle::default_spinner()
+                    .template("{spinner:.dim} Archiving to .zip...")
+                    .unwrap(),
+            );
+            sp.enable_steady_tick(std::time::Duration::from_millis(80));
+            Some(sp)
+        } else {
+            eprintln!("{}", dim.apply_to("Archiving to .zip..."));
+            None
+        };
         let zip_path = backups_root.join(format!("{folder_name}.zip"));
+        let t_zip = Instant::now();
         match zip::compress_dir(&dest_dir, &zip_path) {
             Ok(_) => {
+                let elapsed_zip = t_zip.elapsed();
+                if let Some(ref sp) = zip_spinner {
+                    sp.finish_and_clear();
+                }
                 let _ = fs::remove_dir_all(&dest_dir);
                 final_path = zip_path;
                 is_zip = true;
+                if timing {
+                    eprintln!("{}", dim.apply_to(format!("  [zip]    {:>5}ms", elapsed_zip.as_millis())));
+                }
             }
             Err(e) => {
+                if let Some(ref sp) = zip_spinner {
+                    sp.finish_and_clear();
+                }
                 let detail = format!("Details: {e}");
                 emit_warning(
                     "Zip failed; keeping folder instead.",
@@ -218,12 +320,54 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     }
 
     // 6. Retention
-    let cleaned = retention::apply_retention(
+    let mut ret_cfg = cfg.retention.clone();
+    if let Some(r) = args.retain {
+        ret_cfg.max_backups = r;
+    }
+    let t_retention = Instant::now();
+    let cleaned = retention::apply_retention_policy(
         &backups_root,
         &cfg.naming.prefix,
-        max_backups,
-        cfg.retention.delete_count,
+        &ret_cfg,
     );
+    if timing {
+        eprintln!("{}", dim.apply_to(format!("  [retention] cleaned={cleaned}  {:>5}ms", t_retention.elapsed().as_millis())));
+    }
+
+    // 6b. 写入备份元数据
+    let bak_meta = meta::BakMeta {
+        version: 1,
+        ts: meta::now_unix_secs(),
+        desc: desc.clone(),
+        tags: Vec::new(),
+        stats: meta::BakStats {
+            new: stats.new,
+            modified: stats.modified,
+            deleted: stats.deleted,
+        },
+        incremental: args.incremental,
+    };
+    // 目录备份直接写元数据；zip 备份写入已删除的 dest_dir（zip 前）不可用，改写到 backups_root 旁
+    if !is_zip {
+        meta::write_meta(&final_path, &bak_meta);
+        // 生成 blake3 manifest（目录备份）
+        #[cfg(feature = "bak")]
+        {
+            let mut file_hashes = std::collections::HashMap::new();
+            for (rel, src) in &current {
+                if let Some(hash) = checksum::file_blake3(src) {
+                    file_hashes.insert(rel.clone(), hash);
+                }
+            }
+            checksum::write_manifest(&final_path, &file_hashes);
+        }
+    } else {
+        // zip 已完成，元数据写到同名 .meta.json 旁
+        let meta_path = backups_root.join(format!("{folder_name}.meta.json"));
+        if let Ok(json) = serde_json::to_string_pretty(&bak_meta) {
+            let _ = fs::write(&meta_path, json);
+        }
+    }
 
     // 7. Report
     let size_bytes = if is_zip {
@@ -241,8 +385,8 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     let cyan = Style::new().cyan();
     let white = Style::new().white();
 
-    eprintln!("\n{}", green.apply_to("✔ Backup Success"));
-    eprintln!();
+    println!("\n{}", green.apply_to("✔ Backup Success"));
+    println!();
     report::report(
         "Version",
         &format!("{}{}", cfg.naming.prefix, ver.next_version),
@@ -262,6 +406,8 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     if cleaned > 0 {
         report::report("Cleaned", &format!("{cleaned} old backups"), &yellow);
     }
-    eprintln!();
+    let elapsed_total = t_total.elapsed();
+    report::report("Time", &format!("{:.2}s", elapsed_total.as_secs_f64()), &dim);
+    println!();
     Ok(())
 }

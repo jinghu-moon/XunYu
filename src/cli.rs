@@ -53,7 +53,9 @@ pub use alias::{
     AliasImportCmd, AliasLsCmd, AliasRmCmd, AliasSetupCmd, AliasSubCommand, AliasSyncCmd,
     AliasWhichCmd,
 };
+mod restore;
 pub use bak::BakCmd;
+pub use restore::RestoreCmd;
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
 pub use bookmarks::{
@@ -223,5 +225,6 @@ pub enum SubCommand {
     #[cfg(feature = "img")]
     Img(ImgCmd),
     Video(VideoCmd),
+    Restore(RestoreCmd),
 }
 

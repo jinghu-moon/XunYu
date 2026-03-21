@@ -4,5 +4,6 @@ mod gc_dedup;
 mod import_export;
 mod list;
 mod misc;
+mod restore;
 mod tag;
 mod tree;

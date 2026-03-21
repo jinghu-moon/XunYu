@@ -30,6 +30,8 @@ use super::super::proxy;
 use super::super::redirect;
 #[cfg(feature = "desktop")]
 use super::super::desktop;
+use super::super::restore;
+
 use super::super::tree;
 use super::super::video;
 
@@ -98,6 +100,7 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         #[cfg(feature = "batch_rename")]
         SubCommand::Brn(a) => batch_rename::cmd_brn(a),
         SubCommand::Video(a) => video::cmd_video(a),
+        SubCommand::Restore(a) => restore::cmd_restore(a),
         SubCommand::Init(_) | SubCommand::Ctx(_) | SubCommand::Env(_) => unreachable!(),
         #[cfg(feature = "dashboard")]
         SubCommand::Serve(_) => unreachable!(),
