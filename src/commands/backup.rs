@@ -11,35 +11,20 @@ use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
 use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
 
-#[path = "bak/baseline.rs"]
 mod baseline;
-#[path = "bak/checksum.rs"]
 mod checksum;
-#[path = "bak/config.rs"]
 pub(crate) mod config;
-#[path = "bak/diff.rs"]
 mod diff;
-#[path = "bak/find.rs"]
 mod find;
-#[path = "bak/list.rs"]
 mod list;
-#[path = "bak/meta.rs"]
 mod meta;
-#[path = "bak/report.rs"]
 mod report;
-#[path = "bak/retention.rs"]
 mod retention;
-#[path = "bak/scan.rs"]
 mod scan;
-#[path = "bak/time_fmt.rs"]
 mod time_fmt;
-#[path = "bak/util.rs"]
 mod util;
-#[path = "bak/verify.rs"]
 mod verify;
-#[path = "bak/version.rs"]
 mod version;
-#[path = "bak/zip.rs"]
 mod zip;
 
 pub(crate) use baseline::{FileMeta, read_baseline};

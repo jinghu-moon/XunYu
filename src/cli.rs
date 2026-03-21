@@ -1,7 +1,6 @@
 mod acl;
 #[cfg(feature = "alias")]
 mod alias;
-#[path = "cli/bak.rs"]
 mod backup;
 #[cfg(feature = "batch_rename")]
 mod batch_rename;

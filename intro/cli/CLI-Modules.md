@@ -67,7 +67,7 @@ main.rs
 | 上下文 | `ctx set/use/off/list/show/del/rename` | `src/cli/ctx.rs` | `src/commands/ctx.rs` | 项目 / 会话上下文切换 |
 | 代理 | `proxy` `pon` `poff` `pst` `px` | `src/cli/proxy.rs` | `src/commands/proxy/*` | 系统 / 工具链代理状态管理 |
 | 端口 / 进程 | `ports` `kill` `ps` `pkill` | `src/cli/ports.rs` | `src/commands/ports/*` | 端口查看、按端口杀进程、进程搜索 |
-| 备份 | `backup` `bak` | `src/cli/bak.rs` | `src/commands/bak.rs`（模块名 `backup`） | 备份与归档 |
+| 备份 | `backup` `bak` | `src/cli/backup.rs` | `src/commands/backup.rs` | 备份与归档 |
 | 恢复 | `restore` `rst` | `src/cli/restore.rs` | `src/commands/restore.rs` + `src/commands/restore_core.rs` | 从目录/zip 备份恢复文件 |
 | 树视图 | `tree` | `src/cli/tree.rs` | `src/commands/tree/*` | 文件树收集、过滤、格式化、复制 |
 | 搜索 | `find` | `src/cli/find.rs` | `src/commands/find.rs` | 搜索相关能力 |
@@ -161,7 +161,7 @@ main.rs
 
 - 正式命令：`backup`
 - 别名：`bak`
-- 执行在 `src/commands/bak.rs`（模块名 `backup`）
+- 执行在 `src/commands/backup.rs`
 
 这是相对独立的命令族，适合单独阅读，不依赖复杂分发。
 
@@ -275,7 +275,7 @@ main.rs
 - `Ports/Kill/Ps/Pkill` -> `commands/ports/*`
 - `Tree` -> `commands/tree/*`
 - `Find` -> `commands/find.rs`
-- `Backup` -> `commands/bak.rs`（模块名 `backup`）
+- `Backup` -> `commands/backup.rs`
 - `Restore` -> `commands/restore.rs` + `commands/restore_core.rs`
 - `Video` -> `commands/video/*`
 - feature 命令 -> 各自命名的模块

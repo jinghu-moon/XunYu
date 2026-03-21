@@ -1,13 +1,13 @@
 ﻿# 工程辅助 CLI 模块导读
 
-本文档聚焦另一组很适合从“工程工作流”角度理解的命令：`config`、`ctx`、`find`、`bak`、`delete`。
+本文档聚焦另一组很适合从“工程工作流”角度理解的命令：`config`、`ctx`、`find`、`backup`、`delete`。
 
 如果说 `bookmarks / proxy / ports / tree` 更像高频日常工作台，那么这五组命令更像工程支撑链路：
 
 - `config`：维护全局配置
 - `ctx`：切换项目上下文与会话状态
 - `find`：规则驱动的文件搜索
-- `bak`：增量备份与恢复
+- `backup`：增量备份
 - `delete`：受控删除、扫描、预检与交互确认
 
 把这五组放在一起看，会更容易看懂 `xun` 如何覆盖“配置 -> 切换 -> 搜索 -> 备份 -> 清理”这条完整的本地工程流程。
@@ -19,7 +19,7 @@
 1. `config` 决定工具默认行为。
 2. `ctx` 决定当前会话和项目上下文。
 3. `find` 决定如何把目标文件筛出来。
-4. `bak` 决定如何在修改前后保留可恢复快照。
+4. `backup` 决定如何在修改前后保留可恢复快照。
 5. `delete` 决定如何安全地执行破坏性清理。
 
 所以，这组命令比上一轮的“日常工作台型命令”更偏工程控制面。
@@ -29,7 +29,7 @@
 它们虽然都从 `src/cli.rs` 进入，但分发层有两条路：
 
 ```text
-config / find / bak / delete
+config / find / backup / delete
   -> src/commands/dispatch/misc.rs
 
 ctx
@@ -260,7 +260,7 @@ FindCmd
 
 ## 6. 备份模块：`backup / bak`
 
-### 6.1 命令定义层：`src/cli/bak.rs`
+### 6.1 命令定义层：`src/cli/backup.rs`
 
 正式命令是 `backup`，别名是 `bak`。它现在聚焦四种工作模式：
 
@@ -281,11 +281,11 @@ FindCmd
 - `--retain`
 - `--include / --exclude`
 
-所以 `bak` 并不是简单的“打个 zip”，而是带版本、扫描、差异和恢复语义的备份工具。
+所以 `backup/bak` 并不是简单的“打个 zip”，而是带版本、扫描、差异、压缩与保留策略的备份工具。
 
-### 6.2 执行层拆分：`src/commands/bak*`
+### 6.2 执行层拆分：`src/commands/backup*`
 
-`src/commands/bak.rs` 是总控入口，但核心逻辑被拆到多个文件：
+`src/commands/backup.rs` 是总控入口，但核心逻辑被拆到多个文件：
 
 - `config.rs`：加载 `.svconfig.json`，并在缺失时自动生成默认配置
 - `version.rs`：扫描现有版本并决定下一版本号
@@ -349,19 +349,19 @@ FindCmd
 
 ### 6.6 推荐阅读顺序
 
-1. `src/cli/bak.rs`
+1. `src/cli/backup.rs`
 2. `src/commands/dispatch/misc.rs`
-3. `src/commands/bak.rs`
-4. `src/commands/bak/config.rs`
-5. `src/commands/bak/version.rs`
-6. `src/commands/bak/scan.rs`
-7. `src/commands/bak/baseline.rs`
-8. `src/commands/bak/diff.rs`
-9. `src/commands/bak/verify.rs`
-10. `src/commands/bak/find.rs`
-11. `src/commands/bak/retention.rs`
-12. `src/commands/bak/zip.rs`
-13. `src/commands/bak/list.rs`
+3. `src/commands/backup.rs`
+4. `src/commands/backup/config.rs`
+5. `src/commands/backup/version.rs`
+6. `src/commands/backup/scan.rs`
+7. `src/commands/backup/baseline.rs`
+8. `src/commands/backup/diff.rs`
+9. `src/commands/backup/verify.rs`
+10. `src/commands/backup/find.rs`
+11. `src/commands/backup/retention.rs`
+12. `src/commands/backup/zip.rs`
+13. `src/commands/backup/list.rs`
 
 如果你要追恢复链路，改读：
 
@@ -500,7 +500,7 @@ run_cli_pipeline
 - `config` 负责“工具默认规则”
 - `ctx` 负责“当前工作上下文”
 - `find` 负责“把目标筛出来”
-- `bak` 负责“动手前先留快照”
+- `backup` 负责“动手前先留快照”
 - `delete` 负责“最后安全执行清理”
 
 这比单独看某一个命令，更能体现 `xun` 的整体产品思路。
@@ -510,7 +510,7 @@ run_cli_pipeline
 在这五组里：
 
 - `config` 已经有 Dashboard 双入口
-- `ctx / find / bak / delete` 仍然主要是 CLI 子系统
+- `ctx / find / backup / delete` 仍然主要是 CLI 子系统
 
 这说明项目不是凡事都优先做 Web UI，而是先把 CLI / shell 工作流打磨成熟，再按价值决定是否可视化。
 
@@ -531,7 +531,7 @@ run_cli_pipeline
 1. 先读 `config`
 2. 再读 `ctx`
 3. 再读 `find`
-4. 再读 `bak`
+4. 再读 `backup`
 5. 最后读 `delete`
 
 这样做的原因是：
@@ -547,5 +547,5 @@ run_cli_pipeline
 - `config` 的 CLI 很通用，但 Dashboard `ConfigPanel` 目前只覆盖了树配置的一小部分。
 - `ctx` 本质上是 shell 集成系统，不理解 `XUN_CTX_STATE` 和控制指令输出，就很难真正读懂它。
 - `find` 的 `src/commands/find.rs` 几乎只是门面，真正复杂度在 `src/find/*`。
-- `bak` 已经不是“备份脚本”，而是一个有版本、基线、差异、压缩和 retention 的快照系统。
+- `backup` 已经不是“备份脚本”，而是一个有版本、基线、差异、压缩和 retention 的快照系统。
 - `delete` 比它的命令面看起来重得多，尤其带有明显的 Windows 平台支撑特征。

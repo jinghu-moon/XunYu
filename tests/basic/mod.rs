@@ -1,4 +1,4 @@
-mod bak;
+mod backup;
 mod bookmark_ops;
 mod gc_dedup;
 mod import_export;

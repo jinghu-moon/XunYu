@@ -2,7 +2,7 @@
 
 生成时间：2026-03-21
 
-> 状态说明（2026-03-21）：阶段 0 到阶段 4 已完成实施。`src/commands/bak/restore.rs` 已删除，恢复链路已迁到 `src/commands/restore.rs` 与 `src/commands/restore_core.rs`。下文主体保留为实施前方案与分阶段设计，用于追溯，不代表当前代码现状。
+> 状态说明（2026-03-22）：阶段 0 到阶段 5 已完成实施。恢复链路已迁到 `src/commands/restore.rs` 与 `src/commands/restore_core.rs`，备份模块物理路径也已从 `bak` 收敛为 `backup`（如 `src/cli/backup.rs`、`src/commands/backup.rs`、`src/commands/backup/*`）。下文主体保留为实施前方案与分阶段设计，用于追溯，不代表当前代码现状。
 
 ## 1. 目标与边界
 

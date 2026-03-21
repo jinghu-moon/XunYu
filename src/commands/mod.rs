@@ -2,7 +2,6 @@ pub(crate) mod acl_cmd;
 #[cfg(feature = "alias")]
 pub(crate) mod alias;
 pub(crate) mod app_config;
-#[path = "bak.rs"]
 pub(crate) mod backup;
 pub(crate) mod bookmarks;
 pub(crate) mod completion;
