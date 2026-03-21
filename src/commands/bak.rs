@@ -27,8 +27,6 @@ mod list;
 mod meta;
 #[path = "bak/report.rs"]
 mod report;
-#[path = "bak/restore.rs"]
-pub(crate) mod restore;
 #[path = "bak/retention.rs"]
 mod retention;
 #[path = "bak/scan.rs"]
@@ -43,6 +41,8 @@ mod verify;
 mod version;
 #[path = "bak/zip.rs"]
 mod zip;
+
+pub(crate) use baseline::{FileMeta, read_baseline};
 
 pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     let t_total = Instant::now();

@@ -282,7 +282,7 @@
 - [x] **T10-2** P0：`acl remove/owner/repair/copy/restore` 接入
 - [x] **T10-3** P0：`redirect --apply/--undo` 接入
 - [x] **T10-4** P0：`vault/crypt` 输出路径接入 `PathPolicy::for_output()`
-- [x] **T10-5** P1：`bak restore` 接入
+- [x] **T10-5** P1：`restore` 接入
 - [x] **T10-6** P1：`img` 输出目录、`brn --apply` 接入
 - [x] **T10-7** P2：`find`/`cstat`/`diff` 接入 `PathPolicy::for_read()`
 - [x] **T10-8** P3：`bookmarks set`/`ctx set` 接入（`must_exist=false`）

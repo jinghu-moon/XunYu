@@ -4,7 +4,7 @@ use argh::FromArgs;
 #[derive(FromArgs)]
 #[argh(subcommand, name = "bak")]
 pub struct BakCmd {
-    /// operation and args: `list` | `restore <name>` (default: create backup)
+    /// operation and args: `list` | `verify <name>` | `find [tag]` (default: create backup)
     #[argh(positional)]
     pub op_args: Vec<String>,
 

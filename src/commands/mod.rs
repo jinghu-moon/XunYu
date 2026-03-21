@@ -4,6 +4,7 @@ pub(crate) mod alias;
 pub(crate) mod app_config;
 pub(crate) mod bak;
 pub(crate) mod restore;
+pub(crate) mod restore_core;
 pub(crate) mod bookmarks;
 pub(crate) mod completion;
 pub(crate) mod ctx;

@@ -1,5 +1,6 @@
 use crate::common::*;
 use std::fs;
+use std::io::{Cursor, Write};
 
 const CFG_NO_COMPRESS: &str = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.txt"],"exclude":[]}"#;
 const CFG_COMPRESS: &str = r#"{"storage":{"backupsDir":"A_backups","compress":true},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.txt"],"exclude":[]}"#;
@@ -39,6 +40,19 @@ impl BakProject {
             .to_string_lossy()
             .into_owned()
     }
+}
+
+fn write_test_zip(path: &std::path::Path, entries: &[(&str, &[u8])]) {
+    let cursor = Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored);
+    for (name, bytes) in entries {
+        writer.start_file(name, options).unwrap();
+        writer.write_all(bytes).unwrap();
+    }
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(path, bytes).unwrap();
 }
 
 #[test]
@@ -282,6 +296,29 @@ fn restore_cmd_file_from_zip_backup() {
     assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
 }
 
+#[test]
+fn restore_cmd_file_missing_in_zip_backup_fails() {
+    let proj = BakProject::new("proj_file_missing_in_zip", true);
+    let zip_name = proj.backup_name("v1-", Some(".zip"));
+    let name = zip_name.trim_end_matches(".zip");
+
+    let out = run_err(proj.env.cmd().args([
+        "restore",
+        name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "--file",
+        "missing.txt",
+        "-y",
+    ]));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("not found") || stderr.contains("Restore failed"),
+        "stderr should indicate missing file in zip backup, got: {stderr}"
+    );
+}
+
 // ─── 边界：--file 传含 .. 的不安全路径 → 非零退出 ────────────────────────────
 
 #[test]
@@ -382,6 +419,45 @@ fn restore_cmd_glob_from_zip() {
     assert!(proj.root.join("b.txt").exists(), "b.txt should be restored from zip via glob");
 }
 
+#[test]
+fn restore_cmd_glob_from_zip_rejects_unsafe_entries() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_glob_zip_unsafe");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join(".xun-bak.json"),
+        r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":[],"exclude":[]}"#,
+    )
+    .unwrap();
+
+    let zip_path = env.root.join("unsafe_restore_source.zip");
+    write_test_zip(
+        &zip_path,
+        &[("safe.txt", b"ok"), ("../evil.txt", b"bad")],
+    );
+
+    let out = run_err(env.cmd().args([
+        "restore",
+        zip_path.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--glob",
+        "**/*.txt",
+        "-y",
+    ]));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unsafe zip entry") || stderr.contains("Unsafe"),
+        "stderr should mention unsafe zip entry, got: {stderr}"
+    );
+    assert!(root.join("safe.txt").exists(), "safe.txt should still be restored");
+    assert!(
+        !env.root.join("evil.txt").exists(),
+        "unsafe zip entry must not write outside restore root"
+    );
+}
+
 // ─── 边界：嵌套子目录结构保留 ─────────────────────────────────────────────────
 
 #[test]
@@ -415,6 +491,34 @@ fn restore_cmd_preserves_nested_directory_structure() {
     assert!(root.join("src").join("main.txt").exists(), "main.txt should be restored");
     assert_eq!(fs::read_to_string(deep.join("helper.txt")).unwrap(), "helper content");
     assert_eq!(fs::read_to_string(root.join("src").join("main.txt")).unwrap(), "main content");
+}
+
+#[test]
+fn restore_cmd_directory_backup_skips_internal_meta_files() {
+    let proj = BakProject::new("proj_restore_skip_internal_meta", false);
+    let name = proj.backup_name("v1-", None);
+
+    fs::remove_file(proj.root.join("a.txt")).unwrap();
+    fs::remove_file(proj.root.join("b.txt")).unwrap();
+    assert!(
+        !proj.root.join(".bak-meta.json").exists(),
+        "project root should not start with backup metadata"
+    );
+
+    run_ok(proj.env.cmd().args([
+        "restore",
+        &name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert!(proj.root.join("a.txt").exists());
+    assert!(proj.root.join("b.txt").exists());
+    assert!(
+        !proj.root.join(".bak-meta.json").exists(),
+        "backup internal metadata must not be restored into project root"
+    );
 }
 
 // ─── 边界：--dry-run stderr 含 DRY RUN 提示 ───────────────────────────────────
@@ -456,4 +560,3 @@ fn restore_cmd_snapshot_skipped_on_dry_run() {
     let backup_count = fs::read_dir(&backups).unwrap().flatten().count();
     assert_eq!(backup_count, 1, "dry-run with --snapshot should not create a new backup, got {backup_count}");
 }
-

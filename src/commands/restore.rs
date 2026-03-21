@@ -1,24 +1,16 @@
+use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-use rayon::prelude::*;
+use std::path::{Component, Path, PathBuf};
 
 use crate::cli::RestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
 
+use super::bak::{FileMeta, read_baseline};
 use super::bak::config as bak_config;
-use super::bak::restore as bak_restore;
+use super::restore_core;
 
 use bak_config::BakConfig;
-
-/// zip entry 路径安全校验（复用 path_guard）
-fn is_safe_zip_entry(name: &str) -> bool {
-    let mut policy = PathPolicy::for_output();
-    policy.allow_relative = true;
-    validate_paths([name], &policy).issues.is_empty()
-}
 
 pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     let root = match &args.dir {
@@ -30,7 +22,7 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     let backups_root = root.join(&cfg.storage.backups_dir);
 
     // 解析备份源路径
-    let src = resolve_backup_src(&root, &backups_root, &args.name_or_path)?;
+    let src = resolve_backup_src(&backups_root, &args.name_or_path)?;
 
     // --snapshot：还原前先备份当前状态
     if args.snapshot && !args.dry_run {
@@ -52,7 +44,7 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
 
     // 交互确认
     if !args.yes && can_interact() {
-        bak_restore::show_restore_preview(&dest_root, &cfg, &src);
+        show_restore_preview(&dest_root, &cfg, &src);
         let ok = dialoguer::Confirm::new()
             .with_prompt("Restore may overwrite files. Continue?")
             .default(false)
@@ -65,13 +57,10 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
 
     let t_start = std::time::Instant::now();
     let (restored, failed) = if let Some(ref glob_pat) = args.glob {
-        // --glob 模式：收集匹配文件，并行还原
         restore_with_glob(&src, &dest_root, glob_pat, args.dry_run)?
     } else if let Some(ref file) = args.file {
-        // --file 单文件模式
         restore_single_file(&src, &dest_root, file, args.dry_run)?
     } else {
-        // 全量还原
         restore_all(&src, &dest_root, args.dry_run)?
     };
 
@@ -89,16 +78,12 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
 }
 
 /// 解析备份源路径：直接路径 > 备份目录查找
-fn resolve_backup_src(
-    _root: &Path,
-    backups_root: &Path,
-    name_or_path: &str,
-) -> Result<PathBuf, CliError> {
+fn resolve_backup_src(backups_root: &Path, name_or_path: &str) -> Result<PathBuf, CliError> {
     let p = PathBuf::from(name_or_path);
     if p.is_dir() || p.is_file() {
         return Ok(p);
     }
-    bak_restore::backup_source_path(backups_root, name_or_path).ok_or_else(|| {
+    backup_source_path(backups_root, name_or_path).ok_or_else(|| {
         CliError::with_details(
             2,
             format!("Backup not found: {name_or_path}"),
@@ -110,105 +95,30 @@ fn resolve_backup_src(
     })
 }
 
+fn backup_source_path(backups_root: &Path, name: &str) -> Option<PathBuf> {
+    let candidate = backups_root.join(name);
+    if candidate.is_dir() || candidate.is_file() {
+        return Some(candidate);
+    }
+    let zip = backups_root.join(format!("{name}.zip"));
+    if zip.is_file() {
+        return Some(zip);
+    }
+    None
+}
+
 /// 全量还原，返回 (restored, failed)
 fn restore_all(src: &Path, dest_root: &Path, dry_run: bool) -> Result<(usize, usize), CliError> {
     if src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        restore_all_from_zip(src, dest_root, dry_run)
+        restore_core::restore_many_from_zip(src, dest_root, dry_run, |_| true)
     } else {
-        restore_all_from_dir(src, dest_root, dry_run)
+        Ok(restore_core::restore_many_from_dir(
+            src,
+            dest_root,
+            dry_run,
+            |_, _| true,
+        ))
     }
-}
-
-fn restore_all_from_dir(
-    src_dir: &Path,
-    dest_root: &Path,
-    dry_run: bool,
-) -> Result<(usize, usize), CliError> {
-    let entries = collect_files_recursive(src_dir);
-
-    let restored = AtomicUsize::new(0);
-    let fail_count = AtomicUsize::new(0);
-
-    entries.par_iter().for_each(|src_path| {
-        let rel = match src_path.strip_prefix(src_dir) {
-            Ok(r) => r,
-            Err(_) => return,
-        };
-        let dst = dest_root.join(rel);
-        if dry_run {
-            eprintln!("DRY RUN: would restore {}", rel.display());
-            restored.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-        if let Some(p) = dst.parent() {
-            let _ = fs::create_dir_all(p);
-        }
-        match fs::copy(src_path, &dst) {
-            Ok(_) => { restored.fetch_add(1, Ordering::Relaxed); }
-            Err(e) => {
-                eprintln!("Error restoring {}: {e}", rel.display());
-                fail_count.fetch_add(1, Ordering::Relaxed);
-            }
-        }
-    });
-
-    Ok((restored.load(Ordering::Relaxed), fail_count.load(Ordering::Relaxed)))
-}
-
-fn restore_all_from_zip(
-    zip_path: &Path,
-    dest_root: &Path,
-    dry_run: bool,
-) -> Result<(usize, usize), CliError> {
-    let f = fs::File::open(zip_path)
-        .map_err(|e| CliError::new(1, format!("Open zip failed: {e}")))?;
-    let mut archive = zip::ZipArchive::new(f)
-        .map_err(|e| CliError::new(1, format!("Read zip failed: {e}")))?;
-
-    let mut restored = 0usize;
-    let mut failed = 0usize;
-
-    for i in 0..archive.len() {
-        let mut entry = archive
-            .by_index(i)
-            .map_err(|e| CliError::new(1, format!("Zip entry error: {e}")))?;
-        if entry.is_dir() {
-            continue;
-        }
-        let name = entry.name().to_owned();
-        let name_norm = name.replace('\\', "/");
-        // path_guard 校验：拒绝路径穿越等
-        if !is_safe_zip_entry(&name_norm) {
-            eprintln!("Skipping unsafe zip entry: {name}");
-            failed += 1;
-            continue;
-        }
-        let rel = PathBuf::from(name.replace('/', "\\"));
-        let dst = dest_root.join(&rel);
-        if dry_run {
-            eprintln!("DRY RUN: would restore {}", rel.display());
-            restored += 1;
-            continue;
-        }
-        if let Some(parent) = dst.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        match fs::File::create(&dst) {
-            Ok(mut out) => {
-                if let Err(e) = std::io::copy(&mut entry, &mut out) {
-                    eprintln!("Error writing {}: {e}", rel.display());
-                    failed += 1;
-                } else {
-                    restored += 1;
-                }
-            }
-            Err(e) => {
-                eprintln!("Error creating {}: {e}", rel.display());
-                failed += 1;
-            }
-        }
-    }
-    Ok((restored, failed))
 }
 
 /// 单文件还原
@@ -219,15 +129,14 @@ fn restore_single_file(
     dry_run: bool,
 ) -> Result<(usize, usize), CliError> {
     let rel = PathBuf::from(file);
-    // 拒绝绝对路径和路径穿越（含 .. 组件）
-    if rel.is_absolute() || rel.components().any(|c| c == std::path::Component::ParentDir) {
+    if rel.is_absolute() || rel.components().any(|c| c == Component::ParentDir) {
         return Err(CliError::with_details(
             2,
             format!("Unsafe restore path: {file}"),
             &["Fix: Use a relative path without '..' components."],
         ));
     }
-    // 用 path_guard 校验非法字符等
+
     let mut policy = PathPolicy::for_output();
     policy.allow_relative = true;
     let result = validate_paths([file], &policy);
@@ -238,12 +147,97 @@ fn restore_single_file(
             &["Fix: Use a relative path without '..' components."],
         ));
     }
+
     if src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        bak_restore::restore_from_zip(src, dest_root, Some(&rel), dry_run)?;
+        restore_core::restore_from_zip(src, dest_root, Some(&rel), dry_run)?;
     } else {
-        bak_restore::restore_from_dir(src, dest_root, Some(&rel), dry_run)?;
+        restore_core::restore_from_dir(src, dest_root, Some(&rel), dry_run)?;
     }
     Ok((1, 0))
+}
+
+/// restore 前展示将被覆盖的文件列表（modify/new 文件数）
+fn show_restore_preview(root: &Path, cfg: &BakConfig, backup_src: &Path) {
+    let backup_snapshot = read_baseline(backup_src);
+    let current_snapshot = read_baseline(root);
+    let entries = build_restore_preview_items(&backup_snapshot, &current_snapshot);
+
+    let overwrite_count = entries
+        .iter()
+        .filter(|e| e.kind == RestorePreviewKind::Overwrite)
+        .count();
+    let new_count = entries
+        .iter()
+        .filter(|e| e.kind == RestorePreviewKind::New)
+        .count();
+
+    if overwrite_count == 0 && new_count == 0 {
+        eprintln!("  (no files will be changed)");
+        return;
+    }
+
+    eprintln!("Files to be restored:");
+    let max_show = 20usize;
+    let mut shown = 0;
+    for e in &entries {
+        if shown < max_show {
+            let tag = match e.kind {
+                RestorePreviewKind::Overwrite => "overwrite",
+                RestorePreviewKind::New => "new",
+            };
+            eprintln!("  [{tag}] {}", e.rel);
+        }
+        shown += 1;
+    }
+    if shown > max_show {
+        eprintln!("  ... and {} more", shown - max_show);
+    }
+    eprintln!("  Total: {} overwrite, {} new", overwrite_count, new_count);
+    let _ = cfg;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RestorePreviewKind {
+    Overwrite,
+    New,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RestorePreviewItem {
+    rel: String,
+    kind: RestorePreviewKind,
+}
+
+fn build_restore_preview_items(
+    backup_snapshot: &HashMap<String, FileMeta>,
+    current_snapshot: &HashMap<String, FileMeta>,
+) -> Vec<RestorePreviewItem> {
+    let mut items = Vec::new();
+
+    for (rel, backup_meta) in backup_snapshot {
+        if restore_core::is_backup_internal_name(rel) {
+            continue;
+        }
+        match current_snapshot.get(rel) {
+            Some(current_meta)
+                if backup_meta.size != current_meta.size
+                    || backup_meta.modified > current_meta.modified =>
+            {
+                items.push(RestorePreviewItem {
+                    rel: rel.clone(),
+                    kind: RestorePreviewKind::Overwrite,
+                });
+            }
+            Some(_) => {}
+            None => items.push(RestorePreviewItem {
+                rel: rel.clone(),
+                kind: RestorePreviewKind::New,
+            }),
+        }
+    }
+
+    items.sort_by(|a, b| a.rel.cmp(&b.rel));
+    items
 }
 
 /// glob 模式还原
@@ -254,123 +248,16 @@ fn restore_with_glob(
     dry_run: bool,
 ) -> Result<(usize, usize), CliError> {
     if src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        restore_glob_from_zip(src, dest_root, glob_pat, dry_run)
+        restore_core::restore_many_from_zip(src, dest_root, dry_run, |name| {
+            glob_match(glob_pat, name)
+        })
     } else {
-        restore_glob_from_dir(src, dest_root, glob_pat, dry_run)
-    }
-}
-
-fn restore_glob_from_dir(
-    src_dir: &Path,
-    dest_root: &Path,
-    glob_pat: &str,
-    dry_run: bool,
-) -> Result<(usize, usize), CliError> {
-    let entries = collect_files_recursive(src_dir);
-
-    let restored = AtomicUsize::new(0);
-    let fail_count = AtomicUsize::new(0);
-
-    entries.par_iter().for_each(|src_path| {
-        let rel = match src_path.strip_prefix(src_dir) {
-            Ok(r) => r,
-            Err(_) => return,
-        };
-        let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if !glob_match(glob_pat, &rel_str) {
-            return;
-        }
-        let dst = dest_root.join(rel);
-        if dry_run {
-            eprintln!("DRY RUN: would restore {}", rel.display());
-            restored.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-        if let Some(p) = dst.parent() {
-            let _ = fs::create_dir_all(p);
-        }
-        match fs::copy(src_path, &dst) {
-            Ok(_) => { restored.fetch_add(1, Ordering::Relaxed); }
-            Err(e) => {
-                eprintln!("Error restoring {}: {e}", rel.display());
-                fail_count.fetch_add(1, Ordering::Relaxed);
-            }
-        }
-    });
-
-    Ok((restored.load(Ordering::Relaxed), fail_count.load(Ordering::Relaxed)))
-}
-
-fn restore_glob_from_zip(
-    zip_path: &Path,
-    dest_root: &Path,
-    glob_pat: &str,
-    dry_run: bool,
-) -> Result<(usize, usize), CliError> {
-    let f = fs::File::open(zip_path)
-        .map_err(|e| CliError::new(1, format!("Open zip failed: {e}")))?;
-    let mut archive = zip::ZipArchive::new(f)
-        .map_err(|e| CliError::new(1, format!("Read zip failed: {e}")))?;
-
-    let mut restored = 0usize;
-    let mut failed = 0usize;
-
-    for i in 0..archive.len() {
-        let mut entry = archive
-            .by_index(i)
-            .map_err(|e| CliError::new(1, format!("Zip entry error: {e}")))?;
-        if entry.is_dir() {
-            continue;
-        }
-        let name = entry.name().to_owned();
-        let name_norm = name.replace('\\', "/");
-        if !glob_match(glob_pat, &name_norm) {
-            continue;
-        }
-        let rel = PathBuf::from(name.replace('/', "\\"));
-        let dst = dest_root.join(&rel);
-        if dry_run {
-            eprintln!("DRY RUN: would restore {}", rel.display());
-            restored += 1;
-            continue;
-        }
-        if let Some(parent) = dst.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        match fs::File::create(&dst) {
-            Ok(mut out) => {
-                if let Err(e) = std::io::copy(&mut entry, &mut out) {
-                    eprintln!("Error writing {}: {e}", rel.display());
-                    failed += 1;
-                } else {
-                    restored += 1;
-                }
-            }
-            Err(e) => {
-                eprintln!("Error creating {}: {e}", rel.display());
-                failed += 1;
-            }
-        }
-    }
-    Ok((restored, failed))
-}
-
-/// 递归收集目录下所有文件（不依赖 walkdir）
-fn collect_files_recursive(dir: &Path) -> Vec<PathBuf> {
-    let mut result = Vec::new();
-    collect_recursive_inner(dir, &mut result);
-    result
-}
-
-fn collect_recursive_inner(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = fs::read_dir(dir) else { return };
-    for entry in rd.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_recursive_inner(&path, out);
-        } else if path.is_file() {
-            out.push(path);
-        }
+        Ok(restore_core::restore_many_from_dir(
+            src,
+            dest_root,
+            dry_run,
+            |_, rel_str| glob_match(glob_pat, rel_str),
+        ))
     }
 }
 
@@ -400,23 +287,20 @@ fn glob_match(pattern: &str, path: &str) -> bool {
 }
 
 fn glob_match_parts(pat: &[u8], s: &[u8]) -> bool {
-    // 消耗 pat 开头的 ** 段（** 或 **/ ）
     if pat.starts_with(b"**") {
         let rest_pat = if pat.len() > 2 && pat[2] == b'/' {
-            &pat[3..] // 跳过 **/
+            &pat[3..]
         } else {
-            &pat[2..] // 跳过 **
+            &pat[2..]
         };
-        // ** 匹配零个路径段
         if glob_match_parts(rest_pat, s) {
             return true;
         }
-        // ** 匹配一个或多个路径段：跳过 s 中下一个 / 后继续尝试
         let mut i = 0;
         while i < s.len() {
             if s[i] == b'/' && glob_match_parts(pat, &s[i + 1..]) {
-                    return true;
-                }
+                return true;
+            }
             i += 1;
         }
         return false;
@@ -424,18 +308,15 @@ fn glob_match_parts(pat: &[u8], s: &[u8]) -> bool {
 
     match (pat.first(), s.first()) {
         (None, None) => true,
-        (None, _) | (_, None) if pat == b"*" => true, // 末尾 * 匹配空
+        (None, _) | (_, None) if pat == b"*" => true,
         (None, _) | (Some(_), None) => false,
         (Some(b'*'), _) => {
-            // 单段 *：不跨 /
             if s[0] == b'/' {
                 return false;
             }
-            // * 匹配零字符
             if glob_match_parts(&pat[1..], s) {
                 return true;
             }
-            // * 匹配一个字符（非 /）
             glob_match_parts(pat, &s[1..])
         }
         (Some(b'?'), _) => {
@@ -456,7 +337,11 @@ fn glob_match_parts(pat: &[u8], s: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::glob_match;
+    use std::collections::HashMap;
+    use std::time::{Duration, SystemTime};
+
+    use super::{RestorePreviewItem, RestorePreviewKind, build_restore_preview_items, glob_match};
+    use crate::commands::bak::FileMeta;
 
     #[test]
     fn glob_exact() {
@@ -481,5 +366,58 @@ mod tests {
     fn glob_question() {
         assert!(glob_match("src/?.rs", "src/a.rs"));
         assert!(!glob_match("src/?.rs", "src/ab.rs"));
+    }
+
+    #[test]
+    fn restore_preview_items_skip_internal_files_and_detect_changes() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(200);
+        let older = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+
+        let mut backup_snapshot = HashMap::new();
+        backup_snapshot.insert(
+            "a.txt".to_string(),
+            FileMeta {
+                size: 10,
+                modified: now,
+            },
+        );
+        backup_snapshot.insert(
+            "b.txt".to_string(),
+            FileMeta {
+                size: 20,
+                modified: now,
+            },
+        );
+        backup_snapshot.insert(
+            ".bak-meta.json".to_string(),
+            FileMeta {
+                size: 1,
+                modified: now,
+            },
+        );
+
+        let mut current_snapshot = HashMap::new();
+        current_snapshot.insert(
+            "a.txt".to_string(),
+            FileMeta {
+                size: 9,
+                modified: older,
+            },
+        );
+
+        let items = build_restore_preview_items(&backup_snapshot, &current_snapshot);
+        assert_eq!(
+            items,
+            vec![
+                RestorePreviewItem {
+                    rel: "a.txt".to_string(),
+                    kind: RestorePreviewKind::Overwrite,
+                },
+                RestorePreviewItem {
+                    rel: "b.txt".to_string(),
+                    kind: RestorePreviewKind::New,
+                },
+            ]
+        );
     }
 }

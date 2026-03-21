@@ -650,11 +650,11 @@
 - 示例：`xun bak`  
   说明：增量项目备份。
 - 示例：`xun bak list`  
-  说明：操作与参数：`list` | `restore <name>`（默认创建备份）。
-- 示例：`xun bak restore v12-2026-02-23_1030`  
-  说明：操作与参数：`list` | `restore <name>`（默认创建备份）。
-- 示例：`xun bak --file src\main.rs`  
-  说明：用于 restore：恢复单个文件（相对路径）。
+  说明：操作与参数：`list` | `verify <name>` | `find [tag]`（默认创建备份）。
+- 示例：`xun bak verify v12-2026-02-23_1030`  
+  说明：操作与参数：`list` | `verify <name>` | `find [tag]`（默认创建备份）。
+- 示例：`xun bak find demo`  
+  说明：操作与参数：`list` | `verify <name>` | `find [tag]`（默认创建备份）。
 - 示例：`xun bak --msg "baseline"`  
   说明：备份描述。
 - 示例：`xun bak --dir D:\Repo\MyProj`  
@@ -669,8 +669,27 @@
   说明：添加包含路径（可重复或逗号分隔）。
 - 示例：`xun bak --exclude target,.git`  
   说明：添加排除路径（可重复或逗号分隔）。
-- 示例：`xun bak --yes`  
-  说明：跳过提示/确认。
+- 示例：`xun bak --incremental`  
+  说明：增量备份：仅复制新增或修改的文件。
+
+### 恢复（restore）
+#### `xun restore`
+- 示例：`xun restore v12-2026-02-23_1030`  
+  说明：从 `xun bak` 创建的备份中恢复文件。
+- 示例：`xun restore v12-2026-02-23_1030 --file src\main.rs`  
+  说明：恢复单个文件（相对路径，例如 `src/main.rs`）。
+- 示例：`xun restore v12-2026-02-23_1030 --glob "**/*.ts"`  
+  说明：恢复匹配 glob 的文件（例如 `**/*.ts`）。
+- 示例：`xun restore v12-2026-02-23_1030 --to D:\Restore-Preview`  
+  说明：恢复到指定目录，而不是项目根目录。
+- 示例：`xun restore v12-2026-02-23_1030 --snapshot`  
+  说明：恢复前先为当前状态创建快照（生成 `pre_restore` 备份）。
+- 示例：`xun restore v12-2026-02-23_1030 -C D:\Repo\MyProj`  
+  说明：项目根目录（默认当前目录）。
+- 示例：`xun restore v12-2026-02-23_1030 --dry-run`  
+  说明：演练模式：仅显示将恢复的文件，不写入磁盘。
+- 示例：`xun restore v12-2026-02-23_1030 -y`  
+  说明：跳过确认提示。
 
 ### 目录树（tree）
 #### `xun tree`

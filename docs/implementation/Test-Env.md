@@ -133,7 +133,7 @@ xun pst
 ```
 xun bak -C D:\100_Projects\110_Daily\Xun\target\xun-cli-env\bak-src -m "demo"
 xun bak list
-xun bak restore <name>
+xun restore <name>
 ```
 
 ### 4.9 Lock / FS

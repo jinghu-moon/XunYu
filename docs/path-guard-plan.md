@@ -205,7 +205,7 @@ P0（高风险写入/删除）：
 - `delete`、`acl` 写操作、`redirect --apply`、`vault/crypt` 输出路径。
 
 P1（中风险写入）：
-- `bak restore`、`img` 输出目录、`brn --apply`。
+- `restore`、`img` 输出目录、`brn --apply`。
 
 P2（只读/分析）：
 - `find`、`cstat`、`diff`、`redirect --plan`。

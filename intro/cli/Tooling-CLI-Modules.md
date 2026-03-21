@@ -262,11 +262,14 @@ FindCmd
 
 ### 6.1 命令定义层：`src/cli/bak.rs`
 
-`bak` 只有一个顶层命令，但它其实包含三种工作模式：
+`bak` 只有一个顶层命令，但它现在聚焦四种工作模式：
 
 - 默认：创建一次增量备份
 - `bak list`：列出现有备份
-- `bak restore <name>`：恢复指定备份
+- `bak verify <name>`：校验备份完整性
+- `bak find [tag]`：按标签或描述查找备份
+
+恢复已经拆到独立的 `restore` 顶层命令。
 
 同时它还支持：
 
@@ -292,7 +295,8 @@ FindCmd
 - `zip.rs`：可选压缩为 zip
 - `retention.rs`：执行保留策略
 - `list.rs`：列出备份
-- `restore.rs`：恢复目录或 zip 备份
+- `verify.rs`：校验备份完整性
+- `find.rs`：按标签或描述筛选备份
 - `report.rs` / `util.rs` / `time_fmt.rs`：做报告、大小格式化与时间格式化
 
 这个模块很像一个标准的“快照系统”实现，而不是单命令脚本。
@@ -322,7 +326,13 @@ FindCmd
 
 ### 6.4 恢复语义
 
-`restore.rs` 同时支持：
+恢复职责已经从 `bak` 子模块拆出，当前入口与执行层是：
+
+- `src/cli/restore.rs`
+- `src/commands/restore.rs`
+- `src/commands/restore_core.rs`
+
+这条链路同时支持：
 
 - 从目录型备份恢复
 - 从 zip 型备份恢复
@@ -347,10 +357,17 @@ FindCmd
 6. `src/commands/bak/scan.rs`
 7. `src/commands/bak/baseline.rs`
 8. `src/commands/bak/diff.rs`
-9. `src/commands/bak/restore.rs`
-10. `src/commands/bak/retention.rs`
-11. `src/commands/bak/zip.rs`
-12. `src/commands/bak/list.rs`
+9. `src/commands/bak/verify.rs`
+10. `src/commands/bak/find.rs`
+11. `src/commands/bak/retention.rs`
+12. `src/commands/bak/zip.rs`
+13. `src/commands/bak/list.rs`
+
+如果你要追恢复链路，改读：
+
+1. `src/cli/restore.rs`
+2. `src/commands/restore.rs`
+3. `src/commands/restore_core.rs`
 
 ## 7. 删除模块：`delete`
 

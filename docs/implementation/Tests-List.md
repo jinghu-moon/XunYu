@@ -200,8 +200,8 @@
 | 9.8 | `bak` 增量检测：修改文件标记 `~` | `bak.rs` 文件内容/时间变更检测 | ✅ `test_basic::bak_incremental_reports_modified_file_with_tilde` |
 | 9.9 | `bak` 增量检测：删除文件标记 `-` | `bak.rs` 旧版本有但新版本无的文件 | ✅ `test_basic::bak_incremental_reports_deleted_file_with_minus` |
 | 9.10 | `bak` 版本号自增（v1, v2, v3...） | `bak.rs` 版本号解析和递增 | ✅ `test_basic::bak_version_increments_v1_v2` |
-| 9.11 | `bak list` 输出现有备份列表 | `bak.rs:886-943` `cmd_bak_list()` | ✅ `test_basic::bak_list_and_restore_single_file` |
-| 9.12 | `bak restore` 可恢复单个文件 | `bak.rs:999-1109` `cmd_bak_restore()` | ✅ `test_basic::bak_list_and_restore_single_file` |
+| 9.11 | `bak list` 输出现有备份列表 | `bak/list.rs:13` `cmd_bak_list()` | ✅ `test_basic::bak_list_shows_human_readable_mtime` |
+| 9.12 | `restore --file` 可恢复单个文件 | `restore.rs:15` `cmd_restore()` / `restore.rs:125` `restore_single_file()` | ✅ `test_basic::restore::restore_cmd_file_from_dir_backup` / `test_basic::restore::restore_cmd_file_from_zip_backup` |
 
 ## 10. 端口管理 (`src/ports.rs` + `src/commands/ports.rs`)
 
