@@ -5,16 +5,16 @@ use super::super::acl_cmd;
 #[cfg(feature = "alias")]
 use super::super::alias;
 use super::super::app_config;
-use super::super::bak;
+use super::super::backup;
 #[cfg(feature = "batch_rename")]
 use super::super::batch_rename;
 use super::super::bookmarks;
 use super::super::completion;
 #[cfg(feature = "crypt")]
 use super::super::crypt;
-#[cfg(feature = "crypt")]
-use super::super::vault;
 use super::super::delete;
+#[cfg(feature = "desktop")]
+use super::super::desktop;
 #[cfg(feature = "diff")]
 use super::super::diff;
 use super::super::find;
@@ -28,9 +28,9 @@ use super::super::protect;
 use super::super::proxy;
 #[cfg(feature = "redirect")]
 use super::super::redirect;
-#[cfg(feature = "desktop")]
-use super::super::desktop;
 use super::super::restore;
+#[cfg(feature = "crypt")]
+use super::super::vault;
 
 use super::super::tree;
 use super::super::video;
@@ -70,7 +70,7 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Keys(a) => bookmarks::cmd_keys(a),
         SubCommand::All(a) => bookmarks::cmd_all(a),
         SubCommand::Fuzzy(a) => bookmarks::cmd_fuzzy(a),
-        SubCommand::Bak(a) => bak::cmd_bak(a),
+        SubCommand::Backup(a) => backup::cmd_backup(a),
         SubCommand::Tree(a) => tree::cmd_tree(a),
         SubCommand::Find(a) => find::cmd_find(a),
         #[cfg(feature = "alias")]

@@ -1,7 +1,8 @@
 mod acl;
 #[cfg(feature = "alias")]
 mod alias;
-mod bak;
+#[path = "cli/bak.rs"]
+mod backup;
 #[cfg(feature = "batch_rename")]
 mod batch_rename;
 mod bookmarks;
@@ -11,11 +12,11 @@ mod crypt;
 #[cfg(feature = "cstat")]
 mod cstat;
 mod ctx;
-#[cfg(feature = "desktop")]
-mod desktop;
 #[cfg(feature = "dashboard")]
 mod dashboard;
 mod defaults;
+#[cfg(feature = "desktop")]
+mod desktop;
 mod env;
 mod find;
 #[cfg(feature = "fs")]
@@ -54,8 +55,7 @@ pub use alias::{
     AliasWhichCmd,
 };
 mod restore;
-pub use bak::BakCmd;
-pub use restore::RestoreCmd;
+pub use backup::BackupCmd;
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
 pub use bookmarks::{
@@ -66,13 +66,14 @@ pub use bookmarks::{
 pub use config::{ConfigCmd, ConfigEditCmd, ConfigGetCmd, ConfigSetCmd, ConfigSubCommand};
 #[cfg(feature = "crypt")]
 pub use crypt::{DecryptCmd, EncryptCmd};
-#[cfg(feature = "crypt")]
-pub use vault::{
-    VaultCleanupCmd, VaultCmd, VaultDecCmd, VaultEncCmd, VaultInspectCmd, VaultRecoverKeyCmd,
-    VaultResumeCmd, VaultRewrapCmd, VaultSubCommand, VaultVerifyCmd,
-};
 #[cfg(feature = "cstat")]
 pub use cstat::CstatCmd;
+pub use ctx::{
+    CtxCmd, CtxDelCmd, CtxListCmd, CtxOffCmd, CtxRenameCmd, CtxSetCmd, CtxShowCmd, CtxSubCommand,
+    CtxUseCmd,
+};
+#[cfg(feature = "dashboard")]
+pub use dashboard::ServeCmd;
 #[cfg(feature = "desktop")]
 pub use desktop::{
     DesktopAppCmd, DesktopAppListCmd, DesktopAppSubCommand, DesktopAwakeCmd, DesktopAwakeOffCmd,
@@ -89,16 +90,10 @@ pub use desktop::{
     DesktopSubCommand, DesktopThemeCmd, DesktopThemeScheduleCmd, DesktopThemeSetCmd,
     DesktopThemeStatusCmd, DesktopThemeSubCommand, DesktopThemeToggleCmd, DesktopWindowCmd,
     DesktopWindowFocusCmd, DesktopWindowMoveCmd, DesktopWindowResizeCmd, DesktopWindowSubCommand,
-    DesktopWindowTopCmd, DesktopWindowTransparentCmd, DesktopWorkspaceCmd, DesktopWorkspaceLaunchCmd,
-    DesktopWorkspaceListCmd, DesktopWorkspaceRemoveCmd, DesktopWorkspaceSaveCmd,
-    DesktopWorkspaceSubCommand,
+    DesktopWindowTopCmd, DesktopWindowTransparentCmd, DesktopWorkspaceCmd,
+    DesktopWorkspaceLaunchCmd, DesktopWorkspaceListCmd, DesktopWorkspaceRemoveCmd,
+    DesktopWorkspaceSaveCmd, DesktopWorkspaceSubCommand,
 };
-pub use ctx::{
-    CtxCmd, CtxDelCmd, CtxListCmd, CtxOffCmd, CtxRenameCmd, CtxSetCmd, CtxShowCmd, CtxSubCommand,
-    CtxUseCmd,
-};
-#[cfg(feature = "dashboard")]
-pub use dashboard::ServeCmd;
 pub use env::*;
 pub use find::FindCmd;
 #[cfg(feature = "fs")]
@@ -118,8 +113,14 @@ pub use proxy::{
 };
 #[cfg(feature = "redirect")]
 pub use redirect::RedirectCmd;
+pub use restore::RestoreCmd;
 pub use shell::{CompleteCmd, CompletionCmd, InitCmd};
 pub use tree::TreeCmd;
+#[cfg(feature = "crypt")]
+pub use vault::{
+    VaultCleanupCmd, VaultCmd, VaultDecCmd, VaultEncCmd, VaultInspectCmd, VaultRecoverKeyCmd,
+    VaultResumeCmd, VaultRewrapCmd, VaultSubCommand, VaultVerifyCmd,
+};
 pub use video::{VideoCmd, VideoCompressCmd, VideoProbeCmd, VideoRemuxCmd, VideoSubCommand};
 
 #[derive(FromArgs)]
@@ -188,7 +189,7 @@ pub enum SubCommand {
     Keys(KeysCmd),
     All(AllCmd),
     Fuzzy(FuzzyCmd),
-    Bak(BakCmd),
+    Backup(BackupCmd),
     Tree(TreeCmd),
     Find(FindCmd),
     Env(EnvCmd),
@@ -227,4 +228,3 @@ pub enum SubCommand {
     Video(VideoCmd),
     Restore(RestoreCmd),
 }
-

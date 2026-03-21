@@ -1,9 +1,9 @@
 use argh::FromArgs;
 
-/// Incremental project backup.
+/// Incremental project backup. Alias: `bak`.
 #[derive(FromArgs)]
-#[argh(subcommand, name = "bak")]
-pub struct BakCmd {
+#[argh(subcommand, name = "backup")]
+pub struct BackupCmd {
     /// operation and args: `list` | `verify <name>` | `find [tag]` (default: create backup)
     #[argh(positional)]
     pub op_args: Vec<String>,

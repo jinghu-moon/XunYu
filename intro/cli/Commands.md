@@ -121,7 +121,8 @@
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
-| `xun bak <op-args...>` | 增量项目备份。 | `--file <path>`；`--msg <msg>`；`--dir <path>`；`--dry-run`；`--no-compress`；`--retain <retain>`；`--include <include>`；`--exclude <exclude>`；`--yes` |
+| `xun backup <op-args...>` | 增量项目备份。`xun bak` 为别名。 | `list`；`verify <name>`；`find [tag]`；`--msg <msg>`；`--dir <path>`；`--dry-run`；`--no-compress`；`--retain <retain>`；`--include <include>`；`--exclude <exclude>`；`--incremental` |
+| `xun restore <name-or-path>` | 从备份恢复文件。`xun rst` 为别名。 | `--file <path>`；`--glob <pattern>`；`--to <path>`；`--snapshot`；`--dir <path>`；`--dry-run`；`-y/--yes` |
 
 ---
 

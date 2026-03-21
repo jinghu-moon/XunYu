@@ -1,4 +1,4 @@
-//! `xun bak find` — 按标签/时间过滤备份
+//! `xun backup find` — 按标签/时间过滤备份
 
 use std::fs;
 use std::path::Path;
@@ -7,13 +7,13 @@ use comfy_table::{Attribute, Cell, Color, Table};
 
 use crate::output::{CliResult, apply_pretty_table_style, print_table};
 
-use super::config::BakConfig;
+use super::config::BackupConfig;
 use super::meta::read_meta;
 use super::time_fmt::fmt_unix_ts;
 
-pub(crate) fn cmd_bak_find(
+pub(crate) fn cmd_backup_find(
     root: &Path,
-    cfg: &BakConfig,
+    cfg: &BackupConfig,
     tag: Option<&str>,
     since: Option<u64>,
     until: Option<u64>,
@@ -49,19 +49,22 @@ pub(crate) fn cmd_bak_find(
 
             // 时间过滤
             if let Some(s) = since
-                && m.ts < s {
-                    continue;
-                }
+                && m.ts < s
+            {
+                continue;
+            }
             if let Some(u) = until
-                && m.ts > u {
-                    continue;
-                }
+                && m.ts > u
+            {
+                continue;
+            }
 
             // 标签过滤
             if let Some(t) = tag
-                && !m.tags.iter().any(|tag| tag == t) {
-                    continue;
-                }
+                && !m.tags.iter().any(|tag| tag == t)
+            {
+                continue;
+            }
 
             let display_name = if name.ends_with(".zip") {
                 name.strip_suffix(".zip").unwrap_or(&name).to_string()
@@ -82,10 +85,18 @@ pub(crate) fn cmd_bak_find(
     let mut table = Table::new();
     apply_pretty_table_style(&mut table);
     table.set_header(vec![
-        Cell::new("Name").add_attribute(Attribute::Bold).fg(Color::Cyan),
-        Cell::new("Time").add_attribute(Attribute::Bold).fg(Color::Magenta),
-        Cell::new("Type").add_attribute(Attribute::Bold).fg(Color::Yellow),
-        Cell::new("Desc").add_attribute(Attribute::Bold).fg(Color::White),
+        Cell::new("Name")
+            .add_attribute(Attribute::Bold)
+            .fg(Color::Cyan),
+        Cell::new("Time")
+            .add_attribute(Attribute::Bold)
+            .fg(Color::Magenta),
+        Cell::new("Type")
+            .add_attribute(Attribute::Bold)
+            .fg(Color::Yellow),
+        Cell::new("Desc")
+            .add_attribute(Attribute::Bold)
+            .fg(Color::White),
     ]);
     for (name, ts, incr, desc) in results {
         table.add_row(vec![

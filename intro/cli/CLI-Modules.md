@@ -67,7 +67,8 @@ main.rs
 | 上下文 | `ctx set/use/off/list/show/del/rename` | `src/cli/ctx.rs` | `src/commands/ctx.rs` | 项目 / 会话上下文切换 |
 | 代理 | `proxy` `pon` `poff` `pst` `px` | `src/cli/proxy.rs` | `src/commands/proxy/*` | 系统 / 工具链代理状态管理 |
 | 端口 / 进程 | `ports` `kill` `ps` `pkill` | `src/cli/ports.rs` | `src/commands/ports/*` | 端口查看、按端口杀进程、进程搜索 |
-| 备份 | `bak` | `src/cli/bak.rs` | `src/commands/bak.rs` | 备份与归档 |
+| 备份 | `backup` `bak` | `src/cli/bak.rs` | `src/commands/bak.rs`（模块名 `backup`） | 备份与归档 |
+| 恢复 | `restore` `rst` | `src/cli/restore.rs` | `src/commands/restore.rs` + `src/commands/restore_core.rs` | 从目录/zip 备份恢复文件 |
 | 树视图 | `tree` | `src/cli/tree.rs` | `src/commands/tree/*` | 文件树收集、过滤、格式化、复制 |
 | 搜索 | `find` | `src/cli/find.rs` | `src/commands/find.rs` | 搜索相关能力 |
 | Env | `env ...` | `src/cli/env/*` | `src/commands/env/*` | 独立子系统，功能最完整 |
@@ -156,14 +157,23 @@ main.rs
 
 这说明端口系统并不只盯“端口”，而是把“端口”和“进程”作为一个联合视角来设计。
 
-### 4.7 `bak`
+### 4.7 `backup` / `bak`
 
-- 单入口命令：`bak`
-- 执行在 `src/commands/bak.rs`
+- 正式命令：`backup`
+- 别名：`bak`
+- 执行在 `src/commands/bak.rs`（模块名 `backup`）
 
 这是相对独立的命令族，适合单独阅读，不依赖复杂分发。
 
-### 4.8 `tree`
+### 4.8 `restore` / `rst`
+
+- 正式命令：`restore`
+- 别名：`rst`
+- 执行在 `src/commands/restore.rs` + `src/commands/restore_core.rs`
+
+它负责从目录型或 zip 型备份恢复文件，并带有 snapshot、glob 和安全校验逻辑。
+
+### 4.9 `tree`
 
 `tree` 的执行层虽然对外只有一个命令，但内部拆得很细：
 
@@ -265,7 +275,8 @@ main.rs
 - `Ports/Kill/Ps/Pkill` -> `commands/ports/*`
 - `Tree` -> `commands/tree/*`
 - `Find` -> `commands/find.rs`
-- `Bak` -> `commands/bak.rs`
+- `Backup` -> `commands/bak.rs`（模块名 `backup`）
+- `Restore` -> `commands/restore.rs` + `commands/restore_core.rs`
 - `Video` -> `commands/video/*`
 - feature 命令 -> 各自命名的模块
 

@@ -44,8 +44,9 @@ xun redirect --plan .\xun.plan.json
 xun redirect --apply .\xun.plan.json
 
 # 备份与树
-xun bak -m "baseline"
+xun backup -m "baseline"
 xun bak list
+xun rst v12-2026-02-23_1030
 xun tree -d 2 --size --no-clip
 
 # lock / protect / crypt

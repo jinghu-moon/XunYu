@@ -15,7 +15,7 @@ if (-not (Get-Variable XunHooks -Scope Global -ErrorAction SilentlyContinue)) {
 $global:XunSubcommands = @(
     "acl","alias","init","completion","config","ctx","list","z","open","ws","save","set","delete","del","check","gc","touch","rename","tag",
     "recent","stats","dedup","export","import","proxy","pon","poff","pst","px","ports","kill","ps","pkill","keys","all","fuzzy",
-    "bak","tree","find","env","img","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","desktop",
+    "backup","bak","tree","find","env","img","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","restore","rst","desktop",
     "brn","cstat"
 )
 $global:XunProxySubcommands = @("set","del","get","detect","test")
@@ -132,7 +132,9 @@ function tag { xun tag @args }
 function recent { x recent @args }
 function stats { x stats @args }
 function dedup { xun dedup @args }
+function backup { xun backup @args }
 function bak { xun bak @args }
+function rst { xun rst @args }
 function xtree { xun tree @args }
 function xr { xun redirect @args }
 function redir { xun redirect @args }
@@ -329,7 +331,9 @@ tag() { xun tag "$@"; }
 recent() { x recent "$@"; }
 stats() { x stats "$@"; }
 dedup() { xun dedup "$@"; }
+backup() { xun backup "$@"; }
 bak() { xun bak "$@"; }
+rst() { xun rst "$@"; }
 xtree() { xun tree "$@"; }
 xr() { xun redirect "$@"; }
 redir() { xun redirect "$@"; }
@@ -345,7 +349,7 @@ _xun_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     local sub="${COMP_WORDS[1]}"
-    local subcommands="acl alias init completion config ctx list z open ws save set delete del check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill ps pkill keys all fuzzy bak tree find env img video lock rm mv renfile protect encrypt decrypt serve redirect desktop brn cstat"
+    local subcommands="acl alias init completion config ctx list z open ws save set delete del check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill ps pkill keys all fuzzy backup bak tree find env img video lock rm mv renfile protect encrypt decrypt serve redirect restore rst desktop brn cstat"
     local formats="auto table tsv json"
     local proxy_sub="set del get detect test"
     local ctx_sub="set use off list show del rename"

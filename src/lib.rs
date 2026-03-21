@@ -71,6 +71,23 @@ fn is_global_cli_flag(arg: &str) -> bool {
     )
 }
 
+fn normalize_top_level_aliases(raw_args: &mut [String]) {
+    for arg in raw_args.iter_mut().skip(1) {
+        if is_global_cli_flag(arg) {
+            continue;
+        }
+        if arg.starts_with('-') {
+            return;
+        }
+        match arg.as_str() {
+            "bak" => *arg = "backup".to_string(),
+            "rst" => *arg = "restore".to_string(),
+            _ => {}
+        }
+        return;
+    }
+}
+
 fn wants_version_only(args: &[String]) -> bool {
     let cli_args = match args.get(1..) {
         Some(value) if !value.is_empty() => value,
@@ -90,6 +107,7 @@ pub fn run_from_env(invoked_name: Option<&str>) {
             *arg = "--bookmark".to_string();
         }
     }
+    normalize_top_level_aliases(&mut raw_args);
 
     let cmd = resolve_command_name(&raw_args, invoked_name);
     if wants_version_only(&raw_args) {
@@ -125,5 +143,21 @@ Run {} --help for more information.",
     if let Err(err) = commands::dispatch(args) {
         output::print_cli_error(&err);
         std::process::exit(err.code);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_top_level_aliases;
+
+    #[test]
+    fn normalize_top_level_aliases_maps_bak_and_rst() {
+        let mut args = vec!["xun".to_string(), "bak".to_string()];
+        normalize_top_level_aliases(&mut args);
+        assert_eq!(args[1], "backup");
+
+        let mut args = vec!["xun".to_string(), "--quiet".to_string(), "rst".to_string()];
+        normalize_top_level_aliases(&mut args);
+        assert_eq!(args[2], "restore");
     }
 }

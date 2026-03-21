@@ -214,7 +214,7 @@ coverage/
 | `--no-compress` | 本次跳过 zip 压缩 |
 | `--retain <N>` | 临时覆盖 maxBackups |
 
-`--dry-run` 实现成本极低——在 `cmd_bak` 中加 flag 跳过写操作即可。对大项目用户价值最高。
+`--dry-run` 实现成本极低——在 `cmd_backup` 中加 flag 跳过写操作即可。对大项目用户价值最高。
 
 ### C-3 bak 尊重 .gitignore
 

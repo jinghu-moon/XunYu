@@ -4,7 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 #[test]
-fn bak_creates_backup_folder() {
+fn backup_creates_backup_folder() {
     let env = TestEnv::new();
     let root = env.root.join("proj");
     fs::create_dir_all(&root).unwrap();
@@ -21,7 +21,7 @@ fn bak_creates_backup_folder() {
 
     run_ok(
         env.cmd()
-            .args(["bak", "-C", root.to_str().unwrap(), "-m", "t"]),
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
     );
 
     let backups = root.join("A_backups");
@@ -61,7 +61,10 @@ fn bak_dry_run_creates_no_version() {
     let entries: Vec<_> = fs::read_dir(&backups)
         .map(|rd| rd.flatten().collect())
         .unwrap_or_default();
-    assert!(entries.is_empty(), "dry-run should create no backup entries");
+    assert!(
+        entries.is_empty(),
+        "dry-run should create no backup entries"
+    );
 }
 
 #[test]
@@ -369,9 +372,15 @@ fn bak_config_migration_svconfig_to_xun_bak() {
     );
 
     // 旧名应已被 rename
-    assert!(!root.join(".svconfig.json").exists(), ".svconfig.json should be migrated");
+    assert!(
+        !root.join(".svconfig.json").exists(),
+        ".svconfig.json should be migrated"
+    );
     // 新名应存在
-    assert!(root.join(".xun-bak.json").exists(), ".xun-bak.json should exist after migration");
+    assert!(
+        root.join(".xun-bak.json").exists(),
+        ".xun-bak.json should exist after migration"
+    );
     // 备份仍然正常创建
     let backups = root.join("A_backups");
     let found = fs::read_dir(&backups)
@@ -411,10 +420,14 @@ fn bak_incremental_only_copies_changed_files() {
     fs::write(root.join("a.txt"), "aaa-modified").unwrap();
 
     // 增量备份 v2
-    run_ok(
-        env.cmd()
-            .args(["bak", "-C", root.to_str().unwrap(), "-m", "incr", "--incremental"]),
-    );
+    run_ok(env.cmd().args([
+        "bak",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "incr",
+        "--incremental",
+    ]));
 
     let backups = root.join("A_backups");
     let v2 = fs::read_dir(&backups)
@@ -428,9 +441,15 @@ fn bak_incremental_only_copies_changed_files() {
 
     let v2_path = v2.path();
     // 增量备份应包含 a.txt（修改过）
-    assert!(v2_path.join("a.txt").exists(), "a.txt should be in incremental backup");
+    assert!(
+        v2_path.join("a.txt").exists(),
+        "a.txt should be in incremental backup"
+    );
     // b.txt 未修改，增量备份不含它
-    assert!(!v2_path.join("b.txt").exists(), "b.txt should NOT be in incremental backup");
+    assert!(
+        !v2_path.join("b.txt").exists(),
+        "b.txt should NOT be in incremental backup"
+    );
 }
 
 // ─── 新增：list mtime 格式化 ─────────────────────────────────────────────────
@@ -515,7 +534,10 @@ fn bak_verify_no_manifest_returns_error() {
         .output()
         .unwrap();
     // 无 manifest 时应以非零退出码退出
-    assert!(!out.status.success(), "verify should fail when no manifest exists");
+    assert!(
+        !out.status.success(),
+        "verify should fail when no manifest exists"
+    );
 }
 
 // ─── 新增：find 命令 ──────────────────────────────────────────────────────────
@@ -577,11 +599,20 @@ fn bak_retention_keep_daily_preserves_one_per_day() {
     fs::write(root.join(".xun-bak.json"), cfg).unwrap();
 
     // 创建 3 次备份（同一天内，所有备份属同一 day bucket）
-    run_ok(env.cmd().args(["bak", "-C", root.to_str().unwrap(), "-m", "d1"]));
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "d1"]),
+    );
     fs::write(data.join("a.txt"), "v2").unwrap();
-    run_ok(env.cmd().args(["bak", "-C", root.to_str().unwrap(), "-m", "d2"]));
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "d2"]),
+    );
     fs::write(data.join("a.txt"), "v3").unwrap();
-    run_ok(env.cmd().args(["bak", "-C", root.to_str().unwrap(), "-m", "d3"]));
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "d3"]),
+    );
 
     let backups = root.join("A_backups");
     let versions: Vec<String> = fs::read_dir(&backups)
@@ -626,7 +657,10 @@ fn bak_retention_max_backups_without_time_window() {
 
     for i in 1..=5 {
         fs::write(data.join("a.txt"), format!("v{i}")).unwrap();
-        run_ok(env.cmd().args(["bak", "-C", root.to_str().unwrap(), "-m", &format!("v{i}")]));
+        run_ok(
+            env.cmd()
+                .args(["bak", "-C", root.to_str().unwrap(), "-m", &format!("v{i}")]),
+        );
     }
 
     let backups = root.join("A_backups");
@@ -640,9 +674,19 @@ fn bak_retention_max_backups_without_time_window() {
 
     // maxBackups=3，每次备份后超出 1 个就删 1 个最旧的
     // v1 在 v4 后删，v2 在 v5 后删 → 剩余 v3/v4/v5
-    assert_eq!(versions.len(), 3, "should retain exactly 3 backups, got: {versions:?}");
-    assert!(!versions.iter().any(|n| n.starts_with("v1-")), "v1 should be deleted");
-    assert!(!versions.iter().any(|n| n.starts_with("v2-")), "v2 should be deleted");
+    assert_eq!(
+        versions.len(),
+        3,
+        "should retain exactly 3 backups, got: {versions:?}"
+    );
+    assert!(
+        !versions.iter().any(|n| n.starts_with("v1-")),
+        "v1 should be deleted"
+    );
+    assert!(
+        !versions.iter().any(|n| n.starts_with("v2-")),
+        "v2 should be deleted"
+    );
 }
 
 // ─── 新增：多级子目录备份 ─────────────────────────────────────────────────────
@@ -653,8 +697,16 @@ fn bak_nested_directory_scan() {
     let root = env.root.join("proj_nested");
     let deep = root.join("src").join("components").join("ui");
     fs::create_dir_all(&deep).unwrap();
-    fs::write(deep.join("button.tsx"), "export const Button = () => <button/>").unwrap();
-    fs::write(root.join("src").join("index.ts"), "export * from './components/ui/button'").unwrap();
+    fs::write(
+        deep.join("button.tsx"),
+        "export const Button = () => <button/>",
+    )
+    .unwrap();
+    fs::write(
+        root.join("src").join("index.ts"),
+        "export * from './components/ui/button'",
+    )
+    .unwrap();
 
     let cfg = r#"{
   "storage": { "backupsDir": "A_backups", "compress": false },
@@ -665,7 +717,10 @@ fn bak_nested_directory_scan() {
 }"#;
     fs::write(root.join(".xun-bak.json"), cfg).unwrap();
 
-    run_ok(env.cmd().args(["bak", "-C", root.to_str().unwrap(), "-m", "t"]));
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
 
     let backups = root.join("A_backups");
     let v1 = fs::read_dir(&backups)
@@ -677,7 +732,11 @@ fn bak_nested_directory_scan() {
 
     // 深层文件应被完整备份
     assert!(
-        v1.join("src").join("components").join("ui").join("button.tsx").exists(),
+        v1.join("src")
+            .join("components")
+            .join("ui")
+            .join("button.tsx")
+            .exists(),
         "nested file should be backed up"
     );
     assert!(

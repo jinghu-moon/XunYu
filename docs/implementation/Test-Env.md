@@ -131,8 +131,8 @@ xun pst
 
 ### 4.8 Bak
 ```
-xun bak -C D:\100_Projects\110_Daily\Xun\target\xun-cli-env\bak-src -m "demo"
-xun bak list
+xun backup -C D:\100_Projects\110_Daily\Xun\target\xun-cli-env\bak-src -m "demo"
+xun backup list
 xun restore <name>
 ```
 

@@ -645,37 +645,39 @@
 - 示例：`xun ps --win value`  
   说明：fuzzy match by window title.
 
-### 备份（bak）
-#### `xun bak`
-- 示例：`xun bak`  
-  说明：增量项目备份。
-- 示例：`xun bak list`  
+### 备份（backup / bak）
+#### `xun backup`
+- 示例：`xun backup`  
+  说明：增量项目备份（别名：`xun bak`）。
+- 示例：`xun backup list`  
   说明：操作与参数：`list` | `verify <name>` | `find [tag]`（默认创建备份）。
-- 示例：`xun bak verify v12-2026-02-23_1030`  
+- 示例：`xun backup verify v12-2026-02-23_1030`  
   说明：操作与参数：`list` | `verify <name>` | `find [tag]`（默认创建备份）。
 - 示例：`xun bak find demo`  
-  说明：操作与参数：`list` | `verify <name>` | `find [tag]`（默认创建备份）。
-- 示例：`xun bak --msg "baseline"`  
+  说明：别名示例：`bak` 等价于 `backup`。
+- 示例：`xun backup --msg "baseline"`  
   说明：备份描述。
-- 示例：`xun bak --dir D:\Repo\MyProj`  
+- 示例：`xun backup --dir D:\Repo\MyProj`  
   说明：工作目录（默认当前目录）。
-- 示例：`xun bak --dry-run`  
+- 示例：`xun backup --dry-run`  
   说明：演练（不复制/不压缩/不清理）。
-- 示例：`xun bak --no-compress`  
+- 示例：`xun backup --no-compress`  
   说明：本次跳过压缩。
-- 示例：`xun bak --retain 10`  
+- 示例：`xun backup --retain 10`  
   说明：覆盖最大备份数。
-- 示例：`xun bak --include src,docs`  
+- 示例：`xun backup --include src,docs`  
   说明：添加包含路径（可重复或逗号分隔）。
-- 示例：`xun bak --exclude target,.git`  
+- 示例：`xun backup --exclude target,.git`  
   说明：添加排除路径（可重复或逗号分隔）。
-- 示例：`xun bak --incremental`  
+- 示例：`xun backup --incremental`  
   说明：增量备份：仅复制新增或修改的文件。
 
-### 恢复（restore）
+### 恢复（restore / rst）
 #### `xun restore`
 - 示例：`xun restore v12-2026-02-23_1030`  
-  说明：从 `xun bak` 创建的备份中恢复文件。
+  说明：从 `xun backup` 创建的备份中恢复文件（别名：`xun rst`）。
+- 示例：`xun rst v12-2026-02-23_1030`  
+  说明：别名示例：`rst` 等价于 `restore`。
 - 示例：`xun restore v12-2026-02-23_1030 --file src\main.rs`  
   说明：恢复单个文件（相对路径，例如 `src/main.rs`）。
 - 示例：`xun restore v12-2026-02-23_1030 --glob "**/*.ts"`  

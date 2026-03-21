@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use console::Style;
 
-use crate::cli::BakCmd;
+use crate::cli::BackupCmd;
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
 use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
@@ -44,7 +44,7 @@ mod zip;
 
 pub(crate) use baseline::{FileMeta, read_baseline};
 
-pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
+pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let t_total = Instant::now();
     let timing = std::env::var_os("XUN_BAK_TIMING").is_some();
 
@@ -58,30 +58,30 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     if !args.op_args.is_empty() {
         let op = args.op_args[0].as_str();
         match op.to_ascii_lowercase().as_str() {
-            "list" => return list::cmd_bak_list(&root, &cfg),
+            "list" => return list::cmd_backup_list(&root, &cfg),
             "verify" => {
                 let Some(name) = args.op_args.get(1).map(|s| s.as_str()) else {
                     return Err(CliError::with_details(
                         2,
                         "Missing backup name.".to_string(),
-                        &["Fix: Use `xun bak verify <name>`."],
+                        &["Fix: Use `xun backup verify <name>`."],
                     ));
                 };
-                return verify::cmd_bak_verify(&root, &cfg, name);
+                return verify::cmd_backup_verify(&root, &cfg, name);
             }
             "find" => {
                 let tag = args.op_args.get(1).map(|s| s.as_str());
-                return find::cmd_bak_find(&root, &cfg, tag, None, None);
+                return find::cmd_backup_find(&root, &cfg, tag, None, None);
             }
             _ => {
                 return Err(CliError::with_details(
                     2,
-                    format!("Unknown bak operation: {op}"),
+                    format!("Unknown backup operation: {op}"),
                     &[
-                        "Fix: Use `xun bak` to create a backup.",
-                        "Fix: Use `xun bak list` to list backups.",
-                        "Fix: Use `xun bak verify <name>` to verify integrity.",
-                        "Fix: Use `xun bak find [tag]` to search backups.",
+                        "Fix: Use `xun backup` to create a backup.",
+                        "Fix: Use `xun backup list` to list backups.",
+                        "Fix: Use `xun backup verify <name>` to verify integrity.",
+                        "Fix: Use `xun backup find [tag]` to search backups.",
                         "Fix: Use `xun restore <name>` to restore a backup.",
                     ],
                 ));
@@ -195,7 +195,14 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
         sp.finish_and_clear();
     }
     if timing {
-        eprintln!("{}", dim.apply_to(format!("  [scan]  {:>6} files  {:>5}ms", current.len(), elapsed_scan.as_millis())));
+        eprintln!(
+            "{}",
+            dim.apply_to(format!(
+                "  [scan]  {:>6} files  {:>5}ms",
+                current.len(),
+                elapsed_scan.as_millis()
+            ))
+        );
     }
 
     let t_baseline = Instant::now();
@@ -204,7 +211,13 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
         None => HashMap::new(),
     };
     if timing {
-        eprintln!("{}", dim.apply_to(format!("  [baseline] {:>5}ms", t_baseline.elapsed().as_millis())));
+        eprintln!(
+            "{}",
+            dim.apply_to(format!(
+                "  [baseline] {:>5}ms",
+                t_baseline.elapsed().as_millis()
+            ))
+        );
     }
 
     // 增量模式只追踪变更文件；全量模式（含目录备份）需追踪所有文件
@@ -213,7 +226,14 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     let t_diff = Instant::now();
     let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
     if timing {
-        eprintln!("{}", dim.apply_to(format!("  [diff]   {:>6} entries  {:>5}ms", diff_entries.len(), t_diff.elapsed().as_millis())));
+        eprintln!(
+            "{}",
+            dim.apply_to(format!(
+                "  [diff]   {:>6} entries  {:>5}ms",
+                diff_entries.len(),
+                t_diff.elapsed().as_millis()
+            ))
+        );
     }
     diff::print_diff(&diff_entries, show_unchanged);
 
@@ -221,8 +241,14 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
     let stats = if !args.dry_run {
         // copy 进度：显示文件数
         let copy_bar = if can_interact() && !timing {
-            let total = diff_entries.iter()
-                .filter(|e| matches!(e.kind, diff::DiffKind::New | diff::DiffKind::Modified | diff::DiffKind::Unchanged))
+            let total = diff_entries
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e.kind,
+                        diff::DiffKind::New | diff::DiffKind::Modified | diff::DiffKind::Unchanged
+                    )
+                })
                 .count() as u64;
             if total > 0 {
                 let pb = indicatif::ProgressBar::new(total);
@@ -246,10 +272,23 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
         }
         result
     } else {
-        diff::DiffStats { new: 0, modified: 0, deleted: 0 }
+        diff::DiffStats {
+            new: 0,
+            modified: 0,
+            deleted: 0,
+        }
     };
     if timing {
-        eprintln!("{}", dim.apply_to(format!("  [copy]   +{}~{}-{}  {:>5}ms", stats.new, stats.modified, stats.deleted, t_copy.elapsed().as_millis())));
+        eprintln!(
+            "{}",
+            dim.apply_to(format!(
+                "  [copy]   +{}~{}-{}  {:>5}ms",
+                stats.new,
+                stats.modified,
+                stats.deleted,
+                t_copy.elapsed().as_millis()
+            ))
+        );
     }
 
     eprintln!("{}", dim.apply_to("--------------------"));
@@ -296,7 +335,10 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
                 final_path = zip_path;
                 is_zip = true;
                 if timing {
-                    eprintln!("{}", dim.apply_to(format!("  [zip]    {:>5}ms", elapsed_zip.as_millis())));
+                    eprintln!(
+                        "{}",
+                        dim.apply_to(format!("  [zip]    {:>5}ms", elapsed_zip.as_millis()))
+                    );
                 }
             }
             Err(e) => {
@@ -325,13 +367,15 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
         ret_cfg.max_backups = r;
     }
     let t_retention = Instant::now();
-    let cleaned = retention::apply_retention_policy(
-        &backups_root,
-        &cfg.naming.prefix,
-        &ret_cfg,
-    );
+    let cleaned = retention::apply_retention_policy(&backups_root, &cfg.naming.prefix, &ret_cfg);
     if timing {
-        eprintln!("{}", dim.apply_to(format!("  [retention] cleaned={cleaned}  {:>5}ms", t_retention.elapsed().as_millis())));
+        eprintln!(
+            "{}",
+            dim.apply_to(format!(
+                "  [retention] cleaned={cleaned}  {:>5}ms",
+                t_retention.elapsed().as_millis()
+            ))
+        );
     }
 
     // 6b. 写入备份元数据
@@ -407,7 +451,11 @@ pub(crate) fn cmd_bak(args: BakCmd) -> CliResult {
         report::report("Cleaned", &format!("{cleaned} old backups"), &yellow);
     }
     let elapsed_total = t_total.elapsed();
-    report::report("Time", &format!("{:.2}s", elapsed_total.as_secs_f64()), &dim);
+    report::report(
+        "Time",
+        &format!("{:.2}s", elapsed_total.as_secs_f64()),
+        &dim,
+    );
     println!();
     Ok(())
 }

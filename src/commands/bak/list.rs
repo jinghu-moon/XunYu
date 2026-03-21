@@ -6,11 +6,11 @@ use comfy_table::{Attribute, Cell, Color, Table};
 
 use crate::output::{CliResult, apply_pretty_table_style, print_table};
 
-use super::config::BakConfig;
+use super::config::BackupConfig;
 use super::time_fmt::fmt_unix_ts;
 use super::util::dir_size;
 
-pub(crate) fn cmd_bak_list(root: &Path, cfg: &BakConfig) -> CliResult {
+pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig) -> CliResult {
     let backups_root = root.join(&cfg.storage.backups_dir);
     let _ = fs::create_dir_all(&backups_root);
 

@@ -4,7 +4,7 @@ _xun_complete_static() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     local sub="${COMP_WORDS[1]}"
-    local subcommands="init completion config ctx list z open ws save set del delete check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill keys all fuzzy bak tree env video lock rm mv renfile protect encrypt decrypt serve redirect"
+    local subcommands="init completion config ctx list z open ws save set del delete check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill keys all fuzzy backup bak tree env video lock rm mv renfile protect encrypt decrypt serve redirect restore rst"
     local formats="auto table tsv json"
     local proxy_sub="set del get detect test"
     local ctx_sub="set use off list show del rename"

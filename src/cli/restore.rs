@@ -1,6 +1,6 @@
 use argh::FromArgs;
 
-/// Restore files from a backup created by `xun bak`.
+/// Restore files from a backup created by `xun backup`. Alias: `rst`.
 #[derive(FromArgs)]
 #[argh(subcommand, name = "restore")]
 pub struct RestoreCmd {

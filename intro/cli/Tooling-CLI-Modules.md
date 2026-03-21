@@ -258,18 +258,18 @@ FindCmd
 10. `src/find/walker/single.rs`
 11. `src/find/mft/*`
 
-## 6. 备份模块：`bak`
+## 6. 备份模块：`backup / bak`
 
 ### 6.1 命令定义层：`src/cli/bak.rs`
 
-`bak` 只有一个顶层命令，但它现在聚焦四种工作模式：
+正式命令是 `backup`，别名是 `bak`。它现在聚焦四种工作模式：
 
 - 默认：创建一次增量备份
-- `bak list`：列出现有备份
-- `bak verify <name>`：校验备份完整性
-- `bak find [tag]`：按标签或描述查找备份
+- `backup list`：列出现有备份
+- `backup verify <name>`：校验备份完整性
+- `backup find [tag]`：按标签或描述查找备份
 
-恢复已经拆到独立的 `restore` 顶层命令。
+恢复已经拆到独立的 `restore` 顶层命令，别名为 `rst`。
 
 同时它还支持：
 
@@ -322,7 +322,7 @@ FindCmd
 - 它支持配置里的 `include / exclude`，也支持命令行追加 `--include / --exclude`
 - 如果配置启用 `useGitignore`，会把 `.gitignore` 规则并入扫描过滤
 
-所以 `bak` 不只是“把整个目录复制一份”，而是在做**受规则控制的增量快照**。
+所以 `backup/bak` 不只是“把整个目录复制一份”，而是在做**受规则控制的增量快照**。
 
 ### 6.4 恢复语义
 
@@ -345,7 +345,7 @@ FindCmd
 
 目前没有独立的 Dashboard `BakPanel`。
 
-因此 `bak` 也是一个纯 CLI 工具模块，更偏面向开发者自己的备份 / 回滚流程。
+因此 `backup/bak` 也是一个纯 CLI 工具模块，更偏面向开发者自己的备份 / 回滚流程。
 
 ### 6.6 推荐阅读顺序
 

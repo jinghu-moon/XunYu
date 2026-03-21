@@ -1,4 +1,4 @@
-//! `xun bak verify <name>` — blake3 完整性校验
+//! `xun backup verify <name>` — blake3 完整性校验
 
 use std::fs;
 use std::path::Path;
@@ -6,9 +6,9 @@ use std::path::Path;
 use crate::output::{CliError, CliResult};
 
 use super::checksum::{VerifyResult, verify_manifest};
-use super::config::BakConfig;
+use super::config::BackupConfig;
 
-pub(crate) fn cmd_bak_verify(root: &Path, cfg: &BakConfig, name: &str) -> CliResult {
+pub(crate) fn cmd_backup_verify(root: &Path, cfg: &BackupConfig, name: &str) -> CliResult {
     let backups_root = root.join(&cfg.storage.backups_dir);
 
     // 定位备份（dir 或 zip 目录）
@@ -17,7 +17,7 @@ pub(crate) fn cmd_bak_verify(root: &Path, cfg: &BakConfig, name: &str) -> CliRes
         return Err(CliError::with_details(
             2,
             format!("Backup not found: {name}"),
-            &["Fix: Run `xun bak list` to see available backups."],
+            &["Fix: Run `xun backup list` to see available backups."],
         ));
     };
 
@@ -39,18 +39,19 @@ pub(crate) fn cmd_bak_verify(root: &Path, cfg: &BakConfig, name: &str) -> CliRes
             for f in &files {
                 eprintln!("  CORRUPTED: {f}");
             }
-            Err(CliError::new(1, format!("{} file(s) corrupted", files.len())))
-        }
-        VerifyResult::NoManifest => {
-            Err(CliError::with_details(
-                2,
-                format!("No manifest found in backup: {name}"),
-                &[
-                    "Hint: Manifest is only generated for backups created after this update.",
-                    "Hint: Re-create the backup to generate a manifest.",
-                ],
+            Err(CliError::new(
+                1,
+                format!("{} file(s) corrupted", files.len()),
             ))
         }
+        VerifyResult::NoManifest => Err(CliError::with_details(
+            2,
+            format!("No manifest found in backup: {name}"),
+            &[
+                "Hint: Manifest is only generated for backups created after this update.",
+                "Hint: Re-create the backup to generate a manifest.",
+            ],
+        )),
     }
 }
 
@@ -68,9 +69,7 @@ fn locate_backup(backups_root: &Path, name: &str) -> Option<std::path::PathBuf> 
     if let Ok(rd) = fs::read_dir(backups_root) {
         for e in rd.flatten() {
             let entry_name = e.file_name().to_string_lossy().into_owned();
-            let stem = entry_name
-                .strip_suffix(".zip")
-                .unwrap_or(&entry_name);
+            let stem = entry_name.strip_suffix(".zip").unwrap_or(&entry_name);
             if stem == name || entry_name == name {
                 return Some(e.path());
             }

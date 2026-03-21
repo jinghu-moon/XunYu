@@ -4,7 +4,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub(crate) struct BakConfig {
+pub(crate) struct BackupConfig {
     #[serde(default)]
     pub(crate) storage: StorageCfg,
     #[serde(default)]
@@ -83,7 +83,7 @@ impl Default for RetentionCfg {
     }
 }
 
-impl Default for BakConfig {
+impl Default for BackupConfig {
     fn default() -> Self {
         Self {
             storage: StorageCfg::default(),
@@ -150,15 +150,14 @@ const DEFAULT_CONFIG_JSON: &str = r#"{
 pub(crate) const CONFIG_FILE: &str = ".xun-bak.json";
 const CONFIG_FILE_LEGACY: &str = ".svconfig.json";
 
-pub(crate) fn load_config(root: &Path) -> BakConfig {
+pub(crate) fn load_config(root: &Path) -> BackupConfig {
     let cfg_path = root.join(CONFIG_FILE);
     let legacy_path = root.join(CONFIG_FILE_LEGACY);
 
     // 自动迁移旧配置文件名
-    if !cfg_path.exists() && legacy_path.exists()
-        && fs::rename(&legacy_path, &cfg_path).is_ok() {
-            ui_println!("ℹ Migrated config: .svconfig.json → .xun-bak.json");
-        }
+    if !cfg_path.exists() && legacy_path.exists() && fs::rename(&legacy_path, &cfg_path).is_ok() {
+        ui_println!("ℹ Migrated config: .svconfig.json → .xun-bak.json");
+    }
 
     if !cfg_path.exists() {
         let _ = fs::write(&cfg_path, DEFAULT_CONFIG_JSON);
@@ -166,6 +165,6 @@ pub(crate) fn load_config(root: &Path) -> BakConfig {
     }
     match fs::read_to_string(&cfg_path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or_default(),
-        Err(_) => BakConfig::default(),
+        Err(_) => BackupConfig::default(),
     }
 }

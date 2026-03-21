@@ -6,11 +6,11 @@ use crate::cli::RestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
 
-use super::bak::{FileMeta, read_baseline};
-use super::bak::config as bak_config;
+use super::backup::config as backup_config;
+use super::backup::{FileMeta, read_baseline};
 use super::restore_core;
 
-use bak_config::BakConfig;
+use backup_config::BackupConfig;
 
 pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     let root = match &args.dir {
@@ -18,7 +18,7 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
         None => std::env::current_dir()
             .map_err(|e| CliError::new(1, format!("Failed to get current directory: {e}")))?,
     };
-    let cfg = bak_config::load_config(&root);
+    let cfg = backup_config::load_config(&root);
     let backups_root = root.join(&cfg.storage.backups_dir);
 
     // 解析备份源路径
@@ -27,7 +27,7 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     // --snapshot：还原前先备份当前状态
     if args.snapshot && !args.dry_run {
         eprintln!("Creating pre-restore snapshot...");
-        run_snapshot_bak(&root, &cfg)?;
+        run_snapshot_backup(&root, &cfg)?;
     }
 
     // 确定目标根目录
@@ -72,7 +72,10 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
         elapsed.as_secs_f64()
     );
     if failed > 0 {
-        return Err(CliError::new(1, format!("{failed} file(s) failed to restore.")));
+        return Err(CliError::new(
+            1,
+            format!("{failed} file(s) failed to restore."),
+        ));
     }
     Ok(())
 }
@@ -88,7 +91,7 @@ fn resolve_backup_src(backups_root: &Path, name_or_path: &str) -> Result<PathBuf
             2,
             format!("Backup not found: {name_or_path}"),
             &[
-                "Fix: Run `xun bak list` to see available backups.",
+                "Fix: Run `xun backup list` to see available backups.",
                 "Fix: Pass a direct path to a backup dir or .zip file.",
             ],
         )
@@ -157,7 +160,7 @@ fn restore_single_file(
 }
 
 /// restore 前展示将被覆盖的文件列表（modify/new 文件数）
-fn show_restore_preview(root: &Path, cfg: &BakConfig, backup_src: &Path) {
+fn show_restore_preview(root: &Path, cfg: &BackupConfig, backup_src: &Path) {
     let backup_snapshot = read_baseline(backup_src);
     let current_snapshot = read_baseline(root);
     let entries = build_restore_preview_items(&backup_snapshot, &current_snapshot);
@@ -261,10 +264,10 @@ fn restore_with_glob(
     }
 }
 
-/// snapshot：调用 cmd_bak 备份当前状态（desc = pre_restore）
-fn run_snapshot_bak(root: &Path, _cfg: &BakConfig) -> CliResult {
-    use crate::cli::BakCmd;
-    let args = BakCmd {
+/// snapshot：调用 cmd_backup 备份当前状态（desc = pre_restore）
+fn run_snapshot_backup(root: &Path, _cfg: &BackupConfig) -> CliResult {
+    use crate::cli::BackupCmd;
+    let args = BackupCmd {
         op_args: vec![],
         msg: Some("pre_restore".to_string()),
         dir: Some(root.to_string_lossy().into_owned()),
@@ -275,7 +278,7 @@ fn run_snapshot_bak(root: &Path, _cfg: &BakConfig) -> CliResult {
         exclude: vec![],
         incremental: false,
     };
-    super::bak::cmd_bak(args)
+    super::backup::cmd_backup(args)
 }
 
 /// 简易 glob 匹配（无外部依赖）
@@ -341,7 +344,7 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use super::{RestorePreviewItem, RestorePreviewKind, build_restore_preview_items, glob_match};
-    use crate::commands::bak::FileMeta;
+    use crate::commands::backup::FileMeta;
 
     #[test]
     fn glob_exact() {
