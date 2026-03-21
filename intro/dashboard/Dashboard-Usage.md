@@ -104,7 +104,7 @@ pnpm -C dashboard-ui dev
 | 路径与上下文 | 书签与上下文切换 | Bookmarks、`ctx`、`recent`、`stats`、`gc`、`dedup` |
 | 网络与代理 | 端口、进程、代理 | `ports`、`ps`、`pkill`、`kill`、`px`、Proxy 状态 |
 | 环境与配置 | 环境变量与全局配置 | Config、Env 工作台 |
-| 文件与安全 | 文件浏览、规则、保护、安全治理 | Diff、Redirect、`tree`、`find`、`bak`、`rm`、`protect`、`acl`、`encrypt` |
+| 文件与安全 | 文件浏览、规则、保护、安全治理 | Diff、Redirect、`tree`、`find`、`backup`、`restore`、`rm`、`protect`、`acl`、`encrypt` |
 | 集成与自动化 | shell 集成与工具化动作 | `init`、`completion`、`__complete`、`alias`、`brn` |
 | 媒体与转换 | 图片和视频处理 | `img`、`video probe`、`video compress`、`video remux` |
 | 统计与诊断 | 诊断、任务复盘与统计分析 | Diagnostics Center、Recent Tasks、Recipe、Audit、`cstat` |
@@ -287,7 +287,7 @@ Dashboard 中的高风险动作统一遵循 **Triple-Guard**：
 1. 先用 `DiffPanel` / `RedirectPanel` 看结构、规则、差异。
 2. 如果要对比 ACL，可先把一个文件设为 `ACL 参考`，再切到目标文件同步 `acl:diff / acl:copy`。
 3. 对 `acl:add / acl:purge / acl:owner / acl:inherit` 这类高风险治理，preview 会直接显示“当前 ACL vs 预期状态”的结构化差异，确认前先看这一层。
-4. 再用 `tree` / `find` / `bak` 等任务卡进入工作流。
+4. 再用 `tree` / `find` / `backup` / `restore` 等任务卡进入工作流。
 5. 真正落地的文件变更，一律看 preview 和 receipt；如果 receipt 仍显示 `ACL 差异明细` 未对齐，优先回到任务参数排查。
 6. 批量治理在确认弹窗里也会逐项显示结构化治理摘要；确认前先核对每条路径的预期变更，再执行。
 7. 批量治理完成后，预演项与执行回执都可直接从批量面板跳到最近任务、审计或诊断中心，不必手工重新筛选。

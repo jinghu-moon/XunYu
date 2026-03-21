@@ -8,14 +8,14 @@ use serde::{Deserialize, Serialize};
 pub(crate) const META_FILE: &str = ".bak-meta.json";
 
 #[derive(Serialize, Deserialize, Default)]
-pub(crate) struct BakStats {
+pub(crate) struct BackupStats {
     pub(crate) new: u32,
     pub(crate) modified: u32,
     pub(crate) deleted: u32,
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct BakMeta {
+pub(crate) struct BackupMeta {
     /// 格式版本，目前固定为 1
     pub(crate) version: u32,
     /// 备份创建时间（Unix 秒）
@@ -26,20 +26,20 @@ pub(crate) struct BakMeta {
     #[serde(default)]
     pub(crate) tags: Vec<String>,
     /// 文件统计
-    pub(crate) stats: BakStats,
+    pub(crate) stats: BackupStats,
     /// 是否为增量备份
     pub(crate) incremental: bool,
 }
 
 /// 将元数据写入 backup_path/.bak-meta.json
-pub(crate) fn write_meta(backup_path: &Path, meta: &BakMeta) {
+pub(crate) fn write_meta(backup_path: &Path, meta: &BackupMeta) {
     if let Ok(json) = serde_json::to_string_pretty(meta) {
         let _ = fs::write(backup_path.join(META_FILE), json);
     }
 }
 
 /// 从 backup_path/.bak-meta.json 读取元数据
-pub(crate) fn read_meta(backup_path: &Path) -> Option<BakMeta> {
+pub(crate) fn read_meta(backup_path: &Path) -> Option<BackupMeta> {
     let data = fs::read_to_string(backup_path.join(META_FILE)).ok()?;
     serde_json::from_str(&data).ok()
 }

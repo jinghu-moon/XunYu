@@ -195,12 +195,12 @@
 | 9.3 | `bak` 增量检测：新增文件标记 `+` | `backup.rs` 增量比较逻辑 | ✅ `test_basic::bak_incremental_reports_new_file` |
 | 9.4 | `bak` retention 策略删除旧版本 | `backup.rs` `maxBackups` + `deleteCount` 逻辑 | ✅ `test_basic::bak_retention_removes_old_versions` |
 | 9.5 | `bak` 使用 `.gitignore` 排除文件 | `backup.rs` `useGitignore` 配置项 | ✅ `test_basic::bak_gitignore_excludes_file` |
-| 9.6 | `bak` 无 `.svconfig.json` 时自动创建默认配置 | `backup.rs` 配置文件缺失处理 | ✅ `test_basic::bak_missing_config_auto_creates_default_config` |
+| 9.6 | `backup` 无 `.xun-bak.json` 时自动创建默认配置 | `backup.rs` 配置文件缺失处理 | ✅ `test_basic::bak_missing_config_auto_creates_default_config` |
 | 9.7 | `bak` 压缩模式 (`compress: true`) 生成 zip | `backup.rs` zip 压缩分支 | ✅ `test_basic::bak_compress_true_creates_zip` |
 | 9.8 | `bak` 增量检测：修改文件标记 `~` | `backup.rs` 文件内容/时间变更检测 | ✅ `test_basic::bak_incremental_reports_modified_file_with_tilde` |
 | 9.9 | `bak` 增量检测：删除文件标记 `-` | `backup.rs` 旧版本有但新版本无的文件 | ✅ `test_basic::bak_incremental_reports_deleted_file_with_minus` |
 | 9.10 | `bak` 版本号自增（v1, v2, v3...） | `backup.rs` 版本号解析和递增 | ✅ `test_basic::bak_version_increments_v1_v2` |
-| 9.11 | `backup/bak list` 输出现有备份列表 | `backup/list.rs:13` `cmd_backup_list()` | ✅ `test_basic::bak_list_shows_human_readable_mtime` |
+| 9.11 | `backup list` 输出现有备份列表（`bak list` 为别名） | `backup/list.rs:13` `cmd_backup_list()` | ✅ `test_basic::bak_list_shows_human_readable_mtime` |
 | 9.12 | `restore --file` 可恢复单个文件 | `restore.rs:15` `cmd_restore()` / `restore.rs:125` `restore_single_file()` | ✅ `test_basic::restore::restore_cmd_file_from_dir_backup` / `test_basic::restore::restore_cmd_file_from_zip_backup` |
 
 ## 10. 端口管理 (`src/ports.rs` + `src/commands/ports.rs`)

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -29,9 +30,22 @@ mod zip;
 
 pub(crate) use baseline::{FileMeta, read_baseline};
 
+fn backup_timing_enabled() -> bool {
+    backup_timing_enabled_with(|name| std::env::var_os(name))
+}
+
+fn backup_timing_enabled_with<F>(mut get_env: F) -> bool
+where
+    F: FnMut(&str) -> Option<OsString>,
+{
+    ["XUN_BACKUP_TIMING", "XUN_BAK_TIMING"]
+        .into_iter()
+        .any(|name| get_env(name).is_some())
+}
+
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let t_total = Instant::now();
-    let timing = std::env::var_os("XUN_BAK_TIMING").is_some();
+    let timing = backup_timing_enabled();
 
     let root = match &args.dir {
         Some(d) => PathBuf::from(d),
@@ -364,12 +378,12 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     }
 
     // 6b. 写入备份元数据
-    let bak_meta = meta::BakMeta {
+    let backup_meta = meta::BackupMeta {
         version: 1,
         ts: meta::now_unix_secs(),
         desc: desc.clone(),
         tags: Vec::new(),
-        stats: meta::BakStats {
+        stats: meta::BackupStats {
             new: stats.new,
             modified: stats.modified,
             deleted: stats.deleted,
@@ -378,7 +392,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     };
     // 目录备份直接写元数据；zip 备份写入已删除的 dest_dir（zip 前）不可用，改写到 backups_root 旁
     if !is_zip {
-        meta::write_meta(&final_path, &bak_meta);
+        meta::write_meta(&final_path, &backup_meta);
         // 生成 blake3 manifest（目录备份）
         #[cfg(feature = "bak")]
         {
@@ -393,7 +407,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     } else {
         // zip 已完成，元数据写到同名 .meta.json 旁
         let meta_path = backups_root.join(format!("{folder_name}.meta.json"));
-        if let Ok(json) = serde_json::to_string_pretty(&bak_meta) {
+        if let Ok(json) = serde_json::to_string_pretty(&backup_meta) {
             let _ = fs::write(&meta_path, json);
         }
     }
@@ -443,4 +457,24 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     );
     println!();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::ffi::OsString;
+
+    use super::backup_timing_enabled_with;
+
+    #[test]
+    fn backup_timing_enabled_accepts_formal_env_name() {
+        let env = HashMap::from([("XUN_BACKUP_TIMING", OsString::from("1"))]);
+        assert!(backup_timing_enabled_with(|name| env.get(name).cloned()));
+    }
+
+    #[test]
+    fn backup_timing_enabled_keeps_legacy_env_name_compatible() {
+        let env = HashMap::from([("XUN_BAK_TIMING", OsString::from("1"))]);
+        assert!(backup_timing_enabled_with(|name| env.get(name).cloned()));
+    }
 }

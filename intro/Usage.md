@@ -16,7 +16,7 @@ Windows 路径在 PowerShell/CMD 中不需要转义反斜杠：`xun set proj D:\
 
 ## 命令分层与默认行为
 
-- 默认可用命令族：`acl`、书签、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`bak`、`tree`、`find`、`delete/del`、`rm`
+- 默认可用命令族：`acl`、书签、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`backup/bak`、`restore/rst`、`tree`、`find`、`delete/del`、`rm`
 - 需 feature 的命令族：`alias`、`lock`、`protect`、`crypt`、`redirect`、`serve`、`diff`、`brn`、`cstat`、`img`
 - `ports` 默认展示常见开发端口（3000-3999/5000-5999/8000-8999/4173/5173）；查看全部请加 `--all`
 - `ps`/`pkill` 用于进程检索与终止；支持按名称、PID 或窗口标题（`-w`）
@@ -32,7 +32,7 @@ Windows 路径在 PowerShell/CMD 中不需要转义反斜杠：`xun set proj D:\
 | 代理配置 | `%USERPROFILE%\.xun.proxy.json` | `proxy` / `pon` / `poff` 持久化 |
 | Context 会话 | `%TEMP%\xun-ctx-<pid>.json` | ctx 会话态（由 `XUN_CTX_STATE` 指定） |
 | 审计日志 | `%USERPROFILE%\audit.jsonl` | JSON Lines（用于追溯/undo 等；与 `XUN_DB` 同目录） |
-| 备份配置 | `.svconfig.json` | `bak` 在工作目录自动创建 |
+| 备份配置 | `.xun-bak.json` | `backup` 在工作目录自动创建；旧 `.svconfig.json` 会自动迁移 |
 | 树忽略 | `.xunignore` | `redirect`/`tree` 等忽略规则（类 `.gitignore`） |
 
 ## Dashboard 基础 API（需 `--features dashboard`）

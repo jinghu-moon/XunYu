@@ -273,21 +273,21 @@ FindCmd
 
 同时它还支持：
 
-- `--file`：恢复单个相对路径文件
 - `--msg`：备份描述
 - `--dir`：指定工作目录
 - `--dry-run`
 - `--no-compress`
 - `--retain`
 - `--include / --exclude`
+- `--incremental`
 
-所以 `backup/bak` 并不是简单的“打个 zip”，而是带版本、扫描、差异、压缩与保留策略的备份工具。
+所以 `backup`（别名 `bak`）并不是简单的“打个 zip”，而是带版本、扫描、差异、压缩与保留策略的备份工具。
 
 ### 6.2 执行层拆分：`src/commands/backup*`
 
 `src/commands/backup.rs` 是总控入口，但核心逻辑被拆到多个文件：
 
-- `config.rs`：加载 `.svconfig.json`，并在缺失时自动生成默认配置
+- `config.rs`：加载 `.xun-bak.json`，并兼容迁移旧 `.svconfig.json`
 - `version.rs`：扫描现有版本并决定下一版本号
 - `scan.rs`：扫描当前工作区文件
 - `baseline.rs`：读取上一份备份基线
@@ -306,7 +306,7 @@ FindCmd
 默认创建备份时，大致流程是：
 
 ```text
-加载 .svconfig.json
+加载 .xun-bak.json（必要时先迁移旧 .svconfig.json）
   -> 扫描历史版本
   -> 生成下一版本名
   -> 扫描当前文件
@@ -322,7 +322,7 @@ FindCmd
 - 它支持配置里的 `include / exclude`，也支持命令行追加 `--include / --exclude`
 - 如果配置启用 `useGitignore`，会把 `.gitignore` 规则并入扫描过滤
 
-所以 `backup/bak` 不只是“把整个目录复制一份”，而是在做**受规则控制的增量快照**。
+所以 `backup`（别名 `bak`）不只是“把整个目录复制一份”，而是在做**受规则控制的增量快照**。
 
 ### 6.4 恢复语义
 
@@ -343,9 +343,9 @@ FindCmd
 
 ### 6.5 Dashboard 映射
 
-目前没有独立的 Dashboard `BakPanel`。
+目前没有独立的 Dashboard `BackupPanel` 或 `RestorePanel`。
 
-因此 `backup/bak` 也是一个纯 CLI 工具模块，更偏面向开发者自己的备份 / 回滚流程。
+因此 `backup` / `restore` 目前仍然是纯 CLI 工具模块，更偏面向开发者自己的备份 / 回滚流程。
 
 ### 6.6 推荐阅读顺序
 

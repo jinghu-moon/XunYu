@@ -45,7 +45,7 @@
 
 ## 当前能力速览
 
-- 默认可用：书签命令族、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`bak`、`tree`、`find`、`delete/del`、`rm`、`env`、`video`、`acl`
+- 默认可用：书签命令族、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`backup/bak`、`restore/rst`、`tree`、`find`、`delete/del`、`rm`、`env`、`video`、`acl`
 - 可选 feature：`alias`、`lock`、`protect`、`crypt`、`redirect`、`dashboard`、`diff`、`batch_rename`（`brn`）、`cstat`、`img`
 - 启用 `dashboard,diff` 后，除 `xun diff` 外，还会提供 Dashboard 的文件浏览、Diff、转换、校验与实时刷新能力
 

@@ -7,7 +7,7 @@
 - 很多能力由 Cargo feature 控制，不一定默认出现在每个构建里。
 - 模块更偏专项工具、重型工作流或外部系统集成，而不是基础日常操作。
 
-如果你已经理解了 `bookmarks / proxy / ports / tree / config / ctx / find / bak / delete`，这一篇就是下一层：看项目怎样把“专项能力”接到同一套 CLI 骨架上。
+如果你已经理解了 `bookmarks / proxy / ports / tree / config / ctx / find / backup / restore / delete`，这一篇就是下一层：看项目怎样把“专项能力”接到同一套 CLI 骨架上。
 
 ## 1. 这一组模块为什么适合放在一起看
 
