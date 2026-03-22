@@ -254,3 +254,8 @@ harness = false
 [[bench]]
 name = "backup_hotpath_bench_divan"
 harness = false
+
+[[test]]
+name = "test_alias"
+path = "tests/test_alias.rs"
+required-features = ["alias"]
