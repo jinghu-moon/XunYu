@@ -246,6 +246,7 @@ harness = false
 [[bench]]
 name = "alias_bench_divan"
 harness = false
+required-features = ["alias"]
 
 [[bench]]
 name = "brn_bench_divan"
