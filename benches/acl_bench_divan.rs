@@ -43,9 +43,18 @@ fn make_ace(principal: &str, rights: u32, ace_type: AceType, inherited: bool) ->
 fn make_snapshot(n: usize) -> AclSnapshot {
     let entries = (0..n)
         .map(|i| {
-            let ace_type = if i % 3 == 0 { AceType::Deny } else { AceType::Allow };
+            let ace_type = if i % 3 == 0 {
+                AceType::Deny
+            } else {
+                AceType::Allow
+            };
             let inherited = i % 2 == 0;
-            make_ace(&format!("S-1-5-21-bench-{i}"), 0x1F01FF, ace_type, inherited)
+            make_ace(
+                &format!("S-1-5-21-bench-{i}"),
+                0x1F01FF,
+                ace_type,
+                inherited,
+            )
         })
         .collect();
     AclSnapshot {
@@ -60,10 +69,24 @@ fn make_snapshot_pair(n: usize, diff_pct: u32) -> (AclSnapshot, AclSnapshot) {
     let diff_count = n * diff_pct as usize / 100;
     let common_count = n - diff_count;
     let common: Vec<AceEntry> = (0..common_count)
-        .map(|i| make_ace(&format!("S-1-5-21-common-{i}"), 0x1F01FF, AceType::Allow, false))
+        .map(|i| {
+            make_ace(
+                &format!("S-1-5-21-common-{i}"),
+                0x1F01FF,
+                AceType::Allow,
+                false,
+            )
+        })
         .collect();
     let only_a: Vec<AceEntry> = (0..diff_count)
-        .map(|i| make_ace(&format!("S-1-5-21-onlya-{i}"), 0x1F01FF, AceType::Allow, false))
+        .map(|i| {
+            make_ace(
+                &format!("S-1-5-21-onlya-{i}"),
+                0x1F01FF,
+                AceType::Allow,
+                false,
+            )
+        })
         .collect();
     let mut a_entries = common.clone();
     a_entries.extend(only_a);
@@ -114,7 +137,14 @@ fn diff_completely_different(bencher: Bencher, n: usize) {
         owner: r"NT AUTHORITY\SYSTEM".to_string(),
         is_protected: true,
         entries: (0..n)
-            .map(|i| make_ace(&format!("S-1-5-21-uniq-{i}"), 0x1200A9, AceType::Allow, false))
+            .map(|i| {
+                make_ace(
+                    &format!("S-1-5-21-uniq-{i}"),
+                    0x1200A9,
+                    AceType::Allow,
+                    false,
+                )
+            })
             .collect(),
     };
     bencher
@@ -160,7 +190,10 @@ fn effective_sid_count(bencher: Bencher, sid_count: usize) {
 #[divan::bench(args = [10usize, 50, 200, 500], sample_count = 200)]
 fn effective_ace_count(bencher: Bencher, n: usize) {
     let snap = make_snapshot(n);
-    let sids = vec!["S-1-5-21-bench-0".to_string(), "S-1-5-21-bench-1".to_string()];
+    let sids = vec![
+        "S-1-5-21-bench-0".to_string(),
+        "S-1-5-21-bench-1".to_string(),
+    ];
     bencher
         .counter(divan::counter::ItemsCount::new(n))
         .bench(|| black_box(compute_effective_access(black_box(&snap), black_box(&sids))));
@@ -195,8 +228,11 @@ fn diff_key_throughput(bencher: Bencher, n: usize) {
     bencher
         .counter(divan::counter::ItemsCount::new(n))
         .bench(|| {
-            let _keys: Vec<String> =
-                snap.entries.iter().map(|e| black_box(e.diff_key())).collect();
+            let _keys: Vec<String> = snap
+                .entries
+                .iter()
+                .map(|e| black_box(e.diff_key()))
+                .collect();
         });
 }
 
@@ -247,7 +283,11 @@ fn orphan_filter_none(bencher: Bencher, n: usize) {
     bencher
         .counter(divan::counter::ItemsCount::new(n))
         .bench(|| {
-            let count = snap.entries.iter().filter(|e| black_box(e.is_orphan)).count();
+            let count = snap
+                .entries
+                .iter()
+                .filter(|e| black_box(e.is_orphan))
+                .count();
             black_box(count);
         });
 }
@@ -271,7 +311,11 @@ fn orphan_filter_half(bencher: Bencher, n: usize) {
     bencher
         .counter(divan::counter::ItemsCount::new(n))
         .bench(|| {
-            let count = snap.entries.iter().filter(|e| black_box(e.is_orphan)).count();
+            let count = snap
+                .entries
+                .iter()
+                .filter(|e| black_box(e.is_orphan))
+                .count();
             black_box(count);
         });
 }

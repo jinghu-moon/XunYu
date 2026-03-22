@@ -174,7 +174,11 @@ fn read_audit_actions(env: &TestEnv) -> Vec<String> {
     };
     raw.lines()
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .filter_map(|v| v.get("action").and_then(|a| a.as_str()).map(|s| s.to_string()))
+        .filter_map(|v| {
+            v.get("action")
+                .and_then(|a| a.as_str())
+                .map(|s| s.to_string())
+        })
         .collect()
 }
 
@@ -224,21 +228,25 @@ fn main() {
     results.push(run_ok(
         "acl view",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "view".to_string(),
             "-p".to_string(),
-            dir_a.to_string_lossy().into_owned()],
+            dir_a.to_string_lossy().into_owned(),
+        ],
         |_, _| Ok(()),
     ));
 
     results.push(run_ok(
         "acl view detail",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "view".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
-            "--detail".to_string()],
+            "--detail".to_string(),
+        ],
         |_, _| Ok(()),
     ));
 
@@ -246,12 +254,14 @@ fn main() {
     results.push(run_ok(
         "acl view export",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "view".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
             "--export".to_string(),
-            export_acl.to_string_lossy().into_owned()],
+            export_acl.to_string_lossy().into_owned(),
+        ],
         |_, _| {
             if export_acl.exists() {
                 Ok(())
@@ -265,14 +275,16 @@ fn main() {
     results.push(run_ok(
         "acl diff export",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "diff".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
             "-r".to_string(),
             dir_b.to_string_lossy().into_owned(),
             "-o".to_string(),
-            export_diff.to_string_lossy().into_owned()],
+            export_diff.to_string_lossy().into_owned(),
+        ],
         |_, _| {
             if export_diff.exists() {
                 Ok(())
@@ -285,26 +297,30 @@ fn main() {
     results.push(run_ok(
         "acl effective",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "effective".to_string(),
             "-p".to_string(),
-            dir_a.to_string_lossy().into_owned()],
+            dir_a.to_string_lossy().into_owned(),
+        ],
         |_, _| Ok(()),
     ));
 
     results.push(run_ok(
         "acl config set",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "config".to_string(),
             "--set".to_string(),
             "throttle_limit".to_string(),
-            "8".to_string()],
+            "8".to_string(),
+        ],
         |env, _| {
             let raw = fs::read_to_string(&env.config_path)
                 .map_err(|e| format!("read config failed: {e}"))?;
-            let v: Value = serde_json::from_str(&raw)
-                .map_err(|e| format!("parse config failed: {e}"))?;
+            let v: Value =
+                serde_json::from_str(&raw).map_err(|e| format!("parse config failed: {e}"))?;
             let cur = v
                 .get("acl")
                 .and_then(|a| a.get("throttle_limit"))
@@ -321,12 +337,14 @@ fn main() {
     results.push(run_ok(
         "acl orphans",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "orphans".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
             "--action".to_string(),
-            "none".to_string()],
+            "none".to_string(),
+        ],
         |_, _| Ok(()),
     ));
 
@@ -361,13 +379,15 @@ fn main() {
     results.push(run_ok(
         "acl purge",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "purge".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
             "--principal".to_string(),
             "BUILTIN\\Users".to_string(),
-            "-y".to_string()],
+            "-y".to_string(),
+        ],
         |env, _| {
             let actions = read_audit_actions(env);
             if actions.iter().any(|a| a == "PurgePrincipal") {
@@ -381,11 +401,13 @@ fn main() {
     results.push(run_ok(
         "acl inherit disable",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "inherit".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
-            "--disable".to_string()],
+            "--disable".to_string(),
+        ],
         |env, _| {
             let actions = read_audit_actions(env);
             if actions.iter().any(|a| a == "SetInheritance") {
@@ -399,13 +421,15 @@ fn main() {
     results.push(run_ok(
         "acl copy",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "copy".to_string(),
             "-p".to_string(),
             dir_b.to_string_lossy().into_owned(),
             "-r".to_string(),
             dir_a.to_string_lossy().into_owned(),
-            "-y".to_string()],
+            "-y".to_string(),
+        ],
         |env, _| {
             let actions = read_audit_actions(env);
             if actions.iter().any(|a| a == "CopyAcl") {
@@ -420,12 +444,14 @@ fn main() {
     results.push(run_ok(
         "acl backup",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "backup".to_string(),
             "-p".to_string(),
             dir_a.to_string_lossy().into_owned(),
             "-o".to_string(),
-            backup.to_string_lossy().into_owned()],
+            backup.to_string_lossy().into_owned(),
+        ],
         |_, _| {
             if backup.exists() {
                 Ok(())
@@ -438,13 +464,15 @@ fn main() {
     results.push(run_ok(
         "acl restore",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "restore".to_string(),
             "-p".to_string(),
             dir_b.to_string_lossy().into_owned(),
             "--from".to_string(),
             backup.to_string_lossy().into_owned(),
-            "-y".to_string()],
+            "-y".to_string(),
+        ],
         |env, _| {
             let actions = read_audit_actions(env);
             if actions.iter().any(|a| a == "RestoreAcl") {
@@ -455,15 +483,12 @@ fn main() {
         },
     ));
 
-    let batch_paths = format!(
-        "{},{}",
-        dir_a.to_string_lossy(),
-        dir_b.to_string_lossy()
-    );
+    let batch_paths = format!("{},{}", dir_a.to_string_lossy(), dir_b.to_string_lossy());
     results.push(run_ok(
         "acl batch backup",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "batch".to_string(),
             "--paths".to_string(),
             batch_paths,
@@ -471,7 +496,8 @@ fn main() {
             "backup".to_string(),
             "--output".to_string(),
             env.export_dir.to_string_lossy().into_owned(),
-            "-y".to_string()],
+            "-y".to_string(),
+        ],
         |env, _| {
             let count = count_acl_backups(&env.export_dir);
             if count >= 2 {
@@ -486,10 +512,12 @@ fn main() {
     results.push(run_ok(
         "acl audit export",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "audit".to_string(),
             "--export".to_string(),
-            audit_export.to_string_lossy().into_owned()],
+            audit_export.to_string_lossy().into_owned(),
+        ],
         |_, _| {
             if audit_export.exists() {
                 Ok(())
@@ -502,10 +530,12 @@ fn main() {
     results.push(run_expect_err(
         "acl remove (non-interactive)",
         &env,
-        &["acl".to_string(),
+        &[
+            "acl".to_string(),
             "remove".to_string(),
             "-p".to_string(),
-            dir_a.to_string_lossy().into_owned()],
+            dir_a.to_string_lossy().into_owned(),
+        ],
         "requires interactive mode",
     ));
 
@@ -513,13 +543,15 @@ fn main() {
         results.push(run_ok(
             "acl owner (admin)",
             &env,
-            &["acl".to_string(),
+            &[
+                "acl".to_string(),
                 "owner".to_string(),
                 "-p".to_string(),
                 dir_a.to_string_lossy().into_owned(),
                 "--set".to_string(),
                 "BUILTIN\\Administrators".to_string(),
-                "-y".to_string()],
+                "-y".to_string(),
+            ],
             |env, out| {
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 if stderr.contains("Owner unchanged.") {
@@ -537,11 +569,13 @@ fn main() {
         results.push(run_ok(
             "acl repair (admin)",
             &env,
-            &["acl".to_string(),
+            &[
+                "acl".to_string(),
                 "repair".to_string(),
                 "-p".to_string(),
                 dir_a.to_string_lossy().into_owned(),
-                "-y".to_string()],
+                "-y".to_string(),
+            ],
             |env, _| {
                 let actions = read_audit_actions(env);
                 if actions.iter().any(|a| a == "ForceRepair") {

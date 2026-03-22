@@ -9,8 +9,8 @@ use std::thread;
 use std::time::Instant;
 
 use xun::path_guard::{
-    validate_paths, validate_paths_owned, validate_single, PathIssueKind, PathKind, PathPolicy,
-    validate_paths_with_info,
+    PathIssueKind, PathKind, PathPolicy, validate_paths, validate_paths_owned,
+    validate_paths_with_info, validate_single,
 };
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -50,7 +50,8 @@ fn sc_forbidden_chars_rejected() {
         let path = format!("C:\\foo{ch}bar");
         let result = validate_paths(vec![path.clone()], &policy_output());
         assert_eq!(
-            result.issues.len(), 1,
+            result.issues.len(),
+            1,
             "expected rejection for char '{ch}' in path '{path}'"
         );
         assert_eq!(result.issues[0].kind, PathIssueKind::InvalidChar);
@@ -60,25 +61,33 @@ fn sc_forbidden_chars_rejected() {
 #[test]
 fn sc_reserved_names_rejected() {
     let reserved = [
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM9",
-        "LPT1", "LPT9",
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        "COM1",
+        "COM2",
+        "COM9",
+        "LPT1",
+        "LPT9",
         // 上标变体
-        "COM\u{b9}", "LPT\u{b2}",
+        "COM\u{b9}",
+        "LPT\u{b2}",
         // 带扩展名
-        "NUL.txt", "CON.log",
+        "NUL.txt",
+        "CON.log",
         // 大小写混合
-        "con", "nUl", "Com1",
+        "con",
+        "nUl",
+        "Com1",
     ];
     for name in reserved {
         let path = format!("C:\\dir\\{name}");
         let result = validate_paths(vec![path.clone()], &policy_output());
+        assert_eq!(result.issues.len(), 1, "expected ReservedName for '{name}'");
         assert_eq!(
-            result.issues.len(), 1,
-            "expected ReservedName for '{name}'"
-        );
-        assert_eq!(
-            result.issues[0].kind, PathIssueKind::ReservedName,
+            result.issues[0].kind,
+            PathIssueKind::ReservedName,
             "wrong kind for '{name}'"
         );
     }
@@ -104,7 +113,11 @@ fn sc_trailing_dot_rejected() {
     for path in paths {
         let result = validate_paths(vec![path], &policy_output());
         assert_eq!(result.issues.len(), 1, "path: {path}");
-        assert_eq!(result.issues[0].kind, PathIssueKind::TrailingDotSpace, "path: {path}");
+        assert_eq!(
+            result.issues[0].kind,
+            PathIssueKind::TrailingDotSpace,
+            "path: {path}"
+        );
     }
 }
 
@@ -114,7 +127,11 @@ fn sc_trailing_space_rejected() {
     for path in paths {
         let result = validate_paths(vec![path], &policy_output());
         assert_eq!(result.issues.len(), 1, "path: {path}");
-        assert_eq!(result.issues[0].kind, PathIssueKind::TrailingDotSpace, "path: {path}");
+        assert_eq!(
+            result.issues[0].kind,
+            PathIssueKind::TrailingDotSpace,
+            "path: {path}"
+        );
     }
 }
 
@@ -123,20 +140,23 @@ fn sc_drive_relative_always_rejected() {
     // C:foo 没有反斜杠 → DriveRelative
     let result = validate_paths(vec!["C:foo\\bar"], &policy_output());
     assert_eq!(result.issues.len(), 1);
-    assert_eq!(result.issues[0].kind, PathIssueKind::DriveRelativeNotAllowed);
+    assert_eq!(
+        result.issues[0].kind,
+        PathIssueKind::DriveRelativeNotAllowed
+    );
 }
 
 #[test]
 fn sc_device_namespace_always_rejected() {
-    let paths = [
-        r"\\.\COM1",
-        r"\\.\PhysicalDrive0",
-        r"\\.\pipe\test",
-    ];
+    let paths = [r"\\.\COM1", r"\\.\PhysicalDrive0", r"\\.\pipe\test"];
     for path in paths {
         let result = validate_paths(vec![path], &policy_output());
         assert_eq!(result.issues.len(), 1, "path: {path}");
-        assert_eq!(result.issues[0].kind, PathIssueKind::DeviceNamespaceNotAllowed, "path: {path}");
+        assert_eq!(
+            result.issues[0].kind,
+            PathIssueKind::DeviceNamespaceNotAllowed,
+            "path: {path}"
+        );
     }
 }
 
@@ -144,7 +164,10 @@ fn sc_device_namespace_always_rejected() {
 fn sc_nt_namespace_always_rejected() {
     let paths = [
         // \Device\... 是标准 NT namespace 形式
-        (r"\Device\HarddiskVolume1", PathIssueKind::NtNamespaceNotAllowed),
+        (
+            r"\Device\HarddiskVolume1",
+            PathIssueKind::NtNamespaceNotAllowed,
+        ),
         // \??\ 含 ? 字符，被 check_chars 先拦截为 InvalidChar
         (r"\??\C:\Windows", PathIssueKind::InvalidChar),
     ];
@@ -274,11 +297,7 @@ fn dedupe_exact_duplicate_removed() {
 
 #[test]
 fn dedupe_case_insensitive() {
-    let paths = vec![
-        "C:\\Foo\\Bar.txt",
-        "C:\\foo\\bar.txt",
-        "C:\\FOO\\BAR.TXT",
-    ];
+    let paths = vec!["C:\\Foo\\Bar.txt", "C:\\foo\\bar.txt", "C:\\FOO\\BAR.TXT"];
     let result = validate_paths(paths, &policy_output());
     assert_eq!(result.ok.len(), 1, "case variants should be deduped");
     assert_eq!(result.deduped, 2);
@@ -286,21 +305,19 @@ fn dedupe_case_insensitive() {
 
 #[test]
 fn dedupe_forward_slash_normalized() {
-    let paths = vec![
-        "C:\\foo\\bar.txt",
-        "C:/foo/bar.txt",
-    ];
+    let paths = vec!["C:\\foo\\bar.txt", "C:/foo/bar.txt"];
     let result = validate_paths(paths, &policy_output());
-    assert_eq!(result.ok.len(), 1, "forward/backslash variants should be deduped");
+    assert_eq!(
+        result.ok.len(),
+        1,
+        "forward/backslash variants should be deduped"
+    );
     assert_eq!(result.deduped, 1);
 }
 
 #[test]
 fn dedupe_trailing_slash_normalized() {
-    let paths = vec![
-        "C:\\foo\\bar",
-        "C:\\foo\\bar\\",
-    ];
+    let paths = vec!["C:\\foo\\bar", "C:\\foo\\bar\\"];
     let result = validate_paths(paths, &policy_output());
     assert_eq!(result.ok.len(), 1, "trailing slash should be deduped");
     assert_eq!(result.deduped, 1);
@@ -308,11 +325,7 @@ fn dedupe_trailing_slash_normalized() {
 
 #[test]
 fn dedupe_mixed_case_and_slash() {
-    let paths = vec![
-        "C:\\Foo\\Bar",
-        "C:/foo/bar/",
-        "C:\\FOO\\BAR\\",
-    ];
+    let paths = vec!["C:\\Foo\\Bar", "C:/foo/bar/", "C:\\FOO\\BAR\\"];
     let result = validate_paths(paths, &policy_output());
     assert_eq!(result.ok.len(), 1);
     assert_eq!(result.deduped, 2);
@@ -320,11 +333,7 @@ fn dedupe_mixed_case_and_slash() {
 
 #[test]
 fn dedupe_distinct_paths_not_removed() {
-    let paths = vec![
-        "C:\\foo\\a.txt",
-        "C:\\foo\\b.txt",
-        "C:\\foo\\c.txt",
-    ];
+    let paths = vec!["C:\\foo\\a.txt", "C:\\foo\\b.txt", "C:\\foo\\c.txt"];
     let result = validate_paths(paths, &policy_output());
     assert_eq!(result.ok.len(), 3);
     assert_eq!(result.deduped, 0);
@@ -410,7 +419,12 @@ fn probe_batch_above_threshold_correct() {
     let result = validate_paths(inputs, &policy_read());
     assert_eq!(result.ok.len(), existing_count);
     assert_eq!(result.issues.len(), missing_count);
-    assert!(result.issues.iter().all(|i| i.kind == PathIssueKind::NotFound));
+    assert!(
+        result
+            .issues
+            .iter()
+            .all(|i| i.kind == PathIssueKind::NotFound)
+    );
 }
 
 #[test]
@@ -582,10 +596,8 @@ fn with_info_returns_path_kind() {
     let file = dir.path().join("info.txt");
     fs::write(&file, "ok").unwrap();
 
-    let (infos, issues) = validate_paths_with_info(
-        vec![file.to_string_lossy().to_string()],
-        &policy_read(),
-    );
+    let (infos, issues) =
+        validate_paths_with_info(vec![file.to_string_lossy().to_string()], &policy_read());
     assert!(issues.is_empty());
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].kind, PathKind::DriveAbsolute);
@@ -597,10 +609,8 @@ fn with_info_missing_yields_issue() {
     let dir = tempfile::tempdir().expect("tempdir");
     let missing = dir.path().join("ghost.txt");
 
-    let (infos, issues) = validate_paths_with_info(
-        vec![missing.to_string_lossy().to_string()],
-        &policy_read(),
-    );
+    let (infos, issues) =
+        validate_paths_with_info(vec![missing.to_string_lossy().to_string()], &policy_read());
     assert!(infos.is_empty());
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].kind, PathIssueKind::NotFound);
@@ -671,10 +681,7 @@ fn unicode_filename_existing() {
     let file = dir.path().join("测试文件.txt");
     fs::write(&file, "ok").unwrap();
 
-    let result = validate_paths(
-        vec![file.to_string_lossy().to_string()],
-        &policy_read(),
-    );
+    let result = validate_paths(vec![file.to_string_lossy().to_string()], &policy_read());
     assert_eq!(result.ok.len(), 1, "{:?}", result.issues);
 }
 
@@ -711,13 +718,22 @@ fn perf_serial_10_paths_under_200ms() {
         fs::write(dir.path().join(format!("f{i}.txt")), "ok").unwrap();
     }
     let inputs: Vec<String> = (0..10)
-        .map(|i| dir.path().join(format!("f{}.txt", i % 5)).to_string_lossy().to_string())
+        .map(|i| {
+            dir.path()
+                .join(format!("f{}.txt", i % 5))
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
 
     let start = Instant::now();
     let _ = validate_paths(inputs, &policy_read());
     let elapsed = start.elapsed();
-    assert!(elapsed.as_millis() < 200, "serial 10 paths took {}ms", elapsed.as_millis());
+    assert!(
+        elapsed.as_millis() < 200,
+        "serial 10 paths took {}ms",
+        elapsed.as_millis()
+    );
 }
 
 #[test]
@@ -727,13 +743,22 @@ fn perf_parallel_100_paths_under_500ms() {
         fs::write(dir.path().join(format!("pp{i}.txt")), "ok").unwrap();
     }
     let inputs: Vec<String> = (0..100)
-        .map(|i| dir.path().join(format!("pp{}.txt", i % 50)).to_string_lossy().to_string())
+        .map(|i| {
+            dir.path()
+                .join(format!("pp{}.txt", i % 50))
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
 
     let start = Instant::now();
     let _ = validate_paths(inputs, &policy_read());
     let elapsed = start.elapsed();
-    assert!(elapsed.as_millis() < 500, "parallel 100 paths took {}ms", elapsed.as_millis());
+    assert!(
+        elapsed.as_millis() < 500,
+        "parallel 100 paths took {}ms",
+        elapsed.as_millis()
+    );
 }
 
 // ── 11. issue detail 消息非空 ─────────────────────────────────────────────────
@@ -754,7 +779,10 @@ fn issue_detail_not_empty() {
         let issue = &result.issues[0];
         assert_eq!(issue.kind, expected_kind, "path: {path:?}");
         assert!(!issue.detail.is_empty(), "detail empty for {path:?}");
-        assert!(!issue.raw.is_empty() || path.is_empty(), "raw empty for {path:?}");
+        assert!(
+            !issue.raw.is_empty() || path.is_empty(),
+            "raw empty for {path:?}"
+        );
     }
 }
 
@@ -810,13 +838,14 @@ fn sc_colon_in_path_component_should_be_invalid() {
 fn dedupe_dotdot_not_normalized() {
     // C:\foo\..\bar 与 C:\bar 逻辑等价，但当前 dedupe 未规范化 ..
     // 这是已知盲区：dedupe 只做 case-fold + slash-normalize + trailing-strip
-    let paths = vec![
-        r"C:\foo\..\bar",
-        r"C:\bar",
-    ];
+    let paths = vec![r"C:\foo\..\bar", r"C:\bar"];
     let result = validate_paths(paths, &policy_output());
     // 现状：两条都通过，不被识别为重复
-    assert_eq!(result.ok.len(), 2, "dotdot paths currently not deduped (known limitation)");
+    assert_eq!(
+        result.ok.len(),
+        2,
+        "dotdot paths currently not deduped (known limitation)"
+    );
     assert_eq!(result.deduped, 0);
 }
 
@@ -827,7 +856,7 @@ fn dedupe_multiple_slashes_normalized() {
     // 但连续 backslash 未被折叠
     let paths = vec![
         r"C:\foo\bar",
-        r"C:\\foo\\bar",  // 连续反斜杠
+        r"C:\\foo\\bar", // 连续反斜杠
     ];
     let result = validate_paths(paths, &policy_output());
     // 记录现状：当前不被识别为重复
@@ -925,11 +954,21 @@ fn result_count_complete() {
         inputs.push(f.to_string_lossy().to_string());
     }
     for i in 0..missing {
-        inputs.push(dir.path().join(format!("rm{i}.txt")).to_string_lossy().to_string());
+        inputs.push(
+            dir.path()
+                .join(format!("rm{i}.txt"))
+                .to_string_lossy()
+                .to_string(),
+        );
     }
 
     let result = validate_paths(inputs, &policy_read());
-    assert_eq!(result.ok.len() + result.issues.len() + result.deduped, total,
+    assert_eq!(
+        result.ok.len() + result.issues.len() + result.deduped,
+        total,
         "total count mismatch: ok={} issues={} deduped={}",
-        result.ok.len(), result.issues.len(), result.deduped);
+        result.ok.len(),
+        result.issues.len(),
+        result.deduped
+    );
 }

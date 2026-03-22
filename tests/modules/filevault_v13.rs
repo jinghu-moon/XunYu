@@ -9,9 +9,8 @@ use std::fs;
 
 fn parse_stdout_json(output: &std::process::Output) -> Value {
     let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(stdout.trim()).unwrap_or_else(|err| {
-        panic!("stdout is not valid json: {err}; stdout={stdout}")
-    })
+    serde_json::from_str(stdout.trim())
+        .unwrap_or_else(|err| panic!("stdout is not valid json: {err}; stdout={stdout}"))
 }
 
 struct VerifyExpectation<'a> {
@@ -29,16 +28,20 @@ fn assert_verify_snapshot(json: &Value, expect: &VerifyExpectation<'_>) {
     assert_eq!(json["payload"]["valid"], expect.payload_valid);
     assert_eq!(json["footer"]["present"], expect.footer_present);
     if let Some(reason) = expect.header_reason_contains {
-        assert!(json["header"]["reason"]
-            .as_str()
-            .unwrap_or_default()
-            .contains(reason));
+        assert!(
+            json["header"]["reason"]
+                .as_str()
+                .unwrap_or_default()
+                .contains(reason)
+        );
     }
     if let Some(reason) = expect.payload_reason_contains {
-        assert!(json["payload"]["reason"]
-            .as_str()
-            .unwrap_or_default()
-            .contains(reason));
+        assert!(
+            json["payload"]["reason"]
+                .as_str()
+                .unwrap_or_default()
+                .contains(reason)
+        );
     }
 }
 
@@ -65,16 +68,19 @@ fn filevault_verify_rejects_tampered_header() {
     bytes[tamper_at] ^= 0x5a;
     fs::write(&vault, bytes).unwrap();
 
-    let verify = run_err(env.cmd().args([
-        "vault",
-        "verify",
-        vault.to_str().unwrap(),
-        "--json",
-    ]));
+    let verify = run_err(
+        env.cmd()
+            .args(["vault", "verify", vault.to_str().unwrap(), "--json"]),
+    );
     let json = parse_stdout_json(&verify);
     assert_eq!(json["status"], "corrupt");
     assert_eq!(json["header"]["valid"], false);
-    assert!(json["header"]["reason"].as_str().unwrap_or_default().contains("mac"));
+    assert!(
+        json["header"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("mac")
+    );
 
     cleanup_dir(&work);
 }
@@ -99,15 +105,17 @@ fn filevault_verify_rejects_reordered_frames() {
         "65536",
     ]));
 
-    let inspect = run_ok(env.cmd().args([
-        "vault",
-        "inspect",
-        vault.to_str().unwrap(),
-        "--json",
-    ]));
+    let inspect = run_ok(
+        env.cmd()
+            .args(["vault", "inspect", vault.to_str().unwrap(), "--json"]),
+    );
     let inspect_json = parse_stdout_json(&inspect);
-    let first = inspect_json["layout"]["first_frame_offset"].as_u64().unwrap() as usize;
-    let second = inspect_json["layout"]["second_frame_offset"].as_u64().unwrap() as usize;
+    let first = inspect_json["layout"]["first_frame_offset"]
+        .as_u64()
+        .unwrap() as usize;
+    let second = inspect_json["layout"]["second_frame_offset"]
+        .as_u64()
+        .unwrap() as usize;
     let frame_len = inspect_json["layout"]["frame_span"].as_u64().unwrap() as usize;
 
     let mut bytes = fs::read(&vault).unwrap();
@@ -117,15 +125,18 @@ fn filevault_verify_rejects_reordered_frames() {
     bytes[second..second + frame_len].copy_from_slice(&frame0);
     fs::write(&vault, bytes).unwrap();
 
-    let verify = run_err(env.cmd().args([
-        "vault",
-        "verify",
-        vault.to_str().unwrap(),
-        "--json",
-    ]));
+    let verify = run_err(
+        env.cmd()
+            .args(["vault", "verify", vault.to_str().unwrap(), "--json"]),
+    );
     let json = parse_stdout_json(&verify);
     assert_eq!(json["status"], "corrupt");
-    assert!(json["payload"]["reason"].as_str().unwrap_or_default().contains("frame"));
+    assert!(
+        json["payload"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("frame")
+    );
 
     cleanup_dir(&work);
 }
@@ -152,12 +163,10 @@ fn filevault_verify_reports_missing_footer() {
     bytes.truncate(bytes.len().saturating_sub(80));
     fs::write(&vault, bytes).unwrap();
 
-    let verify = run_err(env.cmd().args([
-        "vault",
-        "verify",
-        vault.to_str().unwrap(),
-        "--json",
-    ]));
+    let verify = run_err(
+        env.cmd()
+            .args(["vault", "verify", vault.to_str().unwrap(), "--json"]),
+    );
     let json = parse_stdout_json(&verify);
     assert_eq!(json["status"], "incomplete");
     assert_eq!(json["footer"]["present"], false);
@@ -175,26 +184,32 @@ fn filevault_resume_finishes_interrupted_write_without_polluting_target() {
     fs::write(&plain, vec![0x7b; 320 * 1024]).unwrap();
     let original_plain = fs::read(&plain).unwrap();
 
-    let crash = run_err(
-        env.cmd()
-            .env("XUN_FILEVAULT_FAIL_AFTER_FRAMES", "2")
-            .args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault.to_str().unwrap(),
-                "--password",
-                "hunter2",
-                "--chunk-size",
-                "65536",
-            ]),
-    );
+    let crash = run_err(env.cmd().env("XUN_FILEVAULT_FAIL_AFTER_FRAMES", "2").args([
+        "vault",
+        "enc",
+        plain.to_str().unwrap(),
+        "-o",
+        vault.to_str().unwrap(),
+        "--password",
+        "hunter2",
+        "--chunk-size",
+        "65536",
+    ]));
     let stderr = String::from_utf8_lossy(&crash.stderr);
     assert!(stderr.contains("simulated crash") || stderr.contains("interrupted"));
-    assert!(!vault.exists(), "final target must remain absent before commit rename");
-    assert_eq!(fs::read(&plain).unwrap(), original_plain, "source file must remain unpolluted");
-    assert!(vault.with_extension("fv.fvjournal").exists() || work.join("archive.tar.fv.fvjournal").exists());
+    assert!(
+        !vault.exists(),
+        "final target must remain absent before commit rename"
+    );
+    assert_eq!(
+        fs::read(&plain).unwrap(),
+        original_plain,
+        "source file must remain unpolluted"
+    );
+    assert!(
+        vault.with_extension("fv.fvjournal").exists()
+            || work.join("archive.tar.fv.fvjournal").exists()
+    );
 
     run_ok(env.cmd().args([
         "vault",
@@ -227,22 +242,24 @@ fn filevault_cleanup_removes_orphan_artifacts_idempotently() {
     let vault = work.join("cleanup.txt.fv");
     fs::write(&plain, vec![0x39; 128 * 1024]).unwrap();
 
-    let _ = run_err(
-        env.cmd()
-            .env("XUN_FILEVAULT_FAIL_AFTER_FRAMES", "1")
-            .args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault.to_str().unwrap(),
-                "--password",
-                "hunter2",
-            ]),
-    );
+    let _ = run_err(env.cmd().env("XUN_FILEVAULT_FAIL_AFTER_FRAMES", "1").args([
+        "vault",
+        "enc",
+        plain.to_str().unwrap(),
+        "-o",
+        vault.to_str().unwrap(),
+        "--password",
+        "hunter2",
+    ]));
 
-    run_ok(env.cmd().args(["vault", "cleanup", vault.to_str().unwrap()]));
-    run_ok(env.cmd().args(["vault", "cleanup", vault.to_str().unwrap()]));
+    run_ok(
+        env.cmd()
+            .args(["vault", "cleanup", vault.to_str().unwrap()]),
+    );
+    run_ok(
+        env.cmd()
+            .args(["vault", "cleanup", vault.to_str().unwrap()]),
+    );
     assert!(!vault.exists());
     assert!(!work.join("cleanup.txt.fv.fvtmp").exists());
     assert!(!work.join("cleanup.txt.fv.fvjournal").exists());
@@ -278,7 +295,10 @@ fn filevault_rewrap_replaces_slots_without_reencrypting_payload() {
         vault.to_str().unwrap(),
         "--json",
     ])));
-    let before_digest = before["footer"]["payload_digest"].as_str().unwrap().to_string();
+    let before_digest = before["footer"]["payload_digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     run_ok(env.cmd().args([
         "vault",
@@ -300,8 +320,14 @@ fn filevault_rewrap_replaces_slots_without_reencrypting_payload() {
         vault.to_str().unwrap(),
         "--json",
     ])));
-    let after_digest = after["footer"]["payload_digest"].as_str().unwrap().to_string();
-    assert_eq!(before_digest, after_digest, "rewrap must not re-encrypt payload ciphertext");
+    let after_digest = after["footer"]["payload_digest"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        before_digest, after_digest,
+        "rewrap must not re-encrypt payload ciphertext"
+    );
 
     let old_password = run_err(env.cmd().args([
         "vault",
@@ -552,7 +578,10 @@ fn filevault_resume_handles_multiple_breakpoints() {
         );
         let stderr = String::from_utf8_lossy(&crash.stderr);
         assert!(stderr.contains("simulated crash") || stderr.contains("interrupted"));
-        assert!(!vault.exists(), "final target must remain absent before commit rename");
+        assert!(
+            !vault.exists(),
+            "final target must remain absent before commit rename"
+        );
         assert_eq!(
             fs::read(&plain).unwrap(),
             original_plain,
@@ -711,9 +740,14 @@ fn filevault_verify_rejects_missing_frame() {
         "65536",
     ]));
 
-    let inspect = run_ok(env.cmd().args(["vault", "inspect", vault.to_str().unwrap(), "--json"]));
+    let inspect = run_ok(
+        env.cmd()
+            .args(["vault", "inspect", vault.to_str().unwrap(), "--json"]),
+    );
     let inspect_json = parse_stdout_json(&inspect);
-    let first = inspect_json["layout"]["first_frame_offset"].as_u64().unwrap() as usize;
+    let first = inspect_json["layout"]["first_frame_offset"]
+        .as_u64()
+        .unwrap() as usize;
     let frame_span = inspect_json["layout"]["frame_span"].as_u64().unwrap() as usize;
     let footer_offset = inspect_json["layout"]["footer_offset"].as_u64().unwrap() as usize;
     let second = first + frame_span;
@@ -727,10 +761,18 @@ fn filevault_verify_rejects_missing_frame() {
     mutated.extend_from_slice(&footer);
     fs::write(&vault, mutated).unwrap();
 
-    let verify = run_err(env.cmd().args(["vault", "verify", vault.to_str().unwrap(), "--json"]));
+    let verify = run_err(
+        env.cmd()
+            .args(["vault", "verify", vault.to_str().unwrap(), "--json"]),
+    );
     let json = parse_stdout_json(&verify);
     assert_eq!(json["status"], "corrupt");
-    assert!(json["payload"]["reason"].as_str().unwrap_or_default().contains("frame"));
+    assert!(
+        json["payload"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("frame")
+    );
 
     cleanup_dir(&work);
 }
@@ -755,7 +797,10 @@ fn filevault_verify_rejects_truncated_frame_payload() {
         "65536",
     ]));
 
-    let inspect = run_ok(env.cmd().args(["vault", "inspect", vault.to_str().unwrap(), "--json"]));
+    let inspect = run_ok(
+        env.cmd()
+            .args(["vault", "inspect", vault.to_str().unwrap(), "--json"]),
+    );
     let inspect_json = parse_stdout_json(&inspect);
     let footer_offset = inspect_json["layout"]["footer_offset"].as_u64().unwrap() as usize;
     let bytes = fs::read(&vault).unwrap();
@@ -766,13 +811,18 @@ fn filevault_verify_rejects_truncated_frame_payload() {
     mutated.extend_from_slice(&footer);
     fs::write(&vault, mutated).unwrap();
 
-    let verify = run_err(env.cmd().args(["vault", "verify", vault.to_str().unwrap(), "--json"]));
+    let verify = run_err(
+        env.cmd()
+            .args(["vault", "verify", vault.to_str().unwrap(), "--json"]),
+    );
     let json = parse_stdout_json(&verify);
     assert_eq!(json["status"], "corrupt");
-    assert!(json["payload"]["reason"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("truncated"));
+    assert!(
+        json["payload"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("truncated")
+    );
 
     cleanup_dir(&work);
 }
@@ -797,9 +847,14 @@ fn filevault_verify_rejects_duplicate_frame() {
         "65536",
     ]));
 
-    let inspect = run_ok(env.cmd().args(["vault", "inspect", vault.to_str().unwrap(), "--json"]));
+    let inspect = run_ok(
+        env.cmd()
+            .args(["vault", "inspect", vault.to_str().unwrap(), "--json"]),
+    );
     let inspect_json = parse_stdout_json(&inspect);
-    let first = inspect_json["layout"]["first_frame_offset"].as_u64().unwrap() as usize;
+    let first = inspect_json["layout"]["first_frame_offset"]
+        .as_u64()
+        .unwrap() as usize;
     let frame_span = inspect_json["layout"]["frame_span"].as_u64().unwrap() as usize;
     let second = first + frame_span;
 
@@ -808,13 +863,18 @@ fn filevault_verify_rejects_duplicate_frame() {
     bytes[second..second + frame_span].copy_from_slice(&frame0);
     fs::write(&vault, bytes).unwrap();
 
-    let verify = run_err(env.cmd().args(["vault", "verify", vault.to_str().unwrap(), "--json"]));
+    let verify = run_err(
+        env.cmd()
+            .args(["vault", "verify", vault.to_str().unwrap(), "--json"]),
+    );
     let json = parse_stdout_json(&verify);
     assert_eq!(json["status"], "corrupt");
-    assert!(json["payload"]["reason"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("sequence"));
+    assert!(
+        json["payload"]["reason"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("sequence")
+    );
 
     cleanup_dir(&work);
 }
@@ -839,7 +899,10 @@ fn filevault_verify_reason_snapshots() {
         "65536",
     ]));
 
-    let inspect = run_ok(env.cmd().args(["vault", "inspect", vault.to_str().unwrap(), "--json"]));
+    let inspect = run_ok(
+        env.cmd()
+            .args(["vault", "inspect", vault.to_str().unwrap(), "--json"]),
+    );
     let inspect_json = parse_stdout_json(&inspect);
     let footer_offset = inspect_json["layout"]["footer_offset"].as_u64().unwrap() as usize;
     let original = fs::read(&vault).unwrap();
@@ -847,7 +910,10 @@ fn filevault_verify_reason_snapshots() {
     let run_case = |name: &str, bytes: Vec<u8>, expect: VerifyExpectation<'_>| {
         let path = work.join(format!("{name}.fv"));
         fs::write(&path, bytes).unwrap();
-        let verify = run_err(env.cmd().args(["vault", "verify", path.to_str().unwrap(), "--json"]));
+        let verify = run_err(
+            env.cmd()
+                .args(["vault", "verify", path.to_str().unwrap(), "--json"]),
+        );
         let json = parse_stdout_json(&verify);
         assert_verify_snapshot(&json, &expect);
     };

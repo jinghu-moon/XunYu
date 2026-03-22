@@ -1,6 +1,6 @@
 use std::fs;
 
-use xun::path_guard::{validate_paths, PathIssueKind, PathPolicy};
+use xun::path_guard::{PathIssueKind, PathPolicy, validate_paths};
 
 #[test]
 fn validate_paths_reports_existing_and_missing() {
@@ -9,18 +9,12 @@ fn validate_paths_reports_existing_and_missing() {
     fs::write(&file, "ok").expect("write");
 
     let policy = PathPolicy::for_read();
-    let ok = validate_paths(
-        vec![file.to_string_lossy().to_string()],
-        &policy,
-    );
+    let ok = validate_paths(vec![file.to_string_lossy().to_string()], &policy);
     assert_eq!(ok.ok.len(), 1);
     assert!(ok.issues.is_empty());
 
     let missing = dir.path().join("missing.txt");
-    let missing = validate_paths(
-        vec![missing.to_string_lossy().to_string()],
-        &policy,
-    );
+    let missing = validate_paths(vec![missing.to_string_lossy().to_string()], &policy);
     assert_eq!(missing.ok.len(), 0);
     assert_eq!(missing.issues.len(), 1);
     assert_eq!(missing.issues[0].kind, PathIssueKind::NotFound);

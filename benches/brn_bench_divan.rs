@@ -15,8 +15,8 @@ use divan::{AllocProfiler, Bencher};
 
 use xun::batch_rename::compute::{RenameMode, ReplacePair};
 use xun::batch_rename::cycle_break::break_cycles;
-use xun::batch_rename::types::{CaseStyle, RenameOp};
 use xun::batch_rename::testing as brn;
+use xun::batch_rename::types::{CaseStyle, RenameOp};
 
 #[global_allocator]
 static ALLOC: AllocProfiler = AllocProfiler::system();
@@ -40,8 +40,14 @@ fn make_swap_ops(n: usize) -> Vec<RenameOp> {
             let a = PathBuf::from(format!("/bench/file_{:04}a.txt", i));
             let b = PathBuf::from(format!("/bench/file_{:04}b.txt", i));
             vec![
-                RenameOp { from: a.clone(), to: b.clone() },
-                RenameOp { from: b.clone(), to: a.clone() },
+                RenameOp {
+                    from: a.clone(),
+                    to: b.clone(),
+                },
+                RenameOp {
+                    from: b.clone(),
+                    to: a.clone(),
+                },
             ]
         })
         .collect()
@@ -53,9 +59,7 @@ fn make_swap_ops(n: usize) -> Vec<RenameOp> {
 fn compute_single(bencher: Bencher, n: usize) {
     let files = make_files(n);
     let mode = RenameMode::Case(CaseStyle::Kebab);
-    bencher.bench(|| {
-        black_box(brn::compute_ops(black_box(&files), black_box(&mode)).ok())
-    });
+    bencher.bench(|| black_box(brn::compute_ops(black_box(&files), black_box(&mode)).ok()));
 }
 
 // ── 基准：3 步 chain ──────────────────────────────────────────────────────────
@@ -64,13 +68,14 @@ fn compute_single(bencher: Bencher, n: usize) {
 fn compute_chain_3(bencher: Bencher, n: usize) {
     let files = make_files(n);
     let steps = vec![
-        RenameMode::Replace(vec![ReplacePair { from: " ".into(), to: "_".into() }]),
+        RenameMode::Replace(vec![ReplacePair {
+            from: " ".into(),
+            to: "_".into(),
+        }]),
         RenameMode::Prefix("pre_".into()),
         RenameMode::Case(CaseStyle::Kebab),
     ];
-    bencher.bench(|| {
-        black_box(brn::compute_ops_chain(black_box(&files), black_box(&steps)).ok())
-    });
+    bencher.bench(|| black_box(brn::compute_ops_chain(black_box(&files), black_box(&steps)).ok()));
 }
 
 // ── 基准：break_cycles（环形依赖中转）────────────────────────────────────────
@@ -80,9 +85,7 @@ fn break_cycles_swaps(bencher: Bencher, n: usize) {
     // n 对互换，产生 n 个两节点环
     let ops = make_swap_ops(n);
     let existing: Vec<PathBuf> = vec![];
-    bencher.bench(|| {
-        black_box(break_cycles(black_box(ops.clone()), black_box(&existing)))
-    });
+    bencher.bench(|| black_box(break_cycles(black_box(ops.clone()), black_box(&existing))));
 }
 
 // ── 基准：undo/redo 100 次 apply（单文件累积历史）────────────────────────────
@@ -102,7 +105,7 @@ fn setup_undo_history(n: usize) -> tempfile::TempDir {
     for i in 0..n {
         let records = vec![UndoRecord {
             from: format!("file_{:04}.txt", i + 1),
-            to:   format!("file_{:04}.txt", i),
+            to: format!("file_{:04}.txt", i),
         }];
         brn::push_undo(dir.path(), &records).unwrap();
     }
@@ -117,7 +120,7 @@ fn undo_push_100(bencher: Bencher) {
         for i in 0..100usize {
             let records = vec![UndoRecord {
                 from: format!("file_{:04}.txt", i + 1),
-                to:   format!("file_{:04}.txt", i),
+                to: format!("file_{:04}.txt", i),
             }];
             brn::push_undo(black_box(dir.path()), black_box(&records)).unwrap();
         }
@@ -129,9 +132,7 @@ fn undo_push_100(bencher: Bencher) {
 #[divan::bench]
 fn undo_read_history_100(bencher: Bencher) {
     let dir = setup_undo_history(100);
-    bencher.bench(|| {
-        black_box(brn::read_undo_history(black_box(dir.path())).unwrap())
-    });
+    bencher.bench(|| black_box(brn::read_undo_history(black_box(dir.path())).unwrap()));
 }
 
 /// 测量：run_undo_steps(100) 在无真实文件时的耗时（JSON 解析 + 历史更新）

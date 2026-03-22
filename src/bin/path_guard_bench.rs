@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use xun::path_guard::{validate_paths, validate_paths_owned, PathPolicy};
+use xun::path_guard::{PathPolicy, validate_paths, validate_paths_owned};
 
 const DEFAULT_EXISTING: usize = 2_500;
 const DEFAULT_TOTAL: usize = 5_000;
@@ -25,9 +25,7 @@ fn main() {
     let warmup_ms = env_usize("XUN_PG_BENCH_WARMUP_MS", 0);
 
     let dir = make_temp_dir();
-    let _guard = BenchDir {
-        path: dir.clone(),
-    };
+    let _guard = BenchDir { path: dir.clone() };
 
     for idx in 0..existing {
         let path = dir.join(format!("file_{idx}.txt"));
@@ -90,7 +88,10 @@ fn make_temp_dir() -> PathBuf {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let candidate = base.join(format!("xun-path-guard-bench-{}-{nanos}", std::process::id()));
+        let candidate = base.join(format!(
+            "xun-path-guard-bench-{}-{nanos}",
+            std::process::id()
+        ));
         if fs::create_dir(&candidate).is_ok() {
             return candidate;
         }
@@ -98,12 +99,7 @@ fn make_temp_dir() -> PathBuf {
     panic!("failed to create bench temp dir");
 }
 
-fn bench_borrow(
-    inputs: &[PathBuf],
-    policy: &PathPolicy,
-    existing: usize,
-    runs: usize,
-) -> Duration {
+fn bench_borrow(inputs: &[PathBuf], policy: &PathPolicy, existing: usize, runs: usize) -> Duration {
     let mut samples: Vec<Duration> = Vec::with_capacity(runs);
     for _ in 0..runs {
         let start = Instant::now();
@@ -116,12 +112,7 @@ fn bench_borrow(
     total_time / runs as u32
 }
 
-fn bench_owned(
-    inputs: &[PathBuf],
-    policy: &PathPolicy,
-    existing: usize,
-    runs: usize,
-) -> Duration {
+fn bench_owned(inputs: &[PathBuf], policy: &PathPolicy, existing: usize, runs: usize) -> Duration {
     let mut samples: Vec<Duration> = Vec::with_capacity(runs);
     for _ in 0..runs {
         let owned_inputs = inputs.to_vec();

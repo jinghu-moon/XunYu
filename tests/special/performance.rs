@@ -37,7 +37,13 @@ const PERF_BACKUP_CFG_COMPRESS: &str = r#"{
 }"#;
 
 fn populate_backup_perf_files(root: &std::path::Path, total: usize) {
-    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    let dirs = [
+        "src/components",
+        "src/utils",
+        "src/hooks",
+        "src/pages",
+        "public",
+    ];
     for dir in dirs {
         fs::create_dir_all(root.join(dir)).unwrap();
     }
@@ -61,18 +67,12 @@ fn write_backup_perf_config(root: &std::path::Path, compress: bool) {
     fs::write(root.join(".xun-bak.json"), content).unwrap();
 }
 
-fn find_backup_name(
-    backups_root: &std::path::Path,
-    prefix: &str,
-    suffix: Option<&str>,
-) -> String {
+fn find_backup_name(backups_root: &std::path::Path, prefix: &str, suffix: Option<&str>) -> String {
     fs::read_dir(backups_root)
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .find(|name| {
-            name.starts_with(prefix) && suffix.is_none_or(|suffix| name.ends_with(suffix))
-        })
+        .find(|name| name.starts_with(prefix) && suffix.is_none_or(|suffix| name.ends_with(suffix)))
         .unwrap_or_else(|| {
             panic!(
                 "backup {}*{} not found in {}",
@@ -326,7 +326,11 @@ fn perf_backup_full_500_files() {
             .args(["backup", "-C", root.to_str().unwrap(), "-m", "perf-full"]),
     );
     let elapsed = start.elapsed();
-    eprintln!("perf: backup_full files={} elapsed_ms={}", files, elapsed.as_millis());
+    eprintln!(
+        "perf: backup_full files={} elapsed_ms={}",
+        files,
+        elapsed.as_millis()
+    );
     assert_under_ms("backup-full", elapsed, "XUN_TEST_BACKUP_FULL_MAX_MS");
 }
 
@@ -347,7 +351,13 @@ fn perf_backup_incremental_50_changed_files() {
     );
 
     thread::sleep(std::time::Duration::from_millis(50));
-    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    let dirs = [
+        "src/components",
+        "src/utils",
+        "src/hooks",
+        "src/pages",
+        "public",
+    ];
     for i in 0..changed {
         let dir = dirs[i % dirs.len()];
         fs::write(
@@ -408,7 +418,11 @@ fn perf_restore_dir_500_files() {
         "-y",
     ]));
     let elapsed = start.elapsed();
-    eprintln!("perf: restore_dir files={} elapsed_ms={}", files, elapsed.as_millis());
+    eprintln!(
+        "perf: restore_dir files={} elapsed_ms={}",
+        files,
+        elapsed.as_millis()
+    );
     assert_under_ms("restore-dir", elapsed, "XUN_TEST_RESTORE_DIR_MAX_MS");
 }
 
@@ -441,7 +455,11 @@ fn perf_restore_zip_500_files() {
         "-y",
     ]));
     let elapsed = start.elapsed();
-    eprintln!("perf: restore_zip files={} elapsed_ms={}", files, elapsed.as_millis());
+    eprintln!(
+        "perf: restore_zip files={} elapsed_ms={}",
+        files,
+        elapsed.as_millis()
+    );
     assert_under_ms("restore-zip", elapsed, "XUN_TEST_RESTORE_ZIP_MAX_MS");
 }
 

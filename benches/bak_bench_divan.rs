@@ -34,7 +34,13 @@ fn xun_bin() -> PathBuf {
 
 /// 在 tmpdir 下生成 n 个随机大小文件（500-3000 字节），分布在多个子目录
 fn populate_files(root: &PathBuf, n: usize) {
-    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    let dirs = [
+        "src/components",
+        "src/utils",
+        "src/hooks",
+        "src/pages",
+        "public",
+    ];
     for d in &dirs {
         fs::create_dir_all(root.join(d)).unwrap();
     }
@@ -110,7 +116,13 @@ fn run_restore(root: &PathBuf, name: &str, extra_args: &[&str]) {
 }
 
 fn mutate_first_n_files(root: &PathBuf, n: usize) {
-    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    let dirs = [
+        "src/components",
+        "src/utils",
+        "src/hooks",
+        "src/pages",
+        "public",
+    ];
     for i in 0..n {
         let dir = dirs[i % dirs.len()];
         fs::write(
@@ -163,7 +175,13 @@ fn incremental_50_changed(bencher: Bencher) {
 
     // 修改 50 个文件作为增量变更夹具（bench 前准备好，bench 中只跑 bak）
     for i in 0..50usize {
-        let d = ["src/components", "src/utils", "src/hooks", "src/pages", "public"][i % 5];
+        let d = [
+            "src/components",
+            "src/utils",
+            "src/hooks",
+            "src/pages",
+            "public",
+        ][i % 5];
         fs::write(
             tmp.join(d).join(format!("file_{i:04}.ts")),
             format!("modified-{i}"),
@@ -180,8 +198,11 @@ fn incremental_50_changed(bencher: Bencher) {
                 let n = e.file_name().to_string_lossy().into_owned();
                 if !n.starts_with("v1-") && !n.ends_with(".meta.json") {
                     let p = e.path();
-                    if p.is_dir() { let _ = fs::remove_dir_all(&p); }
-                    else { let _ = fs::remove_file(&p); }
+                    if p.is_dir() {
+                        let _ = fs::remove_dir_all(&p);
+                    } else {
+                        let _ = fs::remove_file(&p);
+                    }
                 }
             }
         }

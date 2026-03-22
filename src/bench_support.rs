@@ -69,8 +69,15 @@ pub mod backup {
         jobs
     }
 
-    fn collect_tree_jobs_inner(src_root: &Path, current: &Path, dst_root: &Path, out: &mut Vec<TreeJob>) {
-        let Ok(rd) = fs::read_dir(current) else { return };
+    fn collect_tree_jobs_inner(
+        src_root: &Path,
+        current: &Path,
+        dst_root: &Path,
+        out: &mut Vec<TreeJob>,
+    ) {
+        let Ok(rd) = fs::read_dir(current) else {
+            return;
+        };
         for entry in rd.flatten() {
             let path = entry.path();
             if path.is_dir() {

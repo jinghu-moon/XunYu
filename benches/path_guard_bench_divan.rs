@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 use divan::{AllocProfiler, Bencher};
 
-use xun::path_guard::{validate_paths, validate_paths_owned, validate_single, PathPolicy};
+use xun::path_guard::{PathPolicy, validate_paths, validate_paths_owned, validate_single};
 
 // ── 全局 allocator：启用分配统计 ─────────────────────────────────────────────
 #[global_allocator]
@@ -51,19 +51,33 @@ impl BenchFixture {
         for i in 0..missing_count {
             missing.push(dir.path().join(format!("m{i:06}.txt")));
         }
-        Self { _dir: dir, existing, missing }
+        Self {
+            _dir: dir,
+            existing,
+            missing,
+        }
     }
 
     fn all_paths(&self) -> Vec<PathBuf> {
-        self.existing.iter().chain(self.missing.iter()).cloned().collect()
+        self.existing
+            .iter()
+            .chain(self.missing.iter())
+            .cloned()
+            .collect()
     }
 
     fn existing_strings(&self) -> Vec<String> {
-        self.existing.iter().map(|p| p.to_string_lossy().into_owned()).collect()
+        self.existing
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect()
     }
 
     fn all_strings(&self) -> Vec<String> {
-        self.all_paths().iter().map(|p| p.to_string_lossy().into_owned()).collect()
+        self.all_paths()
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect()
     }
 }
 
@@ -92,9 +106,7 @@ fn throughput_string_only_50k(bencher: Bencher) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(inputs.len()))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 含 IO 探测吞吐（must_exist=true，50% existing）
@@ -106,9 +118,7 @@ fn throughput_with_probe_50k(bencher: Bencher) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(inputs.len()))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 含 IO 探测吞吐（100% existing）
@@ -120,9 +130,7 @@ fn throughput_all_existing_50k(bencher: Bencher) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(inputs.len()))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 含 IO 探测吞吐（100% missing）
@@ -130,15 +138,15 @@ fn throughput_all_existing_50k(bencher: Bencher) {
 fn throughput_all_missing_50k(bencher: Bencher) {
     let fx = fixture_50k();
     let policy = PathPolicy::for_read();
-    let inputs: Vec<String> = fx.missing.iter()
+    let inputs: Vec<String> = fx
+        .missing
+        .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
     bencher
         .counter(divan::counter::ItemsCount::new(inputs.len()))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 串行/并行阈值边界：31 条（串行）vs 32 条（并行）
@@ -150,9 +158,7 @@ fn throughput_threshold_boundary(bencher: Bencher, n: usize) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(n))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 规模扩展曲线：N = 1k / 5k / 10k / 50k / 100k
@@ -165,9 +171,7 @@ fn throughput_scale_curve(bencher: Bencher, n: usize) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(n))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// borrow vs owned API 对比
@@ -266,9 +270,7 @@ fn alloc_probe_50k(bencher: Bencher) {
     let inputs = fx.all_strings();
     let policy = PathPolicy::for_read();
 
-    bencher.bench(|| {
-        black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-    });
+    bencher.bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 纯字符串校验的堆分配（无 IO，应接近零额外分配）
@@ -278,9 +280,7 @@ fn alloc_string_only_50k(bencher: Bencher) {
     let inputs = fx.all_strings();
     let policy = PathPolicy::for_output();
 
-    bencher.bench(|| {
-        black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-    });
+    bencher.bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 单条路径的分配开销
@@ -321,7 +321,8 @@ fn scalability_dedupe_rate(bencher: Bencher, dup_pct: u32) {
         .collect();
 
     // 填充至 TOTAL，后面的都是重复
-    let mut all: Vec<String> = base_paths.iter()
+    let mut all: Vec<String> = base_paths
+        .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     while all.len() < TOTAL {
@@ -332,9 +333,7 @@ fn scalability_dedupe_rate(bencher: Bencher, dup_pct: u32) {
     let policy = PathPolicy::for_read();
     bencher
         .counter(divan::counter::ItemsCount::new(TOTAL))
-        .bench(|| {
-            black_box(validate_paths(black_box(all.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(all.iter()), black_box(&policy))));
 }
 
 /// 目录分布对 probe_cache 的影响：1目录 / 10目录 / 100目录 / 1000目录
@@ -362,9 +361,7 @@ fn scalability_dir_distribution(bencher: Bencher, num_dirs: usize) {
     let policy = PathPolicy::for_read();
     bencher
         .counter(divan::counter::ItemsCount::new(inputs.len()))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 路径长度对性能的影响：短(~20) / 中(~80) / 长(~200) / 超长(~400)
@@ -409,9 +406,7 @@ fn scalability_path_length(bencher: Bencher, target_len: usize) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(inputs.len()))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -427,9 +422,7 @@ fn stability_jitter_50k(bencher: Bencher) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(50_000usize))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 /// 字符串校验稳定性（无 IO 干扰，纯 CPU jitter）
@@ -441,9 +434,7 @@ fn stability_jitter_string_only_50k(bencher: Bencher) {
 
     bencher
         .counter(divan::counter::ItemsCount::new(50_000usize))
-        .bench(|| {
-            black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-        });
+        .bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -488,15 +479,15 @@ fn handle_leak_check(bencher: Bencher) {
 
     let handle_count_before = current_handle_count();
 
-    bencher.bench(|| {
-        black_box(validate_paths(black_box(inputs.iter()), black_box(&policy)))
-    });
+    bencher.bench(|| black_box(validate_paths(black_box(inputs.iter()), black_box(&policy))));
 
     let handle_count_after = current_handle_count();
     let delta = handle_count_after.saturating_sub(handle_count_before);
     // 仅打印，不断言：rayon/crossbeam 线程池持有句柄，bench 框架本身也会波动
     if delta > 100 {
-        eprintln!("[handle_leak_check] delta={delta} (before={handle_count_before} after={handle_count_after})");
+        eprintln!(
+            "[handle_leak_check] delta={delta} (before={handle_count_before} after={handle_count_after})"
+        );
     }
 }
 

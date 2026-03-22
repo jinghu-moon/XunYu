@@ -50,7 +50,13 @@ fn fixture() -> &'static Fixture {
         copy_tree_plain(&seed, &baseline);
         copy_tree_plain(&seed, &current);
 
-        let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+        let dirs = [
+            "src/components",
+            "src/utils",
+            "src/hooks",
+            "src/pages",
+            "public",
+        ];
         for i in 0..50usize {
             let dir = dirs[i % dirs.len()];
             fs::write(
@@ -73,7 +79,13 @@ fn fixture() -> &'static Fixture {
 }
 
 fn populate_files(root: &PathBuf, n: usize) {
-    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    let dirs = [
+        "src/components",
+        "src/utils",
+        "src/hooks",
+        "src/pages",
+        "public",
+    ];
     for d in &dirs {
         fs::create_dir_all(root.join(d)).unwrap();
     }
@@ -97,7 +109,12 @@ fn copy_tree_plain(src_root: &PathBuf, dst_root: &PathBuf) {
     }
 }
 
-fn split_tree(current_root: &PathBuf, changed_root: &PathBuf, unchanged_root: &PathBuf, changed_count: usize) {
+fn split_tree(
+    current_root: &PathBuf,
+    changed_root: &PathBuf,
+    unchanged_root: &PathBuf,
+    changed_count: usize,
+) {
     let _ = fs::remove_dir_all(changed_root);
     let _ = fs::remove_dir_all(unchanged_root);
     for entry in walk_files(current_root) {

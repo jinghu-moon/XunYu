@@ -174,7 +174,8 @@ fn perf_force_overwrite_existing_alias() {
         "bench_0000",
         "echo bench_override",
         "--force",
-        "--mode", "cmd",
+        "--mode",
+        "cmd",
     ]));
     let elapsed = start.elapsed();
 

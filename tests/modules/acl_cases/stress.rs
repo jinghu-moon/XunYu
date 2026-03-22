@@ -62,14 +62,19 @@ fn apply_random_acl_rules(
         let mut final_rights: BTreeMap<usize, usize> = BTreeMap::new();
         for (pi, ri) in selected.iter().copied() {
             let e = final_rights.entry(pi).or_insert(ri);
-            if ri > *e { *e = ri; }
+            if ri > *e {
+                *e = ri;
+            }
             groups.entry((pi, ri)).or_default().push(path.clone());
         }
         for (pi, ri) in final_rights {
             let p = principals[pi];
             let r = rights[ri];
             let mask = rights_mask_for_label(r);
-            expected.entry(path.clone()).or_default().push(format!("{p}|{mask}"));
+            expected
+                .entry(path.clone())
+                .or_default()
+                .push(format!("{p}|{mask}"));
         }
     }
 
@@ -77,15 +82,31 @@ fn apply_random_acl_rules(
     for ((pi, ri), targets) in groups {
         let list = env.root.join(format!("acl_stress_batch_{idx}.txt"));
         idx += 1;
-        let content: String = targets.iter().map(|p| format!("{}
-", str_path(p))).collect();
+        let content: String = targets
+            .iter()
+            .map(|p| {
+                format!(
+                    "{}
+",
+                    str_path(p)
+                )
+            })
+            .collect();
         fs::write(&list, content).unwrap();
         run_ok(acl_cmd(env).args([
-            "acl", "add", "--file", &str_path(&list),
-            "--principal", principals[pi],
-            "--rights", rights[ri],
-            "--ace-type", "Allow",
-            "--inherit", "None", "-y",
+            "acl",
+            "add",
+            "--file",
+            &str_path(&list),
+            "--principal",
+            principals[pi],
+            "--rights",
+            rights[ri],
+            "--ace-type",
+            "Allow",
+            "--inherit",
+            "None",
+            "-y",
         ]));
     }
     expected
@@ -106,15 +127,19 @@ fn acl_stress_small_random_rules() {
     let _expected = apply_random_acl_rules(&env, &files, 0x1234_5678);
     let add_elapsed = add_start.elapsed();
     let start = Instant::now();
-    run_ok(acl_cmd(&env).args([
-        "acl", "orphans", "-p", &str_path(&root), "--action", "none",
-    ]));
+    run_ok(acl_cmd(&env).args(["acl", "orphans", "-p", &str_path(&root), "--action", "none"]));
     let elapsed = start.elapsed();
     eprintln!(
         "perf: acl_stress_small setup_ms={} add_ms={} orphans_ms={}",
-        setup_elapsed.as_millis(), add_elapsed.as_millis(), elapsed.as_millis()
+        setup_elapsed.as_millis(),
+        add_elapsed.as_millis(),
+        elapsed.as_millis()
     );
-    assert_under_ms("acl_stress_small_orphans", elapsed, "XUN_TEST_ACL_STRESS_MAX_MS");
+    assert_under_ms(
+        "acl_stress_small_orphans",
+        elapsed,
+        "XUN_TEST_ACL_STRESS_MAX_MS",
+    );
 }
 
 #[test]
@@ -140,8 +165,9 @@ fn acl_stress_large_random_rules() {
     let add_start = Instant::now();
     let expected = apply_random_acl_rules(&env, &files, 0x9E37_79B9);
     let add_elapsed = add_start.elapsed();
-    let expected_principals: HashSet<&str> =
-        ["S-1-1-0", "S-1-5-32-545", "S-1-5-32-544"].into_iter().collect();
+    let expected_principals: HashSet<&str> = ["S-1-1-0", "S-1-5-32-545", "S-1-5-32-544"]
+        .into_iter()
+        .collect();
     let mut post_backup_elapsed = Duration::from_millis(0);
     let mut compare_elapsed = Duration::from_millis(0);
     for (idx, (path, _backup, pre_entries)) in pre_records.iter().enumerate() {
@@ -158,17 +184,25 @@ fn acl_stress_large_random_rules() {
                 continue;
             }
             let key = backup_key_for_entry(entry);
-            assert!(post_keys.contains(&key), "pre ACL entry missing after write: {key}");
+            assert!(
+                post_keys.contains(&key),
+                "pre ACL entry missing after write: {key}"
+            );
         }
         let expected_keys = expected.get(path).expect("missing expected keys");
         for key in expected_keys {
             let mut parts = key.split('|');
             let raw_sid = parts.next().unwrap_or_default();
             let expected_mask = normalize_rights_mask(
-                parts.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0)
+                parts
+                    .next()
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0),
             );
             let pre_mask = allow_mask_for_sid(pre_entries, raw_sid);
-            if (pre_mask & expected_mask) == expected_mask { continue; }
+            if (pre_mask & expected_mask) == expected_mask {
+                continue;
+            }
             let post_mask = allow_mask_for_sid(&post_entries, raw_sid);
             assert!(
                 (post_mask & expected_mask) == expected_mask,
@@ -178,17 +212,22 @@ fn acl_stress_large_random_rules() {
         compare_elapsed += cmp_start.elapsed();
     }
     let start = Instant::now();
-    run_ok(acl_cmd(&env).args([
-        "acl", "orphans", "-p", &str_path(&root), "--action", "none",
-    ]));
+    run_ok(acl_cmd(&env).args(["acl", "orphans", "-p", &str_path(&root), "--action", "none"]));
     let elapsed = start.elapsed();
     eprintln!(
         "perf: acl_stress_large setup_ms={} pre_ms={} add_ms={} post_ms={} cmp_ms={} orphans_ms={}",
-        setup_elapsed.as_millis(), pre_backup_elapsed.as_millis(),
-        add_elapsed.as_millis(), post_backup_elapsed.as_millis(),
-        compare_elapsed.as_millis(), elapsed.as_millis()
+        setup_elapsed.as_millis(),
+        pre_backup_elapsed.as_millis(),
+        add_elapsed.as_millis(),
+        post_backup_elapsed.as_millis(),
+        compare_elapsed.as_millis(),
+        elapsed.as_millis()
     );
-    assert_under_ms("acl_stress_large_orphans", elapsed, "XUN_TEST_ACL_STRESS_LARGE_MAX_MS");
+    assert_under_ms(
+        "acl_stress_large_orphans",
+        elapsed,
+        "XUN_TEST_ACL_STRESS_LARGE_MAX_MS",
+    );
     let restore_start = Instant::now();
     for (path, backup, _) in &pre_records {
         restore_acl(&env, path, backup);
@@ -196,7 +235,7 @@ fn acl_stress_large_random_rules() {
     }
     eprintln!(
         "perf: acl_stress_large restore_ms={} total_ms={}",
-        restore_start.elapsed().as_millis(), total_start.elapsed().as_millis()
+        restore_start.elapsed().as_millis(),
+        total_start.elapsed().as_millis()
     );
 }
-

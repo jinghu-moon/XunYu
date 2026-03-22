@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use common::env_usize;
-use xun::path_guard::{validate_paths, PathPolicy};
+use xun::path_guard::{PathPolicy, validate_paths};
 
 fn path_string(path: &PathBuf) -> String {
     path.to_string_lossy().to_string()

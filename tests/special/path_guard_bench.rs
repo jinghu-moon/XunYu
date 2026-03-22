@@ -4,9 +4,7 @@ mod common;
 use std::path::PathBuf;
 use std::process::Command;
 
-use common::{
-    env_u64, measure_handle_peak_count, measure_working_set_peak_with_baseline_bytes,
-};
+use common::{env_u64, measure_handle_peak_count, measure_working_set_peak_with_baseline_bytes};
 
 #[test]
 #[ignore]

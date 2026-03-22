@@ -173,7 +173,9 @@ fn app_to_shim_with_args(bencher: Bencher) {
 fn config_to_sync_entries_bench(bencher: Bencher, n: usize) {
     let cfg = make_config(n);
     bencher.bench(|| {
-        black_box(xun::alias::shim_gen::config_to_sync_entries(black_box(&cfg)));
+        black_box(xun::alias::shim_gen::config_to_sync_entries(black_box(
+            &cfg,
+        )));
     });
 }
 

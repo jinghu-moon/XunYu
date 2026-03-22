@@ -713,7 +713,10 @@ fn backup_list_empty_reports_no_backups() {
     let root = env.root.join("proj_list_empty");
     fs::create_dir_all(&root).unwrap();
 
-    let out = run_ok(env.cmd().args(["backup", "-C", root.to_str().unwrap(), "list"]));
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "list"]),
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("No backups found"),
@@ -745,7 +748,10 @@ fn backup_list_subcommand_form_works() {
             .args(["backup", "-C", root.to_str().unwrap(), "-m", "list-sub"]),
     );
 
-    let out = run_ok(env.cmd().args(["backup", "-C", root.to_str().unwrap(), "list"]));
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "list"]),
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("v1-"),
@@ -781,7 +787,9 @@ fn backup_list_json_outputs_machine_readable_entries() {
     let value: Value = serde_json::from_slice(&out.stdout).expect("list json should be valid");
     assert_eq!(value["action"], "list");
     assert_eq!(value["count"], 1);
-    let items = value["items"].as_array().expect("list json should contain items");
+    let items = value["items"]
+        .as_array()
+        .expect("list json should contain items");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["is_zip"], false);
     assert!(items[0]["size_bytes"].as_u64().unwrap_or(0) > 0);
@@ -906,13 +914,10 @@ fn bak_verify_subcommand_form_works() {
         .to_string_lossy()
         .into_owned();
 
-    let out = run_ok(env.cmd().args([
-        "backup",
-        "-C",
-        root.to_str().unwrap(),
-        "verify",
-        &v1_name,
-    ]));
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "verify", &v1_name]),
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("All files OK"),
@@ -1002,13 +1007,10 @@ fn bak_find_subcommand_form_works() {
     )
     .unwrap();
 
-    let out = run_ok(env.cmd().args([
-        "backup",
-        "-C",
-        root.to_str().unwrap(),
-        "find",
-        "demo",
-    ]));
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "find", "demo"]),
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("find-sub"),
@@ -1093,7 +1095,10 @@ fn bak_find_filters_backups_by_tag() {
             .args(["bak", "-C", root.to_str().unwrap(), "find", "demo"]),
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("tagged"), "filtered find should keep tagged backup");
+    assert!(
+        stderr.contains("tagged"),
+        "filtered find should keep tagged backup"
+    );
     assert!(
         !stderr.contains("plain"),
         "filtered find should exclude untagged backup, got: {stderr}"
@@ -1141,20 +1146,20 @@ fn bak_find_json_outputs_structured_fields() {
     )
     .unwrap();
 
-    let out = run_ok(
-        env.cmd().args([
-            "backup",
-            "-C",
-            root.to_str().unwrap(),
-            "find",
-            "demo",
-            "--json",
-        ]),
-    );
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "find",
+        "demo",
+        "--json",
+    ]));
     let value: Value = serde_json::from_slice(&out.stdout).expect("find json should be valid");
     assert_eq!(value["action"], "find");
     assert_eq!(value["count"], 1);
-    let items = value["items"].as_array().expect("find json should contain items");
+    let items = value["items"]
+        .as_array()
+        .expect("find json should contain items");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["desc"], "json-find");
     assert_eq!(items[0]["tags"][0], "demo");
@@ -1240,7 +1245,9 @@ fn bak_find_since_until_filters_backups_by_time() {
     assert_eq!(value["action"], "find");
     assert_eq!(value["count"], 1);
     assert_eq!(value["filters"]["since"], 1_767_225_600u64);
-    let items = value["items"].as_array().expect("find json should contain items");
+    let items = value["items"]
+        .as_array()
+        .expect("find json should contain items");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["desc"], "new");
 }

@@ -141,30 +141,26 @@ fn perf_filevault_encrypt_decrypt_throughput() {
     write_pattern_file(&plain, size_bytes);
 
     for warmup in 0..warmups {
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault.to_str().unwrap(),
-                "--password",
-                "perf-secret",
-                "--chunk-size",
-                &chunk_size,
-            ]),
-        );
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "dec",
-                vault.to_str().unwrap(),
-                "-o",
-                out.to_str().unwrap(),
-                "--password",
-                "perf-secret",
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            vault.to_str().unwrap(),
+            "--password",
+            "perf-secret",
+            "--chunk-size",
+            &chunk_size,
+        ]));
+        run_ok_status(env.cmd().args([
+            "vault",
+            "dec",
+            vault.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--password",
+            "perf-secret",
+        ]));
         eprintln!(
             "perf: filevault throughput warmup={} size_mib={} chunk_size={}",
             warmup + 1,
@@ -180,33 +176,29 @@ fn perf_filevault_encrypt_decrypt_throughput() {
 
     for run in 0..runs {
         let encrypt_start = Instant::now();
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault.to_str().unwrap(),
-                "--password",
-                "perf-secret",
-                "--chunk-size",
-                &chunk_size,
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            vault.to_str().unwrap(),
+            "--password",
+            "perf-secret",
+            "--chunk-size",
+            &chunk_size,
+        ]));
         let encrypt_elapsed = encrypt_start.elapsed();
 
         let decrypt_start = Instant::now();
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "dec",
-                vault.to_str().unwrap(),
-                "-o",
-                out.to_str().unwrap(),
-                "--password",
-                "perf-secret",
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "dec",
+            vault.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--password",
+            "perf-secret",
+        ]));
         let decrypt_elapsed = decrypt_start.elapsed();
 
         let encrypt_mib_s = throughput_mib_per_sec(size_bytes, encrypt_elapsed);
@@ -287,28 +279,24 @@ fn perf_filevault_encrypt_peak_working_set_and_handles() {
     write_pattern_file(&plain, size_bytes);
 
     for warmup in 0..warmups {
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault.to_str().unwrap(),
-                "--password",
-                "perf-secret",
-            ]),
-        );
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault_handles.to_str().unwrap(),
-                "--password",
-                "perf-secret",
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            vault.to_str().unwrap(),
+            "--password",
+            "perf-secret",
+        ]));
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            vault_handles.to_str().unwrap(),
+            "--password",
+            "perf-secret",
+        ]));
         eprintln!(
             "perf: filevault resources warmup={} size_mib={} sample_ms={}",
             warmup + 1,
@@ -337,7 +325,10 @@ fn perf_filevault_encrypt_peak_working_set_and_handles() {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let mem_peak = measure_working_set_peak_bytes(mem_cmd.spawn().unwrap(), sample_ms);
-        assert!(vault.exists(), "ciphertext must exist after memory probe run");
+        assert!(
+            vault.exists(),
+            "ciphertext must exist after memory probe run"
+        );
 
         let mut handle_cmd = env.cmd();
         handle_cmd
@@ -353,7 +344,10 @@ fn perf_filevault_encrypt_peak_working_set_and_handles() {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let handle_peak = measure_handle_peak_count(handle_cmd.spawn().unwrap(), sample_ms);
-        assert!(vault_handles.exists(), "ciphertext must exist after handle probe run");
+        assert!(
+            vault_handles.exists(),
+            "ciphertext must exist after handle probe run"
+        );
 
         mem_peaks.push(mem_peak as f64);
         handle_peaks.push(handle_peak as f64);
@@ -423,54 +417,52 @@ fn perf_filevault_rewrap_vs_reencrypt() {
 
     let prepare_vault = || {
         let _ = fs::remove_file(&vault);
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                vault.to_str().unwrap(),
-                "--password",
-                "old-secret",
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            vault.to_str().unwrap(),
+            "--password",
+            "old-secret",
+        ]));
     };
 
     for warmup in 0..warmups {
         prepare_vault();
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "rewrap",
-                vault.to_str().unwrap(),
-                "--unlock-password",
-                "old-secret",
-                "--add-password",
-                "new-secret",
-                "--add-keyfile",
-                keyfile.to_str().unwrap(),
-                "--remove-slot",
-                "password",
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "rewrap",
+            vault.to_str().unwrap(),
+            "--unlock-password",
+            "old-secret",
+            "--add-password",
+            "new-secret",
+            "--add-keyfile",
+            keyfile.to_str().unwrap(),
+            "--remove-slot",
+            "password",
+        ]));
         let _ = fs::remove_file(&vault);
 
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                reencrypt_vault.to_str().unwrap(),
-                "--password",
-                "new-secret",
-                "--keyfile",
-                keyfile.to_str().unwrap(),
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            reencrypt_vault.to_str().unwrap(),
+            "--password",
+            "new-secret",
+            "--keyfile",
+            keyfile.to_str().unwrap(),
+        ]));
         let _ = fs::remove_file(&reencrypt_vault);
 
-        eprintln!("perf: filevault rewrap warmup={} size_mib={}", warmup + 1, size_bytes / (1024 * 1024));
+        eprintln!(
+            "perf: filevault rewrap warmup={} size_mib={}",
+            warmup + 1,
+            size_bytes / (1024 * 1024)
+        );
     }
 
     let mut rewrap_ms_runs = Vec::with_capacity(runs);
@@ -481,38 +473,34 @@ fn perf_filevault_rewrap_vs_reencrypt() {
     for run in 0..runs {
         prepare_vault();
         let rewrap_start = Instant::now();
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "rewrap",
-                vault.to_str().unwrap(),
-                "--unlock-password",
-                "old-secret",
-                "--add-password",
-                "new-secret",
-                "--add-keyfile",
-                keyfile.to_str().unwrap(),
-                "--remove-slot",
-                "password",
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "rewrap",
+            vault.to_str().unwrap(),
+            "--unlock-password",
+            "old-secret",
+            "--add-password",
+            "new-secret",
+            "--add-keyfile",
+            keyfile.to_str().unwrap(),
+            "--remove-slot",
+            "password",
+        ]));
         let rewrap_elapsed = rewrap_start.elapsed();
         let _ = fs::remove_file(&vault);
 
         let reencrypt_start = Instant::now();
-        run_ok_status(
-            env.cmd().args([
-                "vault",
-                "enc",
-                plain.to_str().unwrap(),
-                "-o",
-                reencrypt_vault.to_str().unwrap(),
-                "--password",
-                "new-secret",
-                "--keyfile",
-                keyfile.to_str().unwrap(),
-            ]),
-        );
+        run_ok_status(env.cmd().args([
+            "vault",
+            "enc",
+            plain.to_str().unwrap(),
+            "-o",
+            reencrypt_vault.to_str().unwrap(),
+            "--password",
+            "new-secret",
+            "--keyfile",
+            keyfile.to_str().unwrap(),
+        ]));
         let reencrypt_elapsed = reencrypt_start.elapsed();
         let _ = fs::remove_file(&reencrypt_vault);
 
@@ -546,23 +534,20 @@ fn perf_filevault_rewrap_vs_reencrypt() {
     let ratio_std = stddev(&ratio_runs);
 
     eprintln!("perf: filevault compare-table");
-    eprintln!("perf: op\telapsed_ms_mean\telapsed_ms_std\tthroughput_mib_s_mean\tthroughput_mib_s_std\tnotes");
+    eprintln!(
+        "perf: op\telapsed_ms_mean\telapsed_ms_std\tthroughput_mib_s_mean\tthroughput_mib_s_std\tnotes"
+    );
     eprintln!(
         "perf: rewrap\t{:.0}\t{:.0}\t-\t-\tpayload invariant slot replacement",
-        rewrap_mean,
-        rewrap_std
+        rewrap_mean, rewrap_std
     );
     eprintln!(
         "perf: reencrypt\t{:.0}\t{:.0}\t{:.2}\t{:.2}\tfull payload encryption",
-        reencrypt_mean,
-        reencrypt_std,
-        reencrypt_mib_mean,
-        reencrypt_mib_std
+        reencrypt_mean, reencrypt_std, reencrypt_mib_mean, reencrypt_mib_std
     );
     eprintln!(
         "perf: reencrypt_over_rewrap_ratio_mean={:.2} ratio_std={:.2}",
-        ratio_mean,
-        ratio_std
+        ratio_mean, ratio_std
     );
 
     if let Some(min_ratio) = env_u64("XUN_TEST_FILEVAULT_REENCRYPT_OVER_REWRAP_MIN_RATIO") {
@@ -587,8 +572,11 @@ fn perf_filevault_rewrap_vs_reencrypt() {
 fn perf_filevault_large_file_throughput() {
     let env = TestEnv::new();
     let work = make_safe_work_dir("filevault-perf-large");
-    let size_mib_list =
-        env_mib_list("XUN_TEST_FILEVAULT_LARGE_MIB_LIST", "XUN_TEST_FILEVAULT_LARGE_MIB", &[2048, 4096, 8192]);
+    let size_mib_list = env_mib_list(
+        "XUN_TEST_FILEVAULT_LARGE_MIB_LIST",
+        "XUN_TEST_FILEVAULT_LARGE_MIB",
+        &[2048, 4096, 8192],
+    );
     let chunk_sizes = env_bytes_list(
         "XUN_TEST_FILEVAULT_LARGE_CHUNK_SIZES",
         "XUN_TEST_FILEVAULT_LARGE_CHUNK_SIZE",
@@ -611,30 +599,26 @@ fn perf_filevault_large_file_throughput() {
             let out = size_root.join(format!("large-{chunk_size}.out.bin"));
 
             for warmup in 0..warmups {
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "enc",
-                        plain.to_str().unwrap(),
-                        "-o",
-                        vault.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                        "--chunk-size",
-                        &chunk_size_value,
-                    ]),
-                );
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "dec",
-                        vault.to_str().unwrap(),
-                        "-o",
-                        out.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "enc",
+                    plain.to_str().unwrap(),
+                    "-o",
+                    vault.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                    "--chunk-size",
+                    &chunk_size_value,
+                ]));
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "dec",
+                    vault.to_str().unwrap(),
+                    "-o",
+                    out.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                ]));
                 eprintln!(
                     "perf: filevault large warmup={} size_mib={} chunk_size={}",
                     warmup + 1,
@@ -652,33 +636,29 @@ fn perf_filevault_large_file_throughput() {
 
             for run in 0..runs {
                 let encrypt_start = Instant::now();
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "enc",
-                        plain.to_str().unwrap(),
-                        "-o",
-                        vault.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                        "--chunk-size",
-                        &chunk_size_value,
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "enc",
+                    plain.to_str().unwrap(),
+                    "-o",
+                    vault.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                    "--chunk-size",
+                    &chunk_size_value,
+                ]));
                 let encrypt_elapsed = encrypt_start.elapsed();
 
                 let decrypt_start = Instant::now();
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "dec",
-                        vault.to_str().unwrap(),
-                        "-o",
-                        out.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "dec",
+                    vault.to_str().unwrap(),
+                    "-o",
+                    out.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                ]));
                 let decrypt_elapsed = decrypt_start.elapsed();
 
                 assert_eq!(fs::metadata(&out).unwrap().len(), size_bytes as u64);
@@ -760,7 +740,10 @@ fn perf_filevault_small_files_batch() {
     let work = make_safe_work_dir("filevault-perf-small-batch");
     let default_count = env_usize("XUN_TEST_FILEVAULT_SMALL_COUNT", 256);
     let file_count = env_usize("XUN_TEST_FILEVAULT_SMALL_COUNT_PER_BUCKET", default_count);
-    let bucket_kib = env_kib_list("XUN_TEST_FILEVAULT_SMALL_BUCKETS_KIB", &[1, 2, 4, 8, 16, 32, 64]);
+    let bucket_kib = env_kib_list(
+        "XUN_TEST_FILEVAULT_SMALL_BUCKETS_KIB",
+        &[1, 2, 4, 8, 16, 32, 64],
+    );
     let override_bytes = std::env::var("XUN_TEST_FILEVAULT_SMALL_BYTES")
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
@@ -774,7 +757,10 @@ fn perf_filevault_small_files_batch() {
     let bucket_list = if let Some(bytes) = override_bytes {
         vec![bytes.max(1)]
     } else {
-        bucket_kib.into_iter().map(|kib| kib.max(1) * 1024).collect()
+        bucket_kib
+            .into_iter()
+            .map(|kib| kib.max(1) * 1024)
+            .collect()
     };
 
     for size_bytes in bucket_list {
@@ -796,34 +782,30 @@ fn perf_filevault_small_files_batch() {
             for index in 0..file_count {
                 let plain = plain_root.join(format!("small-{index:04}.bin"));
                 let vault = cipher_root.join(format!("small-{index:04}.bin.fv"));
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "enc",
-                        plain.to_str().unwrap(),
-                        "-o",
-                        vault.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                        "--chunk-size",
-                        &chunk_size,
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "enc",
+                    plain.to_str().unwrap(),
+                    "-o",
+                    vault.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                    "--chunk-size",
+                    &chunk_size,
+                ]));
             }
             for index in 0..file_count {
                 let vault = cipher_root.join(format!("small-{index:04}.bin.fv"));
                 let out = out_root.join(format!("small-{index:04}.bin"));
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "dec",
-                        vault.to_str().unwrap(),
-                        "-o",
-                        out.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "dec",
+                    vault.to_str().unwrap(),
+                    "-o",
+                    out.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                ]));
             }
             eprintln!(
                 "perf: filevault small-batch warmup={} bucket_kib={} count={} size_bytes={} chunk_size={}",
@@ -851,19 +833,17 @@ fn perf_filevault_small_files_batch() {
             for index in 0..file_count {
                 let plain = plain_root.join(format!("small-{index:04}.bin"));
                 let vault = cipher_root.join(format!("small-{index:04}.bin.fv"));
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "enc",
-                        plain.to_str().unwrap(),
-                        "-o",
-                        vault.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                        "--chunk-size",
-                        &chunk_size,
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "enc",
+                    plain.to_str().unwrap(),
+                    "-o",
+                    vault.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                    "--chunk-size",
+                    &chunk_size,
+                ]));
             }
             let encrypt_elapsed = encrypt_start.elapsed();
 
@@ -871,17 +851,15 @@ fn perf_filevault_small_files_batch() {
             for index in 0..file_count {
                 let vault = cipher_root.join(format!("small-{index:04}.bin.fv"));
                 let out = out_root.join(format!("small-{index:04}.bin"));
-                run_ok_status(
-                    env.cmd().args([
-                        "vault",
-                        "dec",
-                        vault.to_str().unwrap(),
-                        "-o",
-                        out.to_str().unwrap(),
-                        "--password",
-                        "perf-secret",
-                    ]),
-                );
+                run_ok_status(env.cmd().args([
+                    "vault",
+                    "dec",
+                    vault.to_str().unwrap(),
+                    "-o",
+                    out.to_str().unwrap(),
+                    "--password",
+                    "perf-secret",
+                ]));
             }
             let decrypt_elapsed = decrypt_start.elapsed();
 
@@ -962,7 +940,11 @@ fn perf_filevault_small_files_batch() {
         }
         if file_count > 0 {
             let last_index = file_count.saturating_sub(1);
-            assert!(plain_root.join(format!("small-{last_index:04}.bin")).exists());
+            assert!(
+                plain_root
+                    .join(format!("small-{last_index:04}.bin"))
+                    .exists()
+            );
         }
         cleanup_dir(&bucket_root);
     }
