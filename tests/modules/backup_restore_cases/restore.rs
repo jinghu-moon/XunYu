@@ -728,6 +728,7 @@ fn restore_cmd_json_outputs_summary() {
 
     let value: Value = serde_json::from_slice(&out.stdout).expect("restore json should be valid");
     assert_eq!(value["action"], "restore");
+    assert_eq!(value["status"], "ok");
     assert_eq!(value["mode"], "all");
     assert_eq!(value["restored"], 2);
     assert_eq!(value["failed"], 0);

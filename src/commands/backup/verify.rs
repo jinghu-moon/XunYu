@@ -12,6 +12,7 @@ use super::meta::collect_backup_records;
 
 #[derive(Serialize)]
 struct BackupVerifyResultView {
+    action: String,
     name: String,
     status: String,
     backup_type: String,
@@ -39,6 +40,7 @@ pub(crate) fn cmd_backup_verify(
     if backup_path.extension().is_some_and(|e| e == "zip") {
         if json {
             let payload = BackupVerifyResultView {
+                action: "verify".to_string(),
                 name: name.to_string(),
                 status: "unsupported".to_string(),
                 backup_type: "zip".to_string(),
@@ -57,6 +59,7 @@ pub(crate) fn cmd_backup_verify(
         VerifyResult::Ok => {
             if json {
                 let payload = BackupVerifyResultView {
+                    action: "verify".to_string(),
                     name: name.to_string(),
                     status: "ok".to_string(),
                     backup_type: "dir".to_string(),
@@ -71,6 +74,7 @@ pub(crate) fn cmd_backup_verify(
         VerifyResult::Corrupted(files) => {
             if json {
                 let payload = BackupVerifyResultView {
+                    action: "verify".to_string(),
                     name: name.to_string(),
                     status: "corrupted".to_string(),
                     backup_type: "dir".to_string(),
@@ -90,6 +94,7 @@ pub(crate) fn cmd_backup_verify(
         VerifyResult::NoManifest => {
             if json {
                 let payload = BackupVerifyResultView {
+                    action: "verify".to_string(),
                     name: name.to_string(),
                     status: "no_manifest".to_string(),
                     backup_type: "dir".to_string(),

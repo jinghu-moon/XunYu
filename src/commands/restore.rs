@@ -39,6 +39,7 @@ fn emit_restore_timing(label: &str, elapsed: std::time::Duration, extra: Option<
 #[derive(Serialize)]
 struct RestoreExecutionSummary {
     action: String,
+    status: String,
     source: String,
     destination: String,
     mode: String,
@@ -138,6 +139,11 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
         let action = if args.dry_run { "preview" } else { "restore" };
         let summary = RestoreExecutionSummary {
             action: action.to_string(),
+            status: if failed == 0 {
+                "ok".to_string()
+            } else {
+                "partial_failed".to_string()
+            },
             source: src.display().to_string(),
             destination: dest_root.display().to_string(),
             mode: mode.to_string(),

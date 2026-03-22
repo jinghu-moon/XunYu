@@ -779,7 +779,9 @@ fn backup_list_json_outputs_machine_readable_entries() {
             .args(["backup", "-C", root.to_str().unwrap(), "list", "--json"]),
     );
     let value: Value = serde_json::from_slice(&out.stdout).expect("list json should be valid");
-    let items = value.as_array().expect("list json should be an array");
+    assert_eq!(value["action"], "list");
+    assert_eq!(value["count"], 1);
+    let items = value["items"].as_array().expect("list json should contain items");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["is_zip"], false);
     assert!(items[0]["size_bytes"].as_u64().unwrap_or(0) > 0);
@@ -1150,7 +1152,9 @@ fn bak_find_json_outputs_structured_fields() {
         ]),
     );
     let value: Value = serde_json::from_slice(&out.stdout).expect("find json should be valid");
-    let items = value.as_array().expect("find json should be an array");
+    assert_eq!(value["action"], "find");
+    assert_eq!(value["count"], 1);
+    let items = value["items"].as_array().expect("find json should contain items");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["desc"], "json-find");
     assert_eq!(items[0]["tags"][0], "demo");
@@ -1233,7 +1237,10 @@ fn bak_find_since_until_filters_backups_by_time() {
         "--json",
     ]));
     let value: Value = serde_json::from_slice(&out.stdout).expect("find json should be valid");
-    let items = value.as_array().expect("find json should be an array");
+    assert_eq!(value["action"], "find");
+    assert_eq!(value["count"], 1);
+    assert_eq!(value["filters"]["since"], 1_767_225_600u64);
+    let items = value["items"].as_array().expect("find json should contain items");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["desc"], "new");
 }
@@ -1277,6 +1284,7 @@ fn bak_verify_json_outputs_ok_status() {
         "--json",
     ]));
     let value: Value = serde_json::from_slice(&out.stdout).expect("verify json should be valid");
+    assert_eq!(value["action"], "verify");
     assert_eq!(value["status"], "ok");
     assert_eq!(value["backup_type"], "dir");
     assert_eq!(

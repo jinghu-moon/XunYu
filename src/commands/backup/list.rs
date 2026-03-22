@@ -19,6 +19,13 @@ struct BackupListItem {
     size_bytes: u64,
 }
 
+#[derive(Serialize)]
+struct BackupListResponse {
+    action: String,
+    count: usize,
+    items: Vec<BackupListItem>,
+}
+
 pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig, json: bool) -> CliResult {
     let backups_root = root.join(&cfg.storage.backups_dir);
     let _ = fs::create_dir_all(&backups_root);
@@ -34,17 +41,21 @@ pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig, json: bool) -> Cl
         })
         .collect();
 
-    if items.is_empty() {
-        if json {
-            out_println!("[]");
-            return Ok(());
-        }
-        ui_println!("No backups found: {}", backups_root.display());
+    if json {
+        let response = BackupListResponse {
+            action: "list".to_string(),
+            count: items.len(),
+            items,
+        };
+        out_println!(
+            "{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
         return Ok(());
     }
 
-    if json {
-        out_println!("{}", serde_json::to_string_pretty(&items).unwrap_or_default());
+    if items.is_empty() {
+        ui_println!("No backups found: {}", backups_root.display());
         return Ok(());
     }
 

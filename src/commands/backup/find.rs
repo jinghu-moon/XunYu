@@ -34,6 +34,21 @@ pub(crate) fn cmd_backup_find(
         size_bytes: u64,
     }
 
+    #[derive(Serialize)]
+    struct BackupFindFilters {
+        tag: Option<String>,
+        since: Option<u64>,
+        until: Option<u64>,
+    }
+
+    #[derive(Serialize)]
+    struct BackupFindResponse {
+        action: String,
+        count: usize,
+        filters: BackupFindFilters,
+        items: Vec<BackupFindItem>,
+    }
+
     let mut results: Vec<BackupFindItem> = Vec::new();
 
     for record in collect_backup_records(&backups_root, &cfg.naming.prefix) {
@@ -72,20 +87,26 @@ pub(crate) fn cmd_backup_find(
 
     results.sort_by(|a, b| a.ts.cmp(&b.ts).then_with(|| a.name.cmp(&b.name)));
 
-    if results.is_empty() {
-        if json {
-            out_println!("[]");
-            return Ok(());
-        }
-        ui_println!("No backups match the filter.");
+    if json {
+        let response = BackupFindResponse {
+            action: "find".to_string(),
+            count: results.len(),
+            filters: BackupFindFilters {
+                tag: tag.map(str::to_string),
+                since,
+                until,
+            },
+            items: results,
+        };
+        out_println!(
+            "{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
         return Ok(());
     }
 
-    if json {
-        out_println!(
-            "{}",
-            serde_json::to_string_pretty(&results).unwrap_or_default()
-        );
+    if results.is_empty() {
+        ui_println!("No backups match the filter.");
         return Ok(());
     }
 
