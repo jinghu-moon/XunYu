@@ -24,7 +24,6 @@ pub(crate) struct DiffStats {
 struct CopyJob {
     src: PathBuf,
     dst: PathBuf,
-    link_src: Option<PathBuf>,
     link_wide: Option<WideLinkPaths>,
 }
 
@@ -191,7 +190,6 @@ pub(crate) fn apply_diff(
                     copy_jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
-                        link_src: None,
                         link_wide: None,
                     });
                     logical_bytes += e.file_size;
@@ -207,7 +205,6 @@ pub(crate) fn apply_diff(
                     copy_jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
-                        link_src: None,
                         link_wide: None,
                     });
                     logical_bytes += e.file_size;
@@ -219,20 +216,18 @@ pub(crate) fn apply_diff(
                     if let Some(parent) = dst.parent() {
                         dir_set.insert(parent.to_path_buf());
                     }
-                    let link_src = prev_backup_dir.map(|prev_dir| {
-                        prev_dir.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR))
-                    });
-                    let link_wide = link_src.as_ref().map(|link_src| WideLinkPaths {
-                        src: wide_null(link_src),
+                    let link_wide = prev_backup_dir.map(|prev_dir| WideLinkPaths {
+                        src: wide_null(
+                            &prev_dir.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR)),
+                        ),
                         dst: wide_null(&dst),
                     });
                     let job = CopyJob {
                         src: src.clone(),
                         dst,
-                        link_src,
                         link_wide,
                     };
-                    if job.link_src.is_some() {
+                    if job.link_wide.is_some() {
                         link_jobs.push(job);
                     } else {
                         copy_jobs.push(job);
@@ -260,7 +255,6 @@ pub(crate) fn apply_diff(
             fallback_copy_jobs.push(CopyJob {
                 src: job.src,
                 dst: job.dst,
-                link_src: None,
                 link_wide: None,
             });
         }
@@ -285,12 +279,6 @@ pub(crate) fn apply_diff(
 
 #[cfg(windows)]
 fn try_hard_link(job: &CopyJob) -> bool {
-    let Some(link_src) = &job.link_src else {
-        return false;
-    };
-    if !link_src.is_file() {
-        return false;
-    }
     let Some(link_wide) = &job.link_wide else {
         return false;
     };
