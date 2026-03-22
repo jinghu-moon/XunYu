@@ -3,12 +3,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
-use std::time::SystemTime;
 
 use console::Style;
 use rayon::prelude::*;
 
 use super::baseline::FileMeta;
+use super::scan::ScannedFile;
 use super::util::fmt_size;
 use crate::windows::file_copy::{FileCopyBackend, copy_file};
 
@@ -47,48 +47,42 @@ pub(crate) enum DiffKind {
 
 /// 纯计算：对比 current 文件集与 old 快照，返回所有 diff 条目
 pub(crate) fn compute_diff(
-    current: &HashMap<String, PathBuf>,
+    current: &HashMap<String, ScannedFile>,
     old: &mut HashMap<String, FileMeta>,
     skip_unchanged: bool,
 ) -> Vec<DiffEntry> {
-    let mut entries: Vec<DiffEntry> = Vec::new();
+    let mut entries: Vec<DiffEntry> = Vec::with_capacity(current.len() + old.len());
 
-    for (rel, src_path) in current {
-        let meta = match fs::metadata(src_path) {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
+    for (rel, scanned) in current {
         if let Some(old_meta) = old.remove(rel) {
-            let size_changed = meta.len() != old_meta.size;
+            let size_changed = scanned.size != old_meta.size;
             // 精确 mtime 比较，无容差
-            let time_changed =
-                meta.modified().unwrap_or(SystemTime::UNIX_EPOCH) > old_meta.modified;
+            let time_changed = scanned.modified > old_meta.modified;
             if size_changed || time_changed {
-                let delta = meta.len() as i64 - old_meta.size as i64;
+                let delta = scanned.size as i64 - old_meta.size as i64;
                 entries.push(DiffEntry {
                     rel: rel.clone(),
-                    src_path: Some(src_path.clone()),
+                    src_path: Some(scanned.path.clone()),
                     kind: DiffKind::Modified,
                     size_delta: delta,
-                    file_size: meta.len(),
+                    file_size: scanned.size,
                 });
             } else if !skip_unchanged {
                 entries.push(DiffEntry {
                     rel: rel.clone(),
-                    src_path: Some(src_path.clone()),
+                    src_path: Some(scanned.path.clone()),
                     kind: DiffKind::Unchanged,
                     size_delta: 0,
-                    file_size: meta.len(),
+                    file_size: scanned.size,
                 });
             }
         } else {
             entries.push(DiffEntry {
                 rel: rel.clone(),
-                src_path: Some(src_path.clone()),
+                src_path: Some(scanned.path.clone()),
                 kind: DiffKind::New,
-                size_delta: meta.len() as i64,
-                file_size: meta.len(),
+                size_delta: scanned.size as i64,
+                file_size: scanned.size,
             });
         }
     }

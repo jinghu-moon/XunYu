@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::time::SystemTime;
 
 use rayon::prelude::*;
 
@@ -9,56 +9,116 @@ use crate::util::{matches_patterns, normalize_glob_path};
 
 use super::util::norm;
 
+pub(crate) struct ScannedFile {
+    pub(crate) path: PathBuf,
+    pub(crate) size: u64,
+    pub(crate) modified: SystemTime,
+}
+
 pub(crate) fn scan_files(
     root: &Path,
     includes: &[String],
     exclude_patterns: &[String],
     include_patterns: &[String],
-) -> HashMap<String, PathBuf> {
-    let files = Mutex::new(HashMap::new());
-
+) -> HashMap<String, ScannedFile> {
+    let fast_path = exclude_patterns.is_empty() && include_patterns.is_empty();
     if includes.is_empty() {
-        walk_parallel(root, root, exclude_patterns, include_patterns, &files);
-    } else {
-        // 顶层 include 路径并行处理
-        includes.par_iter().for_each(|inc| {
-            let full = root.join(inc);
-            if full.is_file() {
-                let mut guard = files.lock().unwrap();
-                guard.insert(norm(inc), full);
-            } else if full.is_dir() {
-                walk_parallel(&full, root, exclude_patterns, include_patterns, &files);
-            }
-        });
+        let mut files = HashMap::new();
+        if fast_path {
+            walk_fast(root, root, &mut files);
+        } else {
+            walk_filtered(root, root, exclude_patterns, include_patterns, &mut files);
+        }
+        return files;
     }
 
-    files.into_inner().unwrap()
+    let parts: Vec<HashMap<String, ScannedFile>> = includes
+        .par_iter()
+        .map(|inc| {
+            let mut local = HashMap::new();
+            let full = root.join(inc);
+            if full.is_file() {
+                if let Ok(meta) = fs::metadata(&full) {
+                    local.insert(
+                        norm(inc),
+                        ScannedFile {
+                            path: full,
+                            size: meta.len(),
+                            modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+                        },
+                    );
+                }
+            } else if full.is_dir() {
+                if fast_path {
+                    walk_fast(&full, root, &mut local);
+                } else {
+                    walk_filtered(&full, root, exclude_patterns, include_patterns, &mut local);
+                }
+            }
+            local
+        })
+        .collect();
+
+    let capacity = parts.iter().map(HashMap::len).sum();
+    let mut files = HashMap::with_capacity(capacity);
+    for part in parts {
+        files.extend(part);
+    }
+    files
 }
 
-fn walk_parallel(
+fn walk_fast(dir: &Path, root: &Path, files: &mut HashMap<String, ScannedFile>) {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let Ok(rd) = fs::read_dir(&current) else {
+            continue;
+        };
+        for entry in rd.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if file_type.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            let rel = path.strip_prefix(root).unwrap_or(&path);
+            files.insert(
+                rel_key(rel),
+                ScannedFile {
+                    path,
+                    size: meta.len(),
+                    modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+                },
+            );
+        }
+    }
+}
+
+fn walk_filtered(
     dir: &Path,
     root: &Path,
     exclude_patterns: &[String],
     include_patterns: &[String],
-    files: &Mutex<HashMap<String, PathBuf>>,
+    files: &mut HashMap<String, ScannedFile>,
 ) {
-    let Ok(rd) = fs::read_dir(dir) else { return };
+    let Ok(rd) = fs::read_dir(dir) else {
+        return;
+    };
 
-    // 收集当前目录条目，分离子目录与文件
-    let mut subdirs: Vec<PathBuf> = Vec::new();
-    let mut file_entries: Vec<(String, PathBuf)> = Vec::new();
-
-    for e in rd.flatten() {
-        let ft = match e.file_type() {
-            Ok(v) => v,
-            Err(_) => continue,
+    for entry in rd.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
         };
-        let path = e.path();
+        let path = entry.path();
         let rel = path.strip_prefix(root).unwrap_or(&path);
         let rel_norm = normalize_glob_path(&rel.to_string_lossy());
-        let name = e.file_name().to_string_lossy().into_owned();
+        let name = entry.file_name().to_string_lossy().into_owned();
         let name_lower = name.to_lowercase();
-        let is_dir = ft.is_dir();
+        let is_dir = file_type.is_dir();
 
         if !include_patterns.is_empty()
             && matches_patterns(&rel_norm, &name_lower, include_patterns, is_dir)
@@ -69,22 +129,29 @@ fn walk_parallel(
         }
 
         if is_dir {
-            subdirs.push(path);
-        } else {
-            file_entries.push((rel_norm.replace('/', "\\"), path));
+            walk_filtered(&path, root, exclude_patterns, include_patterns, files);
+            continue;
         }
-    }
 
-    // 批量写入文件条目
-    {
-        let mut guard = files.lock().unwrap();
-        for (key, path) in file_entries {
-            guard.insert(key, path);
-        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        files.insert(
+            rel_norm.replace('/', "\\"),
+            ScannedFile {
+                path,
+                size: meta.len(),
+                modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+            },
+        );
     }
+}
 
-    // 子目录并行递归
-    subdirs.par_iter().for_each(|sub| {
-        walk_parallel(sub, root, exclude_patterns, include_patterns, files);
-    });
+fn rel_key(rel: &Path) -> String {
+    let value = rel.to_string_lossy();
+    if value.contains('/') {
+        value.replace('/', "\\")
+    } else {
+        value.into_owned()
+    }
 }

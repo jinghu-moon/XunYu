@@ -3,8 +3,6 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
-use super::util::norm;
-
 pub(crate) struct FileMeta {
     pub(crate) size: u64,
     pub(crate) modified: SystemTime,
@@ -34,7 +32,7 @@ fn read_baseline_zip(zip_path: &Path, old: &mut HashMap<String, FileMeta>) {
         if entry.is_dir() {
             continue;
         }
-        let name = norm(entry.name());
+        let name = entry.name().replace('/', "\\");
         if name.is_empty() {
             continue;
         }
@@ -53,22 +51,41 @@ fn read_baseline_zip(zip_path: &Path, old: &mut HashMap<String, FileMeta>) {
 }
 
 fn read_baseline_dir(dir: &Path, base: &Path, old: &mut HashMap<String, FileMeta>) {
-    let Ok(rd) = fs::read_dir(dir) else { return };
-    for e in rd.flatten() {
-        let path = e.path();
-        if path.is_dir() {
-            read_baseline_dir(&path, base, old);
-        } else if let Ok(meta) = path.metadata() {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let Ok(rd) = fs::read_dir(&current) else {
+            continue;
+        };
+        for entry in rd.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if file_type.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
             let rel = path.strip_prefix(base).unwrap_or(&path);
-            let key = norm(&rel.to_string_lossy());
             old.insert(
-                key,
+                rel_key(rel),
                 FileMeta {
                     size: meta.len(),
                     modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
                 },
             );
         }
+    }
+}
+
+fn rel_key(rel: &Path) -> String {
+    let value = rel.to_string_lossy();
+    if value.contains('/') {
+        value.replace('/', "\\")
+    } else {
+        value.into_owned()
     }
 }
 
