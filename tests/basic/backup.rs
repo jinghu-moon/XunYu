@@ -67,6 +67,51 @@ fn backup_creates_backup_folder() {
 }
 
 #[test]
+fn backup_skip_if_unchanged_skips_new_version() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_skip_unchanged");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+    ]));
+
+    let backups = root.join("A_backups");
+    let versions: Vec<String> = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("v") && n.contains('-') && !n.ends_with(".meta.json"))
+        .collect();
+    assert_eq!(versions.len(), 1, "no-change backup should not create v2");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("no changes detected"),
+        "skip path should explain why backup was skipped, got: {stderr}"
+    );
+}
+
+#[test]
 fn bak_dry_run_creates_no_version() {
     let env = TestEnv::new();
     let root = env.root.join("proj_dry");
@@ -481,6 +526,48 @@ fn bak_incremental_only_copies_changed_files() {
         !v2_path.join("b.txt").exists(),
         "b.txt should NOT be in incremental backup"
     );
+}
+
+#[test]
+fn backup_skip_if_unchanged_still_creates_version_when_changed() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_skip_changed");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "v1").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+    thread::sleep(Duration::from_millis(50));
+    fs::write(root.join("a.txt"), "v2").unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+    ]));
+
+    let backups = root.join("A_backups");
+    let versions: Vec<String> = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("v") && n.contains('-') && !n.ends_with(".meta.json"))
+        .collect();
+    assert_eq!(versions.len(), 2, "changed backup should still create v2");
 }
 
 #[test]

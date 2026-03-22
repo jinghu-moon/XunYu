@@ -38,4 +38,8 @@ pub struct BackupCmd {
     /// incremental backup: only copy new/modified files
     #[argh(switch)]
     pub incremental: bool,
+
+    /// skip creating a new backup when no changes are detected
+    #[argh(switch)]
+    pub skip_if_unchanged: bool,
 }

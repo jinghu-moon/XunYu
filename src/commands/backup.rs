@@ -224,9 +224,6 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         cfg.naming.prefix, ver.next_version, desc, date_str, incr_suffix
     );
     let dest_dir = backups_root.join(&folder_name);
-    if !args.dry_run {
-        let _ = fs::create_dir_all(&dest_dir);
-    }
     if timing {
         emit_backup_timing("prepare", t_prepare.elapsed(), Some(folder_name.clone()));
     }
@@ -288,6 +285,9 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             Some(format!("entries={}", diff_entries.len())),
         );
     }
+    let has_changes = diff_entries
+        .iter()
+        .any(|entry| !matches!(entry.kind, diff::DiffKind::Unchanged));
     let t_diff_print = Instant::now();
     diff::print_diff(&diff_entries, show_unchanged);
     if timing {
@@ -298,8 +298,23 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         );
     }
 
+    if args.skip_if_unchanged && !has_changes {
+        let white = Style::new().white();
+        eprintln!();
+        report::report("Skipped", "no changes detected", &white);
+        if let Some(ref name) = ver.prev_name {
+            report::report("Baseline", name, &dim);
+        }
+        eprintln!();
+        if timing {
+            emit_backup_timing("total", t_total.elapsed(), None);
+        }
+        return Ok(());
+    }
+
     let t_copy = Instant::now();
     let stats = if !args.dry_run {
+        let _ = fs::create_dir_all(&dest_dir);
         // copy 进度：显示文件数
         let copy_bar = if can_interact() && !timing {
             let total = diff_entries

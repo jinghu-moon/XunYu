@@ -339,6 +339,7 @@ fn run_snapshot_backup(root: &Path, _cfg: &BackupConfig) -> CliResult {
         include: vec![],
         exclude: vec![],
         incremental: false,
+        skip_if_unchanged: false,
     };
     super::backup::cmd_backup(args)
 }

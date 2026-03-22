@@ -208,7 +208,9 @@
 | 9.16 | retention `keepMonthly` 保留最近月代表 | `backup/retention.rs` monthly 保留分支 | ✅ `commands::backup::retention::tests::keep_monthly_preserves_recent_month_representatives` |
 | 9.17 | manifest 校验支持成功与损坏分支（feature: `bak`） | `backup/checksum.rs` `verify_manifest()` | ✅ `commands::backup::checksum::tests::verify_manifest_roundtrip_ok` / `verify_manifest_detects_corrupted_files` |
 | 9.18 | `restore_core` 统计部分恢复失败数量 | `restore_core.rs` `restore_many_from_dir()` | ✅ `commands::restore_core::tests::restore_many_from_dir_counts_partial_failures` |
-| 9.19 | `restore --file` 可恢复单个文件 | `restore.rs:15` `cmd_restore()` / `restore.rs:125` `restore_single_file()` | ✅ `test_basic::restore::restore_cmd_file_from_dir_backup` / `test_basic::restore::restore_cmd_file_from_zip_backup` |
+| 9.19 | `backup --skip-if-unchanged` 在无变化时跳过新版本 | `backup.rs` no-change skip 分支 | ✅ `test_basic::backup_skip_if_unchanged_skips_new_version` |
+| 9.20 | `backup --skip-if-unchanged` 在有变化时仍创建新版本 | `backup.rs` no-change skip 分支 | ✅ `test_basic::backup_skip_if_unchanged_still_creates_version_when_changed` |
+| 9.21 | `restore --file` 可恢复单个文件 | `restore.rs:15` `cmd_restore()` / `restore.rs:125` `restore_single_file()` | ✅ `test_basic::restore::restore_cmd_file_from_dir_backup` / `test_basic::restore::restore_cmd_file_from_zip_backup` |
 
 ## 10. 端口管理 (`src/ports.rs` + `src/commands/ports.rs`)
 
