@@ -54,6 +54,8 @@ pub use alias::{
     AliasWhichCmd,
 };
 mod restore;
+#[cfg(feature = "xunbak")]
+mod verify;
 pub use backup::{BackupCmd, BackupSubCommand};
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
@@ -120,6 +122,8 @@ pub use vault::{
     VaultCleanupCmd, VaultCmd, VaultDecCmd, VaultEncCmd, VaultInspectCmd, VaultRecoverKeyCmd,
     VaultResumeCmd, VaultRewrapCmd, VaultSubCommand, VaultVerifyCmd,
 };
+#[cfg(feature = "xunbak")]
+pub use verify::VerifyCmd;
 pub use video::{VideoCmd, VideoCompressCmd, VideoProbeCmd, VideoRemuxCmd, VideoSubCommand};
 
 #[derive(FromArgs)]
@@ -226,4 +230,6 @@ pub enum SubCommand {
     Img(ImgCmd),
     Video(VideoCmd),
     Restore(RestoreCmd),
+    #[cfg(feature = "xunbak")]
+    Verify(VerifyCmd),
 }

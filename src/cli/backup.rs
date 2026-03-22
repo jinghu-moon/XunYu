@@ -14,6 +14,15 @@ pub struct BackupCmd {
     #[argh(option, short = 'C')]
     pub dir: Option<String>,
 
+    /// write to a single-file .xunbak container
+    #[argh(option)]
+    pub container: Option<String>,
+
+    /// compression profile for xunbak mode: none | zstd | zstd:N | lz4 | lzma | auto
+    #[argh(option)]
+    #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
+    pub compression: Option<String>,
+
     /// dry run (no copy/zip/cleanup)
     #[argh(switch)]
     pub dry_run: bool,

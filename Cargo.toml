@@ -34,6 +34,7 @@ path = "src/bin/path_guard_bench.rs"
 default = ["fs"]
 fs = []
 bak = []
+xunbak = ["dep:crc32c", "dep:zstd", "dep:ulid"]
 lock = []
 protect = []
 crypt = [
@@ -120,6 +121,7 @@ hmac = { version = "0.12", optional = true }
 getrandom = { version = "0.3", optional = true, features = ["std"] }
 base64 = { version = "0.22", optional = true }
 crc32fast = { version = "1.4", optional = true }
+crc32c = { version = "0.6", optional = true }
 zeroize = { version = "1", optional = true, features = ["zeroize_derive"] }
 axum       = { version = "0.8", optional = true, default-features = false, features = ["json", "tokio", "http1", "query", "ws"] }
 tokio      = { version = "1", optional = true, features = ["rt", "net", "macros", "sync"] }
@@ -191,6 +193,8 @@ unicode-normalization = { version = "0.1", optional = true }
 # —— cstat 模块依赖（feature = "cstat"）——
 ignore  = { version = "0.4", optional = true }
 blake3  = { version = "1" }
+zstd = { version = "0.13", optional = true }
+ulid = { version = "1", optional = true }
 memchr  = { version = "2" }
 indexmap = { version = "2", features = ["std"] }
 
@@ -256,6 +260,11 @@ harness = false
 name = "backup_hotpath_bench_divan"
 harness = false
 
+[[bench]]
+name = "xunbak_bench_divan"
+harness = false
+required-features = ["xunbak"]
+
 [[test]]
 name = "general_cli_core"
 path = "tests/general/cli_core.rs"
@@ -284,6 +293,11 @@ path = "tests/general/naming.rs"
 [[test]]
 name = "module_backup_restore"
 path = "tests/modules/backup_restore.rs"
+
+[[test]]
+name = "test_xunbak"
+path = "tests/test_xunbak.rs"
+required-features = ["xunbak"]
 
 [[test]]
 name = "module_acl"

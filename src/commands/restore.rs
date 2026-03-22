@@ -11,6 +11,8 @@ use serde::Serialize;
 
 use super::backup::config as backup_config;
 use super::restore_core;
+#[cfg(feature = "xunbak")]
+use super::xunbak;
 
 use backup_config::BackupConfig;
 
@@ -62,14 +64,22 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     let cfg = backup_config::load_config(&root);
     let backups_root = root.join(&cfg.storage.backups_dir);
     if timing {
-        emit_restore_timing("config", t_config.elapsed(), Some(root.display().to_string()));
+        emit_restore_timing(
+            "config",
+            t_config.elapsed(),
+            Some(root.display().to_string()),
+        );
     }
 
     // 解析备份源路径
     let t_source = Instant::now();
     let src = resolve_backup_src(&backups_root, &args.name_or_path)?;
     if timing {
-        emit_restore_timing("source", t_source.elapsed(), Some(src.display().to_string()));
+        emit_restore_timing(
+            "source",
+            t_source.elapsed(),
+            Some(src.display().to_string()),
+        );
     }
 
     // --snapshot：还原前先备份当前状态
@@ -95,7 +105,11 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
         None => root.clone(),
     };
     if timing {
-        emit_restore_timing("dest", t_dest.elapsed(), Some(dest_root.display().to_string()));
+        emit_restore_timing(
+            "dest",
+            t_dest.elapsed(),
+            Some(dest_root.display().to_string()),
+        );
     }
 
     // 交互确认
@@ -120,7 +134,20 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     }
 
     let t_start = Instant::now();
-    let (restored, failed) = if let Some(ref glob_pat) = args.glob {
+    let (restored, failed) = if is_xunbak_path(&src) {
+        #[cfg(feature = "xunbak")]
+        {
+            xunbak::restore_container(&src, &dest_root, args.file.as_deref(), args.glob.as_deref())?
+        }
+        #[cfg(not(feature = "xunbak"))]
+        {
+            return Err(CliError::with_details(
+                2,
+                "xunbak restore is not enabled in this build",
+                &["Fix: Rebuild with `--features xunbak`."],
+            ));
+        }
+    } else if let Some(ref glob_pat) = args.glob {
         restore_with_glob(&src, &dest_root, glob_pat, args.dry_run)?
     } else if let Some(ref file) = args.file {
         restore_single_file(&src, &dest_root, file, args.dry_run)?
@@ -152,7 +179,10 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
             restored,
             failed,
         };
-        out_println!("{}", serde_json::to_string_pretty(&summary).unwrap_or_default());
+        out_println!(
+            "{}",
+            serde_json::to_string_pretty(&summary).unwrap_or_default()
+        );
     }
 
     let elapsed = t_start.elapsed();
@@ -202,6 +232,10 @@ fn resolve_backup_src(backups_root: &Path, name_or_path: &str) -> Result<PathBuf
             ],
         )
     })
+}
+
+fn is_xunbak_path(path: &Path) -> bool {
+    path.extension().and_then(|ext| ext.to_str()) == Some("xunbak")
 }
 
 fn backup_source_path(backups_root: &Path, name: &str) -> Option<PathBuf> {
@@ -481,8 +515,10 @@ fn classify_preview_item_zip<R: Read>(
 }
 
 fn paths_differ(src: &Path, dst: &Path) -> Result<bool, CliError> {
-    let src_meta = fs::metadata(src).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
-    let dst_meta = fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    let src_meta =
+        fs::metadata(src).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    let dst_meta =
+        fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
     if !src_meta.is_file() || !dst_meta.is_file() {
         return Ok(true);
     }
@@ -496,7 +532,8 @@ fn paths_differ(src: &Path, dst: &Path) -> Result<bool, CliError> {
 }
 
 fn reader_differs_from_file<R: Read>(reader: &mut R, dst: &Path) -> Result<bool, CliError> {
-    let dst_meta = fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    let dst_meta =
+        fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
     if !dst_meta.is_file() {
         return Ok(true);
     }
@@ -552,6 +589,8 @@ fn run_snapshot_backup(root: &Path, _cfg: &BackupConfig) -> CliResult {
         cmd: None,
         msg: Some("pre_restore".to_string()),
         dir: Some(root.to_string_lossy().into_owned()),
+        container: None,
+        compression: None,
         dry_run: false,
         no_compress: false,
         retain: None,
@@ -629,8 +668,7 @@ mod tests {
 
     use super::{
         PreviewMode, RestorePreviewItem, RestorePreviewKind, build_restore_preview_items,
-        glob_match,
-        restore_timing_enabled_with,
+        glob_match, restore_timing_enabled_with,
     };
 
     #[test]
@@ -666,12 +704,9 @@ mod tests {
         std::fs::write(backup.path().join("b.txt"), "backup-b").unwrap();
         std::fs::write(dest.path().join("a.txt"), "current-a").unwrap();
 
-        let items = build_restore_preview_items(
-            backup.path(),
-            dest.path(),
-            PreviewMode::File("a.txt"),
-        )
-        .unwrap();
+        let items =
+            build_restore_preview_items(backup.path(), dest.path(), PreviewMode::File("a.txt"))
+                .unwrap();
         assert_eq!(
             items,
             vec![RestorePreviewItem {
@@ -688,12 +723,8 @@ mod tests {
         std::fs::write(backup.path().join("same.txt"), "aaaa").unwrap();
         std::fs::write(dest.path().join("same.txt"), "bbbb").unwrap();
 
-        let items = build_restore_preview_items(
-            backup.path(),
-            dest.path(),
-            PreviewMode::All,
-        )
-        .unwrap();
+        let items =
+            build_restore_preview_items(backup.path(), dest.path(), PreviewMode::All).unwrap();
         assert_eq!(
             items,
             vec![RestorePreviewItem {
@@ -725,13 +756,13 @@ mod tests {
         std::fs::create_dir_all(dest.path().join("src")).unwrap();
         std::fs::write(dest.path().join("src").join("a.txt"), "same").unwrap();
 
-        let items = build_restore_preview_items(
-            &zip_path,
-            dest.path(),
-            PreviewMode::Glob("**/*.txt"),
-        )
-        .unwrap();
-        assert!(items.is_empty(), "unchanged matched file should not appear in preview");
+        let items =
+            build_restore_preview_items(&zip_path, dest.path(), PreviewMode::Glob("**/*.txt"))
+                .unwrap();
+        assert!(
+            items.is_empty(),
+            "unchanged matched file should not appear in preview"
+        );
     }
 
     #[test]

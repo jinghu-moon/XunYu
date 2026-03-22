@@ -4,6 +4,8 @@ mod macros;
 pub mod acl;
 #[cfg(feature = "alias")]
 pub mod alias;
+#[doc(hidden)]
+pub mod bench_support;
 mod cli;
 pub(crate) mod commands;
 mod config;
@@ -24,8 +26,8 @@ mod store;
 mod suggest;
 mod util;
 mod windows;
-#[doc(hidden)]
-pub mod bench_support;
+#[cfg(feature = "xunbak")]
+pub mod xunbak;
 
 use std::path::Path;
 use std::time::Instant;

@@ -76,6 +76,22 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         None => std::env::current_dir()
             .map_err(|e| CliError::new(1, format!("Failed to get current directory: {e}")))?,
     };
+
+    if args.container.is_some() {
+        #[cfg(feature = "xunbak")]
+        {
+            return crate::commands::xunbak::cmd_backup_container(&args, &root);
+        }
+        #[cfg(not(feature = "xunbak"))]
+        {
+            return Err(CliError::with_details(
+                2,
+                "xunbak container mode is not enabled in this build",
+                &["Fix: Rebuild with `--features xunbak`."],
+            ));
+        }
+    }
+
     let cfg = config::load_config(&root);
     if timing {
         emit_backup_timing(
@@ -93,21 +109,11 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 "verify",
                 verify::cmd_backup_verify(&root, &cfg, &cmd.name, cmd.json),
             ),
-            BackupSubCommand::Find(cmd) => (
-                "find",
-                {
-                    let since = find::parse_time_filter_bound(cmd.since.as_deref(), false)?;
-                    let until = find::parse_time_filter_bound(cmd.until.as_deref(), true)?;
-                    find::cmd_backup_find(
-                        &root,
-                        &cfg,
-                        cmd.tag.as_deref(),
-                        since,
-                        until,
-                        cmd.json,
-                    )
-                },
-            ),
+            BackupSubCommand::Find(cmd) => ("find", {
+                let since = find::parse_time_filter_bound(cmd.since.as_deref(), false)?;
+                let until = find::parse_time_filter_bound(cmd.until.as_deref(), true)?;
+                find::cmd_backup_find(&root, &cfg, cmd.tag.as_deref(), since, until, cmd.json)
+            }),
         };
         if timing {
             emit_backup_timing("subcommand", t_sub.elapsed(), Some(label.to_string()));
