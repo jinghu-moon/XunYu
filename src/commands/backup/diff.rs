@@ -25,6 +25,12 @@ struct CopyJob {
     src: PathBuf,
     dst: PathBuf,
     link_src: Option<PathBuf>,
+    link_wide: Option<WideLinkPaths>,
+}
+
+struct WideLinkPaths {
+    src: Vec<u16>,
+    dst: Vec<u16>,
 }
 
 /// diff 条目（纯数据）
@@ -166,7 +172,8 @@ pub(crate) fn apply_diff(
 ) -> DiffStats {
     // 阶段1：预计算复制任务和目录，避免在并行阶段重复做路径转换/分支判断
     let mut dir_set = std::collections::HashSet::new();
-    let mut jobs: Vec<CopyJob> = Vec::new();
+    let mut copy_jobs: Vec<CopyJob> = Vec::new();
+    let mut link_jobs: Vec<CopyJob> = Vec::new();
     let mut cnt_new = 0u32;
     let mut cnt_mod = 0u32;
     let mut cnt_del = 0u32;
@@ -181,10 +188,11 @@ pub(crate) fn apply_diff(
                     if let Some(parent) = dst.parent() {
                         dir_set.insert(parent.to_path_buf());
                     }
-                    jobs.push(CopyJob {
+                    copy_jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
                         link_src: None,
+                        link_wide: None,
                     });
                     logical_bytes += e.file_size;
                 }
@@ -196,10 +204,11 @@ pub(crate) fn apply_diff(
                     if let Some(parent) = dst.parent() {
                         dir_set.insert(parent.to_path_buf());
                     }
-                    jobs.push(CopyJob {
+                    copy_jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
                         link_src: None,
+                        link_wide: None,
                     });
                     logical_bytes += e.file_size;
                 }
@@ -213,11 +222,21 @@ pub(crate) fn apply_diff(
                     let link_src = prev_backup_dir.map(|prev_dir| {
                         prev_dir.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR))
                     });
-                    jobs.push(CopyJob {
+                    let link_wide = link_src.as_ref().map(|link_src| WideLinkPaths {
+                        src: wide_null(link_src),
+                        dst: wide_null(&dst),
+                    });
+                    let job = CopyJob {
                         src: src.clone(),
                         dst,
                         link_src,
-                    });
+                        link_wide,
+                    };
+                    if job.link_src.is_some() {
+                        link_jobs.push(job);
+                    } else {
+                        copy_jobs.push(job);
+                    }
                     logical_bytes += e.file_size;
                 }
             }
@@ -230,19 +249,29 @@ pub(crate) fn apply_diff(
         let _ = fs::create_dir_all(dir);
     }
 
-    // 阶段2：并行复制。对当前样本（500 个小文件）实测并行优于串行，
-    // 因此保留并行策略，只减少并行阶段里的重复路径计算。
-    let (copied_bytes, hardlinked_files) = jobs
+    // 阶段2：unchanged 文件优先做 hardlink。路径在 job 构建阶段转成 UTF-16，
+    // 避免每次 CreateHardLinkW 重复编码。
+    let mut hardlinked_files = 0u32;
+    let mut fallback_copy_jobs = Vec::new();
+    for job in link_jobs {
+        if try_hard_link(&job) {
+            hardlinked_files += 1;
+        } else {
+            fallback_copy_jobs.push(CopyJob {
+                src: job.src,
+                dst: job.dst,
+                link_src: None,
+                link_wide: None,
+            });
+        }
+    }
+    copy_jobs.extend(fallback_copy_jobs);
+
+    // 阶段3：真实文件复制保持并行。
+    let copied_bytes: u64 = copy_jobs
         .par_iter()
-        .map(|job| {
-            if let Some(link_src) = &job.link_src
-                && try_hard_link(link_src, &job.dst)
-            {
-                return (0u64, 1u32);
-            }
-            (copy_file(&job.src, &job.dst, backend).unwrap_or(0), 0u32)
-        })
-        .reduce(|| (0u64, 0u32), |a, b| (a.0 + b.0, a.1 + b.1));
+        .map(|job| copy_file(&job.src, &job.dst, backend).unwrap_or(0))
+        .sum();
 
     DiffStats {
         new: cnt_new,
@@ -255,23 +284,36 @@ pub(crate) fn apply_diff(
 }
 
 #[cfg(windows)]
-fn try_hard_link(src: &Path, dst: &Path) -> bool {
-    if !src.is_file() {
+fn try_hard_link(job: &CopyJob) -> bool {
+    let Some(link_src) = &job.link_src else {
+        return false;
+    };
+    if !link_src.is_file() {
         return false;
     }
+    let Some(link_wide) = &job.link_wide else {
+        return false;
+    };
     use windows_sys::Win32::Storage::FileSystem::CreateHardLinkW;
 
-    let mut src_w: Vec<u16> = src.as_os_str().encode_wide().collect();
-    src_w.push(0);
-    let mut dst_w: Vec<u16> = dst.as_os_str().encode_wide().collect();
-    dst_w.push(0);
-
-    unsafe { CreateHardLinkW(dst_w.as_ptr(), src_w.as_ptr(), std::ptr::null()) != 0 }
+    unsafe { CreateHardLinkW(link_wide.dst.as_ptr(), link_wide.src.as_ptr(), std::ptr::null()) != 0 }
 }
 
 #[cfg(not(windows))]
-fn try_hard_link(_src: &Path, _dst: &Path) -> bool {
+fn try_hard_link(_job: &CopyJob) -> bool {
     false
+}
+
+#[cfg(windows)]
+fn wide_null(path: &Path) -> Vec<u16> {
+    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+    wide.push(0);
+    wide
+}
+
+#[cfg(not(windows))]
+fn wide_null(_path: &Path) -> Vec<u16> {
+    Vec::new()
 }
 
 fn print_colored_path(rel: &str) {

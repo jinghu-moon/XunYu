@@ -26,11 +26,9 @@ pub mod backup {
             CopyBackend::CopyFile2 => FileCopyBackend::CopyFile2,
         };
         let jobs = collect_tree_jobs(src_root, dst_root);
+        precreate_parent_dirs(&jobs);
         let mut bytes = 0u64;
         for job in jobs {
-            if let Some(parent) = job.dst.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
             bytes += copy_file(&job.src, &job.dst, backend).unwrap_or(0);
         }
         bytes
@@ -38,11 +36,9 @@ pub mod backup {
 
     pub fn hardlink_tree(src_root: &Path, dst_root: &Path) -> usize {
         let jobs = collect_tree_jobs(src_root, dst_root);
+        precreate_parent_dirs(&jobs);
         let mut linked = 0usize;
         for job in jobs {
-            if let Some(parent) = job.dst.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
             if try_hard_link(&job.src, &job.dst) {
                 linked += 1;
             }
@@ -53,6 +49,18 @@ pub mod backup {
     struct TreeJob {
         src: PathBuf,
         dst: PathBuf,
+    }
+
+    fn precreate_parent_dirs(jobs: &[TreeJob]) {
+        let mut dirs = std::collections::HashSet::new();
+        for job in jobs {
+            if let Some(parent) = job.dst.parent() {
+                dirs.insert(parent.to_path_buf());
+            }
+        }
+        for dir in dirs {
+            let _ = fs::create_dir_all(dir);
+        }
     }
 
     fn collect_tree_jobs(src_root: &Path, dst_root: &Path) -> Vec<TreeJob> {
