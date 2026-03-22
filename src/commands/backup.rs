@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use console::Style;
@@ -11,6 +11,7 @@ use crate::cli::BackupCmd;
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
 use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
+use crate::windows::file_copy::detect_copy_backend_for_backup;
 
 mod baseline;
 mod checksum;
@@ -29,6 +30,18 @@ mod version;
 mod zip;
 
 pub(crate) use baseline::{FileMeta, read_baseline};
+
+#[doc(hidden)]
+pub(crate) fn bench_read_baseline_len(prev: &Path) -> usize {
+    read_baseline(prev).len()
+}
+
+#[doc(hidden)]
+pub(crate) fn bench_scan_and_diff_count(current_root: &Path, prev: &Path) -> usize {
+    let current = scan::scan_files(current_root, &[], &[], &[]);
+    let mut baseline = read_baseline(prev);
+    diff::compute_diff(&current, &mut baseline, false).len()
+}
 
 fn backup_timing_enabled() -> bool {
     backup_timing_enabled_with(|name| std::env::var_os(name))
@@ -55,6 +68,7 @@ fn emit_backup_timing(label: &str, elapsed: std::time::Duration, extra: Option<S
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let t_total = Instant::now();
     let timing = backup_timing_enabled();
+    let copy_backend = detect_copy_backend_for_backup();
 
     let t_config = Instant::now();
     let root = match &args.dir {
@@ -313,7 +327,14 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         } else {
             None
         };
-        let result = diff::apply_diff(&diff_entries, &dest_dir, args.incremental);
+        let prev_backup_dir = ver.prev_path.as_deref().filter(|path| path.is_dir());
+        let result = diff::apply_diff(
+            &diff_entries,
+            &dest_dir,
+            args.incremental,
+            prev_backup_dir,
+            copy_backend,
+        );
         if let Some(ref pb) = copy_bar {
             pb.finish_and_clear();
         }
@@ -323,14 +344,24 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             new: 0,
             modified: 0,
             deleted: 0,
-            bytes_copied: 0,
+            logical_bytes: 0,
+            copied_bytes: 0,
+            hardlinked_files: 0,
         }
     };
     if timing {
         emit_backup_timing(
             "copy",
             t_copy.elapsed(),
-            Some(format!("+{} ~{} -{}", stats.new, stats.modified, stats.deleted)),
+            Some(format!(
+                "+{} ~{} -{} linked={} copied={}B backend={:?}",
+                stats.new,
+                stats.modified,
+                stats.deleted,
+                stats.hardlinked_files,
+                stats.copied_bytes,
+                copy_backend
+            )),
         );
     }
 
@@ -463,7 +494,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let size_bytes = if is_zip {
         fs::metadata(&final_path).map(|m| m.len()).unwrap_or(0)
     } else {
-        stats.bytes_copied
+        stats.logical_bytes
     };
     let size_display = if size_bytes > 1_048_576 {
         format!("{:.2} MB", size_bytes as f64 / 1_048_576.0)

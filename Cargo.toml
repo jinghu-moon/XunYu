@@ -250,3 +250,7 @@ required-features = ["batch_rename"]
 [[bench]]
 name = "bak_bench_divan"
 harness = false
+
+[[bench]]
+name = "backup_hotpath_bench_divan"
+harness = false

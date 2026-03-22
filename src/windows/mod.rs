@@ -12,6 +12,7 @@ pub(crate) mod reboot_ops;
 pub(crate) mod safety;
 
 pub(crate) mod ctrlc;
+pub(crate) mod file_copy;
 
 #[cfg(feature = "redirect")]
 pub(crate) mod trash;

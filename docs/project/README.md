@@ -13,5 +13,6 @@
 - `P3-P5-Completion-Notes.md`：P3 到 P5 的工作台收口、跨工作台统计诊断桥与最终验收结果。
 - `P3-P5-Remaining-Tasks.md`：P3 到 P5 当前剩余收尾项、命名统一项与增强优先级。
 - `Naming-Strategy.md`：项目名、正式命令名、兼容备选与快捷别名策略。
+- `Backup-Restore-Copy-Optimization-Research.md`：`backup/restore` copy 路径优化调研、外部参考与实施优先级。
 - `Performance-Optimization-Customization.md`：性能优化与可定制化策略。
 - `image-recommand.md`：图像能力建议与交付说明（打包脚本引用）。

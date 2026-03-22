@@ -77,6 +77,23 @@ fn run_backup(root: &PathBuf, extra_args: &[&str]) {
     assert!(status.success(), "xun backup failed");
 }
 
+fn run_backup_with_env(root: &PathBuf, extra_args: &[&str], envs: &[(&str, &str)]) {
+    let mut cmd = Command::new(xun_bin());
+    cmd.arg("backup")
+        .arg("-C")
+        .arg(root)
+        .arg("-m")
+        .arg("bench")
+        .args(extra_args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    for (key, value) in envs {
+        cmd.env(key, value);
+    }
+    let status = cmd.status().expect("failed to run xun backup");
+    assert!(status.success(), "xun backup failed");
+}
+
 fn run_restore(root: &PathBuf, name: &str, extra_args: &[&str]) {
     let status = Command::new(xun_bin())
         .arg("restore")
@@ -90,6 +107,18 @@ fn run_restore(root: &PathBuf, name: &str, extra_args: &[&str]) {
         .status()
         .expect("failed to run xun restore");
     assert!(status.success(), "xun restore failed");
+}
+
+fn mutate_first_n_files(root: &PathBuf, n: usize) {
+    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    for i in 0..n {
+        let dir = dirs[i % dirs.len()];
+        fs::write(
+            root.join(dir).join(format!("file_{i:04}.ts")),
+            format!("modified-{i}-{}", "y".repeat(512)),
+        )
+        .unwrap();
+    }
 }
 
 fn find_backup(backups: &PathBuf, prefix: &str, suffix: &str) -> String {
@@ -175,6 +204,68 @@ fn full_backup_500_zip(bencher: Bencher) {
         let backups = tmp.join("A_backups");
         let _ = fs::remove_dir_all(&backups);
         run_backup(&tmp, &[]);
+    });
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+// ── 基准 3.5：v2 full backup（50 文件变更）默认策略 vs 强制 std ────────────────
+
+#[divan::bench]
+fn full_backup_v2_50_changed_default_strategy(bencher: Bencher) {
+    let tmp = std::env::temp_dir().join("xun_bak_bench_v2_default");
+    let _ = fs::remove_dir_all(&tmp);
+    populate_files(&tmp, 500);
+    fs::write(tmp.join(".xun-bak.json"), BAK_CFG_NO_COMPRESS).unwrap();
+    run_backup(&tmp, &[]);
+    mutate_first_n_files(&tmp, 50);
+
+    bencher.bench(|| {
+        let backups = tmp.join("A_backups");
+        if let Ok(rd) = fs::read_dir(&backups) {
+            for e in rd.flatten() {
+                let n = e.file_name().to_string_lossy().into_owned();
+                if !n.starts_with("v1-") && !n.ends_with(".meta.json") {
+                    let p = e.path();
+                    if p.is_dir() {
+                        let _ = fs::remove_dir_all(&p);
+                    } else {
+                        let _ = fs::remove_file(&p);
+                    }
+                }
+            }
+        }
+        run_backup(&tmp, &[]);
+    });
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+#[divan::bench]
+fn full_backup_v2_50_changed_force_std(bencher: Bencher) {
+    let tmp = std::env::temp_dir().join("xun_bak_bench_v2_std");
+    let _ = fs::remove_dir_all(&tmp);
+    populate_files(&tmp, 500);
+    fs::write(tmp.join(".xun-bak.json"), BAK_CFG_NO_COMPRESS).unwrap();
+    run_backup(&tmp, &[]);
+    mutate_first_n_files(&tmp, 50);
+
+    bencher.bench(|| {
+        let backups = tmp.join("A_backups");
+        if let Ok(rd) = fs::read_dir(&backups) {
+            for e in rd.flatten() {
+                let n = e.file_name().to_string_lossy().into_owned();
+                if !n.starts_with("v1-") && !n.ends_with(".meta.json") {
+                    let p = e.path();
+                    if p.is_dir() {
+                        let _ = fs::remove_dir_all(&p);
+                    } else {
+                        let _ = fs::remove_file(&p);
+                    }
+                }
+            }
+        }
+        run_backup_with_env(&tmp, &[], &[("XUN_COPY_BACKEND", "std")]);
     });
 
     let _ = fs::remove_dir_all(&tmp);

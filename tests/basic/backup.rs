@@ -1,7 +1,38 @@
 use crate::common::*;
 use std::fs;
+use std::os::windows::io::AsRawHandle;
 use std::thread;
 use std::time::Duration;
+
+fn same_file_index(path_a: &std::path::Path, path_b: &std::path::Path) -> bool {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+    };
+
+    let open = |path: &std::path::Path| std::fs::OpenOptions::new().read(true).open(path).ok();
+    let info = |file: &std::fs::File| -> Option<(u64, u64)> {
+        let mut info = unsafe { std::mem::zeroed::<BY_HANDLE_FILE_INFORMATION>() };
+        let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+        if handle == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let ok = unsafe { GetFileInformationByHandle(handle, &mut info) };
+        if ok == 0 {
+            return None;
+        }
+        let index = ((info.nFileIndexHigh as u64) << 32) | (info.nFileIndexLow as u64);
+        Some((info.dwVolumeSerialNumber as u64, index))
+    };
+
+    let (Some(file_a), Some(file_b)) = (open(path_a), open(path_b)) else {
+        return false;
+    };
+    let (Some(info_a), Some(info_b)) = (info(&file_a), info(&file_b)) else {
+        return false;
+    };
+    info_a == info_b
+}
 
 #[test]
 fn backup_creates_backup_folder() {
@@ -449,6 +480,58 @@ fn bak_incremental_only_copies_changed_files() {
     assert!(
         !v2_path.join("b.txt").exists(),
         "b.txt should NOT be in incremental backup"
+    );
+}
+
+#[test]
+fn backup_full_reuses_unchanged_files_via_hardlink() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_full_hardlink");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+    fs::write(root.join("b.txt"), "change-v1").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+    thread::sleep(Duration::from_millis(50));
+    fs::write(root.join("b.txt"), "change-v2").unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2"]),
+    );
+
+    let backups = root.join("A_backups");
+    let v1 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let v2 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v2-"))
+        .unwrap()
+        .path();
+
+    assert!(
+        same_file_index(&v1.join("a.txt"), &v2.join("a.txt")),
+        "unchanged file should be hardlinked between v1 and v2"
+    );
+    assert!(
+        !same_file_index(&v1.join("b.txt"), &v2.join("b.txt")),
+        "changed file should not be hardlinked between v1 and v2"
     );
 }
 

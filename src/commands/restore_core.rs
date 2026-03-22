@@ -8,6 +8,7 @@ use rayon::prelude::*;
 
 use crate::output::{CliError, CliResult};
 use crate::path_guard::{PathPolicy, validate_paths};
+use crate::windows::file_copy::{copy_file, detect_copy_backend_for_restore};
 
 const BACKUP_META_FILE: &str = ".bak-meta.json";
 const BACKUP_MANIFEST_FILE: &str = ".bak-manifest.json";
@@ -83,6 +84,7 @@ pub(crate) fn restore_from_dir(
     dry_run: bool,
 ) -> CliResult {
     let timing = restore_timing_enabled();
+    let copy_backend = detect_copy_backend_for_restore();
     if let Some(rel) = file {
         if is_backup_internal_rel_path(rel) {
             return Err(CliError::new(
@@ -101,7 +103,8 @@ pub(crate) fn restore_from_dir(
             ui_println!("DRY RUN: would restore {}", rel.display());
             return Ok(());
         }
-        fs::copy(&src, &dst).map_err(|e| CliError::new(1, format!("Restore failed: {e}")))?;
+        copy_file(&src, &dst, copy_backend)
+            .map_err(|e| CliError::new(1, format!("Restore failed: {e}")))?;
         return Ok(());
     }
 
@@ -160,7 +163,11 @@ pub(crate) fn restore_from_dir(
         return Err(CliError::new(1, "Some files failed to restore."));
     }
     if timing {
-        emit_restore_core_timing("copy-dir", t_copy.elapsed(), None);
+        emit_restore_core_timing(
+            "copy-dir",
+            t_copy.elapsed(),
+            Some(format!("backend={copy_backend:?}")),
+        );
     }
     Ok(())
 }
@@ -264,6 +271,7 @@ where
     F: Fn(&Path, &str) -> bool + Sync,
 {
     let timing = restore_timing_enabled();
+    let copy_backend = detect_copy_backend_for_restore();
     let t_collect = Instant::now();
     let entries = collect_files_recursive(src_dir);
     if timing {
@@ -313,7 +321,7 @@ where
             restored.fetch_add(1, Ordering::Relaxed);
             return;
         }
-        match fs::copy(&job.src, &job.dst) {
+        match copy_file(&job.src, &job.dst, copy_backend) {
             Ok(_) => {
                 restored.fetch_add(1, Ordering::Relaxed);
             }
@@ -325,7 +333,11 @@ where
     });
 
     if timing {
-        emit_restore_core_timing("copy-dir", t_copy.elapsed(), None);
+        emit_restore_core_timing(
+            "copy-dir",
+            t_copy.elapsed(),
+            Some(format!("backend={copy_backend:?}")),
+        );
     }
 
     (

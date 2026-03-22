@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
 use std::time::SystemTime;
 
 use console::Style;
@@ -8,17 +10,21 @@ use rayon::prelude::*;
 
 use super::baseline::FileMeta;
 use super::util::fmt_size;
+use crate::windows::file_copy::{FileCopyBackend, copy_file};
 
 pub(crate) struct DiffStats {
     pub(crate) new: u32,
     pub(crate) modified: u32,
     pub(crate) deleted: u32,
-    pub(crate) bytes_copied: u64,
+    pub(crate) logical_bytes: u64,
+    pub(crate) copied_bytes: u64,
+    pub(crate) hardlinked_files: u32,
 }
 
 struct CopyJob {
     src: PathBuf,
     dst: PathBuf,
+    link_src: Option<PathBuf>,
 }
 
 /// diff 条目（纯数据）
@@ -28,6 +34,7 @@ pub(crate) struct DiffEntry {
     pub(crate) src_path: Option<PathBuf>,
     pub(crate) kind: DiffKind,
     pub(crate) size_delta: i64,
+    pub(crate) file_size: u64,
 }
 
 #[derive(PartialEq, Eq)]
@@ -64,6 +71,7 @@ pub(crate) fn compute_diff(
                     src_path: Some(src_path.clone()),
                     kind: DiffKind::Modified,
                     size_delta: delta,
+                    file_size: meta.len(),
                 });
             } else if !skip_unchanged {
                 entries.push(DiffEntry {
@@ -71,6 +79,7 @@ pub(crate) fn compute_diff(
                     src_path: Some(src_path.clone()),
                     kind: DiffKind::Unchanged,
                     size_delta: 0,
+                    file_size: meta.len(),
                 });
             }
         } else {
@@ -79,6 +88,7 @@ pub(crate) fn compute_diff(
                 src_path: Some(src_path.clone()),
                 kind: DiffKind::New,
                 size_delta: meta.len() as i64,
+                file_size: meta.len(),
             });
         }
     }
@@ -90,6 +100,7 @@ pub(crate) fn compute_diff(
             src_path: None,
             kind: DiffKind::Deleted,
             size_delta: 0,
+            file_size: 0,
         });
     }
 
@@ -152,13 +163,20 @@ pub(crate) fn print_diff(entries: &[DiffEntry], show_unchanged: bool) {
 }
 
 /// 纯写入：将 new/modified（以及可选 unchanged）条目并行复制到 dest
-pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) -> DiffStats {
+pub(crate) fn apply_diff(
+    entries: &[DiffEntry],
+    dest: &Path,
+    incremental: bool,
+    prev_backup_dir: Option<&Path>,
+    backend: FileCopyBackend,
+) -> DiffStats {
     // 阶段1：预计算复制任务和目录，避免在并行阶段重复做路径转换/分支判断
     let mut dir_set = std::collections::HashSet::new();
     let mut jobs: Vec<CopyJob> = Vec::new();
     let mut cnt_new = 0u32;
     let mut cnt_mod = 0u32;
     let mut cnt_del = 0u32;
+    let mut logical_bytes = 0u64;
 
     for e in entries {
         match e.kind {
@@ -172,7 +190,9 @@ pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) 
                     jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
+                        link_src: None,
                     });
+                    logical_bytes += e.file_size;
                 }
             }
             DiffKind::Modified => {
@@ -185,7 +205,9 @@ pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) 
                     jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
+                        link_src: None,
                     });
+                    logical_bytes += e.file_size;
                 }
             }
             DiffKind::Unchanged => {
@@ -194,10 +216,15 @@ pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) 
                     if let Some(parent) = dst.parent() {
                         dir_set.insert(parent.to_path_buf());
                     }
+                    let link_src = prev_backup_dir.map(|prev_dir| {
+                        prev_dir.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR))
+                    });
                     jobs.push(CopyJob {
                         src: src.clone(),
                         dst,
+                        link_src,
                     });
+                    logical_bytes += e.file_size;
                 }
             }
             DiffKind::Deleted => {
@@ -211,17 +238,46 @@ pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) 
 
     // 阶段2：并行复制。对当前样本（500 个小文件）实测并行优于串行，
     // 因此保留并行策略，只减少并行阶段里的重复路径计算。
-    let bytes_copied: u64 = jobs
+    let (copied_bytes, hardlinked_files) = jobs
         .par_iter()
-        .map(|job| fs::copy(&job.src, &job.dst).unwrap_or(0))
-        .sum();
+        .map(|job| {
+            if let Some(link_src) = &job.link_src
+                && try_hard_link(link_src, &job.dst)
+            {
+                return (0u64, 1u32);
+            }
+            (copy_file(&job.src, &job.dst, backend).unwrap_or(0), 0u32)
+        })
+        .reduce(|| (0u64, 0u32), |a, b| (a.0 + b.0, a.1 + b.1));
 
     DiffStats {
         new: cnt_new,
         modified: cnt_mod,
         deleted: cnt_del,
-        bytes_copied,
+        logical_bytes,
+        copied_bytes,
+        hardlinked_files,
     }
+}
+
+#[cfg(windows)]
+fn try_hard_link(src: &Path, dst: &Path) -> bool {
+    if !src.is_file() {
+        return false;
+    }
+    use windows_sys::Win32::Storage::FileSystem::CreateHardLinkW;
+
+    let mut src_w: Vec<u16> = src.as_os_str().encode_wide().collect();
+    src_w.push(0);
+    let mut dst_w: Vec<u16> = dst.as_os_str().encode_wide().collect();
+    dst_w.push(0);
+
+    unsafe { CreateHardLinkW(dst_w.as_ptr(), src_w.as_ptr(), std::ptr::null()) != 0 }
+}
+
+#[cfg(not(windows))]
+fn try_hard_link(_src: &Path, _dst: &Path) -> bool {
+    false
 }
 
 fn print_colored_path(rel: &str) {

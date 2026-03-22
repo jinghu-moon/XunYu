@@ -5,7 +5,7 @@ pub mod acl;
 #[cfg(feature = "alias")]
 pub mod alias;
 mod cli;
-mod commands;
+pub(crate) mod commands;
 mod config;
 mod ctx_store;
 #[cfg(feature = "desktop")]
@@ -24,6 +24,8 @@ mod store;
 mod suggest;
 mod util;
 mod windows;
+#[doc(hidden)]
+pub mod bench_support;
 
 use std::path::Path;
 use std::time::Instant;
