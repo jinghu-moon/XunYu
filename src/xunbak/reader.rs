@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::xunbak::blob::{BlobRecordError, read_blob_record};
 use crate::xunbak::checkpoint::{CheckpointError, CheckpointPayload, read_checkpoint_record};
 use crate::xunbak::constants::{
-    BLOB_HEADER_SIZE, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, RecordType,
+    BLOB_HEADER_SIZE, FLAG_SPLIT, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, RecordType,
 };
 use crate::xunbak::footer::{Footer, FooterError};
 use crate::xunbak::header::{DecodedHeader, Header, HeaderError};
@@ -21,6 +21,8 @@ pub struct ContainerReader {
     pub header: DecodedHeader,
     pub footer: Footer,
     pub checkpoint: CheckpointPayload,
+    pub is_split: bool,
+    pub volume_paths: Vec<PathBuf>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,12 +56,13 @@ pub enum ReaderError {
 
 impl ContainerReader {
     pub fn open(path: &Path) -> Result<Self, ReaderError> {
-        let mut file = File::open(path).map_err(|err| ReaderError::Io(err.to_string()))?;
+        let primary_path = resolve_primary_path(path)?;
+        let mut file = File::open(&primary_path).map_err(|err| ReaderError::Io(err.to_string()))?;
         let file_size = file
             .metadata()
             .map_err(|err| ReaderError::Io(err.to_string()))?
             .len();
-        if file_size < (HEADER_SIZE + FOOTER_SIZE) as u64 {
+        if file_size < (HEADER_SIZE + FOOTER_SIZE) as u64 && !is_split_member_path(&primary_path) {
             return Err(ReaderError::ContainerTooSmall { actual: file_size });
         }
 
@@ -68,35 +71,68 @@ impl ContainerReader {
             .map_err(|err| ReaderError::Io(err.to_string()))?;
         let header = Header::from_bytes(&header_bytes)?;
 
-        let (footer, checkpoint) = match read_footer(&mut file, file_size) {
-            Ok(footer) => {
-                file.seek(SeekFrom::Start(footer.checkpoint_offset))
-                    .map_err(|err| ReaderError::Io(err.to_string()))?;
-                let checkpoint = read_checkpoint_record(&mut file)?.payload;
-                (footer, checkpoint)
-            }
-            Err(_) => {
-                let (offset, checkpoint) = fallback_scan(&mut file)?;
-                (
-                    Footer {
-                        checkpoint_offset: offset,
-                    },
-                    checkpoint,
-                )
+        let (volume_paths, last_path, last_size) = if header.header.flags & FLAG_SPLIT != 0 {
+            let paths = discover_split_volumes(&primary_path, &header)?;
+            let last_path = paths
+                .last()
+                .cloned()
+                .ok_or(ReaderError::UnrecoverableContainer)?;
+            let last_size = std::fs::metadata(&last_path)
+                .map_err(|err| ReaderError::Io(err.to_string()))?
+                .len();
+            (paths, last_path, last_size)
+        } else {
+            (vec![primary_path.clone()], primary_path.clone(), file_size)
+        };
+
+        let (footer, checkpoint) = {
+            let mut last_file =
+                File::open(&last_path).map_err(|err| ReaderError::Io(err.to_string()))?;
+            match read_footer(&mut last_file, last_size) {
+                Ok(footer) => {
+                    last_file
+                        .seek(SeekFrom::Start(footer.checkpoint_offset))
+                        .map_err(|err| ReaderError::Io(err.to_string()))?;
+                    let checkpoint = read_checkpoint_record(&mut last_file)?.payload;
+                    (footer, checkpoint)
+                }
+                Err(_) => {
+                    let (offset, checkpoint) = fallback_scan(&volume_paths)?;
+                    (
+                        Footer {
+                            checkpoint_offset: offset,
+                        },
+                        checkpoint,
+                    )
+                }
             }
         };
 
+        if header.header.flags & FLAG_SPLIT != 0
+            && checkpoint.total_volumes as usize != volume_paths.len()
+        {
+            return Err(ReaderError::UnrecoverableContainer);
+        }
+
         Ok(Self {
-            path: path.to_path_buf(),
-            file_size,
+            path: primary_path,
+            file_size: last_size,
             header,
             footer,
             checkpoint,
+            is_split: volume_paths.len() > 1,
+            volume_paths,
         })
     }
 
     pub fn load_manifest(&self) -> Result<ManifestBody, ReaderError> {
-        let mut file = File::open(&self.path).map_err(|err| ReaderError::Io(err.to_string()))?;
+        let manifest_path = self
+            .volume_paths
+            .last()
+            .cloned()
+            .unwrap_or_else(|| self.path.clone());
+        let mut file =
+            File::open(&manifest_path).map_err(|err| ReaderError::Io(err.to_string()))?;
         file.seek(SeekFrom::Start(self.checkpoint.manifest_offset))
             .map_err(|err| ReaderError::Io(err.to_string()))?;
         let manifest = read_manifest_record(&mut file)?;
@@ -128,8 +164,9 @@ impl ContainerReader {
         if let Some(parts) = &entry.parts {
             let mut out = Vec::new();
             for part in parts {
+                let volume_path = self.volume_path(part.volume_index)?;
                 let mut file =
-                    File::open(&self.path).map_err(|err| ReaderError::Io(err.to_string()))?;
+                    File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
                 file.seek(SeekFrom::Start(part.blob_offset))
                     .map_err(|err| ReaderError::Io(err.to_string()))?;
                 let blob = read_blob_record(&mut file)?;
@@ -141,7 +178,8 @@ impl ContainerReader {
             return Ok(out);
         }
 
-        let mut file = File::open(&self.path).map_err(|err| ReaderError::Io(err.to_string()))?;
+        let volume_path = self.volume_path(entry.volume_index)?;
+        let mut file = File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
         file.seek(SeekFrom::Start(entry.blob_offset))
             .map_err(|err| ReaderError::Io(err.to_string()))?;
         let blob = read_blob_record(&mut file)?;
@@ -196,49 +234,142 @@ fn read_footer(file: &mut File, file_size: u64) -> Result<Footer, ReaderError> {
     Footer::from_bytes(&footer_bytes, file_size).map_err(ReaderError::from)
 }
 
-fn fallback_scan(file: &mut File) -> Result<(u64, CheckpointPayload), ReaderError> {
-    file.seek(SeekFrom::Start(HEADER_SIZE as u64))
-        .map_err(|err| ReaderError::Io(err.to_string()))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
-        .map_err(|err| ReaderError::Io(err.to_string()))?;
-    let mut offset = 0usize;
-    let mut last_checkpoint_offset = None;
-    while offset + RECORD_PREFIX_SIZE <= bytes.len() {
-        let prefix = match RecordPrefix::from_bytes(&bytes[offset..offset + RECORD_PREFIX_SIZE]) {
-            Ok(prefix) => prefix,
-            Err(_) => break,
-        };
-        let payload_start = offset + RECORD_PREFIX_SIZE;
-        let payload_end = payload_start.saturating_add(prefix.record_len as usize);
-        if payload_end > bytes.len() {
-            break;
-        }
-        let payload = &bytes[payload_start..payload_end];
-        let payload_for_crc: &[u8] =
-            if prefix.record_type == RecordType::BLOB && payload.len() >= BLOB_HEADER_SIZE {
-                &payload[..BLOB_HEADER_SIZE]
-            } else {
-                payload
+fn fallback_scan(volume_paths: &[PathBuf]) -> Result<(u64, CheckpointPayload), ReaderError> {
+    let mut last: Option<(PathBuf, u64)> = None;
+    for volume_path in volume_paths {
+        let mut file = File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
+        file.seek(SeekFrom::Start(HEADER_SIZE as u64))
+            .map_err(|err| ReaderError::Io(err.to_string()))?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(|err| ReaderError::Io(err.to_string()))?;
+        let mut offset = 0usize;
+        while offset + RECORD_PREFIX_SIZE <= bytes.len() {
+            let prefix = match RecordPrefix::from_bytes(&bytes[offset..offset + RECORD_PREFIX_SIZE])
+            {
+                Ok(prefix) => prefix,
+                Err(_) => break,
             };
-        let crc = compute_record_crc(
-            prefix.record_type,
-            prefix.record_len.to_le_bytes(),
-            payload_for_crc,
-        );
-        if crc != prefix.record_crc {
-            break;
+            let payload_start = offset + RECORD_PREFIX_SIZE;
+            let payload_end = payload_start.saturating_add(prefix.record_len as usize);
+            if payload_end > bytes.len() {
+                break;
+            }
+            let payload = &bytes[payload_start..payload_end];
+            let payload_for_crc: &[u8] =
+                if prefix.record_type == RecordType::BLOB && payload.len() >= BLOB_HEADER_SIZE {
+                    &payload[..BLOB_HEADER_SIZE]
+                } else {
+                    payload
+                };
+            let crc = compute_record_crc(
+                prefix.record_type,
+                prefix.record_len.to_le_bytes(),
+                payload_for_crc,
+            );
+            if crc != prefix.record_crc {
+                break;
+            }
+            if prefix.record_type == RecordType::CHECKPOINT {
+                last = Some((volume_path.clone(), HEADER_SIZE as u64 + offset as u64));
+            }
+            offset = payload_end;
         }
-        if prefix.record_type == RecordType::CHECKPOINT {
-            last_checkpoint_offset = Some(HEADER_SIZE as u64 + offset as u64);
-        }
-        offset = payload_end;
     }
-    let checkpoint_offset = last_checkpoint_offset.ok_or(ReaderError::UnrecoverableContainer)?;
+    let (path, checkpoint_offset) = last.ok_or(ReaderError::UnrecoverableContainer)?;
+    let mut file = File::open(path).map_err(|err| ReaderError::Io(err.to_string()))?;
     file.seek(SeekFrom::Start(checkpoint_offset))
         .map_err(|err| ReaderError::Io(err.to_string()))?;
-    let checkpoint = read_checkpoint_record(file)?.payload;
+    let checkpoint = read_checkpoint_record(&mut file)?.payload;
     Ok((checkpoint_offset, checkpoint))
+}
+
+impl ContainerReader {
+    fn volume_path(&self, volume_index: u16) -> Result<&Path, ReaderError> {
+        self.volume_paths
+            .get(volume_index as usize)
+            .map(|path| path.as_path())
+            .ok_or(ReaderError::UnrecoverableContainer)
+    }
+}
+
+fn resolve_primary_path(input: &Path) -> Result<PathBuf, ReaderError> {
+    if input.exists() {
+        return Ok(input.to_path_buf());
+    }
+    let split_first = PathBuf::from(format!("{}.001", input.display()));
+    if split_first.exists() {
+        return Ok(split_first);
+    }
+    Err(ReaderError::Io(format!(
+        "container not found: {}",
+        input.display()
+    )))
+}
+
+fn discover_split_volumes(
+    first_volume: &Path,
+    first_header: &DecodedHeader,
+) -> Result<Vec<PathBuf>, ReaderError> {
+    let base = split_base_path(first_volume);
+    let parent = base.parent().unwrap_or_else(|| Path::new("."));
+    let prefix = base
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let expected_set_id = first_header
+        .header
+        .split
+        .as_ref()
+        .map(|split| split.set_id)
+        .ok_or(ReaderError::UnrecoverableContainer)?;
+    let mut volumes = Vec::new();
+    for entry in std::fs::read_dir(parent).map_err(|err| ReaderError::Io(err.to_string()))? {
+        let entry = entry.map_err(|err| ReaderError::Io(err.to_string()))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(&format!("{prefix}.")) && name.len() == prefix.len() + 4 {
+            volumes.push(entry.path());
+        }
+    }
+    volumes.sort();
+    if volumes.is_empty() {
+        return Err(ReaderError::UnrecoverableContainer);
+    }
+    for (index, path) in volumes.iter().enumerate() {
+        let mut file = File::open(path).map_err(|err| ReaderError::Io(err.to_string()))?;
+        let mut header_bytes = [0u8; HEADER_SIZE];
+        file.read_exact(&mut header_bytes)
+            .map_err(|err| ReaderError::Io(err.to_string()))?;
+        let header = Header::from_bytes(&header_bytes)?;
+        let split = header
+            .header
+            .split
+            .ok_or(ReaderError::UnrecoverableContainer)?;
+        if split.volume_index as usize != index || split.set_id != expected_set_id {
+            return Err(ReaderError::UnrecoverableContainer);
+        }
+    }
+    Ok(volumes)
+}
+
+fn split_base_path(path: &Path) -> PathBuf {
+    if is_split_member_path(path) {
+        let raw = path.to_string_lossy();
+        PathBuf::from(raw[..raw.len() - 4].to_string())
+    } else {
+        path.to_path_buf()
+    }
+}
+
+fn is_split_member_path(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    name.len() >= 4
+        && name.as_bytes()[name.len() - 4] == b'.'
+        && name[name.len() - 3..].chars().all(|ch| ch.is_ascii_digit())
 }
 
 impl ContainerReader {
@@ -367,7 +498,7 @@ fn apply_windows_metadata(_path: &Path, _entry: &ManifestEntry) -> Result<(), Re
 
 #[cfg(windows)]
 fn to_verbatim_path(path: &Path) -> PathBuf {
-    let raw = path.to_string_lossy();
+    let raw = path.to_string_lossy().replace('/', "\\");
     if raw.starts_with(r"\\?\") {
         return path.to_path_buf();
     }

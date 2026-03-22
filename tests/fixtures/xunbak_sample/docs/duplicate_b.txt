@@ -1,0 +1,3 @@
+This is a duplicate content file used to test content-hash deduplication.
+When backed up, only one blob should be stored for this content,
+regardless of how many paths reference it.

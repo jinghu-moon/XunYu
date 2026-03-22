@@ -22,10 +22,14 @@ fn single_thread_baseline_backup_of_100_files_is_correct() {
         &BackupOptions {
             codec: Codec::NONE,
             zstd_level: 1,
+            split_size: None,
         },
     )
     .unwrap();
-    let manifest = ContainerReader::open(&container).unwrap().load_manifest().unwrap();
+    let manifest = ContainerReader::open(&container)
+        .unwrap()
+        .load_manifest()
+        .unwrap();
     assert_eq!(manifest.entries.len(), 100);
 }
 
@@ -43,8 +47,18 @@ fn parallel_pipeline_matches_single_thread_logical_results() {
             rel: format!("f{i:03}.txt"),
             path,
             size: meta.len(),
-            mtime_ns: meta.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64,
-            created_time_ns: meta.created().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64,
+            mtime_ns: meta
+                .modified()
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64,
+            created_time_ns: meta
+                .created()
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64,
             win_attributes: 0,
         });
     }
@@ -70,8 +84,18 @@ fn parallel_pipeline_with_one_thread_matches_sequential_mode() {
         rel: "a.txt".to_string(),
         path,
         size: meta.len(),
-        mtime_ns: meta.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64,
-        created_time_ns: meta.created().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64,
+        mtime_ns: meta
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64,
+        created_time_ns: meta
+            .created()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64,
         win_attributes: 0,
     }];
     let seq = parallel_compress_pipeline(&files, Codec::NONE, 1, 1).unwrap();
@@ -82,13 +106,15 @@ fn parallel_pipeline_with_one_thread_matches_sequential_mode() {
 #[test]
 fn streaming_hash_and_compress_limits_buffer_growth_for_10mb() {
     let input = vec![b'x'; 10 * 1024 * 1024];
-    let result = stream_hash_and_compress(&mut Cursor::new(&input), Codec::ZSTD, 1, 64 * 1024).unwrap();
+    let result =
+        stream_hash_and_compress(&mut Cursor::new(&input), Codec::ZSTD, 1, 64 * 1024).unwrap();
     assert!(result.peak_buffer_bytes <= 2 * 64 * 1024);
 }
 
 #[test]
 fn streaming_hash_matches_one_shot_blake3() {
     let input = vec![b'y'; 10 * 1024 * 1024];
-    let result = stream_hash_and_compress(&mut Cursor::new(&input), Codec::NONE, 1, 64 * 1024).unwrap();
+    let result =
+        stream_hash_and_compress(&mut Cursor::new(&input), Codec::NONE, 1, 64 * 1024).unwrap();
     assert_eq!(result.hash, *blake3::hash(&input).as_bytes());
 }

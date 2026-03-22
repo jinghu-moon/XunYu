@@ -1,0 +1,20 @@
+[package]
+name = "sample-project"
+version = "0.1.0"
+edition = "2024"
+description = "A sample project for xunbak backup testing"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "1.5"
+zstd = "0.13"
+
+[dev-dependencies]
+tempfile = "3.10"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

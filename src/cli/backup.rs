@@ -23,6 +23,11 @@ pub struct BackupCmd {
     #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
     pub compression: Option<String>,
 
+    /// split xunbak output into numbered volumes, e.g. 64M / 2G
+    #[argh(option)]
+    #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
+    pub split_size: Option<String>,
+
     /// dry run (no copy/zip/cleanup)
     #[argh(switch)]
     pub dry_run: bool,

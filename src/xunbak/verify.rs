@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::Serialize;
@@ -185,57 +185,75 @@ pub fn verify_paranoid(reader: &ContainerReader) -> VerifyReport {
         }
     };
 
-    let mut file = match File::open(&reader.path) {
-        Ok(file) => file,
-        Err(err) => {
-            return VerifyReport::failure(
-                VerifyLevel::Paranoid,
-                vec![issue(err.to_string())],
-                VerifyStats {
-                    elapsed_ms: start.elapsed().as_millis(),
-                    ..VerifyStats::default()
-                },
-            );
-        }
-    };
-    let data_end = reader.file_size - FOOTER_SIZE as u64;
-    if file.seek(SeekFrom::Start(HEADER_SIZE as u64)).is_err() {
-        return VerifyReport::failure(
-            VerifyLevel::Paranoid,
-            vec![issue("failed to seek to first record".to_string())],
-            VerifyStats {
-                elapsed_ms: start.elapsed().as_millis(),
-                ..VerifyStats::default()
-            },
-        );
-    }
-    let stream_len = (reader.file_size - HEADER_SIZE as u64 - FOOTER_SIZE as u64) as usize;
-    let mut bytes = vec![0u8; stream_len];
-    if file.read_exact(&mut bytes).is_err() {
-        return VerifyReport::failure(
-            VerifyLevel::Paranoid,
-            vec![issue("failed to read record stream".to_string())],
-            VerifyStats {
-                elapsed_ms: start.elapsed().as_millis(),
-                ..VerifyStats::default()
-            },
-        );
-    }
-
-    let mut offset = 0usize;
-    while offset + RECORD_PREFIX_SIZE <= bytes.len() {
-        let prefix = match RecordPrefix::from_bytes(&bytes[offset..offset + RECORD_PREFIX_SIZE]) {
-            Ok(prefix) => prefix,
+    for (volume_index, volume_path) in reader.volume_paths.iter().enumerate() {
+        let volume_size = match std::fs::metadata(volume_path) {
+            Ok(meta) => meta.len(),
             Err(err) => {
                 return VerifyReport::failure(
                     VerifyLevel::Paranoid,
+                    vec![issue(err.to_string())],
+                    VerifyStats {
+                        elapsed_ms: start.elapsed().as_millis(),
+                        ..VerifyStats::default()
+                    },
+                );
+            }
+        };
+        let scan_end = if volume_index + 1 == reader.volume_paths.len() {
+            volume_size - FOOTER_SIZE as u64
+        } else {
+            volume_size
+        };
+        let bytes = match read_record_region(volume_path, scan_end) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                return VerifyReport::failure(
+                    VerifyLevel::Paranoid,
+                    vec![issue(err)],
+                    VerifyStats {
+                        elapsed_ms: start.elapsed().as_millis(),
+                        ..VerifyStats::default()
+                    },
+                );
+            }
+        };
+
+        let mut offset = 0usize;
+        while offset + RECORD_PREFIX_SIZE <= bytes.len() {
+            let prefix = match RecordPrefix::from_bytes(&bytes[offset..offset + RECORD_PREFIX_SIZE])
+            {
+                Ok(prefix) => prefix,
+                Err(err) => {
+                    return VerifyReport::failure(
+                        VerifyLevel::Paranoid,
+                        vec![VerifyIssue {
+                            message: format!("{err:?}"),
+                            path: None,
+                            blob_id: None,
+                            offset: Some(HEADER_SIZE as u64 + offset as u64),
+                            volume_index: Some(volume_index as u16),
+                            record_type: None,
+                        }],
+                        VerifyStats {
+                            blob_count: reader.checkpoint.blob_count,
+                            manifest_entries: manifest.entries.len(),
+                            elapsed_ms: start.elapsed().as_millis(),
+                        },
+                    );
+                }
+            };
+            let payload_start = offset + RECORD_PREFIX_SIZE;
+            let payload_end = payload_start.saturating_add(prefix.record_len as usize);
+            if payload_end > bytes.len() {
+                return VerifyReport::failure(
+                    VerifyLevel::Paranoid,
                     vec![VerifyIssue {
-                        message: format!("{err:?}"),
+                        message: "truncated record".to_string(),
                         path: None,
                         blob_id: None,
                         offset: Some(HEADER_SIZE as u64 + offset as u64),
-                        volume_index: None,
-                        record_type: None,
+                        volume_index: Some(volume_index as u16),
+                        record_type: Some(prefix.record_type.as_u8()),
                     }],
                     VerifyStats {
                         blob_count: reader.checkpoint.blob_count,
@@ -244,77 +262,57 @@ pub fn verify_paranoid(reader: &ContainerReader) -> VerifyReport {
                     },
                 );
             }
-        };
-        let payload_start = offset + RECORD_PREFIX_SIZE;
-        let payload_end = payload_start.saturating_add(prefix.record_len as usize);
-        if payload_end > bytes.len() {
-            return VerifyReport::failure(
-                VerifyLevel::Paranoid,
-                vec![VerifyIssue {
-                    message: "truncated record".to_string(),
-                    path: None,
-                    blob_id: None,
-                    offset: Some(HEADER_SIZE as u64 + offset as u64),
-                    volume_index: None,
-                    record_type: Some(prefix.record_type.as_u8()),
-                }],
-                VerifyStats {
-                    blob_count: reader.checkpoint.blob_count,
-                    manifest_entries: manifest.entries.len(),
-                    elapsed_ms: start.elapsed().as_millis(),
-                },
+            let payload = &bytes[payload_start..payload_end];
+            let payload_for_crc: &[u8] =
+                if prefix.record_type == RecordType::BLOB && payload.len() >= BLOB_HEADER_SIZE {
+                    &payload[..BLOB_HEADER_SIZE]
+                } else {
+                    payload
+                };
+            let crc = compute_record_crc(
+                prefix.record_type,
+                prefix.record_len.to_le_bytes(),
+                payload_for_crc,
             );
+            if crc != prefix.record_crc {
+                return VerifyReport::failure(
+                    VerifyLevel::Paranoid,
+                    vec![VerifyIssue {
+                        message: "record CRC mismatch".to_string(),
+                        path: None,
+                        blob_id: None,
+                        offset: Some(HEADER_SIZE as u64 + offset as u64),
+                        volume_index: Some(volume_index as u16),
+                        record_type: Some(prefix.record_type.as_u8()),
+                    }],
+                    VerifyStats {
+                        blob_count: reader.checkpoint.blob_count,
+                        manifest_entries: manifest.entries.len(),
+                        elapsed_ms: start.elapsed().as_millis(),
+                    },
+                );
+            }
+            offset = payload_end;
         }
-        let payload = &bytes[payload_start..payload_end];
-        let payload_for_crc: &[u8] =
-            if prefix.record_type == RecordType::BLOB && payload.len() >= BLOB_HEADER_SIZE {
-                &payload[..BLOB_HEADER_SIZE]
-            } else {
-                payload
-            };
-        let crc = compute_record_crc(
-            prefix.record_type,
-            prefix.record_len.to_le_bytes(),
-            payload_for_crc,
-        );
-        if crc != prefix.record_crc {
-            return VerifyReport::failure(
-                VerifyLevel::Paranoid,
-                vec![VerifyIssue {
-                    message: "record CRC mismatch".to_string(),
-                    path: None,
-                    blob_id: None,
-                    offset: Some(HEADER_SIZE as u64 + offset as u64),
-                    volume_index: None,
-                    record_type: Some(prefix.record_type.as_u8()),
-                }],
-                VerifyStats {
-                    blob_count: reader.checkpoint.blob_count,
-                    manifest_entries: manifest.entries.len(),
-                    elapsed_ms: start.elapsed().as_millis(),
-                },
-            );
-        }
-        offset = payload_end;
-    }
 
-    if HEADER_SIZE as u64 + offset as u64 != data_end {
-        return VerifyReport::failure(
-            VerifyLevel::Paranoid,
-            vec![VerifyIssue {
-                message: "record boundary discontinuity".to_string(),
-                path: None,
-                blob_id: None,
-                offset: Some(HEADER_SIZE as u64 + offset as u64),
-                volume_index: None,
-                record_type: None,
-            }],
-            VerifyStats {
-                blob_count: reader.checkpoint.blob_count,
-                manifest_entries: manifest.entries.len(),
-                elapsed_ms: start.elapsed().as_millis(),
-            },
-        );
+        if HEADER_SIZE as u64 + offset as u64 != scan_end {
+            return VerifyReport::failure(
+                VerifyLevel::Paranoid,
+                vec![VerifyIssue {
+                    message: "record boundary discontinuity".to_string(),
+                    path: None,
+                    blob_id: None,
+                    offset: Some(HEADER_SIZE as u64 + offset as u64),
+                    volume_index: Some(volume_index as u16),
+                    record_type: None,
+                }],
+                VerifyStats {
+                    blob_count: reader.checkpoint.blob_count,
+                    manifest_entries: manifest.entries.len(),
+                    elapsed_ms: start.elapsed().as_millis(),
+                },
+            );
+        }
     }
 
     VerifyReport::success(
@@ -360,4 +358,16 @@ fn hex_string(bytes: &[u8; 32]) -> String {
         let _ = write!(&mut out, "{byte:02x}");
     }
     out
+}
+
+fn read_record_region(path: &PathBuf, scan_end: u64) -> Result<Vec<u8>, String> {
+    let mut file = File::open(path).map_err(|err| err.to_string())?;
+    file.seek(SeekFrom::Start(HEADER_SIZE as u64))
+        .map_err(|err| err.to_string())?;
+    let len = scan_end
+        .checked_sub(HEADER_SIZE as u64)
+        .ok_or_else(|| "invalid scan range".to_string())? as usize;
+    let mut bytes = vec![0u8; len];
+    file.read_exact(&mut bytes).map_err(|err| err.to_string())?;
+    Ok(bytes)
 }

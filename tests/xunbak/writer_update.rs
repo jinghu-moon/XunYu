@@ -17,6 +17,7 @@ fn none_options() -> BackupOptions {
     BackupOptions {
         codec: Codec::NONE,
         zstd_level: 1,
+        split_size: None,
     }
 }
 

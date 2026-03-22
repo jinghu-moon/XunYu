@@ -1,0 +1,2 @@
+This file is deeply nested (5 levels) to test backup/restore of deep directory structures.
+Path: deep/level1/level2/level3/level4/leaf.txt

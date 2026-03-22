@@ -25,6 +25,7 @@ fn backup_directory_writes_three_blobs_manifest_and_checkpoint() {
         &BackupOptions {
             codec: Codec::NONE,
             zstd_level: 1,
+            split_size: None,
         },
     )
     .unwrap();
@@ -58,6 +59,7 @@ fn backup_manifest_entries_have_correct_offsets_and_hashes() {
         &BackupOptions {
             codec: Codec::NONE,
             zstd_level: 1,
+            split_size: None,
         },
     )
     .unwrap();
@@ -99,6 +101,7 @@ fn backup_checkpoint_stats_match_written_files() {
         &BackupOptions {
             codec: Codec::NONE,
             zstd_level: 1,
+            split_size: None,
         },
     )
     .unwrap();
@@ -114,5 +117,55 @@ fn backup_checkpoint_stats_match_written_files() {
     assert_eq!(
         checkpoint.payload.total_container_bytes,
         cursor.get_ref().len() as u64
+    );
+}
+
+#[test]
+fn backup_reuses_blob_for_duplicate_content_in_same_run() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(source.join("nested")).unwrap();
+    fs::write(source.join("a.txt"), "same content").unwrap();
+    fs::write(source.join("nested").join("b.txt"), "same content").unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    let result = ContainerWriter::backup(
+        &container,
+        &source,
+        &BackupOptions {
+            codec: Codec::NONE,
+            zstd_level: 1,
+            split_size: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(result.file_count, 2);
+    assert_eq!(result.blob_count, 1);
+
+    let bytes = fs::read(&container).unwrap();
+    let footer =
+        Footer::from_bytes(&bytes[bytes.len() - FOOTER_SIZE..], bytes.len() as u64).unwrap();
+    let mut cursor = Cursor::new(bytes.as_slice());
+    cursor
+        .seek(SeekFrom::Start(footer.checkpoint_offset))
+        .unwrap();
+    let checkpoint = read_checkpoint_record(&mut cursor).unwrap();
+    assert_eq!(checkpoint.payload.blob_count, 1);
+    cursor
+        .seek(SeekFrom::Start(checkpoint.payload.manifest_offset))
+        .unwrap();
+    let manifest = read_manifest_record(&mut cursor).unwrap();
+    assert_eq!(manifest.body.entries.len(), 2);
+    assert_eq!(
+        manifest.body.entries[0].content_hash,
+        manifest.body.entries[1].content_hash
+    );
+    assert_eq!(
+        manifest.body.entries[0].blob_offset,
+        manifest.body.entries[1].blob_offset
+    );
+    assert_eq!(
+        manifest.body.entries[0].blob_len,
+        manifest.body.entries[1].blob_len
     );
 }

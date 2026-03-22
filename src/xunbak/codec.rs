@@ -133,8 +133,8 @@ pub fn stream_hash_and_compress<R: Read>(
             })
         }
         codec if codec == Codec::ZSTD => {
-            let mut encoder =
-                zstd::stream::Encoder::new(Vec::new(), level).map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
+            let mut encoder = zstd::stream::Encoder::new(Vec::new(), level)
+                .map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
             loop {
                 let n = reader
                     .read(&mut buf)

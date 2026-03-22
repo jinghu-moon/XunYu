@@ -1,0 +1,5 @@
+This file is in a directory with spaces in the name.
+It tests that the backup and restore process handles spaces correctly
+in both directory names and file names.
+
+Testing path: "path with spaces/nested folder/notes file.txt"

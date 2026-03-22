@@ -12,6 +12,8 @@ mod codec;
 mod constants;
 #[path = "xunbak/e2e.rs"]
 mod e2e;
+#[path = "xunbak/fixture.rs"]
+mod fixture;
 #[path = "xunbak/footer.rs"]
 mod footer;
 #[path = "xunbak/header.rs"]
@@ -30,6 +32,8 @@ mod record;
 mod restore_all;
 #[path = "xunbak/restore_selective.rs"]
 mod restore_selective;
+#[path = "xunbak/split.rs"]
+mod split;
 #[path = "xunbak/verify.rs"]
 mod verify;
 #[path = "xunbak/writer_backup.rs"]

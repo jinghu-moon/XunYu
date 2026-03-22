@@ -25,7 +25,9 @@ pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
         if !should_print_progress {
             return;
         }
-        if event.processed_files < event.total_files && event.processed_files.saturating_sub(last_reported) < 25 {
+        if event.processed_files < event.total_files
+            && event.processed_files.saturating_sub(last_reported) < 25
+        {
             return;
         }
         last_reported = event.processed_files;
@@ -45,9 +47,10 @@ pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
         );
     };
 
-    if container.exists() {
-        let result = ContainerWriter::update_with_progress(&container, root, &options, &mut progress)
-            .map_err(|err| CliError::new(2, err.to_string()))?;
+    if container_exists(&container) {
+        let result =
+            ContainerWriter::update_with_progress(&container, root, &options, &mut progress)
+                .map_err(|err| CliError::new(2, err.to_string()))?;
         eprintln!(
             "Updated xunbak: {}  files={}  new_blobs={}",
             result.container_path.display(),
@@ -55,8 +58,9 @@ pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
             result.added_blob_count
         );
     } else {
-        let result = ContainerWriter::backup_with_progress(&container, root, &options, &mut progress)
-            .map_err(|err| CliError::new(2, err.to_string()))?;
+        let result =
+            ContainerWriter::backup_with_progress(&container, root, &options, &mut progress)
+                .map_err(|err| CliError::new(2, err.to_string()))?;
         eprintln!(
             "Created xunbak: {}  files={}  blobs={}",
             result.container_path.display(),
@@ -151,32 +155,41 @@ fn parse_backup_options(args: &BackupCmd) -> Result<BackupOptions, CliError> {
         return Ok(BackupOptions {
             codec: crate::xunbak::constants::Codec::NONE,
             zstd_level: 1,
+            split_size: parse_split_size(args.split_size.as_deref())?,
         });
     }
 
     match args.compression.as_deref() {
-        None => Ok(BackupOptions::default()),
+        None => Ok(BackupOptions {
+            split_size: parse_split_size(args.split_size.as_deref())?,
+            ..BackupOptions::default()
+        }),
         Some(raw) => {
             match parse_compression_arg(raw).map_err(|err| CliError::new(2, err.to_string()))? {
                 CompressionMode::None => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::NONE,
                     zstd_level: 1,
+                    split_size: parse_split_size(args.split_size.as_deref())?,
                 }),
                 CompressionMode::Zstd { level } => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::ZSTD,
                     zstd_level: level,
+                    split_size: parse_split_size(args.split_size.as_deref())?,
                 }),
                 CompressionMode::Lz4 => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::LZ4,
                     zstd_level: 1,
+                    split_size: parse_split_size(args.split_size.as_deref())?,
                 }),
                 CompressionMode::Lzma => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::LZMA,
                     zstd_level: 1,
+                    split_size: parse_split_size(args.split_size.as_deref())?,
                 }),
                 CompressionMode::Auto => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::ZSTD,
                     zstd_level: 1,
+                    split_size: parse_split_size(args.split_size.as_deref())?,
                 }),
             }
         }
@@ -200,4 +213,32 @@ fn estimate_total_files(root: &Path) -> usize {
         total
     }
     count(root)
+}
+
+fn parse_split_size(raw: Option<&str>) -> Result<Option<u64>, CliError> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let value = raw.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    let upper = value.to_ascii_uppercase();
+    let (number, multiplier) = if let Some(stripped) = upper.strip_suffix('K') {
+        (stripped, 1024u64)
+    } else if let Some(stripped) = upper.strip_suffix('M') {
+        (stripped, 1024u64 * 1024)
+    } else if let Some(stripped) = upper.strip_suffix('G') {
+        (stripped, 1024u64 * 1024 * 1024)
+    } else {
+        (upper.as_str(), 1u64)
+    };
+    let size = number
+        .parse::<u64>()
+        .map_err(|_| CliError::new(2, format!("Invalid split size: {raw}")))?;
+    Ok(Some(size.saturating_mul(multiplier)))
+}
+
+fn container_exists(path: &Path) -> bool {
+    path.exists() || PathBuf::from(format!("{}.001", path.display())).exists()
 }

@@ -1,0 +1,2 @@
+This file should have the hidden attribute set.
+Used to test win_attributes backup and restore.

@@ -289,3 +289,55 @@ fn cli_backup_container_prints_progress_for_long_runs() {
     assert!(stderr.contains("files="));
     assert!(stderr.contains("bytes="));
 }
+
+#[test]
+fn cli_backup_restore_verify_split_container() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "a".repeat(80)).unwrap();
+    fs::write(root.join("b.txt"), "b".repeat(80)).unwrap();
+    fs::write(root.join("c.txt"), "c".repeat(80)).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "--container",
+        "backup.xunbak",
+        "--compression",
+        "none",
+        "--split-size",
+        "1900",
+        "-m",
+        "t",
+    ]));
+
+    assert!(root.join("backup.xunbak.001").exists());
+    assert!(root.join("backup.xunbak.002").exists());
+
+    let restore_dir = root.join("restore");
+    run_ok(env.cmd().args([
+        "restore",
+        root.join("backup.xunbak").to_str().unwrap(),
+        "--to",
+        restore_dir.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+    assert_eq!(
+        fs::read_to_string(restore_dir.join("a.txt")).unwrap(),
+        "a".repeat(80)
+    );
+
+    let verify = run_ok(env.cmd().args([
+        "verify",
+        root.join("backup.xunbak").to_str().unwrap(),
+        "--level",
+        "paranoid",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&verify.stdout).unwrap();
+    assert_eq!(value.get("passed").and_then(Value::as_bool), Some(true));
+}

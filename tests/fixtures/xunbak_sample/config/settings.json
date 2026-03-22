@@ -1,0 +1,31 @@
+{
+  "app_name": "sample-project",
+  "version": "0.1.0",
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "sample_db",
+    "pool_size": 10,
+    "timeout_ms": 5000,
+    "ssl": false
+  },
+  "logging": {
+    "level": "info",
+    "file": "logs/app.log",
+    "max_size_mb": 50,
+    "rotate": true,
+    "keep_days": 30
+  },
+  "features": {
+    "cache_enabled": true,
+    "cache_ttl_seconds": 3600,
+    "max_concurrent_tasks": 8,
+    "retry_count": 3,
+    "retry_delay_ms": 1000
+  },
+  "paths": {
+    "data_dir": "./data",
+    "temp_dir": "./tmp",
+    "backup_dir": "./backups"
+  }
+}

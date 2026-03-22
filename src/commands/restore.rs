@@ -219,7 +219,11 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
 /// 解析备份源路径：直接路径 > 备份目录查找
 fn resolve_backup_src(backups_root: &Path, name_or_path: &str) -> Result<PathBuf, CliError> {
     let p = PathBuf::from(name_or_path);
-    if p.is_dir() || p.is_file() {
+    if p.is_dir()
+        || p.is_file()
+        || p.extension().and_then(|e| e.to_str()) == Some("xunbak")
+            && PathBuf::from(format!("{}.001", p.display())).exists()
+    {
         return Ok(p);
     }
     backup_source_path(backups_root, name_or_path).ok_or_else(|| {
@@ -591,6 +595,7 @@ fn run_snapshot_backup(root: &Path, _cfg: &BackupConfig) -> CliResult {
         dir: Some(root.to_string_lossy().into_owned()),
         container: None,
         compression: None,
+        split_size: None,
         dry_run: false,
         no_compress: false,
         retain: None,

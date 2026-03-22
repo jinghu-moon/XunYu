@@ -1,0 +1,2000 @@
+2026-03-22T08:00:00 [INFO ] [engine  ] Pipeline stage executed in 4013ms
+2026-03-22T08:00:02 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:00:04 [INFO ] [network ] File scan completed: 521 entries found
+2026-03-22T08:00:06 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:00:08 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:00:10 [DEBUG] [pipeline] Compression ratio: 9655.00x for blob
+2026-03-22T08:00:12 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:00:14 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:00:16 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:00:18 [INFO ] [cache   ] Checkpoint written at offset 9892
+2026-03-22T08:00:20 [ERROR] [engine  ] Compression ratio: 8786.00x for blob
+2026-03-22T08:00:22 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:00:24 [ERROR] [storage ] Worker thread 5926 started processing batch
+2026-03-22T08:00:26 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:00:28 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:00:30 [INFO ] [config  ] Pipeline stage executed in 7429ms
+2026-03-22T08:00:32 [ERROR] [pipeline] Checkpoint written at offset 5821
+2026-03-22T08:00:34 [WARN ] [storage ] Pipeline stage executed in 1170ms
+2026-03-22T08:00:36 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:00:38 [DEBUG] [config  ] Pipeline stage executed in 9126ms
+2026-03-22T08:00:40 [WARN ] [storage ] Checkpoint written at offset 917
+2026-03-22T08:00:42 [WARN ] [engine  ] Checkpoint written at offset 6573
+2026-03-22T08:00:44 [ERROR] [engine  ] Configuration reloaded from disk
+2026-03-22T08:00:46 [ERROR] [pipeline] Compression ratio: 6483.00x for blob
+2026-03-22T08:00:48 [DEBUG] [pipeline] Pipeline stage executed in 2288ms
+2026-03-22T08:00:50 [WARN ] [storage ] Retry attempt 8831 of 3 for operation
+2026-03-22T08:00:52 [ERROR] [storage ] Worker thread 7020 started processing batch
+2026-03-22T08:00:54 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:00:56 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:00:58 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:01:00 [INFO ] [config  ] File scan completed: 9764 entries found
+2026-03-22T08:01:02 [DEBUG] [network ] Pipeline stage executed in 9065ms
+2026-03-22T08:01:04 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:01:06 [ERROR] [storage ] Checkpoint written at offset 1828
+2026-03-22T08:01:08 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:01:10 [INFO ] [storage ] Pipeline stage executed in 8202ms
+2026-03-22T08:01:12 [WARN ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:01:14 [WARN ] [pipeline] Checkpoint written at offset 2647
+2026-03-22T08:01:16 [INFO ] [network ] Checkpoint written at offset 8006
+2026-03-22T08:01:18 [INFO ] [engine  ] Checkpoint written at offset 5039
+2026-03-22T08:01:20 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:01:22 [INFO ] [engine  ] Compression ratio: 1134.00x for blob
+2026-03-22T08:01:24 [WARN ] [pipeline] Compression ratio: 9008.00x for blob
+2026-03-22T08:01:26 [WARN ] [cache   ] Retry attempt 9939 of 3 for operation
+2026-03-22T08:01:28 [DEBUG] [pipeline] Retry attempt 3296 of 3 for operation
+2026-03-22T08:01:30 [ERROR] [config  ] Checkpoint written at offset 7178
+2026-03-22T08:01:32 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T08:01:34 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:01:36 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:01:38 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:01:40 [INFO ] [engine  ] Checkpoint written at offset 1161
+2026-03-22T08:01:42 [WARN ] [cache   ] Compression ratio: 3511.00x for blob
+2026-03-22T08:01:44 [WARN ] [storage ] Worker thread 9441 started processing batch
+2026-03-22T08:01:46 [DEBUG] [pipeline] Compression ratio: 6670.00x for blob
+2026-03-22T08:01:48 [WARN ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:01:50 [ERROR] [config  ] File scan completed: 7652 entries found
+2026-03-22T08:01:52 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:01:54 [DEBUG] [storage ] Checkpoint written at offset 1791
+2026-03-22T08:01:56 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:01:58 [DEBUG] [pipeline] File scan completed: 3007 entries found
+2026-03-22T08:02:00 [ERROR] [config  ] Configuration reloaded from disk
+2026-03-22T08:02:02 [DEBUG] [network ] Cache miss for key, fetching from source
+2026-03-22T08:02:04 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:02:06 [DEBUG] [config  ] Compression ratio: 3503.00x for blob
+2026-03-22T08:02:08 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:02:10 [INFO ] [config  ] Pipeline stage executed in 7455ms
+2026-03-22T08:02:12 [ERROR] [config  ] Retry attempt 7974 of 3 for operation
+2026-03-22T08:02:14 [WARN ] [pipeline] Pipeline stage executed in 3567ms
+2026-03-22T08:02:16 [INFO ] [network ] Retry attempt 999 of 3 for operation
+2026-03-22T08:02:18 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:02:20 [DEBUG] [network ] Retry attempt 2580 of 3 for operation
+2026-03-22T08:02:22 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:02:24 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:02:26 [DEBUG] [engine  ] Worker thread 4034 started processing batch
+2026-03-22T08:02:28 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:02:30 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T08:02:32 [WARN ] [cache   ] File scan completed: 2145 entries found
+2026-03-22T08:02:34 [ERROR] [config  ] Checkpoint written at offset 1189
+2026-03-22T08:02:36 [INFO ] [config  ] Worker thread 9225 started processing batch
+2026-03-22T08:02:38 [INFO ] [engine  ] Retry attempt 3493 of 3 for operation
+2026-03-22T08:02:40 [ERROR] [pipeline] Checkpoint written at offset 1128
+2026-03-22T08:02:42 [WARN ] [cache   ] Pipeline stage executed in 2585ms
+2026-03-22T08:02:44 [DEBUG] [network ] Pipeline stage executed in 8667ms
+2026-03-22T08:02:46 [INFO ] [storage ] Retry attempt 4906 of 3 for operation
+2026-03-22T08:02:48 [INFO ] [pipeline] Pipeline stage executed in 1892ms
+2026-03-22T08:02:50 [INFO ] [storage ] Retry attempt 2547 of 3 for operation
+2026-03-22T08:02:52 [ERROR] [cache   ] Worker thread 3451 started processing batch
+2026-03-22T08:02:54 [ERROR] [pipeline] Pipeline stage executed in 8281ms
+2026-03-22T08:02:56 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:02:58 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:03:00 [ERROR] [pipeline] Pipeline stage executed in 2648ms
+2026-03-22T08:03:02 [DEBUG] [network ] File scan completed: 9190 entries found
+2026-03-22T08:03:04 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:03:06 [INFO ] [cache   ] Worker thread 9053 started processing batch
+2026-03-22T08:03:08 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:03:10 [ERROR] [cache   ] Processing request completed successfully
+2026-03-22T08:03:12 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T08:03:14 [ERROR] [network ] File scan completed: 2533 entries found
+2026-03-22T08:03:16 [WARN ] [pipeline] Connection established to remote host
+2026-03-22T08:03:18 [INFO ] [pipeline] Checkpoint written at offset 6746
+2026-03-22T08:03:20 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:03:22 [DEBUG] [engine  ] Compression ratio: 3645.00x for blob
+2026-03-22T08:03:24 [WARN ] [config  ] Checkpoint written at offset 5001
+2026-03-22T08:03:26 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:03:28 [DEBUG] [cache   ] Pipeline stage executed in 1138ms
+2026-03-22T08:03:30 [ERROR] [cache   ] Retry attempt 6549 of 3 for operation
+2026-03-22T08:03:32 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:03:34 [WARN ] [network ] Pipeline stage executed in 627ms
+2026-03-22T08:03:36 [INFO ] [network ] File scan completed: 5664 entries found
+2026-03-22T08:03:38 [ERROR] [config  ] Worker thread 8380 started processing batch
+2026-03-22T08:03:40 [INFO ] [config  ] Worker thread 3115 started processing batch
+2026-03-22T08:03:42 [ERROR] [engine  ] File scan completed: 28 entries found
+2026-03-22T08:03:44 [WARN ] [cache   ] File scan completed: 1147 entries found
+2026-03-22T08:03:46 [ERROR] [network ] Checkpoint written at offset 2042
+2026-03-22T08:03:48 [ERROR] [network ] Pipeline stage executed in 6692ms
+2026-03-22T08:03:50 [ERROR] [config  ] Pipeline stage executed in 9084ms
+2026-03-22T08:03:52 [WARN ] [pipeline] File scan completed: 6212 entries found
+2026-03-22T08:03:54 [WARN ] [network ] Worker thread 4931 started processing batch
+2026-03-22T08:03:56 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:03:58 [ERROR] [pipeline] File scan completed: 9503 entries found
+2026-03-22T08:04:00 [ERROR] [config  ] Compression ratio: 7245.00x for blob
+2026-03-22T08:04:02 [WARN ] [network ] Compression ratio: 2781.00x for blob
+2026-03-22T08:04:04 [INFO ] [cache   ] Retry attempt 5492 of 3 for operation
+2026-03-22T08:04:06 [INFO ] [pipeline] Pipeline stage executed in 3681ms
+2026-03-22T08:04:08 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:04:10 [WARN ] [config  ] Worker thread 1194 started processing batch
+2026-03-22T08:04:12 [DEBUG] [config  ] Worker thread 3186 started processing batch
+2026-03-22T08:04:14 [DEBUG] [config  ] File scan completed: 3998 entries found
+2026-03-22T08:04:16 [WARN ] [storage ] Processing request completed successfully
+2026-03-22T08:04:18 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:04:20 [DEBUG] [engine  ] Retry attempt 4083 of 3 for operation
+2026-03-22T08:04:22 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:04:24 [ERROR] [config  ] Worker thread 8271 started processing batch
+2026-03-22T08:04:26 [DEBUG] [network ] Compression ratio: 2608.00x for blob
+2026-03-22T08:04:28 [DEBUG] [config  ] Pipeline stage executed in 4051ms
+2026-03-22T08:04:30 [ERROR] [network ] Compression ratio: 3920.00x for blob
+2026-03-22T08:04:32 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:04:34 [WARN ] [cache   ] Checkpoint written at offset 5239
+2026-03-22T08:04:36 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T08:04:38 [DEBUG] [storage ] Connection established to remote host
+2026-03-22T08:04:40 [INFO ] [config  ] File scan completed: 5422 entries found
+2026-03-22T08:04:42 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:04:44 [DEBUG] [config  ] Worker thread 321 started processing batch
+2026-03-22T08:04:46 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:04:48 [ERROR] [config  ] File scan completed: 8819 entries found
+2026-03-22T08:04:50 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:04:52 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:04:54 [ERROR] [storage ] File scan completed: 2705 entries found
+2026-03-22T08:04:56 [DEBUG] [pipeline] Worker thread 8752 started processing batch
+2026-03-22T08:04:58 [INFO ] [config  ] Worker thread 9247 started processing batch
+2026-03-22T08:05:00 [INFO ] [engine  ] File scan completed: 2224 entries found
+2026-03-22T08:05:02 [DEBUG] [pipeline] Processing request completed successfully
+2026-03-22T08:05:04 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:05:06 [ERROR] [cache   ] File scan completed: 4559 entries found
+2026-03-22T08:05:08 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:05:10 [INFO ] [storage ] Retry attempt 854 of 3 for operation
+2026-03-22T08:05:12 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:05:14 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:05:16 [WARN ] [pipeline] Connection established to remote host
+2026-03-22T08:05:18 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:05:20 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:05:22 [INFO ] [pipeline] Pipeline stage executed in 1772ms
+2026-03-22T08:05:24 [INFO ] [cache   ] Worker thread 6150 started processing batch
+2026-03-22T08:05:26 [DEBUG] [storage ] Configuration reloaded from disk
+2026-03-22T08:05:28 [WARN ] [engine  ] Pipeline stage executed in 9838ms
+2026-03-22T08:05:30 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:05:32 [DEBUG] [storage ] Checkpoint written at offset 1130
+2026-03-22T08:05:34 [ERROR] [engine  ] File scan completed: 8032 entries found
+2026-03-22T08:05:36 [INFO ] [config  ] Checkpoint written at offset 7533
+2026-03-22T08:05:38 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:05:40 [ERROR] [network ] Retry attempt 7922 of 3 for operation
+2026-03-22T08:05:42 [DEBUG] [config  ] Worker thread 4398 started processing batch
+2026-03-22T08:05:44 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:05:46 [DEBUG] [pipeline] Compression ratio: 9337.00x for blob
+2026-03-22T08:05:48 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:05:50 [ERROR] [pipeline] Compression ratio: 3476.00x for blob
+2026-03-22T08:05:52 [ERROR] [cache   ] Checkpoint written at offset 4582
+2026-03-22T08:05:54 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:05:56 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:05:58 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T08:06:00 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:06:02 [ERROR] [pipeline] File scan completed: 3987 entries found
+2026-03-22T08:06:04 [ERROR] [storage ] Worker thread 6047 started processing batch
+2026-03-22T08:06:06 [DEBUG] [network ] Retry attempt 5633 of 3 for operation
+2026-03-22T08:06:08 [DEBUG] [storage ] Retry attempt 5420 of 3 for operation
+2026-03-22T08:06:10 [ERROR] [storage ] Compression ratio: 4439.00x for blob
+2026-03-22T08:06:12 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T08:06:14 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:06:16 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:06:18 [ERROR] [storage ] Worker thread 8596 started processing batch
+2026-03-22T08:06:20 [ERROR] [engine  ] Configuration reloaded from disk
+2026-03-22T08:06:22 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:06:24 [INFO ] [storage ] Retry attempt 2074 of 3 for operation
+2026-03-22T08:06:26 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:06:28 [ERROR] [storage ] Connection established to remote host
+2026-03-22T08:06:30 [INFO ] [engine  ] Worker thread 4659 started processing batch
+2026-03-22T08:06:32 [DEBUG] [config  ] Compression ratio: 5583.00x for blob
+2026-03-22T08:06:34 [WARN ] [engine  ] Pipeline stage executed in 7828ms
+2026-03-22T08:06:36 [INFO ] [engine  ] File scan completed: 8057 entries found
+2026-03-22T08:06:38 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:06:40 [WARN ] [network ] Pipeline stage executed in 1396ms
+2026-03-22T08:06:42 [WARN ] [engine  ] Retry attempt 6819 of 3 for operation
+2026-03-22T08:06:44 [WARN ] [network ] File scan completed: 7382 entries found
+2026-03-22T08:06:46 [DEBUG] [cache   ] Worker thread 7026 started processing batch
+2026-03-22T08:06:48 [ERROR] [network ] Worker thread 987 started processing batch
+2026-03-22T08:06:50 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:06:52 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:06:54 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T08:06:56 [DEBUG] [storage ] Worker thread 7700 started processing batch
+2026-03-22T08:06:58 [ERROR] [engine  ] Configuration reloaded from disk
+2026-03-22T08:07:00 [ERROR] [storage ] Compression ratio: 1167.00x for blob
+2026-03-22T08:07:02 [WARN ] [cache   ] Worker thread 3242 started processing batch
+2026-03-22T08:07:04 [DEBUG] [engine  ] Retry attempt 3684 of 3 for operation
+2026-03-22T08:07:06 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:07:08 [INFO ] [pipeline] Pipeline stage executed in 9750ms
+2026-03-22T08:07:10 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:07:12 [ERROR] [storage ] File scan completed: 4461 entries found
+2026-03-22T08:07:14 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:07:16 [INFO ] [config  ] Checkpoint written at offset 9892
+2026-03-22T08:07:18 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:07:20 [INFO ] [storage ] Pipeline stage executed in 9442ms
+2026-03-22T08:07:22 [INFO ] [pipeline] Compression ratio: 8503.00x for blob
+2026-03-22T08:07:24 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:07:26 [DEBUG] [storage ] Compression ratio: 1495.00x for blob
+2026-03-22T08:07:28 [DEBUG] [cache   ] File scan completed: 5461 entries found
+2026-03-22T08:07:30 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:07:32 [ERROR] [config  ] Compression ratio: 4723.00x for blob
+2026-03-22T08:07:34 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:07:36 [INFO ] [cache   ] Pipeline stage executed in 5297ms
+2026-03-22T08:07:38 [INFO ] [config  ] Retry attempt 19 of 3 for operation
+2026-03-22T08:07:40 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:07:42 [ERROR] [network ] Compression ratio: 7243.00x for blob
+2026-03-22T08:07:44 [INFO ] [pipeline] Pipeline stage executed in 8999ms
+2026-03-22T08:07:46 [WARN ] [cache   ] Compression ratio: 7942.00x for blob
+2026-03-22T08:07:48 [INFO ] [engine  ] Worker thread 3921 started processing batch
+2026-03-22T08:07:50 [WARN ] [cache   ] Retry attempt 225 of 3 for operation
+2026-03-22T08:07:52 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T08:07:54 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:07:56 [ERROR] [network ] Pipeline stage executed in 6808ms
+2026-03-22T08:07:58 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T08:08:00 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:08:02 [WARN ] [engine  ] Pipeline stage executed in 6799ms
+2026-03-22T08:08:04 [ERROR] [network ] Pipeline stage executed in 43ms
+2026-03-22T08:08:06 [ERROR] [storage ] Pipeline stage executed in 9617ms
+2026-03-22T08:08:08 [DEBUG] [pipeline] Compression ratio: 8825.00x for blob
+2026-03-22T08:08:10 [DEBUG] [cache   ] Checkpoint written at offset 9043
+2026-03-22T08:08:12 [DEBUG] [config  ] Checkpoint written at offset 3091
+2026-03-22T08:08:14 [WARN ] [network ] File scan completed: 3827 entries found
+2026-03-22T08:08:16 [DEBUG] [engine  ] Checkpoint written at offset 7750
+2026-03-22T08:08:18 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:08:20 [INFO ] [pipeline] Retry attempt 9670 of 3 for operation
+2026-03-22T08:08:22 [ERROR] [engine  ] Compression ratio: 1634.00x for blob
+2026-03-22T08:08:24 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:08:26 [WARN ] [engine  ] Compression ratio: 4343.00x for blob
+2026-03-22T08:08:28 [ERROR] [network ] File scan completed: 1316 entries found
+2026-03-22T08:08:30 [ERROR] [storage ] Retry attempt 6227 of 3 for operation
+2026-03-22T08:08:32 [ERROR] [storage ] Compression ratio: 8865.00x for blob
+2026-03-22T08:08:34 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:08:36 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:08:38 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:08:40 [WARN ] [storage ] Pipeline stage executed in 475ms
+2026-03-22T08:08:42 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:08:44 [ERROR] [cache   ] File scan completed: 2386 entries found
+2026-03-22T08:08:46 [WARN ] [network ] File scan completed: 9273 entries found
+2026-03-22T08:08:48 [WARN ] [pipeline] Connection established to remote host
+2026-03-22T08:08:50 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T08:08:52 [WARN ] [pipeline] Compression ratio: 4162.00x for blob
+2026-03-22T08:08:54 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:08:56 [ERROR] [storage ] Retry attempt 2589 of 3 for operation
+2026-03-22T08:08:58 [INFO ] [config  ] Checkpoint written at offset 9627
+2026-03-22T08:09:00 [ERROR] [storage ] File scan completed: 4098 entries found
+2026-03-22T08:09:02 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:09:04 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T08:09:06 [ERROR] [network ] Pipeline stage executed in 4838ms
+2026-03-22T08:09:08 [INFO ] [storage ] File scan completed: 4498 entries found
+2026-03-22T08:09:10 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:09:12 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:09:14 [ERROR] [pipeline] Configuration reloaded from disk
+2026-03-22T08:09:16 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:09:18 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T08:09:20 [ERROR] [storage ] Connection established to remote host
+2026-03-22T08:09:22 [ERROR] [cache   ] File scan completed: 2878 entries found
+2026-03-22T08:09:24 [WARN ] [pipeline] Retry attempt 5995 of 3 for operation
+2026-03-22T08:09:26 [ERROR] [pipeline] Pipeline stage executed in 7895ms
+2026-03-22T08:09:28 [ERROR] [storage ] Checkpoint written at offset 1887
+2026-03-22T08:09:30 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:09:32 [DEBUG] [network ] Checkpoint written at offset 1480
+2026-03-22T08:09:34 [DEBUG] [engine  ] Pipeline stage executed in 8792ms
+2026-03-22T08:09:36 [INFO ] [config  ] Checkpoint written at offset 4296
+2026-03-22T08:09:38 [DEBUG] [storage ] Checkpoint written at offset 1776
+2026-03-22T08:09:40 [WARN ] [config  ] Processing request completed successfully
+2026-03-22T08:09:42 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:09:44 [DEBUG] [storage ] Pipeline stage executed in 6690ms
+2026-03-22T08:09:46 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T08:09:48 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:09:50 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:09:52 [DEBUG] [cache   ] Retry attempt 6867 of 3 for operation
+2026-03-22T08:09:54 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:09:56 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:09:58 [WARN ] [config  ] Compression ratio: 3869.00x for blob
+2026-03-22T08:10:00 [ERROR] [engine  ] Checkpoint written at offset 8921
+2026-03-22T08:10:02 [ERROR] [engine  ] File scan completed: 4521 entries found
+2026-03-22T08:10:04 [WARN ] [engine  ] Compression ratio: 1502.00x for blob
+2026-03-22T08:10:06 [WARN ] [storage ] Worker thread 350 started processing batch
+2026-03-22T08:10:08 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:10:10 [WARN ] [engine  ] Retry attempt 3395 of 3 for operation
+2026-03-22T08:10:12 [WARN ] [pipeline] Checkpoint written at offset 2418
+2026-03-22T08:10:14 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:10:16 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:10:18 [WARN ] [engine  ] Checkpoint written at offset 3899
+2026-03-22T08:10:20 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:10:22 [INFO ] [pipeline] File scan completed: 8620 entries found
+2026-03-22T08:10:24 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:10:26 [DEBUG] [cache   ] Retry attempt 9727 of 3 for operation
+2026-03-22T08:10:28 [INFO ] [config  ] Retry attempt 3630 of 3 for operation
+2026-03-22T08:10:30 [INFO ] [storage ] Retry attempt 4942 of 3 for operation
+2026-03-22T08:10:32 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T08:10:34 [DEBUG] [config  ] File scan completed: 1769 entries found
+2026-03-22T08:10:36 [DEBUG] [storage ] Compression ratio: 1205.00x for blob
+2026-03-22T08:10:38 [INFO ] [cache   ] Worker thread 2431 started processing batch
+2026-03-22T08:10:40 [INFO ] [pipeline] Pipeline stage executed in 9591ms
+2026-03-22T08:10:42 [ERROR] [config  ] Worker thread 8693 started processing batch
+2026-03-22T08:10:44 [ERROR] [config  ] Retry attempt 9920 of 3 for operation
+2026-03-22T08:10:46 [DEBUG] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:10:48 [WARN ] [config  ] Compression ratio: 3744.00x for blob
+2026-03-22T08:10:50 [DEBUG] [cache   ] Compression ratio: 6533.00x for blob
+2026-03-22T08:10:52 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:10:54 [DEBUG] [cache   ] Pipeline stage executed in 6133ms
+2026-03-22T08:10:56 [WARN ] [storage ] Compression ratio: 1100.00x for blob
+2026-03-22T08:10:58 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:11:00 [INFO ] [storage ] Checkpoint written at offset 2132
+2026-03-22T08:11:02 [INFO ] [network ] Retry attempt 9203 of 3 for operation
+2026-03-22T08:11:04 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:11:06 [ERROR] [storage ] File scan completed: 843 entries found
+2026-03-22T08:11:08 [ERROR] [network ] Pipeline stage executed in 5762ms
+2026-03-22T08:11:10 [INFO ] [network ] Retry attempt 3486 of 3 for operation
+2026-03-22T08:11:12 [WARN ] [storage ] Compression ratio: 3675.00x for blob
+2026-03-22T08:11:14 [INFO ] [cache   ] Retry attempt 6023 of 3 for operation
+2026-03-22T08:11:16 [INFO ] [cache   ] Worker thread 3706 started processing batch
+2026-03-22T08:11:18 [DEBUG] [network ] Worker thread 9122 started processing batch
+2026-03-22T08:11:20 [INFO ] [network ] Pipeline stage executed in 475ms
+2026-03-22T08:11:22 [WARN ] [cache   ] Pipeline stage executed in 5568ms
+2026-03-22T08:11:24 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:11:26 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:11:28 [INFO ] [storage ] Retry attempt 3525 of 3 for operation
+2026-03-22T08:11:30 [DEBUG] [config  ] Compression ratio: 5586.00x for blob
+2026-03-22T08:11:32 [WARN ] [cache   ] Pipeline stage executed in 5315ms
+2026-03-22T08:11:34 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:11:36 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:11:38 [DEBUG] [storage ] File scan completed: 7958 entries found
+2026-03-22T08:11:40 [DEBUG] [config  ] Pipeline stage executed in 3532ms
+2026-03-22T08:11:42 [INFO ] [cache   ] File scan completed: 1817 entries found
+2026-03-22T08:11:44 [ERROR] [storage ] Worker thread 7973 started processing batch
+2026-03-22T08:11:46 [ERROR] [engine  ] Configuration reloaded from disk
+2026-03-22T08:11:48 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:11:50 [WARN ] [pipeline] Pipeline stage executed in 4743ms
+2026-03-22T08:11:52 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:11:54 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:11:56 [WARN ] [network ] Retry attempt 5803 of 3 for operation
+2026-03-22T08:11:58 [INFO ] [config  ] Processing request completed successfully
+2026-03-22T08:12:00 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:12:02 [DEBUG] [network ] File scan completed: 6844 entries found
+2026-03-22T08:12:04 [ERROR] [engine  ] File scan completed: 342 entries found
+2026-03-22T08:12:06 [ERROR] [pipeline] Worker thread 7539 started processing batch
+2026-03-22T08:12:08 [ERROR] [engine  ] File scan completed: 1735 entries found
+2026-03-22T08:12:10 [WARN ] [config  ] Worker thread 6561 started processing batch
+2026-03-22T08:12:12 [INFO ] [config  ] Pipeline stage executed in 5563ms
+2026-03-22T08:12:14 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:12:16 [INFO ] [network ] Retry attempt 3177 of 3 for operation
+2026-03-22T08:12:18 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:12:20 [INFO ] [pipeline] Pipeline stage executed in 3233ms
+2026-03-22T08:12:22 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:12:24 [WARN ] [storage ] Compression ratio: 7602.00x for blob
+2026-03-22T08:12:26 [DEBUG] [storage ] Worker thread 5296 started processing batch
+2026-03-22T08:12:28 [ERROR] [pipeline] Compression ratio: 1119.00x for blob
+2026-03-22T08:12:30 [DEBUG] [config  ] Pipeline stage executed in 4501ms
+2026-03-22T08:12:32 [INFO ] [cache   ] Retry attempt 1216 of 3 for operation
+2026-03-22T08:12:34 [ERROR] [config  ] Compression ratio: 617.00x for blob
+2026-03-22T08:12:36 [INFO ] [cache   ] Pipeline stage executed in 1258ms
+2026-03-22T08:12:38 [INFO ] [network ] Worker thread 8308 started processing batch
+2026-03-22T08:12:40 [DEBUG] [config  ] Worker thread 9082 started processing batch
+2026-03-22T08:12:42 [INFO ] [config  ] Worker thread 3085 started processing batch
+2026-03-22T08:12:44 [ERROR] [network ] Compression ratio: 8215.00x for blob
+2026-03-22T08:12:46 [WARN ] [engine  ] Compression ratio: 1696.00x for blob
+2026-03-22T08:12:48 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:12:50 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:12:52 [DEBUG] [network ] Retry attempt 9992 of 3 for operation
+2026-03-22T08:12:54 [WARN ] [cache   ] Checkpoint written at offset 4635
+2026-03-22T08:12:56 [DEBUG] [config  ] Checkpoint written at offset 9796
+2026-03-22T08:12:58 [INFO ] [storage ] Checkpoint written at offset 1080
+2026-03-22T08:13:00 [ERROR] [engine  ] Retry attempt 6334 of 3 for operation
+2026-03-22T08:13:02 [ERROR] [cache   ] Worker thread 2464 started processing batch
+2026-03-22T08:13:04 [ERROR] [engine  ] Worker thread 2318 started processing batch
+2026-03-22T08:13:06 [ERROR] [cache   ] File scan completed: 2113 entries found
+2026-03-22T08:13:08 [INFO ] [cache   ] Retry attempt 6172 of 3 for operation
+2026-03-22T08:13:10 [ERROR] [pipeline] Retry attempt 1532 of 3 for operation
+2026-03-22T08:13:12 [DEBUG] [network ] Checkpoint written at offset 299
+2026-03-22T08:13:14 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:13:16 [ERROR] [config  ] Configuration reloaded from disk
+2026-03-22T08:13:18 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:13:20 [INFO ] [network ] Retry attempt 8627 of 3 for operation
+2026-03-22T08:13:22 [INFO ] [storage ] Checkpoint written at offset 2148
+2026-03-22T08:13:24 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:13:26 [WARN ] [storage ] Compression ratio: 716.00x for blob
+2026-03-22T08:13:28 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:13:30 [ERROR] [storage ] Compression ratio: 3834.00x for blob
+2026-03-22T08:13:32 [WARN ] [cache   ] Compression ratio: 3179.00x for blob
+2026-03-22T08:13:34 [ERROR] [storage ] Worker thread 7219 started processing batch
+2026-03-22T08:13:36 [DEBUG] [cache   ] File scan completed: 8240 entries found
+2026-03-22T08:13:38 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:13:40 [WARN ] [cache   ] Processing request completed successfully
+2026-03-22T08:13:42 [ERROR] [network ] Cache miss for key, fetching from source
+2026-03-22T08:13:44 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:13:46 [ERROR] [config  ] Retry attempt 2415 of 3 for operation
+2026-03-22T08:13:48 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T08:13:50 [ERROR] [engine  ] File scan completed: 873 entries found
+2026-03-22T08:13:52 [DEBUG] [network ] Checkpoint written at offset 3863
+2026-03-22T08:13:54 [DEBUG] [engine  ] Checkpoint written at offset 3679
+2026-03-22T08:13:56 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:13:58 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:14:00 [DEBUG] [storage ] Connection established to remote host
+2026-03-22T08:14:02 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:14:04 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:14:06 [DEBUG] [engine  ] Pipeline stage executed in 3894ms
+2026-03-22T08:14:08 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:14:10 [DEBUG] [storage ] Worker thread 7490 started processing batch
+2026-03-22T08:14:12 [INFO ] [engine  ] Compression ratio: 9777.00x for blob
+2026-03-22T08:14:14 [INFO ] [storage ] Retry attempt 9422 of 3 for operation
+2026-03-22T08:14:16 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:14:18 [DEBUG] [engine  ] Worker thread 5781 started processing batch
+2026-03-22T08:14:20 [WARN ] [network ] File scan completed: 3069 entries found
+2026-03-22T08:14:22 [INFO ] [network ] Checkpoint written at offset 1109
+2026-03-22T08:14:24 [INFO ] [config  ] Compression ratio: 714.00x for blob
+2026-03-22T08:14:26 [DEBUG] [cache   ] Pipeline stage executed in 267ms
+2026-03-22T08:14:28 [ERROR] [engine  ] Checkpoint written at offset 3951
+2026-03-22T08:14:30 [INFO ] [network ] Checkpoint written at offset 2186
+2026-03-22T08:14:32 [INFO ] [cache   ] Retry attempt 5547 of 3 for operation
+2026-03-22T08:14:34 [WARN ] [storage ] Compression ratio: 7841.00x for blob
+2026-03-22T08:14:36 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:14:38 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:14:40 [WARN ] [engine  ] Checkpoint written at offset 5081
+2026-03-22T08:14:42 [DEBUG] [network ] Compression ratio: 4151.00x for blob
+2026-03-22T08:14:44 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:14:46 [ERROR] [engine  ] Checkpoint written at offset 4477
+2026-03-22T08:14:48 [INFO ] [cache   ] File scan completed: 6554 entries found
+2026-03-22T08:14:50 [DEBUG] [config  ] Checkpoint written at offset 3061
+2026-03-22T08:14:52 [DEBUG] [storage ] Compression ratio: 6019.00x for blob
+2026-03-22T08:14:54 [ERROR] [engine  ] File scan completed: 1294 entries found
+2026-03-22T08:14:56 [DEBUG] [network ] Connection established to remote host
+2026-03-22T08:14:58 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:15:00 [ERROR] [storage ] Pipeline stage executed in 5022ms
+2026-03-22T08:15:02 [DEBUG] [network ] File scan completed: 2731 entries found
+2026-03-22T08:15:04 [DEBUG] [cache   ] Compression ratio: 694.00x for blob
+2026-03-22T08:15:06 [ERROR] [network ] File scan completed: 4499 entries found
+2026-03-22T08:15:08 [INFO ] [engine  ] File scan completed: 5953 entries found
+2026-03-22T08:15:10 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:15:12 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:15:14 [WARN ] [storage ] Checkpoint written at offset 5934
+2026-03-22T08:15:16 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:15:18 [WARN ] [storage ] Compression ratio: 6078.00x for blob
+2026-03-22T08:15:20 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:15:22 [WARN ] [network ] Checkpoint written at offset 6522
+2026-03-22T08:15:24 [ERROR] [storage ] Pipeline stage executed in 4090ms
+2026-03-22T08:15:26 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:15:28 [DEBUG] [network ] Cache miss for key, fetching from source
+2026-03-22T08:15:30 [ERROR] [storage ] Compression ratio: 3516.00x for blob
+2026-03-22T08:15:32 [ERROR] [storage ] Compression ratio: 3280.00x for blob
+2026-03-22T08:15:34 [INFO ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:15:36 [WARN ] [storage ] Compression ratio: 1439.00x for blob
+2026-03-22T08:15:38 [ERROR] [storage ] Checkpoint written at offset 1064
+2026-03-22T08:15:40 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:15:42 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:15:44 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:15:46 [INFO ] [cache   ] Retry attempt 9377 of 3 for operation
+2026-03-22T08:15:48 [ERROR] [config  ] Retry attempt 2127 of 3 for operation
+2026-03-22T08:15:50 [INFO ] [engine  ] Pipeline stage executed in 6524ms
+2026-03-22T08:15:52 [DEBUG] [network ] File scan completed: 6709 entries found
+2026-03-22T08:15:54 [INFO ] [pipeline] Checkpoint written at offset 1216
+2026-03-22T08:15:56 [DEBUG] [config  ] Retry attempt 5645 of 3 for operation
+2026-03-22T08:15:58 [WARN ] [network ] Worker thread 2982 started processing batch
+2026-03-22T08:16:00 [WARN ] [config  ] Retry attempt 908 of 3 for operation
+2026-03-22T08:16:02 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:16:04 [WARN ] [pipeline] Checkpoint written at offset 3695
+2026-03-22T08:16:06 [ERROR] [network ] Pipeline stage executed in 1293ms
+2026-03-22T08:16:08 [ERROR] [pipeline] Retry attempt 4497 of 3 for operation
+2026-03-22T08:16:10 [WARN ] [storage ] Pipeline stage executed in 8741ms
+2026-03-22T08:16:12 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:16:14 [WARN ] [pipeline] Worker thread 9915 started processing batch
+2026-03-22T08:16:16 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:16:18 [INFO ] [engine  ] Worker thread 4337 started processing batch
+2026-03-22T08:16:20 [WARN ] [network ] File scan completed: 497 entries found
+2026-03-22T08:16:22 [DEBUG] [storage ] Retry attempt 4746 of 3 for operation
+2026-03-22T08:16:24 [ERROR] [config  ] Configuration reloaded from disk
+2026-03-22T08:16:26 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:16:28 [WARN ] [config  ] File scan completed: 7934 entries found
+2026-03-22T08:16:30 [DEBUG] [pipeline] Checkpoint written at offset 9940
+2026-03-22T08:16:32 [WARN ] [cache   ] Checkpoint written at offset 5659
+2026-03-22T08:16:34 [DEBUG] [pipeline] Checkpoint written at offset 8438
+2026-03-22T08:16:36 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:16:38 [INFO ] [cache   ] Compression ratio: 4062.00x for blob
+2026-03-22T08:16:40 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:16:42 [DEBUG] [network ] File scan completed: 4068 entries found
+2026-03-22T08:16:44 [WARN ] [cache   ] Worker thread 5124 started processing batch
+2026-03-22T08:16:46 [WARN ] [pipeline] Compression ratio: 8434.00x for blob
+2026-03-22T08:16:48 [DEBUG] [config  ] Pipeline stage executed in 8149ms
+2026-03-22T08:16:50 [INFO ] [engine  ] File scan completed: 8282 entries found
+2026-03-22T08:16:52 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:16:54 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:16:56 [DEBUG] [network ] Compression ratio: 4682.00x for blob
+2026-03-22T08:16:58 [INFO ] [engine  ] File scan completed: 2195 entries found
+2026-03-22T08:17:00 [ERROR] [storage ] Checkpoint written at offset 6607
+2026-03-22T08:17:02 [ERROR] [engine  ] File scan completed: 839 entries found
+2026-03-22T08:17:04 [WARN ] [cache   ] Retry attempt 4729 of 3 for operation
+2026-03-22T08:17:06 [INFO ] [config  ] Retry attempt 7379 of 3 for operation
+2026-03-22T08:17:08 [ERROR] [network ] Worker thread 1947 started processing batch
+2026-03-22T08:17:10 [WARN ] [engine  ] File scan completed: 6115 entries found
+2026-03-22T08:17:12 [ERROR] [network ] Checkpoint written at offset 2364
+2026-03-22T08:17:14 [WARN ] [network ] Retry attempt 6577 of 3 for operation
+2026-03-22T08:17:16 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T08:17:18 [ERROR] [config  ] Retry attempt 7488 of 3 for operation
+2026-03-22T08:17:20 [WARN ] [network ] Retry attempt 2291 of 3 for operation
+2026-03-22T08:17:22 [ERROR] [network ] Checkpoint written at offset 2663
+2026-03-22T08:17:24 [DEBUG] [network ] Pipeline stage executed in 9728ms
+2026-03-22T08:17:26 [ERROR] [network ] Retry attempt 8722 of 3 for operation
+2026-03-22T08:17:28 [DEBUG] [storage ] Worker thread 4912 started processing batch
+2026-03-22T08:17:30 [DEBUG] [engine  ] Checkpoint written at offset 5428
+2026-03-22T08:17:32 [INFO ] [config  ] Worker thread 5041 started processing batch
+2026-03-22T08:17:34 [INFO ] [network ] Compression ratio: 4351.00x for blob
+2026-03-22T08:17:36 [WARN ] [storage ] Processing request completed successfully
+2026-03-22T08:17:38 [DEBUG] [pipeline] Retry attempt 6230 of 3 for operation
+2026-03-22T08:17:40 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T08:17:42 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T08:17:44 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:17:46 [WARN ] [config  ] Retry attempt 7727 of 3 for operation
+2026-03-22T08:17:48 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:17:50 [WARN ] [network ] Checkpoint written at offset 7838
+2026-03-22T08:17:52 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:17:54 [ERROR] [network ] Checkpoint written at offset 4332
+2026-03-22T08:17:56 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:17:58 [ERROR] [pipeline] Pipeline stage executed in 4736ms
+2026-03-22T08:18:00 [WARN ] [storage ] Compression ratio: 5195.00x for blob
+2026-03-22T08:18:02 [DEBUG] [cache   ] Retry attempt 4481 of 3 for operation
+2026-03-22T08:18:04 [ERROR] [engine  ] Worker thread 8900 started processing batch
+2026-03-22T08:18:06 [DEBUG] [config  ] Checkpoint written at offset 2400
+2026-03-22T08:18:08 [ERROR] [engine  ] Pipeline stage executed in 1295ms
+2026-03-22T08:18:10 [ERROR] [config  ] Pipeline stage executed in 7850ms
+2026-03-22T08:18:12 [WARN ] [pipeline] Retry attempt 4443 of 3 for operation
+2026-03-22T08:18:14 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:18:16 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:18:18 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T08:18:20 [INFO ] [config  ] Checkpoint written at offset 7740
+2026-03-22T08:18:22 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:18:24 [WARN ] [config  ] Compression ratio: 7823.00x for blob
+2026-03-22T08:18:26 [WARN ] [cache   ] Checkpoint written at offset 4677
+2026-03-22T08:18:28 [INFO ] [engine  ] Worker thread 3805 started processing batch
+2026-03-22T08:18:30 [INFO ] [pipeline] File scan completed: 2881 entries found
+2026-03-22T08:18:32 [INFO ] [config  ] Compression ratio: 3053.00x for blob
+2026-03-22T08:18:34 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:18:36 [INFO ] [cache   ] Pipeline stage executed in 7445ms
+2026-03-22T08:18:38 [DEBUG] [pipeline] Retry attempt 7669 of 3 for operation
+2026-03-22T08:18:40 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:18:42 [WARN ] [storage ] Compression ratio: 4216.00x for blob
+2026-03-22T08:18:44 [WARN ] [engine  ] Checkpoint written at offset 4834
+2026-03-22T08:18:46 [WARN ] [pipeline] Worker thread 6644 started processing batch
+2026-03-22T08:18:48 [DEBUG] [network ] Checkpoint written at offset 1422
+2026-03-22T08:18:50 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:18:52 [WARN ] [config  ] Checkpoint written at offset 4065
+2026-03-22T08:18:54 [INFO ] [cache   ] File scan completed: 3859 entries found
+2026-03-22T08:18:56 [DEBUG] [cache   ] Checkpoint written at offset 4948
+2026-03-22T08:18:58 [INFO ] [cache   ] Checkpoint written at offset 3872
+2026-03-22T08:19:00 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:19:02 [ERROR] [pipeline] File scan completed: 8234 entries found
+2026-03-22T08:19:04 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:19:06 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:19:08 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:19:10 [ERROR] [config  ] Retry attempt 7715 of 3 for operation
+2026-03-22T08:19:12 [WARN ] [pipeline] Worker thread 1342 started processing batch
+2026-03-22T08:19:14 [DEBUG] [network ] Checkpoint written at offset 1280
+2026-03-22T08:19:16 [INFO ] [engine  ] Retry attempt 8282 of 3 for operation
+2026-03-22T08:19:18 [WARN ] [network ] Retry attempt 2456 of 3 for operation
+2026-03-22T08:19:20 [WARN ] [cache   ] Retry attempt 7240 of 3 for operation
+2026-03-22T08:19:22 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:19:24 [DEBUG] [engine  ] Retry attempt 7299 of 3 for operation
+2026-03-22T08:19:26 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:19:28 [DEBUG] [config  ] Worker thread 946 started processing batch
+2026-03-22T08:19:30 [DEBUG] [storage ] Pipeline stage executed in 357ms
+2026-03-22T08:19:32 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:19:34 [INFO ] [engine  ] File scan completed: 5645 entries found
+2026-03-22T08:19:36 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:19:38 [DEBUG] [engine  ] Pipeline stage executed in 6699ms
+2026-03-22T08:19:40 [WARN ] [pipeline] File scan completed: 6136 entries found
+2026-03-22T08:19:42 [DEBUG] [config  ] File scan completed: 6155 entries found
+2026-03-22T08:19:44 [INFO ] [storage ] Retry attempt 2179 of 3 for operation
+2026-03-22T08:19:46 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:19:48 [DEBUG] [network ] Connection established to remote host
+2026-03-22T08:19:50 [INFO ] [engine  ] Pipeline stage executed in 7586ms
+2026-03-22T08:19:52 [DEBUG] [network ] File scan completed: 3763 entries found
+2026-03-22T08:19:54 [WARN ] [config  ] Checkpoint written at offset 2542
+2026-03-22T08:19:56 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:19:58 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:20:00 [WARN ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:20:02 [INFO ] [config  ] Worker thread 798 started processing batch
+2026-03-22T08:20:04 [WARN ] [storage ] Processing request completed successfully
+2026-03-22T08:20:06 [DEBUG] [pipeline] Retry attempt 3560 of 3 for operation
+2026-03-22T08:20:08 [INFO ] [pipeline] Retry attempt 4740 of 3 for operation
+2026-03-22T08:20:10 [WARN ] [storage ] Worker thread 5225 started processing batch
+2026-03-22T08:20:12 [ERROR] [pipeline] Pipeline stage executed in 2348ms
+2026-03-22T08:20:14 [WARN ] [config  ] Pipeline stage executed in 4509ms
+2026-03-22T08:20:16 [INFO ] [network ] Worker thread 2870 started processing batch
+2026-03-22T08:20:18 [DEBUG] [network ] Compression ratio: 769.00x for blob
+2026-03-22T08:20:20 [ERROR] [storage ] File scan completed: 8593 entries found
+2026-03-22T08:20:22 [ERROR] [storage ] File scan completed: 6689 entries found
+2026-03-22T08:20:24 [WARN ] [cache   ] File scan completed: 3013 entries found
+2026-03-22T08:20:26 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:20:28 [WARN ] [config  ] Processing request completed successfully
+2026-03-22T08:20:30 [DEBUG] [config  ] Retry attempt 8684 of 3 for operation
+2026-03-22T08:20:32 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:20:34 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:20:36 [ERROR] [engine  ] Retry attempt 3121 of 3 for operation
+2026-03-22T08:20:38 [INFO ] [cache   ] File scan completed: 9912 entries found
+2026-03-22T08:20:40 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:20:42 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:20:44 [ERROR] [engine  ] Configuration reloaded from disk
+2026-03-22T08:20:46 [INFO ] [storage ] Compression ratio: 3975.00x for blob
+2026-03-22T08:20:48 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:20:50 [ERROR] [cache   ] File scan completed: 7640 entries found
+2026-03-22T08:20:52 [ERROR] [cache   ] Pipeline stage executed in 5893ms
+2026-03-22T08:20:54 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:20:56 [ERROR] [pipeline] Checkpoint written at offset 5127
+2026-03-22T08:20:58 [DEBUG] [engine  ] Worker thread 3626 started processing batch
+2026-03-22T08:21:00 [WARN ] [engine  ] Pipeline stage executed in 9066ms
+2026-03-22T08:21:02 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:21:04 [ERROR] [pipeline] File scan completed: 9336 entries found
+2026-03-22T08:21:06 [WARN ] [config  ] Retry attempt 5531 of 3 for operation
+2026-03-22T08:21:08 [ERROR] [config  ] Compression ratio: 7551.00x for blob
+2026-03-22T08:21:10 [WARN ] [storage ] Checkpoint written at offset 2774
+2026-03-22T08:21:12 [WARN ] [storage ] Retry attempt 8001 of 3 for operation
+2026-03-22T08:21:14 [WARN ] [network ] Processing request completed successfully
+2026-03-22T08:21:16 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T08:21:18 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:21:20 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:21:22 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:21:24 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:21:26 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:21:28 [ERROR] [network ] Pipeline stage executed in 281ms
+2026-03-22T08:21:30 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:21:32 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:21:34 [ERROR] [cache   ] Pipeline stage executed in 6503ms
+2026-03-22T08:21:36 [INFO ] [cache   ] File scan completed: 7521 entries found
+2026-03-22T08:21:38 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T08:21:40 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:21:42 [DEBUG] [config  ] File scan completed: 9056 entries found
+2026-03-22T08:21:44 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:21:46 [INFO ] [config  ] File scan completed: 5428 entries found
+2026-03-22T08:21:48 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:21:50 [WARN ] [storage ] Worker thread 7791 started processing batch
+2026-03-22T08:21:52 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:21:54 [INFO ] [pipeline] Checkpoint written at offset 257
+2026-03-22T08:21:56 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:21:58 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:22:00 [WARN ] [network ] File scan completed: 8857 entries found
+2026-03-22T08:22:02 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:22:04 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:22:06 [WARN ] [engine  ] Checkpoint written at offset 9916
+2026-03-22T08:22:08 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:22:10 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T08:22:12 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:22:14 [DEBUG] [engine  ] Worker thread 4840 started processing batch
+2026-03-22T08:22:16 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:22:18 [ERROR] [pipeline] File scan completed: 2528 entries found
+2026-03-22T08:22:20 [DEBUG] [cache   ] Checkpoint written at offset 1746
+2026-03-22T08:22:22 [INFO ] [engine  ] Pipeline stage executed in 7287ms
+2026-03-22T08:22:24 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:22:26 [INFO ] [pipeline] File scan completed: 7354 entries found
+2026-03-22T08:22:28 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:22:30 [ERROR] [network ] Cache miss for key, fetching from source
+2026-03-22T08:22:32 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T08:22:34 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:22:36 [WARN ] [network ] Retry attempt 2779 of 3 for operation
+2026-03-22T08:22:38 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:22:40 [ERROR] [cache   ] Compression ratio: 2391.00x for blob
+2026-03-22T08:22:42 [INFO ] [pipeline] File scan completed: 4522 entries found
+2026-03-22T08:22:44 [DEBUG] [cache   ] Compression ratio: 1261.00x for blob
+2026-03-22T08:22:46 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T08:22:48 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:22:50 [ERROR] [engine  ] File scan completed: 5444 entries found
+2026-03-22T08:22:52 [DEBUG] [cache   ] Compression ratio: 5485.00x for blob
+2026-03-22T08:22:54 [DEBUG] [storage ] Worker thread 2231 started processing batch
+2026-03-22T08:22:56 [ERROR] [cache   ] Worker thread 3291 started processing batch
+2026-03-22T08:22:58 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:23:00 [ERROR] [cache   ] Compression ratio: 9436.00x for blob
+2026-03-22T08:23:02 [WARN ] [cache   ] File scan completed: 4593 entries found
+2026-03-22T08:23:04 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:23:06 [WARN ] [network ] Retry attempt 2948 of 3 for operation
+2026-03-22T08:23:08 [INFO ] [storage ] Compression ratio: 3435.00x for blob
+2026-03-22T08:23:10 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:23:12 [DEBUG] [pipeline] Pipeline stage executed in 3966ms
+2026-03-22T08:23:14 [ERROR] [storage ] Connection established to remote host
+2026-03-22T08:23:16 [DEBUG] [engine  ] Compression ratio: 9797.00x for blob
+2026-03-22T08:23:18 [DEBUG] [network ] File scan completed: 8756 entries found
+2026-03-22T08:23:20 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:23:22 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:23:24 [WARN ] [storage ] Worker thread 726 started processing batch
+2026-03-22T08:23:26 [DEBUG] [cache   ] File scan completed: 1736 entries found
+2026-03-22T08:23:28 [INFO ] [engine  ] Pipeline stage executed in 3638ms
+2026-03-22T08:23:30 [WARN ] [config  ] Checkpoint written at offset 6409
+2026-03-22T08:23:32 [DEBUG] [storage ] Worker thread 8200 started processing batch
+2026-03-22T08:23:34 [WARN ] [cache   ] Processing request completed successfully
+2026-03-22T08:23:36 [INFO ] [cache   ] File scan completed: 1407 entries found
+2026-03-22T08:23:38 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:23:40 [ERROR] [cache   ] Compression ratio: 3390.00x for blob
+2026-03-22T08:23:42 [DEBUG] [cache   ] Compression ratio: 1600.00x for blob
+2026-03-22T08:23:44 [DEBUG] [storage ] Compression ratio: 5226.00x for blob
+2026-03-22T08:23:46 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:23:48 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:23:50 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:23:52 [WARN ] [cache   ] Retry attempt 6986 of 3 for operation
+2026-03-22T08:23:54 [DEBUG] [pipeline] File scan completed: 3023 entries found
+2026-03-22T08:23:56 [WARN ] [storage ] File scan completed: 6482 entries found
+2026-03-22T08:23:58 [INFO ] [storage ] Worker thread 3233 started processing batch
+2026-03-22T08:24:00 [DEBUG] [network ] File scan completed: 6371 entries found
+2026-03-22T08:24:02 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:24:04 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:24:06 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:24:08 [ERROR] [pipeline] Compression ratio: 1868.00x for blob
+2026-03-22T08:24:10 [ERROR] [storage ] Compression ratio: 8647.00x for blob
+2026-03-22T08:24:12 [ERROR] [network ] File scan completed: 6432 entries found
+2026-03-22T08:24:14 [INFO ] [cache   ] Checkpoint written at offset 7502
+2026-03-22T08:24:16 [WARN ] [storage ] Pipeline stage executed in 9670ms
+2026-03-22T08:24:18 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:24:20 [INFO ] [pipeline] Pipeline stage executed in 1917ms
+2026-03-22T08:24:22 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:24:24 [DEBUG] [config  ] Worker thread 2259 started processing batch
+2026-03-22T08:24:26 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:24:28 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:24:30 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:24:32 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:24:34 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:24:36 [DEBUG] [network ] Retry attempt 8110 of 3 for operation
+2026-03-22T08:24:38 [DEBUG] [storage ] Compression ratio: 6810.00x for blob
+2026-03-22T08:24:40 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:24:42 [INFO ] [pipeline] Pipeline stage executed in 536ms
+2026-03-22T08:24:44 [ERROR] [pipeline] Retry attempt 4730 of 3 for operation
+2026-03-22T08:24:46 [WARN ] [config  ] Worker thread 8116 started processing batch
+2026-03-22T08:24:48 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:24:50 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:24:52 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:24:54 [ERROR] [engine  ] Compression ratio: 4306.00x for blob
+2026-03-22T08:24:56 [ERROR] [engine  ] Compression ratio: 1924.00x for blob
+2026-03-22T08:24:58 [WARN ] [pipeline] Worker thread 5745 started processing batch
+2026-03-22T08:25:00 [DEBUG] [pipeline] Worker thread 2282 started processing batch
+2026-03-22T08:25:02 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:25:04 [ERROR] [network ] Pipeline stage executed in 9779ms
+2026-03-22T08:25:06 [WARN ] [cache   ] Pipeline stage executed in 4741ms
+2026-03-22T08:25:08 [ERROR] [network ] Cache miss for key, fetching from source
+2026-03-22T08:25:10 [DEBUG] [engine  ] Pipeline stage executed in 2079ms
+2026-03-22T08:25:12 [WARN ] [pipeline] Connection established to remote host
+2026-03-22T08:25:14 [WARN ] [storage ] File scan completed: 8020 entries found
+2026-03-22T08:25:16 [WARN ] [network ] Pipeline stage executed in 6787ms
+2026-03-22T08:25:18 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:25:20 [DEBUG] [network ] Pipeline stage executed in 6047ms
+2026-03-22T08:25:22 [DEBUG] [config  ] Checkpoint written at offset 9535
+2026-03-22T08:25:24 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:25:26 [ERROR] [engine  ] Retry attempt 6517 of 3 for operation
+2026-03-22T08:25:28 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:25:30 [ERROR] [cache   ] Pipeline stage executed in 5534ms
+2026-03-22T08:25:32 [WARN ] [network ] Compression ratio: 5632.00x for blob
+2026-03-22T08:25:34 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:25:36 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:25:38 [DEBUG] [engine  ] File scan completed: 3315 entries found
+2026-03-22T08:25:40 [WARN ] [storage ] Pipeline stage executed in 2605ms
+2026-03-22T08:25:42 [ERROR] [engine  ] Checkpoint written at offset 4103
+2026-03-22T08:25:44 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:25:46 [DEBUG] [storage ] Pipeline stage executed in 3837ms
+2026-03-22T08:25:48 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:25:50 [INFO ] [pipeline] Compression ratio: 1277.00x for blob
+2026-03-22T08:25:52 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:25:54 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:25:56 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:25:58 [INFO ] [pipeline] File scan completed: 1464 entries found
+2026-03-22T08:26:00 [INFO ] [engine  ] Checkpoint written at offset 6023
+2026-03-22T08:26:02 [ERROR] [pipeline] File scan completed: 2182 entries found
+2026-03-22T08:26:04 [WARN ] [engine  ] Retry attempt 9229 of 3 for operation
+2026-03-22T08:26:06 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:26:08 [ERROR] [storage ] Configuration reloaded from disk
+2026-03-22T08:26:10 [DEBUG] [network ] Compression ratio: 3560.00x for blob
+2026-03-22T08:26:12 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:26:14 [DEBUG] [cache   ] File scan completed: 5153 entries found
+2026-03-22T08:26:16 [WARN ] [pipeline] Pipeline stage executed in 1381ms
+2026-03-22T08:26:18 [WARN ] [network ] Worker thread 9831 started processing batch
+2026-03-22T08:26:20 [ERROR] [storage ] Processing request completed successfully
+2026-03-22T08:26:22 [WARN ] [network ] Worker thread 8349 started processing batch
+2026-03-22T08:26:24 [WARN ] [storage ] File scan completed: 4843 entries found
+2026-03-22T08:26:26 [INFO ] [pipeline] Compression ratio: 6323.00x for blob
+2026-03-22T08:26:28 [INFO ] [pipeline] Compression ratio: 9731.00x for blob
+2026-03-22T08:26:30 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:26:32 [ERROR] [pipeline] File scan completed: 9313 entries found
+2026-03-22T08:26:34 [DEBUG] [cache   ] Retry attempt 2831 of 3 for operation
+2026-03-22T08:26:36 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:26:38 [INFO ] [engine  ] Pipeline stage executed in 3535ms
+2026-03-22T08:26:40 [INFO ] [engine  ] File scan completed: 8301 entries found
+2026-03-22T08:26:42 [ERROR] [storage ] Retry attempt 6807 of 3 for operation
+2026-03-22T08:26:44 [DEBUG] [storage ] File scan completed: 1351 entries found
+2026-03-22T08:26:46 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:26:48 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:26:50 [ERROR] [config  ] Worker thread 1084 started processing batch
+2026-03-22T08:26:52 [ERROR] [storage ] File scan completed: 3910 entries found
+2026-03-22T08:26:54 [INFO ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:26:56 [INFO ] [config  ] Worker thread 9976 started processing batch
+2026-03-22T08:26:58 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:27:00 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:27:02 [WARN ] [config  ] Checkpoint written at offset 8569
+2026-03-22T08:27:04 [ERROR] [pipeline] Checkpoint written at offset 2080
+2026-03-22T08:27:06 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:27:08 [ERROR] [config  ] Pipeline stage executed in 8583ms
+2026-03-22T08:27:10 [INFO ] [cache   ] Worker thread 1263 started processing batch
+2026-03-22T08:27:12 [DEBUG] [config  ] Retry attempt 5901 of 3 for operation
+2026-03-22T08:27:14 [INFO ] [config  ] Worker thread 2735 started processing batch
+2026-03-22T08:27:16 [ERROR] [pipeline] Pipeline stage executed in 1686ms
+2026-03-22T08:27:18 [INFO ] [pipeline] Retry attempt 43 of 3 for operation
+2026-03-22T08:27:20 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:27:22 [DEBUG] [cache   ] File scan completed: 2459 entries found
+2026-03-22T08:27:24 [WARN ] [engine  ] Retry attempt 6871 of 3 for operation
+2026-03-22T08:27:26 [WARN ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:27:28 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:27:30 [ERROR] [engine  ] Retry attempt 863 of 3 for operation
+2026-03-22T08:27:32 [WARN ] [pipeline] Retry attempt 753 of 3 for operation
+2026-03-22T08:27:34 [DEBUG] [engine  ] Compression ratio: 4626.00x for blob
+2026-03-22T08:27:36 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:27:38 [DEBUG] [engine  ] Checkpoint written at offset 3288
+2026-03-22T08:27:40 [ERROR] [network ] Pipeline stage executed in 3975ms
+2026-03-22T08:27:42 [DEBUG] [cache   ] Worker thread 8084 started processing batch
+2026-03-22T08:27:44 [WARN ] [storage ] Retry attempt 4017 of 3 for operation
+2026-03-22T08:27:46 [WARN ] [engine  ] File scan completed: 392 entries found
+2026-03-22T08:27:48 [WARN ] [network ] Checkpoint written at offset 158
+2026-03-22T08:27:50 [ERROR] [engine  ] File scan completed: 5039 entries found
+2026-03-22T08:27:52 [INFO ] [pipeline] Retry attempt 3903 of 3 for operation
+2026-03-22T08:27:54 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:27:56 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:27:58 [DEBUG] [storage ] Checkpoint written at offset 7512
+2026-03-22T08:28:00 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:28:02 [WARN ] [storage ] File scan completed: 1227 entries found
+2026-03-22T08:28:04 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:28:06 [ERROR] [cache   ] Checkpoint written at offset 6439
+2026-03-22T08:28:08 [ERROR] [cache   ] Compression ratio: 4456.00x for blob
+2026-03-22T08:28:10 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:28:12 [INFO ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:28:14 [DEBUG] [config  ] Checkpoint written at offset 6661
+2026-03-22T08:28:16 [INFO ] [network ] Checkpoint written at offset 3402
+2026-03-22T08:28:18 [DEBUG] [cache   ] Compression ratio: 4342.00x for blob
+2026-03-22T08:28:20 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:28:22 [INFO ] [pipeline] Checkpoint written at offset 2431
+2026-03-22T08:28:24 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:28:26 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:28:28 [ERROR] [pipeline] Processing request completed successfully
+2026-03-22T08:28:30 [DEBUG] [network ] Retry attempt 4094 of 3 for operation
+2026-03-22T08:28:32 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:28:34 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T08:28:36 [WARN ] [pipeline] File scan completed: 6099 entries found
+2026-03-22T08:28:38 [INFO ] [network ] Worker thread 4241 started processing batch
+2026-03-22T08:28:40 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:28:42 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:28:44 [INFO ] [engine  ] Compression ratio: 830.00x for blob
+2026-03-22T08:28:46 [WARN ] [network ] File scan completed: 6472 entries found
+2026-03-22T08:28:48 [DEBUG] [engine  ] File scan completed: 6991 entries found
+2026-03-22T08:28:50 [WARN ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:28:52 [ERROR] [cache   ] Compression ratio: 2436.00x for blob
+2026-03-22T08:28:54 [INFO ] [network ] Worker thread 4027 started processing batch
+2026-03-22T08:28:56 [ERROR] [config  ] File scan completed: 9023 entries found
+2026-03-22T08:28:58 [DEBUG] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:29:00 [DEBUG] [pipeline] File scan completed: 3268 entries found
+2026-03-22T08:29:02 [WARN ] [storage ] Retry attempt 320 of 3 for operation
+2026-03-22T08:29:04 [DEBUG] [storage ] Checkpoint written at offset 7860
+2026-03-22T08:29:06 [DEBUG] [cache   ] Worker thread 8232 started processing batch
+2026-03-22T08:29:08 [ERROR] [config  ] Pipeline stage executed in 2947ms
+2026-03-22T08:29:10 [INFO ] [cache   ] Worker thread 3589 started processing batch
+2026-03-22T08:29:12 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:29:14 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:29:16 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:29:18 [INFO ] [pipeline] Worker thread 6364 started processing batch
+2026-03-22T08:29:20 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:29:22 [ERROR] [storage ] Checkpoint written at offset 9693
+2026-03-22T08:29:24 [INFO ] [storage ] Checkpoint written at offset 9301
+2026-03-22T08:29:26 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:29:28 [ERROR] [pipeline] Compression ratio: 622.00x for blob
+2026-03-22T08:29:30 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:29:32 [WARN ] [engine  ] Retry attempt 7832 of 3 for operation
+2026-03-22T08:29:34 [INFO ] [cache   ] Worker thread 3301 started processing batch
+2026-03-22T08:29:36 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:29:38 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:29:40 [WARN ] [engine  ] Retry attempt 5979 of 3 for operation
+2026-03-22T08:29:42 [INFO ] [cache   ] File scan completed: 9602 entries found
+2026-03-22T08:29:44 [INFO ] [cache   ] Pipeline stage executed in 5286ms
+2026-03-22T08:29:46 [WARN ] [pipeline] File scan completed: 7983 entries found
+2026-03-22T08:29:48 [ERROR] [pipeline] Retry attempt 5847 of 3 for operation
+2026-03-22T08:29:50 [WARN ] [storage ] Worker thread 2873 started processing batch
+2026-03-22T08:29:52 [DEBUG] [cache   ] Pipeline stage executed in 2087ms
+2026-03-22T08:29:54 [WARN ] [storage ] Processing request completed successfully
+2026-03-22T08:29:56 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:29:58 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:30:00 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:30:02 [INFO ] [pipeline] Checkpoint written at offset 5235
+2026-03-22T08:30:04 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:30:06 [DEBUG] [engine  ] Pipeline stage executed in 3436ms
+2026-03-22T08:30:08 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:30:10 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:30:12 [DEBUG] [config  ] File scan completed: 2726 entries found
+2026-03-22T08:30:14 [DEBUG] [config  ] File scan completed: 5755 entries found
+2026-03-22T08:30:16 [DEBUG] [engine  ] Compression ratio: 9471.00x for blob
+2026-03-22T08:30:18 [WARN ] [pipeline] Compression ratio: 1208.00x for blob
+2026-03-22T08:30:20 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:30:22 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:30:24 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:30:26 [INFO ] [cache   ] Worker thread 7910 started processing batch
+2026-03-22T08:30:28 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:30:30 [DEBUG] [pipeline] Processing request completed successfully
+2026-03-22T08:30:32 [ERROR] [pipeline] Configuration reloaded from disk
+2026-03-22T08:30:34 [ERROR] [storage ] Pipeline stage executed in 4873ms
+2026-03-22T08:30:36 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:30:38 [DEBUG] [pipeline] Processing request completed successfully
+2026-03-22T08:30:40 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:30:42 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:30:44 [WARN ] [pipeline] Pipeline stage executed in 1343ms
+2026-03-22T08:30:46 [DEBUG] [engine  ] Pipeline stage executed in 6513ms
+2026-03-22T08:30:48 [DEBUG] [config  ] Pipeline stage executed in 1494ms
+2026-03-22T08:30:50 [DEBUG] [pipeline] Checkpoint written at offset 6250
+2026-03-22T08:30:52 [ERROR] [pipeline] Compression ratio: 732.00x for blob
+2026-03-22T08:30:54 [ERROR] [config  ] Compression ratio: 4316.00x for blob
+2026-03-22T08:30:56 [WARN ] [cache   ] Worker thread 1010 started processing batch
+2026-03-22T08:30:58 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:31:00 [ERROR] [network ] File scan completed: 9663 entries found
+2026-03-22T08:31:02 [WARN ] [network ] Processing request completed successfully
+2026-03-22T08:31:04 [DEBUG] [network ] Compression ratio: 9384.00x for blob
+2026-03-22T08:31:06 [WARN ] [config  ] Pipeline stage executed in 1294ms
+2026-03-22T08:31:08 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T08:31:10 [WARN ] [engine  ] Compression ratio: 2833.00x for blob
+2026-03-22T08:31:12 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:31:14 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:31:16 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:31:18 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:31:20 [DEBUG] [network ] File scan completed: 9045 entries found
+2026-03-22T08:31:22 [ERROR] [cache   ] Retry attempt 7507 of 3 for operation
+2026-03-22T08:31:24 [INFO ] [storage ] Worker thread 9627 started processing batch
+2026-03-22T08:31:26 [DEBUG] [engine  ] File scan completed: 2452 entries found
+2026-03-22T08:31:28 [WARN ] [network ] Worker thread 9547 started processing batch
+2026-03-22T08:31:30 [INFO ] [engine  ] Worker thread 1655 started processing batch
+2026-03-22T08:31:32 [ERROR] [network ] Checkpoint written at offset 6733
+2026-03-22T08:31:34 [ERROR] [config  ] Compression ratio: 9373.00x for blob
+2026-03-22T08:31:36 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:31:38 [DEBUG] [pipeline] Worker thread 9973 started processing batch
+2026-03-22T08:31:40 [DEBUG] [engine  ] File scan completed: 5432 entries found
+2026-03-22T08:31:42 [WARN ] [engine  ] Compression ratio: 4401.00x for blob
+2026-03-22T08:31:44 [ERROR] [engine  ] Checkpoint written at offset 4966
+2026-03-22T08:31:46 [ERROR] [cache   ] Compression ratio: 1610.00x for blob
+2026-03-22T08:31:48 [WARN ] [pipeline] Pipeline stage executed in 7260ms
+2026-03-22T08:31:50 [ERROR] [cache   ] File scan completed: 9912 entries found
+2026-03-22T08:31:52 [INFO ] [pipeline] Compression ratio: 3464.00x for blob
+2026-03-22T08:31:54 [DEBUG] [storage ] Compression ratio: 8463.00x for blob
+2026-03-22T08:31:56 [ERROR] [engine  ] Retry attempt 2605 of 3 for operation
+2026-03-22T08:31:58 [INFO ] [cache   ] Retry attempt 6610 of 3 for operation
+2026-03-22T08:32:00 [WARN ] [network ] Worker thread 475 started processing batch
+2026-03-22T08:32:02 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:32:04 [WARN ] [engine  ] Compression ratio: 829.00x for blob
+2026-03-22T08:32:06 [ERROR] [storage ] Configuration reloaded from disk
+2026-03-22T08:32:08 [ERROR] [config  ] Retry attempt 6504 of 3 for operation
+2026-03-22T08:32:10 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:32:12 [ERROR] [config  ] Worker thread 7309 started processing batch
+2026-03-22T08:32:14 [WARN ] [config  ] Worker thread 9034 started processing batch
+2026-03-22T08:32:16 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:32:18 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:32:20 [INFO ] [pipeline] Worker thread 3512 started processing batch
+2026-03-22T08:32:22 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T08:32:24 [ERROR] [storage ] File scan completed: 8410 entries found
+2026-03-22T08:32:26 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:32:28 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:32:30 [INFO ] [pipeline] Pipeline stage executed in 9968ms
+2026-03-22T08:32:32 [ERROR] [storage ] Pipeline stage executed in 6944ms
+2026-03-22T08:32:34 [DEBUG] [cache   ] Compression ratio: 4129.00x for blob
+2026-03-22T08:32:36 [WARN ] [config  ] Pipeline stage executed in 8531ms
+2026-03-22T08:32:38 [DEBUG] [network ] Cache miss for key, fetching from source
+2026-03-22T08:32:40 [ERROR] [network ] Worker thread 9979 started processing batch
+2026-03-22T08:32:42 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:32:44 [INFO ] [cache   ] Pipeline stage executed in 5328ms
+2026-03-22T08:32:46 [ERROR] [cache   ] Pipeline stage executed in 3087ms
+2026-03-22T08:32:48 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:32:50 [DEBUG] [storage ] Checkpoint written at offset 2293
+2026-03-22T08:32:52 [INFO ] [storage ] Compression ratio: 4844.00x for blob
+2026-03-22T08:32:54 [ERROR] [config  ] File scan completed: 6362 entries found
+2026-03-22T08:32:56 [INFO ] [network ] Worker thread 3112 started processing batch
+2026-03-22T08:32:58 [ERROR] [storage ] Configuration reloaded from disk
+2026-03-22T08:33:00 [DEBUG] [storage ] Checkpoint written at offset 8312
+2026-03-22T08:33:02 [ERROR] [pipeline] Retry attempt 2968 of 3 for operation
+2026-03-22T08:33:04 [ERROR] [engine  ] Compression ratio: 2097.00x for blob
+2026-03-22T08:33:06 [ERROR] [storage ] Retry attempt 3000 of 3 for operation
+2026-03-22T08:33:08 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:33:10 [ERROR] [pipeline] Pipeline stage executed in 6890ms
+2026-03-22T08:33:12 [ERROR] [cache   ] Pipeline stage executed in 9594ms
+2026-03-22T08:33:14 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:33:16 [INFO ] [storage ] Worker thread 9508 started processing batch
+2026-03-22T08:33:18 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:33:20 [INFO ] [storage ] File scan completed: 8681 entries found
+2026-03-22T08:33:22 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T08:33:24 [WARN ] [pipeline] Checkpoint written at offset 6705
+2026-03-22T08:33:26 [DEBUG] [pipeline] Checkpoint written at offset 2955
+2026-03-22T08:33:28 [INFO ] [config  ] Checkpoint written at offset 2898
+2026-03-22T08:33:30 [ERROR] [storage ] Processing request completed successfully
+2026-03-22T08:33:32 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:33:34 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:33:36 [DEBUG] [storage ] File scan completed: 6610 entries found
+2026-03-22T08:33:38 [DEBUG] [config  ] File scan completed: 77 entries found
+2026-03-22T08:33:40 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:33:42 [INFO ] [cache   ] Retry attempt 3123 of 3 for operation
+2026-03-22T08:33:44 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:33:46 [WARN ] [storage ] Checkpoint written at offset 5114
+2026-03-22T08:33:48 [WARN ] [engine  ] File scan completed: 8247 entries found
+2026-03-22T08:33:50 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:33:52 [ERROR] [cache   ] Compression ratio: 8525.00x for blob
+2026-03-22T08:33:54 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:33:56 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:33:58 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T08:34:00 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:34:02 [WARN ] [engine  ] Checkpoint written at offset 613
+2026-03-22T08:34:04 [DEBUG] [storage ] Pipeline stage executed in 8762ms
+2026-03-22T08:34:06 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:34:08 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:34:10 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:34:12 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:34:14 [INFO ] [cache   ] File scan completed: 1655 entries found
+2026-03-22T08:34:16 [ERROR] [network ] Worker thread 2248 started processing batch
+2026-03-22T08:34:18 [DEBUG] [engine  ] Retry attempt 1929 of 3 for operation
+2026-03-22T08:34:20 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:34:22 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:34:24 [WARN ] [cache   ] File scan completed: 4840 entries found
+2026-03-22T08:34:26 [WARN ] [engine  ] Retry attempt 8133 of 3 for operation
+2026-03-22T08:34:28 [WARN ] [storage ] Compression ratio: 5417.00x for blob
+2026-03-22T08:34:30 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:34:32 [INFO ] [network ] Compression ratio: 2444.00x for blob
+2026-03-22T08:34:34 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:34:36 [ERROR] [storage ] Configuration reloaded from disk
+2026-03-22T08:34:38 [ERROR] [cache   ] Compression ratio: 821.00x for blob
+2026-03-22T08:34:40 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T08:34:42 [ERROR] [storage ] Checkpoint written at offset 6980
+2026-03-22T08:34:44 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T08:34:46 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:34:48 [ERROR] [config  ] Worker thread 4396 started processing batch
+2026-03-22T08:34:50 [INFO ] [cache   ] Checkpoint written at offset 2997
+2026-03-22T08:34:52 [INFO ] [config  ] File scan completed: 7480 entries found
+2026-03-22T08:34:54 [ERROR] [config  ] Compression ratio: 6910.00x for blob
+2026-03-22T08:34:56 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:34:58 [WARN ] [engine  ] File scan completed: 9679 entries found
+2026-03-22T08:35:00 [DEBUG] [network ] Compression ratio: 2970.00x for blob
+2026-03-22T08:35:02 [DEBUG] [cache   ] Worker thread 473 started processing batch
+2026-03-22T08:35:04 [WARN ] [config  ] Compression ratio: 1851.00x for blob
+2026-03-22T08:35:06 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:35:08 [ERROR] [storage ] Checkpoint written at offset 203
+2026-03-22T08:35:10 [WARN ] [storage ] Checkpoint written at offset 8505
+2026-03-22T08:35:12 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:35:14 [ERROR] [storage ] File scan completed: 2436 entries found
+2026-03-22T08:35:16 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:35:18 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:35:20 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:35:22 [ERROR] [engine  ] Retry attempt 3649 of 3 for operation
+2026-03-22T08:35:24 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T08:35:26 [DEBUG] [config  ] Worker thread 7342 started processing batch
+2026-03-22T08:35:28 [INFO ] [config  ] Compression ratio: 5179.00x for blob
+2026-03-22T08:35:30 [INFO ] [config  ] Processing request completed successfully
+2026-03-22T08:35:32 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:35:34 [INFO ] [engine  ] Worker thread 4991 started processing batch
+2026-03-22T08:35:36 [WARN ] [storage ] Compression ratio: 5585.00x for blob
+2026-03-22T08:35:38 [ERROR] [engine  ] Configuration reloaded from disk
+2026-03-22T08:35:40 [ERROR] [network ] Worker thread 9830 started processing batch
+2026-03-22T08:35:42 [DEBUG] [storage ] Checkpoint written at offset 7415
+2026-03-22T08:35:44 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:35:46 [ERROR] [cache   ] Pipeline stage executed in 8974ms
+2026-03-22T08:35:48 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:35:50 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:35:52 [INFO ] [cache   ] Worker thread 3210 started processing batch
+2026-03-22T08:35:54 [WARN ] [engine  ] File scan completed: 3533 entries found
+2026-03-22T08:35:56 [DEBUG] [pipeline] Checkpoint written at offset 1766
+2026-03-22T08:35:58 [DEBUG] [engine  ] Worker thread 2019 started processing batch
+2026-03-22T08:36:00 [DEBUG] [config  ] Worker thread 8261 started processing batch
+2026-03-22T08:36:02 [WARN ] [config  ] Processing request completed successfully
+2026-03-22T08:36:04 [INFO ] [network ] File scan completed: 9587 entries found
+2026-03-22T08:36:06 [DEBUG] [network ] Connection established to remote host
+2026-03-22T08:36:08 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:36:10 [DEBUG] [storage ] Worker thread 9932 started processing batch
+2026-03-22T08:36:12 [ERROR] [network ] File scan completed: 6860 entries found
+2026-03-22T08:36:14 [WARN ] [cache   ] File scan completed: 5618 entries found
+2026-03-22T08:36:16 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:36:18 [DEBUG] [network ] Retry attempt 4898 of 3 for operation
+2026-03-22T08:36:20 [ERROR] [storage ] Retry attempt 3561 of 3 for operation
+2026-03-22T08:36:22 [WARN ] [pipeline] Worker thread 4761 started processing batch
+2026-03-22T08:36:24 [ERROR] [storage ] Connection established to remote host
+2026-03-22T08:36:26 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:36:28 [DEBUG] [network ] Worker thread 6840 started processing batch
+2026-03-22T08:36:30 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T08:36:32 [INFO ] [engine  ] File scan completed: 2382 entries found
+2026-03-22T08:36:34 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:36:36 [ERROR] [pipeline] Pipeline stage executed in 4106ms
+2026-03-22T08:36:38 [WARN ] [engine  ] Pipeline stage executed in 3343ms
+2026-03-22T08:36:40 [INFO ] [cache   ] Compression ratio: 1680.00x for blob
+2026-03-22T08:36:42 [WARN ] [storage ] Retry attempt 6372 of 3 for operation
+2026-03-22T08:36:44 [WARN ] [network ] Pipeline stage executed in 770ms
+2026-03-22T08:36:46 [DEBUG] [config  ] File scan completed: 5123 entries found
+2026-03-22T08:36:48 [INFO ] [engine  ] Pipeline stage executed in 3328ms
+2026-03-22T08:36:50 [DEBUG] [pipeline] Checkpoint written at offset 9641
+2026-03-22T08:36:52 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T08:36:54 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:36:56 [WARN ] [storage ] Retry attempt 1956 of 3 for operation
+2026-03-22T08:36:58 [DEBUG] [engine  ] File scan completed: 4573 entries found
+2026-03-22T08:37:00 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:37:02 [ERROR] [engine  ] Checkpoint written at offset 7641
+2026-03-22T08:37:04 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:37:06 [INFO ] [storage ] Worker thread 4935 started processing batch
+2026-03-22T08:37:08 [DEBUG] [network ] Retry attempt 5867 of 3 for operation
+2026-03-22T08:37:10 [INFO ] [storage ] Checkpoint written at offset 8609
+2026-03-22T08:37:12 [WARN ] [pipeline] Retry attempt 1118 of 3 for operation
+2026-03-22T08:37:14 [WARN ] [config  ] Retry attempt 8799 of 3 for operation
+2026-03-22T08:37:16 [DEBUG] [engine  ] Checkpoint written at offset 3625
+2026-03-22T08:37:18 [WARN ] [storage ] Checkpoint written at offset 5425
+2026-03-22T08:37:20 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T08:37:22 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:37:24 [ERROR] [config  ] Configuration reloaded from disk
+2026-03-22T08:37:26 [INFO ] [storage ] Checkpoint written at offset 6249
+2026-03-22T08:37:28 [INFO ] [config  ] Pipeline stage executed in 8852ms
+2026-03-22T08:37:30 [ERROR] [engine  ] Retry attempt 6144 of 3 for operation
+2026-03-22T08:37:32 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:37:34 [WARN ] [cache   ] Retry attempt 1350 of 3 for operation
+2026-03-22T08:37:36 [INFO ] [pipeline] Retry attempt 8737 of 3 for operation
+2026-03-22T08:37:38 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:37:40 [WARN ] [storage ] File scan completed: 1703 entries found
+2026-03-22T08:37:42 [WARN ] [network ] File scan completed: 1182 entries found
+2026-03-22T08:37:44 [WARN ] [engine  ] Compression ratio: 5435.00x for blob
+2026-03-22T08:37:46 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:37:48 [WARN ] [cache   ] Retry attempt 1155 of 3 for operation
+2026-03-22T08:37:50 [WARN ] [cache   ] File scan completed: 6358 entries found
+2026-03-22T08:37:52 [DEBUG] [storage ] File scan completed: 7095 entries found
+2026-03-22T08:37:54 [ERROR] [engine  ] File scan completed: 1939 entries found
+2026-03-22T08:37:56 [INFO ] [storage ] Worker thread 1037 started processing batch
+2026-03-22T08:37:58 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:38:00 [INFO ] [cache   ] Pipeline stage executed in 9938ms
+2026-03-22T08:38:02 [INFO ] [cache   ] Compression ratio: 6250.00x for blob
+2026-03-22T08:38:04 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T08:38:06 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:38:08 [DEBUG] [network ] Pipeline stage executed in 2361ms
+2026-03-22T08:38:10 [ERROR] [storage ] Checkpoint written at offset 183
+2026-03-22T08:38:12 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:38:14 [DEBUG] [network ] Retry attempt 1395 of 3 for operation
+2026-03-22T08:38:16 [ERROR] [pipeline] Checkpoint written at offset 3470
+2026-03-22T08:38:18 [DEBUG] [storage ] Retry attempt 2334 of 3 for operation
+2026-03-22T08:38:20 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:38:22 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:38:24 [INFO ] [network ] Compression ratio: 9006.00x for blob
+2026-03-22T08:38:26 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:38:28 [INFO ] [pipeline] Worker thread 7983 started processing batch
+2026-03-22T08:38:30 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:38:32 [INFO ] [cache   ] Worker thread 1144 started processing batch
+2026-03-22T08:38:34 [WARN ] [cache   ] Compression ratio: 7384.00x for blob
+2026-03-22T08:38:36 [ERROR] [network ] Pipeline stage executed in 9572ms
+2026-03-22T08:38:38 [WARN ] [network ] Worker thread 5972 started processing batch
+2026-03-22T08:38:40 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:38:42 [ERROR] [pipeline] Configuration reloaded from disk
+2026-03-22T08:38:44 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:38:46 [DEBUG] [config  ] Compression ratio: 5878.00x for blob
+2026-03-22T08:38:48 [ERROR] [config  ] Retry attempt 1784 of 3 for operation
+2026-03-22T08:38:50 [WARN ] [storage ] Worker thread 1344 started processing batch
+2026-03-22T08:38:52 [ERROR] [pipeline] Retry attempt 3219 of 3 for operation
+2026-03-22T08:38:54 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:38:56 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:38:58 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T08:39:00 [ERROR] [network ] Retry attempt 7735 of 3 for operation
+2026-03-22T08:39:02 [WARN ] [cache   ] File scan completed: 3659 entries found
+2026-03-22T08:39:04 [ERROR] [pipeline] Compression ratio: 8211.00x for blob
+2026-03-22T08:39:06 [INFO ] [config  ] Checkpoint written at offset 8228
+2026-03-22T08:39:08 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:39:10 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:39:12 [WARN ] [storage ] Compression ratio: 5879.00x for blob
+2026-03-22T08:39:14 [INFO ] [pipeline] Compression ratio: 3797.00x for blob
+2026-03-22T08:39:16 [INFO ] [cache   ] Checkpoint written at offset 3835
+2026-03-22T08:39:18 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:39:20 [ERROR] [config  ] Compression ratio: 7449.00x for blob
+2026-03-22T08:39:22 [INFO ] [engine  ] Checkpoint written at offset 1692
+2026-03-22T08:39:24 [ERROR] [storage ] Pipeline stage executed in 9481ms
+2026-03-22T08:39:26 [WARN ] [config  ] File scan completed: 5986 entries found
+2026-03-22T08:39:28 [INFO ] [network ] Pipeline stage executed in 6166ms
+2026-03-22T08:39:30 [WARN ] [network ] File scan completed: 5782 entries found
+2026-03-22T08:39:32 [ERROR] [config  ] Compression ratio: 9900.00x for blob
+2026-03-22T08:39:34 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:39:36 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:39:38 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:39:40 [WARN ] [cache   ] Worker thread 1939 started processing batch
+2026-03-22T08:39:42 [WARN ] [config  ] Checkpoint written at offset 1857
+2026-03-22T08:39:44 [DEBUG] [storage ] Compression ratio: 7849.00x for blob
+2026-03-22T08:39:46 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:39:48 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T08:39:50 [WARN ] [pipeline] Retry attempt 643 of 3 for operation
+2026-03-22T08:39:52 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:39:54 [WARN ] [network ] File scan completed: 9820 entries found
+2026-03-22T08:39:56 [INFO ] [storage ] Pipeline stage executed in 1405ms
+2026-03-22T08:39:58 [WARN ] [config  ] Worker thread 7724 started processing batch
+2026-03-22T08:40:00 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:40:02 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:40:04 [ERROR] [pipeline] Checkpoint written at offset 7430
+2026-03-22T08:40:06 [INFO ] [pipeline] File scan completed: 6316 entries found
+2026-03-22T08:40:08 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:40:10 [DEBUG] [pipeline] Worker thread 1578 started processing batch
+2026-03-22T08:40:12 [WARN ] [config  ] Worker thread 9828 started processing batch
+2026-03-22T08:40:14 [INFO ] [network ] Retry attempt 1926 of 3 for operation
+2026-03-22T08:40:16 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:40:18 [INFO ] [storage ] File scan completed: 8554 entries found
+2026-03-22T08:40:20 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:40:22 [DEBUG] [pipeline] Compression ratio: 6247.00x for blob
+2026-03-22T08:40:24 [ERROR] [network ] Worker thread 1601 started processing batch
+2026-03-22T08:40:26 [DEBUG] [pipeline] Pipeline stage executed in 7818ms
+2026-03-22T08:40:28 [WARN ] [engine  ] Pipeline stage executed in 9803ms
+2026-03-22T08:40:30 [DEBUG] [cache   ] Configuration reloaded from disk
+2026-03-22T08:40:32 [INFO ] [network ] Retry attempt 1931 of 3 for operation
+2026-03-22T08:40:34 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:40:36 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:40:38 [DEBUG] [storage ] Worker thread 4156 started processing batch
+2026-03-22T08:40:40 [ERROR] [network ] File scan completed: 9252 entries found
+2026-03-22T08:40:42 [ERROR] [network ] Pipeline stage executed in 6512ms
+2026-03-22T08:40:44 [WARN ] [config  ] Retry attempt 9136 of 3 for operation
+2026-03-22T08:40:46 [DEBUG] [pipeline] Checkpoint written at offset 9161
+2026-03-22T08:40:48 [DEBUG] [cache   ] Pipeline stage executed in 9465ms
+2026-03-22T08:40:50 [ERROR] [storage ] File scan completed: 2263 entries found
+2026-03-22T08:40:52 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:40:54 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:40:56 [DEBUG] [cache   ] Retry attempt 853 of 3 for operation
+2026-03-22T08:40:58 [WARN ] [config  ] Processing request completed successfully
+2026-03-22T08:41:00 [WARN ] [config  ] Worker thread 7134 started processing batch
+2026-03-22T08:41:02 [INFO ] [engine  ] Pipeline stage executed in 3634ms
+2026-03-22T08:41:04 [ERROR] [engine  ] Worker thread 619 started processing batch
+2026-03-22T08:41:06 [DEBUG] [config  ] Worker thread 8537 started processing batch
+2026-03-22T08:41:08 [ERROR] [storage ] Worker thread 942 started processing batch
+2026-03-22T08:41:10 [WARN ] [storage ] Compression ratio: 7193.00x for blob
+2026-03-22T08:41:12 [INFO ] [pipeline] Retry attempt 4686 of 3 for operation
+2026-03-22T08:41:14 [WARN ] [engine  ] Worker thread 8365 started processing batch
+2026-03-22T08:41:16 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:41:18 [ERROR] [pipeline] Processing request completed successfully
+2026-03-22T08:41:20 [INFO ] [cache   ] File scan completed: 5786 entries found
+2026-03-22T08:41:22 [DEBUG] [config  ] Worker thread 3282 started processing batch
+2026-03-22T08:41:24 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:41:26 [ERROR] [storage ] Retry attempt 9551 of 3 for operation
+2026-03-22T08:41:28 [ERROR] [cache   ] Pipeline stage executed in 3708ms
+2026-03-22T08:41:30 [WARN ] [config  ] File scan completed: 9420 entries found
+2026-03-22T08:41:32 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:41:34 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:41:36 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:41:38 [ERROR] [network ] Worker thread 4099 started processing batch
+2026-03-22T08:41:40 [DEBUG] [config  ] Worker thread 7924 started processing batch
+2026-03-22T08:41:42 [WARN ] [cache   ] Compression ratio: 7549.00x for blob
+2026-03-22T08:41:44 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:41:46 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:41:48 [ERROR] [config  ] Checkpoint written at offset 8463
+2026-03-22T08:41:50 [INFO ] [storage ] Pipeline stage executed in 4068ms
+2026-03-22T08:41:52 [ERROR] [engine  ] File scan completed: 5604 entries found
+2026-03-22T08:41:54 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:41:56 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T08:41:58 [ERROR] [pipeline] Configuration reloaded from disk
+2026-03-22T08:42:00 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:42:02 [WARN ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:42:04 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:42:06 [INFO ] [storage ] Compression ratio: 109.00x for blob
+2026-03-22T08:42:08 [INFO ] [config  ] Checkpoint written at offset 5168
+2026-03-22T08:42:10 [DEBUG] [network ] Pipeline stage executed in 8042ms
+2026-03-22T08:42:12 [WARN ] [network ] Pipeline stage executed in 6519ms
+2026-03-22T08:42:14 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:42:16 [DEBUG] [config  ] Retry attempt 534 of 3 for operation
+2026-03-22T08:42:18 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:42:20 [INFO ] [storage ] Retry attempt 7538 of 3 for operation
+2026-03-22T08:42:22 [ERROR] [storage ] Processing request completed successfully
+2026-03-22T08:42:24 [WARN ] [config  ] Worker thread 1651 started processing batch
+2026-03-22T08:42:26 [ERROR] [cache   ] Worker thread 4255 started processing batch
+2026-03-22T08:42:28 [WARN ] [network ] Pipeline stage executed in 3886ms
+2026-03-22T08:42:30 [ERROR] [config  ] Worker thread 5622 started processing batch
+2026-03-22T08:42:32 [ERROR] [pipeline] Compression ratio: 6946.00x for blob
+2026-03-22T08:42:34 [WARN ] [config  ] Checkpoint written at offset 5982
+2026-03-22T08:42:36 [DEBUG] [cache   ] Compression ratio: 2948.00x for blob
+2026-03-22T08:42:38 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:42:40 [ERROR] [pipeline] Retry attempt 7082 of 3 for operation
+2026-03-22T08:42:42 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:42:44 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:42:46 [DEBUG] [pipeline] Retry attempt 8749 of 3 for operation
+2026-03-22T08:42:48 [ERROR] [config  ] Pipeline stage executed in 4112ms
+2026-03-22T08:42:50 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:42:52 [INFO ] [pipeline] Pipeline stage executed in 7808ms
+2026-03-22T08:42:54 [INFO ] [config  ] Checkpoint written at offset 4257
+2026-03-22T08:42:56 [ERROR] [cache   ] Retry attempt 9134 of 3 for operation
+2026-03-22T08:42:58 [ERROR] [cache   ] Processing request completed successfully
+2026-03-22T08:43:00 [INFO ] [cache   ] Worker thread 3260 started processing batch
+2026-03-22T08:43:02 [WARN ] [cache   ] Checkpoint written at offset 5327
+2026-03-22T08:43:04 [DEBUG] [storage ] Compression ratio: 1285.00x for blob
+2026-03-22T08:43:06 [DEBUG] [network ] Pipeline stage executed in 7599ms
+2026-03-22T08:43:08 [WARN ] [pipeline] Checkpoint written at offset 6912
+2026-03-22T08:43:10 [DEBUG] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:43:12 [ERROR] [pipeline] Checkpoint written at offset 5192
+2026-03-22T08:43:14 [ERROR] [storage ] Pipeline stage executed in 9919ms
+2026-03-22T08:43:16 [DEBUG] [cache   ] Compression ratio: 5951.00x for blob
+2026-03-22T08:43:18 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:43:20 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:43:22 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T08:43:24 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:43:26 [INFO ] [engine  ] File scan completed: 8585 entries found
+2026-03-22T08:43:28 [INFO ] [engine  ] Pipeline stage executed in 2545ms
+2026-03-22T08:43:30 [INFO ] [storage ] File scan completed: 5069 entries found
+2026-03-22T08:43:32 [WARN ] [pipeline] Pipeline stage executed in 7261ms
+2026-03-22T08:43:34 [WARN ] [pipeline] Retry attempt 2796 of 3 for operation
+2026-03-22T08:43:36 [INFO ] [engine  ] Checkpoint written at offset 5329
+2026-03-22T08:43:38 [DEBUG] [config  ] Retry attempt 4464 of 3 for operation
+2026-03-22T08:43:40 [DEBUG] [pipeline] Retry attempt 2901 of 3 for operation
+2026-03-22T08:43:42 [DEBUG] [storage ] Worker thread 7127 started processing batch
+2026-03-22T08:43:44 [ERROR] [cache   ] Compression ratio: 8842.00x for blob
+2026-03-22T08:43:46 [WARN ] [engine  ] Compression ratio: 5045.00x for blob
+2026-03-22T08:43:48 [ERROR] [config  ] Pipeline stage executed in 2552ms
+2026-03-22T08:43:50 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:43:52 [WARN ] [cache   ] Pipeline stage executed in 7688ms
+2026-03-22T08:43:54 [INFO ] [storage ] Compression ratio: 7817.00x for blob
+2026-03-22T08:43:56 [ERROR] [engine  ] File scan completed: 4800 entries found
+2026-03-22T08:43:58 [WARN ] [engine  ] Retry attempt 6122 of 3 for operation
+2026-03-22T08:44:00 [WARN ] [config  ] Retry attempt 7162 of 3 for operation
+2026-03-22T08:44:02 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:44:04 [DEBUG] [pipeline] Pipeline stage executed in 1298ms
+2026-03-22T08:44:06 [DEBUG] [storage ] Configuration reloaded from disk
+2026-03-22T08:44:08 [ERROR] [cache   ] Retry attempt 4405 of 3 for operation
+2026-03-22T08:44:10 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:44:12 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:44:14 [DEBUG] [cache   ] Worker thread 8061 started processing batch
+2026-03-22T08:44:16 [WARN ] [cache   ] Processing request completed successfully
+2026-03-22T08:44:18 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:44:20 [INFO ] [cache   ] Pipeline stage executed in 2049ms
+2026-03-22T08:44:22 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T08:44:24 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T08:44:26 [WARN ] [cache   ] File scan completed: 5105 entries found
+2026-03-22T08:44:28 [DEBUG] [cache   ] Compression ratio: 520.00x for blob
+2026-03-22T08:44:30 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:44:32 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:44:34 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:44:36 [DEBUG] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:44:38 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T08:44:40 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:44:42 [WARN ] [config  ] File scan completed: 5114 entries found
+2026-03-22T08:44:44 [ERROR] [pipeline] Processing request completed successfully
+2026-03-22T08:44:46 [INFO ] [cache   ] Compression ratio: 4896.00x for blob
+2026-03-22T08:44:48 [WARN ] [cache   ] Processing request completed successfully
+2026-03-22T08:44:50 [INFO ] [pipeline] File scan completed: 5317 entries found
+2026-03-22T08:44:52 [INFO ] [pipeline] Pipeline stage executed in 9580ms
+2026-03-22T08:44:54 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:44:56 [INFO ] [network ] Compression ratio: 9769.00x for blob
+2026-03-22T08:44:58 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:45:00 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:45:02 [INFO ] [engine  ] Checkpoint written at offset 2522
+2026-03-22T08:45:04 [INFO ] [pipeline] Compression ratio: 3813.00x for blob
+2026-03-22T08:45:06 [ERROR] [network ] Checkpoint written at offset 7188
+2026-03-22T08:45:08 [WARN ] [engine  ] File scan completed: 5869 entries found
+2026-03-22T08:45:10 [WARN ] [cache   ] Processing request completed successfully
+2026-03-22T08:45:12 [DEBUG] [network ] Pipeline stage executed in 8893ms
+2026-03-22T08:45:14 [DEBUG] [pipeline] Worker thread 3058 started processing batch
+2026-03-22T08:45:16 [ERROR] [cache   ] Compression ratio: 4511.00x for blob
+2026-03-22T08:45:18 [WARN ] [engine  ] Retry attempt 2540 of 3 for operation
+2026-03-22T08:45:20 [DEBUG] [cache   ] Pipeline stage executed in 8874ms
+2026-03-22T08:45:22 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T08:45:24 [DEBUG] [storage ] Connection established to remote host
+2026-03-22T08:45:26 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:45:28 [INFO ] [storage ] Retry attempt 6349 of 3 for operation
+2026-03-22T08:45:30 [WARN ] [network ] Compression ratio: 9036.00x for blob
+2026-03-22T08:45:32 [WARN ] [network ] Pipeline stage executed in 5286ms
+2026-03-22T08:45:34 [DEBUG] [storage ] Checkpoint written at offset 1810
+2026-03-22T08:45:36 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:45:38 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:45:40 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:45:42 [INFO ] [network ] File scan completed: 8027 entries found
+2026-03-22T08:45:44 [ERROR] [engine  ] Checkpoint written at offset 3617
+2026-03-22T08:45:46 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:45:48 [INFO ] [config  ] Processing request completed successfully
+2026-03-22T08:45:50 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:45:52 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:45:54 [INFO ] [pipeline] Retry attempt 1592 of 3 for operation
+2026-03-22T08:45:56 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T08:45:58 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:46:00 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:46:02 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:46:04 [ERROR] [storage ] Compression ratio: 6998.00x for blob
+2026-03-22T08:46:06 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T08:46:08 [DEBUG] [network ] Checkpoint written at offset 2592
+2026-03-22T08:46:10 [DEBUG] [cache   ] Checkpoint written at offset 9013
+2026-03-22T08:46:12 [ERROR] [cache   ] File scan completed: 7055 entries found
+2026-03-22T08:46:14 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:46:16 [WARN ] [config  ] Retry attempt 4163 of 3 for operation
+2026-03-22T08:46:18 [ERROR] [config  ] Compression ratio: 6506.00x for blob
+2026-03-22T08:46:20 [INFO ] [storage ] Processing request completed successfully
+2026-03-22T08:46:22 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:46:24 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:46:26 [ERROR] [engine  ] Pipeline stage executed in 9072ms
+2026-03-22T08:46:28 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:46:30 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:46:32 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:46:34 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:46:36 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T08:46:38 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:46:40 [INFO ] [network ] Pipeline stage executed in 613ms
+2026-03-22T08:46:42 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:46:44 [ERROR] [config  ] File scan completed: 1975 entries found
+2026-03-22T08:46:46 [WARN ] [storage ] Worker thread 188 started processing batch
+2026-03-22T08:46:48 [DEBUG] [engine  ] Pipeline stage executed in 8592ms
+2026-03-22T08:46:50 [INFO ] [cache   ] Retry attempt 9256 of 3 for operation
+2026-03-22T08:46:52 [WARN ] [cache   ] Retry attempt 3618 of 3 for operation
+2026-03-22T08:46:54 [WARN ] [engine  ] File scan completed: 7301 entries found
+2026-03-22T08:46:56 [INFO ] [pipeline] File scan completed: 4748 entries found
+2026-03-22T08:46:58 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:47:00 [INFO ] [config  ] Worker thread 808 started processing batch
+2026-03-22T08:47:02 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:47:04 [DEBUG] [storage ] Connection established to remote host
+2026-03-22T08:47:06 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T08:47:08 [DEBUG] [storage ] Worker thread 3213 started processing batch
+2026-03-22T08:47:10 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:47:12 [DEBUG] [cache   ] Worker thread 1468 started processing batch
+2026-03-22T08:47:14 [INFO ] [storage ] File scan completed: 6940 entries found
+2026-03-22T08:47:16 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T08:47:18 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:47:20 [WARN ] [cache   ] Worker thread 7246 started processing batch
+2026-03-22T08:47:22 [WARN ] [config  ] Processing request completed successfully
+2026-03-22T08:47:24 [WARN ] [storage ] Checkpoint written at offset 2556
+2026-03-22T08:47:26 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T08:47:28 [WARN ] [cache   ] Processing request completed successfully
+2026-03-22T08:47:30 [INFO ] [cache   ] Compression ratio: 7720.00x for blob
+2026-03-22T08:47:32 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:47:34 [WARN ] [pipeline] Retry attempt 8574 of 3 for operation
+2026-03-22T08:47:36 [ERROR] [network ] Compression ratio: 2316.00x for blob
+2026-03-22T08:47:38 [INFO ] [config  ] Worker thread 8632 started processing batch
+2026-03-22T08:47:40 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:47:42 [ERROR] [pipeline] Worker thread 4445 started processing batch
+2026-03-22T08:47:44 [INFO ] [config  ] Processing request completed successfully
+2026-03-22T08:47:46 [DEBUG] [storage ] Pipeline stage executed in 5902ms
+2026-03-22T08:47:48 [INFO ] [engine  ] Pipeline stage executed in 6333ms
+2026-03-22T08:47:50 [WARN ] [config  ] Retry attempt 1632 of 3 for operation
+2026-03-22T08:47:52 [ERROR] [config  ] Worker thread 8710 started processing batch
+2026-03-22T08:47:54 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:47:56 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:47:58 [WARN ] [network ] Pipeline stage executed in 5466ms
+2026-03-22T08:48:00 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:48:02 [ERROR] [storage ] Checkpoint written at offset 5823
+2026-03-22T08:48:04 [ERROR] [pipeline] Retry attempt 4520 of 3 for operation
+2026-03-22T08:48:06 [INFO ] [storage ] Pipeline stage executed in 6344ms
+2026-03-22T08:48:08 [INFO ] [network ] Pipeline stage executed in 3696ms
+2026-03-22T08:48:10 [WARN ] [cache   ] File scan completed: 2249 entries found
+2026-03-22T08:48:12 [INFO ] [storage ] File scan completed: 8532 entries found
+2026-03-22T08:48:14 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T08:48:16 [WARN ] [config  ] Pipeline stage executed in 9919ms
+2026-03-22T08:48:18 [ERROR] [config  ] Retry attempt 2159 of 3 for operation
+2026-03-22T08:48:20 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:48:22 [WARN ] [pipeline] Pipeline stage executed in 8583ms
+2026-03-22T08:48:24 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:48:26 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:48:28 [INFO ] [pipeline] Checkpoint written at offset 2385
+2026-03-22T08:48:30 [INFO ] [cache   ] File scan completed: 6738 entries found
+2026-03-22T08:48:32 [ERROR] [config  ] Pipeline stage executed in 2490ms
+2026-03-22T08:48:34 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:48:36 [INFO ] [network ] Worker thread 4373 started processing batch
+2026-03-22T08:48:38 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:48:40 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:48:42 [WARN ] [network ] Worker thread 7681 started processing batch
+2026-03-22T08:48:44 [ERROR] [pipeline] File scan completed: 8052 entries found
+2026-03-22T08:48:46 [DEBUG] [pipeline] Connection established to remote host
+2026-03-22T08:48:48 [WARN ] [engine  ] File scan completed: 246 entries found
+2026-03-22T08:48:50 [ERROR] [config  ] Configuration reloaded from disk
+2026-03-22T08:48:52 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:48:54 [DEBUG] [storage ] Checkpoint written at offset 7497
+2026-03-22T08:48:56 [WARN ] [config  ] File scan completed: 686 entries found
+2026-03-22T08:48:58 [DEBUG] [storage ] Checkpoint written at offset 6458
+2026-03-22T08:49:00 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:49:02 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T08:49:04 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T08:49:06 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:49:08 [ERROR] [config  ] File scan completed: 4990 entries found
+2026-03-22T08:49:10 [ERROR] [config  ] Connection established to remote host
+2026-03-22T08:49:12 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:49:14 [WARN ] [config  ] Compression ratio: 1482.00x for blob
+2026-03-22T08:49:16 [INFO ] [pipeline] Worker thread 8953 started processing batch
+2026-03-22T08:49:18 [WARN ] [config  ] File scan completed: 5300 entries found
+2026-03-22T08:49:20 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T08:49:22 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:49:24 [ERROR] [storage ] Connection established to remote host
+2026-03-22T08:49:26 [INFO ] [engine  ] Compression ratio: 5947.00x for blob
+2026-03-22T08:49:28 [INFO ] [network ] File scan completed: 8384 entries found
+2026-03-22T08:49:30 [WARN ] [config  ] Retry attempt 6236 of 3 for operation
+2026-03-22T08:49:32 [INFO ] [pipeline] Checkpoint written at offset 9266
+2026-03-22T08:49:34 [WARN ] [pipeline] Connection established to remote host
+2026-03-22T08:49:36 [INFO ] [config  ] Pipeline stage executed in 5072ms
+2026-03-22T08:49:38 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:49:40 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:49:42 [INFO ] [config  ] Compression ratio: 8170.00x for blob
+2026-03-22T08:49:44 [INFO ] [network ] Compression ratio: 3898.00x for blob
+2026-03-22T08:49:46 [WARN ] [network ] Compression ratio: 7435.00x for blob
+2026-03-22T08:49:48 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:49:50 [INFO ] [pipeline] Retry attempt 4557 of 3 for operation
+2026-03-22T08:49:52 [WARN ] [engine  ] Connection established to remote host
+2026-03-22T08:49:54 [INFO ] [storage ] Checkpoint written at offset 602
+2026-03-22T08:49:56 [WARN ] [engine  ] Worker thread 9885 started processing batch
+2026-03-22T08:49:58 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:50:00 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:50:02 [ERROR] [network ] Worker thread 9377 started processing batch
+2026-03-22T08:50:04 [WARN ] [config  ] Worker thread 5902 started processing batch
+2026-03-22T08:50:06 [INFO ] [engine  ] Pipeline stage executed in 5290ms
+2026-03-22T08:50:08 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:50:10 [INFO ] [cache   ] Compression ratio: 2205.00x for blob
+2026-03-22T08:50:12 [INFO ] [storage ] Pipeline stage executed in 5394ms
+2026-03-22T08:50:14 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T08:50:16 [INFO ] [engine  ] Worker thread 8667 started processing batch
+2026-03-22T08:50:18 [INFO ] [config  ] Worker thread 4706 started processing batch
+2026-03-22T08:50:20 [DEBUG] [network ] Checkpoint written at offset 4255
+2026-03-22T08:50:22 [ERROR] [pipeline] Worker thread 9219 started processing batch
+2026-03-22T08:50:24 [DEBUG] [network ] Compression ratio: 8070.00x for blob
+2026-03-22T08:50:26 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T08:50:28 [WARN ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:50:30 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:50:32 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:50:34 [ERROR] [network ] Configuration reloaded from disk
+2026-03-22T08:50:36 [WARN ] [storage ] Pipeline stage executed in 4169ms
+2026-03-22T08:50:38 [INFO ] [cache   ] Pipeline stage executed in 8302ms
+2026-03-22T08:50:40 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:50:42 [ERROR] [config  ] Worker thread 478 started processing batch
+2026-03-22T08:50:44 [WARN ] [pipeline] Checkpoint written at offset 5537
+2026-03-22T08:50:46 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:50:48 [DEBUG] [pipeline] Compression ratio: 8798.00x for blob
+2026-03-22T08:50:50 [ERROR] [config  ] File scan completed: 918 entries found
+2026-03-22T08:50:52 [ERROR] [network ] Checkpoint written at offset 9097
+2026-03-22T08:50:54 [INFO ] [pipeline] Worker thread 5435 started processing batch
+2026-03-22T08:50:56 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:50:58 [INFO ] [cache   ] File scan completed: 8754 entries found
+2026-03-22T08:51:00 [WARN ] [network ] Worker thread 6383 started processing batch
+2026-03-22T08:51:02 [WARN ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:51:04 [ERROR] [storage ] Processing request completed successfully
+2026-03-22T08:51:06 [DEBUG] [engine  ] Compression ratio: 3894.00x for blob
+2026-03-22T08:51:08 [ERROR] [config  ] Pipeline stage executed in 3542ms
+2026-03-22T08:51:10 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:51:12 [INFO ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:51:14 [INFO ] [config  ] Retry attempt 2525 of 3 for operation
+2026-03-22T08:51:16 [WARN ] [cache   ] Compression ratio: 8580.00x for blob
+2026-03-22T08:51:18 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:51:20 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:51:22 [DEBUG] [storage ] Retry attempt 1898 of 3 for operation
+2026-03-22T08:51:24 [INFO ] [cache   ] Processing request completed successfully
+2026-03-22T08:51:26 [INFO ] [cache   ] Compression ratio: 756.00x for blob
+2026-03-22T08:51:28 [INFO ] [network ] Pipeline stage executed in 369ms
+2026-03-22T08:51:30 [ERROR] [storage ] Configuration reloaded from disk
+2026-03-22T08:51:32 [WARN ] [pipeline] Pipeline stage executed in 4533ms
+2026-03-22T08:51:34 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:51:36 [WARN ] [pipeline] Pipeline stage executed in 1876ms
+2026-03-22T08:51:38 [INFO ] [network ] Retry attempt 8423 of 3 for operation
+2026-03-22T08:51:40 [INFO ] [pipeline] Retry attempt 5740 of 3 for operation
+2026-03-22T08:51:42 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:51:44 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:51:46 [ERROR] [network ] Compression ratio: 832.00x for blob
+2026-03-22T08:51:48 [WARN ] [engine  ] Compression ratio: 827.00x for blob
+2026-03-22T08:51:50 [INFO ] [config  ] Processing request completed successfully
+2026-03-22T08:51:52 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:51:54 [DEBUG] [network ] Checkpoint written at offset 5120
+2026-03-22T08:51:56 [ERROR] [pipeline] Retry attempt 1287 of 3 for operation
+2026-03-22T08:51:58 [DEBUG] [network ] Connection established to remote host
+2026-03-22T08:52:00 [DEBUG] [engine  ] Compression ratio: 5086.00x for blob
+2026-03-22T08:52:02 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T08:52:04 [WARN ] [network ] Pipeline stage executed in 5955ms
+2026-03-22T08:52:06 [DEBUG] [pipeline] Checkpoint written at offset 5321
+2026-03-22T08:52:08 [DEBUG] [config  ] Processing request completed successfully
+2026-03-22T08:52:10 [DEBUG] [engine  ] Checkpoint written at offset 7843
+2026-03-22T08:52:12 [DEBUG] [pipeline] Pipeline stage executed in 5712ms
+2026-03-22T08:52:14 [WARN ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:52:16 [INFO ] [cache   ] Retry attempt 1163 of 3 for operation
+2026-03-22T08:52:18 [ERROR] [network ] Compression ratio: 6567.00x for blob
+2026-03-22T08:52:20 [DEBUG] [pipeline] Worker thread 3993 started processing batch
+2026-03-22T08:52:22 [WARN ] [config  ] File scan completed: 1083 entries found
+2026-03-22T08:52:24 [ERROR] [pipeline] Worker thread 7064 started processing batch
+2026-03-22T08:52:26 [DEBUG] [network ] Checkpoint written at offset 8922
+2026-03-22T08:52:28 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:52:30 [DEBUG] [engine  ] Worker thread 9767 started processing batch
+2026-03-22T08:52:32 [DEBUG] [cache   ] Retry attempt 1600 of 3 for operation
+2026-03-22T08:52:34 [DEBUG] [pipeline] Pipeline stage executed in 6649ms
+2026-03-22T08:52:36 [INFO ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:52:38 [DEBUG] [cache   ] Compression ratio: 1008.00x for blob
+2026-03-22T08:52:40 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T08:52:42 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T08:52:44 [ERROR] [config  ] Worker thread 9469 started processing batch
+2026-03-22T08:52:46 [DEBUG] [pipeline] Configuration reloaded from disk
+2026-03-22T08:52:48 [ERROR] [network ] Pipeline stage executed in 7123ms
+2026-03-22T08:52:50 [ERROR] [engine  ] Worker thread 134 started processing batch
+2026-03-22T08:52:52 [DEBUG] [pipeline] Pipeline stage executed in 1023ms
+2026-03-22T08:52:54 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:52:56 [ERROR] [engine  ] Pipeline stage executed in 511ms
+2026-03-22T08:52:58 [WARN ] [config  ] Worker thread 6460 started processing batch
+2026-03-22T08:53:00 [ERROR] [storage ] File scan completed: 6653 entries found
+2026-03-22T08:53:02 [DEBUG] [config  ] Retry attempt 3461 of 3 for operation
+2026-03-22T08:53:04 [WARN ] [config  ] Connection established to remote host
+2026-03-22T08:53:06 [DEBUG] [cache   ] File scan completed: 2528 entries found
+2026-03-22T08:53:08 [ERROR] [storage ] Connection established to remote host
+2026-03-22T08:53:10 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T08:53:12 [DEBUG] [storage ] File scan completed: 2225 entries found
+2026-03-22T08:53:14 [INFO ] [pipeline] File scan completed: 7472 entries found
+2026-03-22T08:53:16 [DEBUG] [network ] Connection established to remote host
+2026-03-22T08:53:18 [DEBUG] [network ] Compression ratio: 6304.00x for blob
+2026-03-22T08:53:20 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:53:22 [INFO ] [network ] Compression ratio: 3879.00x for blob
+2026-03-22T08:53:24 [ERROR] [config  ] Retry attempt 9443 of 3 for operation
+2026-03-22T08:53:26 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:53:28 [DEBUG] [storage ] Checkpoint written at offset 1855
+2026-03-22T08:53:30 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:53:32 [ERROR] [config  ] Retry attempt 1282 of 3 for operation
+2026-03-22T08:53:34 [INFO ] [pipeline] Compression ratio: 1280.00x for blob
+2026-03-22T08:53:36 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:53:38 [INFO ] [config  ] Compression ratio: 8400.00x for blob
+2026-03-22T08:53:40 [DEBUG] [network ] Checkpoint written at offset 6898
+2026-03-22T08:53:42 [ERROR] [cache   ] Pipeline stage executed in 2745ms
+2026-03-22T08:53:44 [INFO ] [storage ] Worker thread 4982 started processing batch
+2026-03-22T08:53:46 [ERROR] [engine  ] Compression ratio: 9473.00x for blob
+2026-03-22T08:53:48 [WARN ] [network ] Processing request completed successfully
+2026-03-22T08:53:50 [INFO ] [cache   ] Compression ratio: 1352.00x for blob
+2026-03-22T08:53:52 [WARN ] [network ] Cache miss for key, fetching from source
+2026-03-22T08:53:54 [ERROR] [pipeline] Worker thread 4604 started processing batch
+2026-03-22T08:53:56 [ERROR] [cache   ] Processing request completed successfully
+2026-03-22T08:53:58 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:54:00 [ERROR] [pipeline] Pipeline stage executed in 3870ms
+2026-03-22T08:54:02 [DEBUG] [pipeline] Retry attempt 543 of 3 for operation
+2026-03-22T08:54:04 [ERROR] [engine  ] Connection established to remote host
+2026-03-22T08:54:06 [WARN ] [config  ] File scan completed: 6278 entries found
+2026-03-22T08:54:08 [WARN ] [storage ] Compression ratio: 2741.00x for blob
+2026-03-22T08:54:10 [WARN ] [network ] Checkpoint written at offset 891
+2026-03-22T08:54:12 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T08:54:14 [DEBUG] [config  ] Compression ratio: 4938.00x for blob
+2026-03-22T08:54:16 [DEBUG] [storage ] Retry attempt 3829 of 3 for operation
+2026-03-22T08:54:18 [DEBUG] [storage ] File scan completed: 7776 entries found
+2026-03-22T08:54:20 [ERROR] [pipeline] Retry attempt 7123 of 3 for operation
+2026-03-22T08:54:22 [INFO ] [cache   ] Compression ratio: 6259.00x for blob
+2026-03-22T08:54:24 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:54:26 [ERROR] [config  ] Worker thread 4467 started processing batch
+2026-03-22T08:54:28 [ERROR] [cache   ] Pipeline stage executed in 1611ms
+2026-03-22T08:54:30 [ERROR] [storage ] Worker thread 6409 started processing batch
+2026-03-22T08:54:32 [DEBUG] [storage ] Configuration reloaded from disk
+2026-03-22T08:54:34 [WARN ] [network ] Checkpoint written at offset 2948
+2026-03-22T08:54:36 [ERROR] [network ] Processing request completed successfully
+2026-03-22T08:54:38 [INFO ] [engine  ] File scan completed: 1601 entries found
+2026-03-22T08:54:40 [INFO ] [storage ] Compression ratio: 5760.00x for blob
+2026-03-22T08:54:42 [WARN ] [storage ] Pipeline stage executed in 4128ms
+2026-03-22T08:54:44 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T08:54:46 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:54:48 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:54:50 [WARN ] [config  ] Worker thread 3028 started processing batch
+2026-03-22T08:54:52 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:54:54 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T08:54:56 [ERROR] [config  ] Checkpoint written at offset 4217
+2026-03-22T08:54:58 [WARN ] [engine  ] Pipeline stage executed in 1023ms
+2026-03-22T08:55:00 [DEBUG] [config  ] Checkpoint written at offset 985
+2026-03-22T08:55:02 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:55:04 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T08:55:06 [WARN ] [storage ] Compression ratio: 1777.00x for blob
+2026-03-22T08:55:08 [WARN ] [network ] File scan completed: 3579 entries found
+2026-03-22T08:55:10 [INFO ] [config  ] Pipeline stage executed in 1693ms
+2026-03-22T08:55:12 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:55:14 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T08:55:16 [WARN ] [storage ] Processing request completed successfully
+2026-03-22T08:55:18 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:55:20 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T08:55:22 [DEBUG] [config  ] File scan completed: 6618 entries found
+2026-03-22T08:55:24 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:55:26 [DEBUG] [storage ] Compression ratio: 1986.00x for blob
+2026-03-22T08:55:28 [ERROR] [cache   ] Pipeline stage executed in 6564ms
+2026-03-22T08:55:30 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:55:32 [ERROR] [engine  ] Compression ratio: 4751.00x for blob
+2026-03-22T08:55:34 [WARN ] [pipeline] Retry attempt 645 of 3 for operation
+2026-03-22T08:55:36 [DEBUG] [storage ] Configuration reloaded from disk
+2026-03-22T08:55:38 [DEBUG] [engine  ] Checkpoint written at offset 7971
+2026-03-22T08:55:40 [INFO ] [storage ] Compression ratio: 3105.00x for blob
+2026-03-22T08:55:42 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:55:44 [WARN ] [config  ] File scan completed: 1033 entries found
+2026-03-22T08:55:46 [ERROR] [config  ] Retry attempt 7362 of 3 for operation
+2026-03-22T08:55:48 [INFO ] [engine  ] Checkpoint written at offset 919
+2026-03-22T08:55:50 [ERROR] [storage ] Processing request completed successfully
+2026-03-22T08:55:52 [INFO ] [pipeline] Retry attempt 7510 of 3 for operation
+2026-03-22T08:55:54 [WARN ] [storage ] Worker thread 3818 started processing batch
+2026-03-22T08:55:56 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:55:58 [INFO ] [config  ] Worker thread 751 started processing batch
+2026-03-22T08:56:00 [WARN ] [storage ] Connection established to remote host
+2026-03-22T08:56:02 [WARN ] [storage ] Processing request completed successfully
+2026-03-22T08:56:04 [INFO ] [config  ] Worker thread 2797 started processing batch
+2026-03-22T08:56:06 [INFO ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:56:08 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:56:10 [ERROR] [storage ] File scan completed: 5313 entries found
+2026-03-22T08:56:12 [INFO ] [storage ] Worker thread 8944 started processing batch
+2026-03-22T08:56:14 [WARN ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:56:16 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:56:18 [ERROR] [pipeline] File scan completed: 2754 entries found
+2026-03-22T08:56:20 [ERROR] [network ] Connection established to remote host
+2026-03-22T08:56:22 [WARN ] [network ] Processing request completed successfully
+2026-03-22T08:56:24 [INFO ] [storage ] Worker thread 6163 started processing batch
+2026-03-22T08:56:26 [WARN ] [engine  ] Compression ratio: 1323.00x for blob
+2026-03-22T08:56:28 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:56:30 [ERROR] [config  ] Compression ratio: 2080.00x for blob
+2026-03-22T08:56:32 [WARN ] [pipeline] Pipeline stage executed in 8571ms
+2026-03-22T08:56:34 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T08:56:36 [INFO ] [network ] Connection established to remote host
+2026-03-22T08:56:38 [INFO ] [storage ] Pipeline stage executed in 5700ms
+2026-03-22T08:56:40 [DEBUG] [engine  ] Retry attempt 3861 of 3 for operation
+2026-03-22T08:56:42 [WARN ] [engine  ] Retry attempt 1568 of 3 for operation
+2026-03-22T08:56:44 [ERROR] [network ] Retry attempt 3593 of 3 for operation
+2026-03-22T08:56:46 [DEBUG] [storage ] Configuration reloaded from disk
+2026-03-22T08:56:48 [INFO ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:56:50 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:56:52 [INFO ] [engine  ] Checkpoint written at offset 4671
+2026-03-22T08:56:54 [WARN ] [config  ] Pipeline stage executed in 5478ms
+2026-03-22T08:56:56 [DEBUG] [engine  ] Cache miss for key, fetching from source
+2026-03-22T08:56:58 [WARN ] [pipeline] Processing request completed successfully
+2026-03-22T08:57:00 [INFO ] [engine  ] Configuration reloaded from disk
+2026-03-22T08:57:02 [ERROR] [config  ] Configuration reloaded from disk
+2026-03-22T08:57:04 [WARN ] [engine  ] Checkpoint written at offset 3732
+2026-03-22T08:57:06 [INFO ] [pipeline] File scan completed: 3277 entries found
+2026-03-22T08:57:08 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:57:10 [DEBUG] [engine  ] File scan completed: 2375 entries found
+2026-03-22T08:57:12 [WARN ] [network ] Compression ratio: 2918.00x for blob
+2026-03-22T08:57:14 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:57:16 [WARN ] [storage ] Checkpoint written at offset 4419
+2026-03-22T08:57:18 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:57:20 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T08:57:22 [DEBUG] [config  ] File scan completed: 2805 entries found
+2026-03-22T08:57:24 [ERROR] [pipeline] Pipeline stage executed in 9890ms
+2026-03-22T08:57:26 [WARN ] [storage ] Worker thread 2785 started processing batch
+2026-03-22T08:57:28 [WARN ] [engine  ] File scan completed: 8549 entries found
+2026-03-22T08:57:30 [DEBUG] [pipeline] Worker thread 7758 started processing batch
+2026-03-22T08:57:32 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:57:34 [WARN ] [pipeline] Checkpoint written at offset 7115
+2026-03-22T08:57:36 [WARN ] [network ] Connection established to remote host
+2026-03-22T08:57:38 [INFO ] [config  ] Processing request completed successfully
+2026-03-22T08:57:40 [DEBUG] [storage ] Retry attempt 551 of 3 for operation
+2026-03-22T08:57:42 [DEBUG] [network ] File scan completed: 7853 entries found
+2026-03-22T08:57:44 [INFO ] [config  ] Compression ratio: 3941.00x for blob
+2026-03-22T08:57:46 [INFO ] [network ] Processing request completed successfully
+2026-03-22T08:57:48 [WARN ] [pipeline] Checkpoint written at offset 4847
+2026-03-22T08:57:50 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:57:52 [DEBUG] [storage ] Pipeline stage executed in 2651ms
+2026-03-22T08:57:54 [DEBUG] [network ] Worker thread 400 started processing batch
+2026-03-22T08:57:56 [DEBUG] [config  ] Connection established to remote host
+2026-03-22T08:57:58 [WARN ] [cache   ] Compression ratio: 23.00x for blob
+2026-03-22T08:58:00 [INFO ] [config  ] Checkpoint written at offset 8699
+2026-03-22T08:58:02 [INFO ] [cache   ] File scan completed: 4421 entries found
+2026-03-22T08:58:04 [WARN ] [storage ] Cache miss for key, fetching from source
+2026-03-22T08:58:06 [INFO ] [network ] Checkpoint written at offset 845
+2026-03-22T08:58:08 [INFO ] [config  ] Checkpoint written at offset 7625
+2026-03-22T08:58:10 [INFO ] [cache   ] Checkpoint written at offset 2872
+2026-03-22T08:58:12 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:58:14 [ERROR] [pipeline] Retry attempt 1861 of 3 for operation
+2026-03-22T08:58:16 [DEBUG] [storage ] Worker thread 3438 started processing batch
+2026-03-22T08:58:18 [WARN ] [cache   ] Checkpoint written at offset 4381
+2026-03-22T08:58:20 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:58:22 [ERROR] [cache   ] Compression ratio: 7967.00x for blob
+2026-03-22T08:58:24 [INFO ] [config  ] Retry attempt 8731 of 3 for operation
+2026-03-22T08:58:26 [ERROR] [config  ] Worker thread 6032 started processing batch
+2026-03-22T08:58:28 [INFO ] [pipeline] Compression ratio: 1431.00x for blob
+2026-03-22T08:58:30 [INFO ] [config  ] Connection established to remote host
+2026-03-22T08:58:32 [INFO ] [engine  ] Connection established to remote host
+2026-03-22T08:58:34 [INFO ] [storage ] Connection established to remote host
+2026-03-22T08:58:36 [WARN ] [pipeline] Retry attempt 372 of 3 for operation
+2026-03-22T08:58:38 [ERROR] [config  ] Retry attempt 2164 of 3 for operation
+2026-03-22T08:58:40 [DEBUG] [cache   ] File scan completed: 7273 entries found
+2026-03-22T08:58:42 [INFO ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:58:44 [INFO ] [pipeline] Retry attempt 5504 of 3 for operation
+2026-03-22T08:58:46 [DEBUG] [network ] Checkpoint written at offset 5347
+2026-03-22T08:58:48 [DEBUG] [network ] Retry attempt 8987 of 3 for operation
+2026-03-22T08:58:50 [DEBUG] [config  ] Pipeline stage executed in 9294ms
+2026-03-22T08:58:52 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T08:58:54 [WARN ] [config  ] Checkpoint written at offset 4721
+2026-03-22T08:58:56 [INFO ] [pipeline] Checkpoint written at offset 4660
+2026-03-22T08:58:58 [DEBUG] [pipeline] Worker thread 2635 started processing batch
+2026-03-22T08:59:00 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T08:59:02 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T08:59:04 [ERROR] [network ] Connection established to remote host
+2026-03-22T08:59:06 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T08:59:08 [INFO ] [storage ] Checkpoint written at offset 5634
+2026-03-22T08:59:10 [WARN ] [cache   ] Compression ratio: 8846.00x for blob
+2026-03-22T08:59:12 [WARN ] [network ] Pipeline stage executed in 1991ms
+2026-03-22T08:59:14 [INFO ] [config  ] Compression ratio: 2382.00x for blob
+2026-03-22T08:59:16 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:59:18 [ERROR] [storage ] Pipeline stage executed in 7765ms
+2026-03-22T08:59:20 [ERROR] [network ] Connection established to remote host
+2026-03-22T08:59:22 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:59:24 [INFO ] [pipeline] Retry attempt 1915 of 3 for operation
+2026-03-22T08:59:26 [ERROR] [engine  ] File scan completed: 3611 entries found
+2026-03-22T08:59:28 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T08:59:30 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T08:59:32 [WARN ] [cache   ] Configuration reloaded from disk
+2026-03-22T08:59:34 [INFO ] [network ] Compression ratio: 1432.00x for blob
+2026-03-22T08:59:36 [DEBUG] [pipeline] Compression ratio: 5207.00x for blob
+2026-03-22T08:59:38 [INFO ] [storage ] Checkpoint written at offset 6514
+2026-03-22T08:59:40 [WARN ] [storage ] File scan completed: 6057 entries found
+2026-03-22T08:59:42 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T08:59:44 [ERROR] [cache   ] Pipeline stage executed in 7301ms
+2026-03-22T08:59:46 [INFO ] [pipeline] Compression ratio: 6810.00x for blob
+2026-03-22T08:59:48 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T08:59:50 [DEBUG] [pipeline] Worker thread 9797 started processing batch
+2026-03-22T08:59:52 [INFO ] [pipeline] Configuration reloaded from disk
+2026-03-22T08:59:54 [DEBUG] [network ] Checkpoint written at offset 1084
+2026-03-22T08:59:56 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T08:59:58 [ERROR] [config  ] Connection established to remote host
+2026-03-22T09:00:00 [DEBUG] [storage ] Worker thread 2244 started processing batch
+2026-03-22T09:00:02 [WARN ] [pipeline] File scan completed: 4743 entries found
+2026-03-22T09:00:04 [DEBUG] [engine  ] Pipeline stage executed in 9589ms
+2026-03-22T09:00:06 [ERROR] [config  ] Retry attempt 7594 of 3 for operation
+2026-03-22T09:00:08 [WARN ] [engine  ] Processing request completed successfully
+2026-03-22T09:00:10 [ERROR] [cache   ] Compression ratio: 2035.00x for blob
+2026-03-22T09:00:12 [ERROR] [config  ] Connection established to remote host
+2026-03-22T09:00:14 [WARN ] [engine  ] Cache miss for key, fetching from source
+2026-03-22T09:00:16 [DEBUG] [engine  ] Worker thread 5928 started processing batch
+2026-03-22T09:00:18 [DEBUG] [network ] File scan completed: 4226 entries found
+2026-03-22T09:00:20 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T09:00:22 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T09:00:24 [INFO ] [pipeline] Checkpoint written at offset 7554
+2026-03-22T09:00:26 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T09:00:28 [ERROR] [cache   ] File scan completed: 5833 entries found
+2026-03-22T09:00:30 [INFO ] [cache   ] Pipeline stage executed in 8678ms
+2026-03-22T09:00:32 [INFO ] [network ] Configuration reloaded from disk
+2026-03-22T09:00:34 [INFO ] [network ] Connection established to remote host
+2026-03-22T09:00:36 [ERROR] [cache   ] Pipeline stage executed in 4448ms
+2026-03-22T09:00:38 [ERROR] [engine  ] Retry attempt 9504 of 3 for operation
+2026-03-22T09:00:40 [ERROR] [pipeline] Processing request completed successfully
+2026-03-22T09:00:42 [ERROR] [cache   ] Compression ratio: 6751.00x for blob
+2026-03-22T09:00:44 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T09:00:46 [WARN ] [network ] Configuration reloaded from disk
+2026-03-22T09:00:48 [INFO ] [config  ] Compression ratio: 1252.00x for blob
+2026-03-22T09:00:50 [INFO ] [pipeline] Processing request completed successfully
+2026-03-22T09:00:52 [ERROR] [cache   ] Checkpoint written at offset 2278
+2026-03-22T09:00:54 [DEBUG] [network ] Retry attempt 5605 of 3 for operation
+2026-03-22T09:00:56 [WARN ] [storage ] Pipeline stage executed in 472ms
+2026-03-22T09:00:58 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T09:01:00 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T09:01:02 [WARN ] [engine  ] File scan completed: 1831 entries found
+2026-03-22T09:01:04 [INFO ] [engine  ] Compression ratio: 7066.00x for blob
+2026-03-22T09:01:06 [INFO ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T09:01:08 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:01:10 [INFO ] [engine  ] Pipeline stage executed in 169ms
+2026-03-22T09:01:12 [INFO ] [engine  ] Worker thread 3366 started processing batch
+2026-03-22T09:01:14 [WARN ] [pipeline] Checkpoint written at offset 480
+2026-03-22T09:01:16 [INFO ] [pipeline] Pipeline stage executed in 9499ms
+2026-03-22T09:01:18 [ERROR] [cache   ] Connection established to remote host
+2026-03-22T09:01:20 [WARN ] [network ] Worker thread 1120 started processing batch
+2026-03-22T09:01:22 [INFO ] [network ] Processing request completed successfully
+2026-03-22T09:01:24 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T09:01:26 [WARN ] [network ] Processing request completed successfully
+2026-03-22T09:01:28 [WARN ] [network ] Compression ratio: 6005.00x for blob
+2026-03-22T09:01:30 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:01:32 [ERROR] [config  ] File scan completed: 3511 entries found
+2026-03-22T09:01:34 [WARN ] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:01:36 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:01:38 [WARN ] [config  ] Checkpoint written at offset 4724
+2026-03-22T09:01:40 [INFO ] [engine  ] Checkpoint written at offset 8089
+2026-03-22T09:01:42 [INFO ] [config  ] Pipeline stage executed in 7487ms
+2026-03-22T09:01:44 [ERROR] [storage ] Compression ratio: 3701.00x for blob
+2026-03-22T09:01:46 [DEBUG] [cache   ] File scan completed: 3094 entries found
+2026-03-22T09:01:48 [INFO ] [config  ] Checkpoint written at offset 2938
+2026-03-22T09:01:50 [INFO ] [storage ] Compression ratio: 1724.00x for blob
+2026-03-22T09:01:52 [DEBUG] [config  ] Retry attempt 1393 of 3 for operation
+2026-03-22T09:01:54 [INFO ] [pipeline] File scan completed: 6564 entries found
+2026-03-22T09:01:56 [INFO ] [storage ] Connection established to remote host
+2026-03-22T09:01:58 [ERROR] [pipeline] Checkpoint written at offset 3282
+2026-03-22T09:02:00 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T09:02:02 [DEBUG] [cache   ] Worker thread 9727 started processing batch
+2026-03-22T09:02:04 [ERROR] [storage ] File scan completed: 5835 entries found
+2026-03-22T09:02:06 [DEBUG] [storage ] Worker thread 6627 started processing batch
+2026-03-22T09:02:08 [DEBUG] [network ] Pipeline stage executed in 2415ms
+2026-03-22T09:02:10 [DEBUG] [engine  ] Cache miss for key, fetching from source
+2026-03-22T09:02:12 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T09:02:14 [INFO ] [engine  ] Processing request completed successfully
+2026-03-22T09:02:16 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T09:02:18 [DEBUG] [network ] Checkpoint written at offset 2503
+2026-03-22T09:02:20 [ERROR] [network ] Worker thread 1579 started processing batch
+2026-03-22T09:02:22 [INFO ] [storage ] Retry attempt 8065 of 3 for operation
+2026-03-22T09:02:24 [DEBUG] [pipeline] Pipeline stage executed in 8158ms
+2026-03-22T09:02:26 [DEBUG] [network ] Pipeline stage executed in 8888ms
+2026-03-22T09:02:28 [ERROR] [network ] Retry attempt 290 of 3 for operation
+2026-03-22T09:02:30 [INFO ] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:02:32 [DEBUG] [cache   ] File scan completed: 7251 entries found
+2026-03-22T09:02:34 [DEBUG] [engine  ] Processing request completed successfully
+2026-03-22T09:02:36 [ERROR] [storage ] Connection established to remote host
+2026-03-22T09:02:38 [DEBUG] [pipeline] Pipeline stage executed in 6375ms
+2026-03-22T09:02:40 [DEBUG] [engine  ] Worker thread 8038 started processing batch
+2026-03-22T09:02:42 [DEBUG] [config  ] Retry attempt 2561 of 3 for operation
+2026-03-22T09:02:44 [INFO ] [config  ] Pipeline stage executed in 8106ms
+2026-03-22T09:02:46 [DEBUG] [network ] Checkpoint written at offset 4661
+2026-03-22T09:02:48 [ERROR] [engine  ] Processing request completed successfully
+2026-03-22T09:02:50 [INFO ] [pipeline] Checkpoint written at offset 5716
+2026-03-22T09:02:52 [INFO ] [storage ] Checkpoint written at offset 6236
+2026-03-22T09:02:54 [INFO ] [config  ] Checkpoint written at offset 5856
+2026-03-22T09:02:56 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T09:02:58 [WARN ] [pipeline] Pipeline stage executed in 9709ms
+2026-03-22T09:03:00 [INFO ] [storage ] Cache miss for key, fetching from source
+2026-03-22T09:03:02 [INFO ] [cache   ] Connection established to remote host
+2026-03-22T09:03:04 [ERROR] [engine  ] Compression ratio: 6922.00x for blob
+2026-03-22T09:03:06 [DEBUG] [cache   ] Processing request completed successfully
+2026-03-22T09:03:08 [INFO ] [cache   ] File scan completed: 9345 entries found
+2026-03-22T09:03:10 [DEBUG] [cache   ] Worker thread 1602 started processing batch
+2026-03-22T09:03:12 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T09:03:14 [DEBUG] [network ] Checkpoint written at offset 2731
+2026-03-22T09:03:16 [ERROR] [cache   ] File scan completed: 3306 entries found
+2026-03-22T09:03:18 [DEBUG] [storage ] Cache miss for key, fetching from source
+2026-03-22T09:03:20 [WARN ] [cache   ] Pipeline stage executed in 779ms
+2026-03-22T09:03:22 [ERROR] [network ] File scan completed: 3701 entries found
+2026-03-22T09:03:24 [INFO ] [storage ] Worker thread 1553 started processing batch
+2026-03-22T09:03:26 [ERROR] [cache   ] Cache miss for key, fetching from source
+2026-03-22T09:03:28 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T09:03:30 [INFO ] [storage ] Pipeline stage executed in 8269ms
+2026-03-22T09:03:32 [ERROR] [config  ] Retry attempt 5134 of 3 for operation
+2026-03-22T09:03:34 [WARN ] [config  ] File scan completed: 4117 entries found
+2026-03-22T09:03:36 [DEBUG] [storage ] Retry attempt 2959 of 3 for operation
+2026-03-22T09:03:38 [INFO ] [storage ] Retry attempt 3057 of 3 for operation
+2026-03-22T09:03:40 [DEBUG] [pipeline] Compression ratio: 4390.00x for blob
+2026-03-22T09:03:42 [DEBUG] [network ] Processing request completed successfully
+2026-03-22T09:03:44 [WARN ] [cache   ] Compression ratio: 2421.00x for blob
+2026-03-22T09:03:46 [WARN ] [pipeline] Pipeline stage executed in 7134ms
+2026-03-22T09:03:48 [DEBUG] [cache   ] Cache miss for key, fetching from source
+2026-03-22T09:03:50 [DEBUG] [cache   ] Pipeline stage executed in 2632ms
+2026-03-22T09:03:52 [ERROR] [storage ] Worker thread 3869 started processing batch
+2026-03-22T09:03:54 [DEBUG] [pipeline] Cache miss for key, fetching from source
+2026-03-22T09:03:56 [WARN ] [engine  ] Configuration reloaded from disk
+2026-03-22T09:03:58 [DEBUG] [config  ] Retry attempt 7146 of 3 for operation
+2026-03-22T09:04:00 [DEBUG] [storage ] Processing request completed successfully
+2026-03-22T09:04:02 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T09:04:04 [ERROR] [cache   ] Retry attempt 2884 of 3 for operation
+2026-03-22T09:04:06 [INFO ] [storage ] Compression ratio: 327.00x for blob
+2026-03-22T09:04:08 [INFO ] [engine  ] Checkpoint written at offset 9857
+2026-03-22T09:04:10 [ERROR] [engine  ] File scan completed: 5955 entries found
+2026-03-22T09:04:12 [INFO ] [config  ] Connection established to remote host
+2026-03-22T09:04:14 [INFO ] [network ] Retry attempt 1977 of 3 for operation
+2026-03-22T09:04:16 [ERROR] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:04:18 [INFO ] [cache   ] Checkpoint written at offset 9574
+2026-03-22T09:04:20 [DEBUG] [storage ] Configuration reloaded from disk
+2026-03-22T09:04:22 [WARN ] [pipeline] Cache miss for key, fetching from source
+2026-03-22T09:04:24 [WARN ] [cache   ] Compression ratio: 6691.00x for blob
+2026-03-22T09:04:26 [ERROR] [network ] Processing request completed successfully
+2026-03-22T09:04:28 [ERROR] [storage ] Cache miss for key, fetching from source
+2026-03-22T09:04:30 [DEBUG] [config  ] Configuration reloaded from disk
+2026-03-22T09:04:32 [WARN ] [cache   ] Compression ratio: 6026.00x for blob
+2026-03-22T09:04:34 [ERROR] [engine  ] Worker thread 571 started processing batch
+2026-03-22T09:04:36 [INFO ] [storage ] Configuration reloaded from disk
+2026-03-22T09:04:38 [DEBUG] [cache   ] Checkpoint written at offset 2000
+2026-03-22T09:04:40 [WARN ] [config  ] File scan completed: 129 entries found
+2026-03-22T09:04:42 [DEBUG] [cache   ] Pipeline stage executed in 1479ms
+2026-03-22T09:04:44 [WARN ] [cache   ] Configuration reloaded from disk
+2026-03-22T09:04:46 [DEBUG] [storage ] Checkpoint written at offset 6657
+2026-03-22T09:04:48 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T09:04:50 [DEBUG] [storage ] File scan completed: 5452 entries found
+2026-03-22T09:04:52 [DEBUG] [engine  ] Connection established to remote host
+2026-03-22T09:04:54 [INFO ] [cache   ] File scan completed: 9866 entries found
+2026-03-22T09:04:56 [ERROR] [config  ] Processing request completed successfully
+2026-03-22T09:04:58 [WARN ] [storage ] Compression ratio: 2230.00x for blob
+2026-03-22T09:05:00 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T09:05:02 [ERROR] [network ] Cache miss for key, fetching from source
+2026-03-22T09:05:04 [WARN ] [pipeline] Retry attempt 2132 of 3 for operation
+2026-03-22T09:05:06 [DEBUG] [cache   ] Compression ratio: 7838.00x for blob
+2026-03-22T09:05:08 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T09:05:10 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T09:05:12 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T09:05:14 [DEBUG] [network ] Configuration reloaded from disk
+2026-03-22T09:05:16 [INFO ] [network ] Worker thread 3748 started processing batch
+2026-03-22T09:05:18 [INFO ] [config  ] Configuration reloaded from disk
+2026-03-22T09:05:20 [WARN ] [engine  ] File scan completed: 7028 entries found
+2026-03-22T09:05:22 [ERROR] [pipeline] Cache miss for key, fetching from source
+2026-03-22T09:05:24 [WARN ] [network ] Cache miss for key, fetching from source
+2026-03-22T09:05:26 [DEBUG] [config  ] Compression ratio: 1942.00x for blob
+2026-03-22T09:05:28 [WARN ] [storage ] Configuration reloaded from disk
+2026-03-22T09:05:30 [ERROR] [cache   ] Compression ratio: 6260.00x for blob
+2026-03-22T09:05:32 [WARN ] [config  ] Configuration reloaded from disk
+2026-03-22T09:05:34 [WARN ] [cache   ] Configuration reloaded from disk
+2026-03-22T09:05:36 [WARN ] [config  ] Connection established to remote host
+2026-03-22T09:05:38 [ERROR] [cache   ] Configuration reloaded from disk
+2026-03-22T09:05:40 [WARN ] [cache   ] Worker thread 7507 started processing batch
+2026-03-22T09:05:42 [INFO ] [engine  ] Compression ratio: 2183.00x for blob
+2026-03-22T09:05:44 [ERROR] [storage ] File scan completed: 3477 entries found
+2026-03-22T09:05:46 [DEBUG] [storage ] File scan completed: 9785 entries found
+2026-03-22T09:05:48 [ERROR] [engine  ] Cache miss for key, fetching from source
+2026-03-22T09:05:50 [INFO ] [engine  ] Checkpoint written at offset 3848
+2026-03-22T09:05:52 [DEBUG] [cache   ] Worker thread 9802 started processing batch
+2026-03-22T09:05:54 [INFO ] [engine  ] Pipeline stage executed in 8267ms
+2026-03-22T09:05:56 [DEBUG] [cache   ] File scan completed: 6077 entries found
+2026-03-22T09:05:58 [WARN ] [network ] Processing request completed successfully
+2026-03-22T09:06:00 [WARN ] [cache   ] Connection established to remote host
+2026-03-22T09:06:02 [DEBUG] [cache   ] Compression ratio: 2162.00x for blob
+2026-03-22T09:06:04 [INFO ] [cache   ] Retry attempt 7094 of 3 for operation
+2026-03-22T09:06:06 [WARN ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T09:06:08 [INFO ] [pipeline] Compression ratio: 4604.00x for blob
+2026-03-22T09:06:10 [ERROR] [config  ] Pipeline stage executed in 4313ms
+2026-03-22T09:06:12 [ERROR] [network ] Checkpoint written at offset 7140
+2026-03-22T09:06:14 [WARN ] [cache   ] Compression ratio: 2479.00x for blob
+2026-03-22T09:06:16 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T09:06:18 [INFO ] [pipeline] Connection established to remote host
+2026-03-22T09:06:20 [DEBUG] [cache   ] Connection established to remote host
+2026-03-22T09:06:22 [DEBUG] [engine  ] Compression ratio: 669.00x for blob
+2026-03-22T09:06:24 [DEBUG] [cache   ] Retry attempt 7950 of 3 for operation
+2026-03-22T09:06:26 [DEBUG] [config  ] Cache miss for key, fetching from source
+2026-03-22T09:06:28 [INFO ] [cache   ] Cache miss for key, fetching from source
+2026-03-22T09:06:30 [ERROR] [pipeline] Connection established to remote host
+2026-03-22T09:06:32 [ERROR] [network ] Worker thread 3480 started processing batch
+2026-03-22T09:06:34 [INFO ] [network ] Worker thread 2959 started processing batch
+2026-03-22T09:06:36 [DEBUG] [engine  ] Configuration reloaded from disk
+2026-03-22T09:06:38 [INFO ] [cache   ] Processing request completed successfully
