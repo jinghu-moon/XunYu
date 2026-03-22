@@ -2,18 +2,14 @@
 //
 // File collection using walkdir + dunce.
 
-use std::path::{Path, PathBuf};
 use globset::{Glob, GlobMatcher};
 use rayon::prelude::*;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::output::{CliError, CliResult};
 
-pub fn collect_files(
-    path: &str,
-    exts: &[String],
-    recursive: bool,
-) -> CliResult<Vec<PathBuf>> {
+pub fn collect_files(path: &str, exts: &[String], recursive: bool) -> CliResult<Vec<PathBuf>> {
     collect_files_filtered(path, exts, recursive, None, None)
 }
 
@@ -62,10 +58,12 @@ pub fn collect_files_depth(
         let mut top_files = walk_single(&root, 1, exts, &filter_matcher, &exclude_matcher);
 
         let subdirs: Vec<PathBuf> = std::fs::read_dir(&root)
-            .map(|rd| rd.filter_map(|e| e.ok())
-                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-                .map(|e| e.path())
-                .collect())
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                    .map(|e| e.path())
+                    .collect()
+            })
             .unwrap_or_default();
 
         let sub_files: Vec<PathBuf> = subdirs
@@ -123,9 +121,7 @@ fn ext_matches(path: &Path, exts: &[String]) -> bool {
 fn glob_filter(path: &Path, matcher: &Option<GlobMatcher>) -> bool {
     match matcher {
         None => true,
-        Some(m) => path.file_name()
-            .map(|n| m.is_match(n))
-            .unwrap_or(false),
+        Some(m) => path.file_name().map(|n| m.is_match(n)).unwrap_or(false),
     }
 }
 
@@ -133,9 +129,7 @@ fn glob_filter(path: &Path, matcher: &Option<GlobMatcher>) -> bool {
 fn glob_exclude(path: &Path, matcher: &Option<GlobMatcher>) -> bool {
     match matcher {
         None => false,
-        Some(m) => path.file_name()
-            .map(|n| m.is_match(n))
-            .unwrap_or(false),
+        Some(m) => path.file_name().map(|n| m.is_match(n)).unwrap_or(false),
     }
 }
 

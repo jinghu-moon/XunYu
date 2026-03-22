@@ -63,7 +63,14 @@ pub(crate) fn detect_kind(units: &[u16]) -> PathKind {
     if matches_prefix(
         units,
         &[
-            SLASH, SLASH, QMARK, SLASH, b'U' as u16, b'N' as u16, b'C' as u16, SLASH,
+            SLASH,
+            SLASH,
+            QMARK,
+            SLASH,
+            b'U' as u16,
+            b'N' as u16,
+            b'C' as u16,
+            SLASH,
         ],
     ) {
         return PathKind::ExtendedUNC;
@@ -71,8 +78,17 @@ pub(crate) fn detect_kind(units: &[u16]) -> PathKind {
     if matches_prefix(
         units,
         &[
-            SLASH, SLASH, QMARK, SLASH, b'V' as u16, b'o' as u16, b'l' as u16, b'u' as u16,
-            b'm' as u16, b'e' as u16, b'{' as u16,
+            SLASH,
+            SLASH,
+            QMARK,
+            SLASH,
+            b'V' as u16,
+            b'o' as u16,
+            b'l' as u16,
+            b'u' as u16,
+            b'm' as u16,
+            b'e' as u16,
+            b'{' as u16,
         ],
     ) {
         return PathKind::VolumeGuid;
@@ -88,7 +104,16 @@ pub(crate) fn detect_kind(units: &[u16]) -> PathKind {
     }
     if matches_prefix(
         units,
-        &[SLASH, b'D' as u16, b'e' as u16, b'v' as u16, b'i' as u16, b'c' as u16, b'e' as u16, SLASH],
+        &[
+            SLASH,
+            b'D' as u16,
+            b'e' as u16,
+            b'v' as u16,
+            b'i' as u16,
+            b'c' as u16,
+            b'e' as u16,
+            SLASH,
+        ],
     ) || matches_prefix(units, &[SLASH, QMARK, QMARK, SLASH])
     {
         return PathKind::NTNamespace;
@@ -140,10 +165,10 @@ pub(crate) fn check_chars(units: &[u16]) -> Option<PathIssueKind> {
         }
     }
 
-    if qmark_count > 0
-        && (!has_extended_prefix || qmark_count != 1 || units.get(2) != Some(&QMARK)) {
-            return Some(PathIssueKind::InvalidChar);
-        }
+    if qmark_count > 0 && (!has_extended_prefix || qmark_count != 1 || units.get(2) != Some(&QMARK))
+    {
+        return Some(PathIssueKind::InvalidChar);
+    }
 
     None
 }
@@ -164,7 +189,10 @@ pub(crate) fn check_component(component: &[u16], allow_colon: bool) -> Option<Pa
         return Some(PathIssueKind::InvalidChar);
     }
 
-    let stem_end = component.iter().position(|&u| u == DOT).unwrap_or(component.len());
+    let stem_end = component
+        .iter()
+        .position(|&u| u == DOT)
+        .unwrap_or(component.len());
     if stem_end == 0 {
         return None;
     }
@@ -202,9 +230,7 @@ pub(crate) fn check_string(
         PathKind::NTNamespace => return Some(PathIssueKind::NtNamespaceNotAllowed),
         PathKind::VolumeGuid => return Some(PathIssueKind::VolumeGuidNotAllowed),
         PathKind::DriveRelative => return Some(PathIssueKind::DriveRelativeNotAllowed),
-        PathKind::Relative if !allow_relative => {
-            return Some(PathIssueKind::RelativeNotAllowed)
-        }
+        PathKind::Relative if !allow_relative => return Some(PathIssueKind::RelativeNotAllowed),
         _ => {}
     }
 
@@ -220,16 +246,18 @@ pub(crate) fn check_string(
     for (idx, &unit) in units.iter().enumerate().skip(start) {
         if unit == SLASH || unit == FSLASH {
             if idx > start
-                && let Some(issue) = check_component(&units[start..idx], policy.allow_ads) {
-                    return Some(issue);
-                }
+                && let Some(issue) = check_component(&units[start..idx], policy.allow_ads)
+            {
+                return Some(issue);
+            }
             start = idx + 1;
         }
     }
     if start < units.len()
-        && let Some(issue) = check_component(&units[start..], policy.allow_ads) {
-            return Some(issue);
-        }
+        && let Some(issue) = check_component(&units[start..], policy.allow_ads)
+    {
+        return Some(issue);
+    }
 
     if let Some(base) = &policy.base {
         let joined = base.join(Path::new(raw));
@@ -261,8 +289,7 @@ fn is_dot_component(component: &[u16]) -> bool {
 }
 
 fn is_ascii_letter(unit: u16) -> bool {
-    (b'a' as u16..=b'z' as u16).contains(&unit)
-        || (b'A' as u16..=b'Z' as u16).contains(&unit)
+    (b'a' as u16..=b'z' as u16).contains(&unit) || (b'A' as u16..=b'Z' as u16).contains(&unit)
 }
 
 fn is_reserved_stem(stem: &[u16]) -> bool {
@@ -312,8 +339,8 @@ fn to_ascii_lower(unit: u16) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use std::os::windows::ffi::OsStrExt;
+    use std::path::PathBuf;
 
     fn to_wide(raw: &str) -> Vec<u16> {
         OsStr::new(raw).encode_wide().collect()
@@ -329,17 +356,32 @@ mod tests {
             detect_kind(&to_wide(r"\\?\Volume{1234-5678}\file.txt")),
             PathKind::VolumeGuid
         );
-        assert_eq!(detect_kind(&to_wide(r"\\?\C:\Windows")), PathKind::ExtendedLength);
-        assert_eq!(detect_kind(&to_wide(r"\\.\COM1")), PathKind::DeviceNamespace);
+        assert_eq!(
+            detect_kind(&to_wide(r"\\?\C:\Windows")),
+            PathKind::ExtendedLength
+        );
+        assert_eq!(
+            detect_kind(&to_wide(r"\\.\COM1")),
+            PathKind::DeviceNamespace
+        );
         assert_eq!(detect_kind(&to_wide(r"\\server\share\dir")), PathKind::UNC);
         assert_eq!(
             detect_kind(&to_wide(r"\Device\HarddiskVolume1\Windows")),
             PathKind::NTNamespace
         );
-        assert_eq!(detect_kind(&to_wide(r"C:\Windows")), PathKind::DriveAbsolute);
-        assert_eq!(detect_kind(&to_wide(r"C:/Windows")), PathKind::DriveAbsolute);
+        assert_eq!(
+            detect_kind(&to_wide(r"C:\Windows")),
+            PathKind::DriveAbsolute
+        );
+        assert_eq!(
+            detect_kind(&to_wide(r"C:/Windows")),
+            PathKind::DriveAbsolute
+        );
         assert_eq!(detect_kind(&to_wide(r"C:Windows")), PathKind::DriveRelative);
-        assert_eq!(detect_kind(&to_wide(r"folder\file.txt")), PathKind::Relative);
+        assert_eq!(
+            detect_kind(&to_wide(r"folder\file.txt")),
+            PathKind::Relative
+        );
     }
 
     #[test]

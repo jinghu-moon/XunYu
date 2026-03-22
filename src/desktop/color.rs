@@ -11,7 +11,7 @@ pub(crate) fn pick_color() -> Result<Color, CliError> {
     #[cfg(windows)]
     {
         use windows_sys::Win32::Foundation::POINT;
-        use windows_sys::Win32::Graphics::Gdi::{CLR_INVALID, GetPixel, GetDC, ReleaseDC};
+        use windows_sys::Win32::Graphics::Gdi::{CLR_INVALID, GetDC, GetPixel, ReleaseDC};
         use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
         // SAFETY: Win32 API requires raw pointers; we validate return codes and release the DC.
@@ -89,4 +89,3 @@ pub(crate) fn copy_to_clipboard(text: &str) -> bool {
         false
     }
 }
-

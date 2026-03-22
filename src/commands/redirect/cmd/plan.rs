@@ -24,7 +24,11 @@ pub(super) fn run_plan(
             .map(|issue| format!("Invalid plan path: {} ({})", issue.raw, issue.detail))
             .collect();
         details.push("Fix: Provide a valid plan file path.".to_string());
-        return Err(CliError::with_details(2, "Invalid plan path.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid plan path.".to_string(),
+            &details,
+        ));
     }
     let plan_path = validation
         .ok

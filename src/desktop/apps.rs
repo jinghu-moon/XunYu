@@ -22,7 +22,7 @@ pub(crate) fn list_installed_apps() -> Vec<InstalledApp> {
 
 #[cfg(windows)]
 fn list_installed_apps_windows() -> Vec<InstalledApp> {
-    use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 
     let mut apps = Vec::new();
 
@@ -37,7 +37,11 @@ fn list_installed_apps_windows() -> Vec<InstalledApp> {
     collect_app_paths(&mut apps);
 
     apps.retain(|app| !is_excluded_app(app));
-    apps.sort_by(|a, b| a.path.to_ascii_lowercase().cmp(&b.path.to_ascii_lowercase()));
+    apps.sort_by(|a, b| {
+        a.path
+            .to_ascii_lowercase()
+            .cmp(&b.path.to_ascii_lowercase())
+    });
     apps.dedup_by(|a, b| a.path.eq_ignore_ascii_case(&b.path));
     apps
 }
@@ -111,19 +115,8 @@ fn get_special_folder_path(csidl: i32) -> Option<PathBuf> {
 
     unsafe {
         let mut buffer = [0u16; MAX_PATH as usize];
-        if SHGetFolderPathW(
-            None,
-            csidl | CSIDL_FLAG_CREATE as i32,
-            None,
-            0,
-            &mut buffer,
-        )
-        .is_ok()
-        {
-            let len = buffer
-                .iter()
-                .position(|&c| c == 0)
-                .unwrap_or(buffer.len());
+        if SHGetFolderPathW(None, csidl | CSIDL_FLAG_CREATE as i32, None, 0, &mut buffer).is_ok() {
+            let len = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
             let path = String::from_utf16_lossy(&buffer[..len]).trim().to_string();
             if path.is_empty() {
                 None
@@ -176,7 +169,9 @@ fn collect_shortcuts(dir: &Path, out: &mut Vec<InstalledApp>) {
 #[cfg(windows)]
 fn resolve_shortcut(path: &Path) -> Option<String> {
     use windows::Win32::Foundation::MAX_PATH;
-    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER, IPersistFile, STGM_READ};
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, CoCreateInstance, IPersistFile, STGM_READ,
+    };
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
     use windows::core::{Interface, PCWSTR};
 
@@ -271,7 +266,10 @@ fn collect_app_paths(out: &mut Vec<InstalledApp>) {
 
     const APP_PATHS_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\App Paths";
 
-    for hive in [RegKey::predef(HKEY_LOCAL_MACHINE), RegKey::predef(HKEY_CURRENT_USER)] {
+    for hive in [
+        RegKey::predef(HKEY_LOCAL_MACHINE),
+        RegKey::predef(HKEY_CURRENT_USER),
+    ] {
         let Ok(root) = hive.open_subkey(APP_PATHS_KEY) else {
             continue;
         };

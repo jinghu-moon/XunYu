@@ -13,4 +13,3 @@ pub(crate) fn run_command(command: &str) -> Result<(), CliError> {
         Err(err) => Err(CliError::new(2, format!("Failed to run command: {err}"))),
     }
 }
-

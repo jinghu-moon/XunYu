@@ -19,7 +19,11 @@ pub mod undo;
 pub mod testing {
     use std::path::{Path, PathBuf};
 
-    pub fn collect_files(dir: &str, exts: &[String], recursive: bool) -> Result<Vec<PathBuf>, String> {
+    pub fn collect_files(
+        dir: &str,
+        exts: &[String],
+        recursive: bool,
+    ) -> Result<Vec<PathBuf>, String> {
         super::collect::collect_files(dir, exts, recursive).map_err(|e| e.message)
     }
 

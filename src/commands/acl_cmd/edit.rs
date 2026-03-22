@@ -66,9 +66,7 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
         return Err(CliError::with_details(
             2,
             "add requires --path or --file or --paths".to_string(),
-            &[
-                "Fix: Use `xun acl add -p <path>` or `--file <txt>` or `--paths a,b,c`.",
-            ],
+            &["Fix: Use `xun acl add -p <path>` or `--file <txt>` or `--paths a,b,c`."],
         ));
     }
     let policy = crate::path_guard::PathPolicy::for_write();
@@ -94,10 +92,9 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     let paths_elapsed = paths_start.elapsed();
 
     let is_batch = args.file.is_some() || args.paths.is_some();
-    if !is_batch
-        && let Some(path) = paths.first() {
-            print_path_header(path);
-        }
+    if !is_batch && let Some(path) = paths.first() {
+        print_path_header(path);
+    }
     ui_println!("Add permission entry");
     if is_batch {
         ui_println!("Paths: {}", paths.len());
@@ -180,10 +177,7 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
     } else if is_batch {
         InheritanceFlags::NONE
     } else {
-        let is_dir = paths
-            .first()
-            .map(|p| p.is_dir())
-            .unwrap_or(false);
+        let is_dir = paths.first().map(|p| p.is_dir()).unwrap_or(false);
         if !is_dir || !can_interact() {
             InheritanceFlags::NONE
         } else {
@@ -316,7 +310,8 @@ pub(super) fn cmd_add(args: AclAddCmd) -> CliResult {
                 failures.len() + 1,
                 paths.len()
             ));
-            err.details.push(format!("First failed path: {}", first_path.display()));
+            err.details
+                .push(format!("First failed path: {}", first_path.display()));
             return Err(err);
         }
     } else {
@@ -454,9 +449,7 @@ pub(super) fn cmd_remove(args: AclRemoveCmd) -> CliResult {
             return Err(CliError::with_details(
                 2,
                 "remove requires --principal or --raw-sid for non-interactive mode.".to_string(),
-                &[
-                    "Fix: Provide --principal or --raw-sid (optional: --rights, --ace-type).",
-                ],
+                &["Fix: Provide --principal or --raw-sid (optional: --rights, --ace-type)."],
             ));
         }
 
@@ -476,21 +469,25 @@ pub(super) fn cmd_remove(args: AclRemoveCmd) -> CliResult {
             .iter()
             .filter(|e| {
                 if let Some(principal) = args.principal.as_deref()
-                    && !e.principal.eq_ignore_ascii_case(principal) {
-                        return false;
-                    }
+                    && !e.principal.eq_ignore_ascii_case(principal)
+                {
+                    return false;
+                }
                 if let Some(raw_sid) = args.raw_sid.as_deref()
-                    && !e.raw_sid.eq_ignore_ascii_case(raw_sid) {
-                        return false;
-                    }
+                    && !e.raw_sid.eq_ignore_ascii_case(raw_sid)
+                {
+                    return false;
+                }
                 if let Some(mask) = rights_mask
-                    && e.rights_mask != mask {
-                        return false;
-                    }
+                    && e.rights_mask != mask
+                {
+                    return false;
+                }
                 if let Some(ref ty) = ace_type
-                    && &e.ace_type != ty {
-                        return false;
-                    }
+                    && &e.ace_type != ty
+                {
+                    return false;
+                }
                 true
             })
             .cloned()

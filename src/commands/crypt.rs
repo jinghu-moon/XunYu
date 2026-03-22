@@ -15,7 +15,11 @@ pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
             .map(|issue| format!("Invalid input path: {} ({})", issue.raw, issue.detail))
             .collect();
         details.push("Hint: Check the path exists before encrypting.".to_string());
-        return Err(CliError::with_details(2, "Invalid input path.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid input path.".to_string(),
+            &details,
+        ));
     }
     let path = input_validation
         .ok
@@ -94,13 +98,13 @@ pub(crate) fn cmd_encrypt(args: EncryptCmd) -> CliResult {
                 .map(|issue| format!("Invalid output path: {} ({})", issue.raw, issue.detail))
                 .collect();
             details.push("Fix: Use a valid output file path.".to_string());
-            return Err(CliError::with_details(2, "Invalid output path.".to_string(), &details));
+            return Err(CliError::with_details(
+                2,
+                "Invalid output path.".to_string(),
+                &details,
+            ));
         }
-        let out_path = out_validation
-            .ok
-            .into_iter()
-            .next()
-            .unwrap_or(out_path);
+        let out_path = out_validation.ok.into_iter().next().unwrap_or(out_path);
 
         if args.passphrase {
             let pass = dialoguer::Password::new()
@@ -178,7 +182,11 @@ pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
             .map(|issue| format!("Invalid input path: {} ({})", issue.raw, issue.detail))
             .collect();
         details.push("Hint: Check the path exists before decrypting.".to_string());
-        return Err(CliError::with_details(2, "Invalid input path.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid input path.".to_string(),
+            &details,
+        ));
     }
     let path = input_validation
         .ok
@@ -206,7 +214,7 @@ pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
                     "EFS Decryption failed: file is in use by another process.",
                     &[format!(
                         "Hint: Try `xun lock who {}` to find the blocking process.",
-                            path.display()
+                        path.display()
                     )],
                 ));
             }
@@ -250,13 +258,13 @@ pub(crate) fn cmd_decrypt(args: DecryptCmd) -> CliResult {
                 .map(|issue| format!("Invalid output path: {} ({})", issue.raw, issue.detail))
                 .collect();
             details.push("Fix: Use a valid output file path.".to_string());
-            return Err(CliError::with_details(2, "Invalid output path.".to_string(), &details));
+            return Err(CliError::with_details(
+                2,
+                "Invalid output path.".to_string(),
+                &details,
+            ));
         }
-        let out_path = out_validation
-            .ok
-            .into_iter()
-            .next()
-            .unwrap_or(out_path);
+        let out_path = out_validation.ok.into_iter().next().unwrap_or(out_path);
 
         if args.passphrase || !args.identity.is_empty() {
             let pass = if args.passphrase {

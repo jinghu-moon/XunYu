@@ -9,7 +9,7 @@ use argh::FromArgs;
 /// Batch file renamer — dry-run by default, --apply to execute
 pub struct BrnCmd {
     /// directory to scan (default: current directory)
-    #[argh(positional, default = "String::from(\".\")") ]
+    #[argh(positional, default = "String::from(\".\")")]
     pub path: String,
 
     // ── Rename steps (combinable, applied in fixed order) ────────────────

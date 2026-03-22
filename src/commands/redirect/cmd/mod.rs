@@ -100,7 +100,11 @@ pub(crate) fn cmd_redirect(args: RedirectCmd) -> CliResult {
             .map(|issue| format!("Invalid source path: {} ({})", issue.raw, issue.detail))
             .collect();
         details.push("Fix: Provide an existing directory path.".to_string());
-        return Err(CliError::with_details(2, "Invalid source path.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid source path.".to_string(),
+            &details,
+        ));
     }
     let source = validation
         .ok

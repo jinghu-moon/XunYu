@@ -4,18 +4,21 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::thread;
 
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use rayon::prelude::*;
 
 use super::{
-    build_issue, dedupe_inputs, string_check, winapi, PathIssue, PathIssueKind, PathKind,
-    PathPolicy, PathValidationResult,
+    PathIssue, PathIssueKind, PathKind, PathPolicy, PathValidationResult, build_issue,
+    dedupe_inputs, string_check, winapi,
 };
 
 const PARALLEL_MIN: usize = 32;
 const UNC_THRESHOLD: usize = 500;
 
-pub(crate) fn validate_paths(raw_inputs: Vec<OsString>, policy: &PathPolicy) -> PathValidationResult {
+pub(crate) fn validate_paths(
+    raw_inputs: Vec<OsString>,
+    policy: &PathPolicy,
+) -> PathValidationResult {
     let total = raw_inputs.len();
     if total < PARALLEL_MIN {
         return super::validate_paths_serial(raw_inputs, policy);
@@ -53,7 +56,10 @@ fn validate_paths_parallel(
     let inputs = Arc::new(inputs);
     let use_workers = policy.must_exist || policy.safety_check;
 
-    let mut out = PathValidationResult { deduped, ..Default::default() };
+    let mut out = PathValidationResult {
+        deduped,
+        ..Default::default()
+    };
     if total == 0 {
         return out;
     }
@@ -76,7 +82,12 @@ fn validate_paths_parallel(
         .par_iter()
         .map(|raw| {
             let result = super::with_check_buf(|scratch| {
-                super::validate_string_stage(raw.as_os_str(), &policy_arc, cwd_snapshot.as_deref(), scratch)
+                super::validate_string_stage(
+                    raw.as_os_str(),
+                    &policy_arc,
+                    cwd_snapshot.as_deref(),
+                    scratch,
+                )
             });
             let (path, _) = match result {
                 Ok(value) => value,
@@ -178,10 +189,7 @@ fn worker_loop(
             .unwrap_or_else(|| OsStr::new(""));
         if policy.must_exist {
             let probe_timer = super::trace_stage_start(super::TraceStage::Probe);
-            match probe_cache
-                .get(item.idx)
-                .and_then(|cached| cached.as_ref())
-            {
+            match probe_cache.get(item.idx).and_then(|cached| cached.as_ref()) {
                 Some(Ok(attr)) => {
                     if !policy.allow_reparse && winapi::is_reparse_point(*attr) {
                         super::trace_stage_end(super::TraceStage::Probe, probe_timer);

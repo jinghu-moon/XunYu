@@ -1,26 +1,26 @@
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use windows_sys::Win32::Foundation::{CloseHandle, HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::System::Threading::{
-    GetCurrentThread, OpenProcess, QueryFullProcessImageNameW, SetThreadPriority,
-    PROCESS_QUERY_LIMITED_INFORMATION, THREAD_PRIORITY_HIGHEST,
+    GetCurrentThread, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+    SetThreadPriority, THREAD_PRIORITY_HIGHEST,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, SendInput, HOT_KEY_MODIFIERS, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
-    KEYEVENTF_KEYUP, MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, VK_CONTROL, VK_LWIN, VK_MENU,
-    VK_RWIN, VK_SHIFT,
+    GetAsyncKeyState, HOT_KEY_MODIFIERS, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+    KEYEVENTF_KEYUP, MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, SendInput, VK_CONTROL, VK_LWIN,
+    VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetForegroundWindow, GetMessageW, GetWindowThreadProcessId,
-    PostMessageW, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, HHOOK, KBDLLHOOKSTRUCT,
-    MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN, WM_USER,
+    HHOOK, KBDLLHOOKSTRUCT, MSG, PostMessageW, SetWindowsHookExW, TranslateMessage,
+    UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN, WM_USER,
 };
 
 use crate::config::{DesktopRemap, DesktopSnippet};
 
-use super::hotkey::{parse_hotkey, ParsedHotkey};
+use super::hotkey::{ParsedHotkey, parse_hotkey};
 use super::snippet::{self, CharBuf};
 
 const PROBE_TAG: usize = 0xB2C3_D4E5;
@@ -28,7 +28,10 @@ const PROBE_VK: u16 = 0xFF;
 
 #[derive(Debug, Clone)]
 pub(crate) enum RemapTarget {
-    Hotkey { modifiers: HOT_KEY_MODIFIERS, vk: u16 },
+    Hotkey {
+        modifiers: HOT_KEY_MODIFIERS,
+        vk: u16,
+    },
     Disable,
     Text(String),
 }
@@ -183,12 +186,8 @@ pub(crate) fn start_remap_thread(
             });
             HOOK_CTX = Some(Box::into_raw(ctx));
 
-            HOOK_HANDLE = SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(keyboard_proc),
-                std::ptr::null_mut(),
-                0,
-            );
+            HOOK_HANDLE =
+                SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_proc), std::ptr::null_mut(), 0);
             if HOOK_HANDLE.is_null() {
                 let ctx_ptr = HOOK_CTX;
                 HOOK_CTX = None;
@@ -318,7 +317,11 @@ fn send_hotkey(modifiers: HOT_KEY_MODIFIERS, vk: u16, tag: usize) {
     }
     // SAFETY: INPUT array is fully initialized and lives for the call duration.
     unsafe {
-        SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
     }
 }
 
@@ -372,33 +375,35 @@ fn foreground_process_name() -> String {
 fn start_health_check(probe_flag: Arc<AtomicBool>, main_hwnd: isize) {
     std::thread::Builder::new()
         .name("xun-desktop-remap-health".to_string())
-        .spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_secs(30));
+        .spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(30));
 
-            probe_flag.store(false, Ordering::Relaxed);
-            let input = INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: PROBE_VK,
-                        wScan: 0,
-                        dwFlags: 0,
-                        time: 0,
-                        dwExtraInfo: PROBE_TAG,
+                probe_flag.store(false, Ordering::Relaxed);
+                let input = INPUT {
+                    r#type: INPUT_KEYBOARD,
+                    Anonymous: INPUT_0 {
+                        ki: KEYBDINPUT {
+                            wVk: PROBE_VK,
+                            wScan: 0,
+                            dwFlags: 0,
+                            time: 0,
+                            dwExtraInfo: PROBE_TAG,
+                        },
                     },
-                },
-            };
-            // SAFETY: INPUT is initialized and lives for the call duration.
-            unsafe {
-                SendInput(1, &input, std::mem::size_of::<INPUT>() as i32);
-            }
-
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            if !probe_flag.load(Ordering::Relaxed) && main_hwnd != 0 {
-                let hwnd = main_hwnd as HWND;
-                // SAFETY: PostMessageW is safe with a valid HWND or null check.
+                };
+                // SAFETY: INPUT is initialized and lives for the call duration.
                 unsafe {
-                    let _ = PostMessageW(hwnd, WM_USER + 5, 0, 0);
+                    SendInput(1, &input, std::mem::size_of::<INPUT>() as i32);
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if !probe_flag.load(Ordering::Relaxed) && main_hwnd != 0 {
+                    let hwnd = main_hwnd as HWND;
+                    // SAFETY: PostMessageW is safe with a valid HWND or null check.
+                    unsafe {
+                        let _ = PostMessageW(hwnd, WM_USER + 5, 0, 0);
+                    }
                 }
             }
         })

@@ -1,9 +1,9 @@
 use chrono::{DateTime, Duration, Local, NaiveTime, TimeZone};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use windows_sys::Win32::System::Power::{
-    SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED,
-    EXECUTION_STATE,
+    ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED, EXECUTION_STATE,
+    SetThreadExecutionState,
 };
 
 use crate::output::CliError;
@@ -11,8 +11,13 @@ use crate::output::CliError;
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AwakeMode {
     Off,
-    Indefinite { display_on: bool },
-    Timed { display_on: bool, until: DateTime<Local> },
+    Indefinite {
+        display_on: bool,
+    },
+    Timed {
+        display_on: bool,
+        until: DateTime<Local>,
+    },
 }
 
 impl AwakeMode {
@@ -20,16 +25,29 @@ impl AwakeMode {
         match self {
             Self::Off => "未激活".into(),
             Self::Indefinite { display_on } => {
-                if *display_on { "持续唤醒（保持屏幕亮）".into() }
-                else { "持续唤醒".into() }
+                if *display_on {
+                    "持续唤醒（保持屏幕亮）".into()
+                } else {
+                    "持续唤醒".into()
+                }
             }
             Self::Timed { display_on, until } => {
                 let now = Local::now();
                 let remaining = *until - now;
                 let h = remaining.num_hours();
                 let m = remaining.num_minutes() % 60;
-                let suffix = if *display_on { "，保持屏幕亮" } else { "" };
-                format!("定时唤醒，剩余 {}h {}m（到 {}{}）", h, m, until.format("%H:%M:%S"), suffix)
+                let suffix = if *display_on {
+                    "，保持屏幕亮"
+                } else {
+                    ""
+                };
+                format!(
+                    "定时唤醒，剩余 {}h {}m（到 {}{}）",
+                    h,
+                    m,
+                    until.format("%H:%M:%S"),
+                    suffix
+                )
             }
         }
     }
@@ -42,22 +60,34 @@ pub(crate) struct AwakeState {
 
 impl AwakeState {
     pub(crate) fn new() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self { mode: AwakeMode::Off, cancel_tx: None }))
+        Arc::new(Mutex::new(Self {
+            mode: AwakeMode::Off,
+            cancel_tx: None,
+        }))
     }
 }
 
-pub(crate) fn awake_indefinite(display_on: bool, state: &Arc<Mutex<AwakeState>>) -> Result<(), CliError> {
+pub(crate) fn awake_indefinite(
+    display_on: bool,
+    state: &Arc<Mutex<AwakeState>>,
+) -> Result<(), CliError> {
     cancel_awake(state);
     let flags = build_flags(display_on);
-    unsafe { SetThreadExecutionState(flags); }
+    unsafe {
+        SetThreadExecutionState(flags);
+    }
 
     let (tx, rx) = channel::<()>();
     let flags_cancel = ES_CONTINUOUS;
 
     std::thread::spawn(move || {
-        unsafe { SetThreadExecutionState(flags); }
+        unsafe {
+            SetThreadExecutionState(flags);
+        }
         let _ = rx.recv();
-        unsafe { SetThreadExecutionState(flags_cancel); }
+        unsafe {
+            SetThreadExecutionState(flags_cancel);
+        }
     });
 
     let mut s = state.lock().unwrap();
@@ -78,9 +108,13 @@ pub(crate) fn awake_timed(
     let (tx, rx) = channel::<()>();
 
     std::thread::spawn(move || {
-        unsafe { SetThreadExecutionState(flags); }
+        unsafe {
+            SetThreadExecutionState(flags);
+        }
         let result = rx.recv_timeout(duration);
-        unsafe { SetThreadExecutionState(ES_CONTINUOUS); }
+        unsafe {
+            SetThreadExecutionState(ES_CONTINUOUS);
+        }
         if result.is_err() {
             expired_callback();
         }

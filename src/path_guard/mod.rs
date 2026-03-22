@@ -79,7 +79,10 @@ where
     result
 }
 
-pub fn validate_paths_with_info<I, P>(inputs: I, policy: &PathPolicy) -> (Vec<PathInfo>, Vec<PathIssue>)
+pub fn validate_paths_with_info<I, P>(
+    inputs: I,
+    policy: &PathPolicy,
+) -> (Vec<PathInfo>, Vec<PathIssue>)
 where
     I: IntoIterator<Item = P>,
     P: AsRef<OsStr>,
@@ -104,7 +107,13 @@ where
     };
 
     for raw in inputs {
-        match validate_single_inner(raw.as_os_str(), policy, cwd_snapshot.as_ref(), &mut scratch, true) {
+        match validate_single_inner(
+            raw.as_os_str(),
+            policy,
+            cwd_snapshot.as_ref(),
+            &mut scratch,
+            true,
+        ) {
             Ok(info) => infos.push(info),
             Err(issue) => issues.push(issue),
         }
@@ -150,7 +159,13 @@ where
     };
 
     for raw in inputs {
-        match validate_single_inner(raw.as_os_str(), policy, cwd_snapshot.as_ref(), &mut scratch, true) {
+        match validate_single_inner(
+            raw.as_os_str(),
+            policy,
+            cwd_snapshot.as_ref(),
+            &mut scratch,
+            true,
+        ) {
             Ok(info) => infos.push(info),
             Err(issue) => issues.push(issue),
         }
@@ -201,7 +216,10 @@ pub(crate) fn validate_paths_serial(
     let trace_before = trace_snapshot_if_enabled();
     let (inputs, deduped) = dedupe_inputs(raw_inputs);
     let total = inputs.len();
-    let mut out = PathValidationResult { deduped, ..Default::default() };
+    let mut out = PathValidationResult {
+        deduped,
+        ..Default::default()
+    };
 
     let cwd_snapshot = if policy.allow_relative {
         policy.cwd_snapshot.clone().or_else(current_dir_safe)
@@ -240,14 +258,12 @@ pub(crate) fn validate_paths_serial(
     for (idx, raw, path) in checked {
         if policy.must_exist {
             let probe_timer = trace_stage_start(TraceStage::Probe);
-            match probe_cache
-                .get(idx)
-                .and_then(|cached| cached.as_ref())
-            {
+            match probe_cache.get(idx).and_then(|cached| cached.as_ref()) {
                 Some(Ok(attr)) => {
                     if !policy.allow_reparse && winapi::is_reparse_point(*attr) {
                         trace_stage_end(TraceStage::Probe, probe_timer);
-                        out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
+                        out.issues
+                            .push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
                         continue;
                     }
                 }
@@ -260,7 +276,8 @@ pub(crate) fn validate_paths_serial(
                     Ok(attr) => {
                         if !policy.allow_reparse && winapi::is_reparse_point(attr) {
                             trace_stage_end(TraceStage::Probe, probe_timer);
-                            out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
+                            out.issues
+                                .push(build_issue(raw.as_os_str(), PathIssueKind::ReparsePoint));
                             continue;
                         }
                     }
@@ -278,7 +295,8 @@ pub(crate) fn validate_paths_serial(
             let safety_timer = trace_stage_start(TraceStage::Safety);
             if crate::windows::safety::ensure_safe_target(&path).is_err() {
                 trace_stage_end(TraceStage::Safety, safety_timer);
-                out.issues.push(build_issue(raw.as_os_str(), PathIssueKind::AccessDenied));
+                out.issues
+                    .push(build_issue(raw.as_os_str(), PathIssueKind::AccessDenied));
                 continue;
             }
             trace_stage_end(TraceStage::Safety, safety_timer);
@@ -323,13 +341,15 @@ fn validate_single_inner(
 
     if probe_any || policy.must_exist {
         let probe_timer = trace_stage_start(TraceStage::Probe);
-        if policy.must_exist && policy.allow_reparse
-            && let Ok(handle) = winapi::open_path_with_policy(&info.path, policy) {
-                if let Ok(tag_info) = winapi::get_attribute_tag_info(&handle) {
-                    attr_from_handle = Some(tag_info.FileAttributes);
-                }
-                handle_for_canonical = Some(handle);
+        if policy.must_exist
+            && policy.allow_reparse
+            && let Ok(handle) = winapi::open_path_with_policy(&info.path, policy)
+        {
+            if let Ok(tag_info) = winapi::get_attribute_tag_info(&handle) {
+                attr_from_handle = Some(tag_info.FileAttributes);
             }
+            handle_for_canonical = Some(handle);
+        }
 
         if probe_any {
             if let Some(attr) = attr_from_handle {
@@ -377,9 +397,10 @@ fn validate_single_inner(
     if policy.must_exist && policy.allow_reparse {
         let canonical_timer = trace_stage_start(TraceStage::Canonical);
         if let Some(handle) = handle_for_canonical
-            && let Ok(final_path) = winapi::get_final_path(&handle) {
-                info.canonical = Some(final_path);
-            }
+            && let Ok(final_path) = winapi::get_final_path(&handle)
+        {
+            info.canonical = Some(final_path);
+        }
         trace_stage_end(TraceStage::Canonical, canonical_timer);
     }
 
@@ -429,7 +450,9 @@ pub(crate) fn validate_string_stage(
         trace_stage_end(TraceStage::ExpandEnv, expand_timer);
         fill_wide(scratch, &current);
         let string_timer = trace_stage_start(TraceStage::StringCheck);
-        if let Some(kind) = string_check::check_string(&current, scratch, policy, policy.allow_relative) {
+        if let Some(kind) =
+            string_check::check_string(&current, scratch, policy, policy.allow_relative)
+        {
             trace_stage_end(TraceStage::StringCheck, string_timer);
             return Err(kind);
         }
@@ -703,8 +726,7 @@ fn is_unc_root(raw: &[u16]) -> bool {
 }
 
 fn is_ascii_letter(unit: u16) -> bool {
-    (b'a' as u16..=b'z' as u16).contains(&unit)
-        || (b'A' as u16..=b'Z' as u16).contains(&unit)
+    (b'a' as u16..=b'z' as u16).contains(&unit) || (b'A' as u16..=b'Z' as u16).contains(&unit)
 }
 
 pub(crate) fn current_dir_safe() -> Option<PathBuf> {
@@ -868,10 +890,7 @@ pub(crate) fn trace_stage_end(stage: TraceStage, start: Option<Instant>) {
     let Some(start) = start else {
         return;
     };
-    let ns = start
-        .elapsed()
-        .as_nanos()
-        .min(u64::MAX as u128) as u64;
+    let ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
     match stage {
         TraceStage::Dedupe => {
             TRACE_DEDUPE_NS.fetch_add(ns, Ordering::Relaxed);

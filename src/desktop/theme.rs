@@ -1,13 +1,13 @@
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use windows_sys::Win32::System::Registry::{
-    RegCloseKey, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
-    KEY_READ, KEY_SET_VALUE, REG_DWORD,
+    HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, REG_DWORD, RegCloseKey, RegOpenKeyExW,
+    RegQueryValueExW, RegSetValueExW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    SendMessageTimeoutW, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
+    HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
 };
 
 use crate::output::CliError;
@@ -48,7 +48,11 @@ pub(crate) fn get_current_theme() -> ThemeMode {
             &mut data_size,
         );
         let _ = RegCloseKey(hkey);
-        if data == 1 { ThemeMode::Light } else { ThemeMode::Dark }
+        if data == 1 {
+            ThemeMode::Light
+        } else {
+            ThemeMode::Dark
+        }
     }
 }
 
@@ -62,7 +66,14 @@ pub(crate) fn set_theme(mode: &ThemeMode) -> Result<(), CliError> {
     unsafe {
         let mut hkey: HKEY = std::ptr::null_mut();
         let key_wide = to_wide(PERSONALIZE_KEY);
-        if RegOpenKeyExW(HKEY_CURRENT_USER, key_wide.as_ptr(), 0, KEY_SET_VALUE, &mut hkey) != 0 {
+        if RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            key_wide.as_ptr(),
+            0,
+            KEY_SET_VALUE,
+            &mut hkey,
+        ) != 0
+        {
             return Err(CliError::new(2, "无法打开主题配置"));
         }
 
@@ -110,7 +121,11 @@ pub(crate) struct ThemeSchedule {
 
 impl ThemeSchedule {
     pub(crate) fn new() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self { light_at: None, dark_at: None, cancel_tx: None }))
+        Arc::new(Mutex::new(Self {
+            light_at: None,
+            dark_at: None,
+            cancel_tx: None,
+        }))
     }
 
     pub(crate) fn start(
@@ -125,10 +140,8 @@ impl ThemeSchedule {
 
         let (tx, rx) = channel::<()>();
         std::thread::spawn(move || {
-            let mut events: Vec<(Duration, ThemeMode)> = vec![
-                (light_dur, ThemeMode::Light),
-                (dark_dur, ThemeMode::Dark),
-            ];
+            let mut events: Vec<(Duration, ThemeMode)> =
+                vec![(light_dur, ThemeMode::Light), (dark_dur, ThemeMode::Dark)];
             events.sort_by_key(|(d, _)| *d);
 
             for (dur, mode) in events {

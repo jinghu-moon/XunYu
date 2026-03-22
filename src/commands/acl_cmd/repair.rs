@@ -125,8 +125,12 @@ pub(super) fn cmd_repair(args: AclRepairCmd) -> CliResult {
 
     print_path_header(path);
     if args.reset_clean {
-        ui_println!("Clean reset: break inheritance + wipe ACL + write Administrators+SYSTEM FullControl");
-        ui_println!("WARNING: all existing ACEs (including custom permissions) will be permanently removed.");
+        ui_println!(
+            "Clean reset: break inheritance + wipe ACL + write Administrators+SYSTEM FullControl"
+        );
+        ui_println!(
+            "WARNING: all existing ACEs (including custom permissions) will be permanently removed."
+        );
     } else {
         ui_println!("Force repair (take ownership + grant FullControl)");
     }
@@ -138,7 +142,8 @@ pub(super) fn cmd_repair(args: AclRepairCmd) -> CliResult {
     }
 
     let stats = if args.reset_clean {
-        let extra: Vec<String> = args.grant
+        let extra: Vec<String> = args
+            .grant
             .as_deref()
             .unwrap_or("")
             .split(',')

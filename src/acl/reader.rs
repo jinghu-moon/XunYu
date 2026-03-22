@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use windows::Win32::Foundation::{
-    GetLastError, HLOCAL, LocalFree, ERROR_INSUFFICIENT_BUFFER, ERROR_NONE_MAPPED,
+    ERROR_INSUFFICIENT_BUFFER, ERROR_NONE_MAPPED, GetLastError, HLOCAL, LocalFree,
 };
 use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, GetNamedSecurityInfoW, SE_FILE_OBJECT,
@@ -338,8 +338,8 @@ unsafe fn parse_dacl(dacl: *mut windows::Win32::Security::ACL) -> Result<Vec<Ace
 
         let sid = PSID(sid_ptr as *mut _);
         let raw_sid = sid_to_string(sid).unwrap_or_else(|_| "(invalid)".to_string());
-        let (principal, is_orphan) = resolve_sid_with_orphan(sid)
-            .unwrap_or_else(|_| (raw_sid.clone(), true));
+        let (principal, is_orphan) =
+            resolve_sid_with_orphan(sid).unwrap_or_else(|_| (raw_sid.clone(), true));
 
         entries.push(AceEntry {
             principal,

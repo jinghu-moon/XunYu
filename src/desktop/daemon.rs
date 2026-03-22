@@ -5,14 +5,14 @@ use std::sync::{Arc, Mutex};
 use windows_sys::Win32::Foundation::{CloseHandle, HWND};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::{
-    OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
-    GetWindowThreadProcessId, PostQuitMessage, RegisterClassExW, TranslateMessage, MSG,
-    SW_SHOWNORMAL, WNDCLASSEXW, WM_HOTKEY, WM_USER,
+    GetWindowThreadProcessId, MSG, PostQuitMessage, RegisterClassExW, SW_SHOWNORMAL,
+    TranslateMessage, WM_HOTKEY, WM_USER, WNDCLASSEXW,
 };
 
 use crate::config::{self, DesktopBinding, DesktopConfig};
@@ -98,12 +98,7 @@ pub(crate) fn run_daemon(opts: DaemonOptions) -> CliResult {
                 WM_HOTKEY => {
                     let id = msg.wParam as i32;
                     if let Some(binding) = registered.iter().find(|r| r.id == id) {
-                        handle_binding_action(
-                            &binding.binding,
-                            &desktop,
-                            &awake_state,
-                            quiet,
-                        );
+                        handle_binding_action(&binding.binding, &desktop, &awake_state, quiet);
                     }
                 }
                 WM_AWAKE_EXPIRE => {
@@ -232,10 +227,7 @@ fn spawn_run(raw: &str) -> Result<(), CliError> {
     if cmdline.is_empty() {
         return Err(CliError::new(2, "run command is empty."));
     }
-    let parts: Vec<String> = cmdline
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect();
+    let parts: Vec<String> = cmdline.split_whitespace().map(|s| s.to_string()).collect();
     if parts.is_empty() {
         return Err(CliError::new(2, "run command is empty."));
     }
@@ -307,8 +299,8 @@ fn apply_layout(name: &str, desktop: &DesktopConfig) -> Result<(), CliError> {
         monitor: 0,
     };
     let template = layout::LayoutTemplate::Grid(grid);
-    let monitor = layout::get_monitor_area(0)
-        .ok_or_else(|| CliError::new(2, "Monitor 0 not found."))?;
+    let monitor =
+        layout::get_monitor_area(0).ok_or_else(|| CliError::new(2, "Monitor 0 not found."))?;
     let zones = layout::compute_zones(&template, &monitor);
     if zones.is_empty() {
         return Err(CliError::new(2, "No zones computed."));
@@ -317,7 +309,10 @@ fn apply_layout(name: &str, desktop: &DesktopConfig) -> Result<(), CliError> {
     let mut assignments: Vec<(u32, layout::ZoneRect)> = Vec::new();
     for (app, zone_index) in &layout_cfg.bindings {
         if *zone_index >= zones.len() {
-            return Err(CliError::new(2, format!("Zone index out of range: {zone_index}")));
+            return Err(CliError::new(
+                2,
+                format!("Zone index out of range: {zone_index}"),
+            ));
         }
         if let Some(proc) = crate::proc::find_by_name(app)
             .into_iter()

@@ -43,7 +43,11 @@ pub(super) fn cmd_batch(args: AclBatchCmd) -> CliResult {
             .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
             .collect();
         details.push("Fix: Provide an existing path and avoid reserved device names.".to_string());
-        return Err(CliError::with_details(2, "Invalid path input.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid path input.".to_string(),
+            &details,
+        ));
     }
     let paths = validation.ok;
     if paths.is_empty() {

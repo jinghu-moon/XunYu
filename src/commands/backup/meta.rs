@@ -129,7 +129,11 @@ pub(crate) fn collect_backup_records(backups_root: &Path, prefix: &str) -> Vec<B
         }
     }
 
-    records.sort_by(|a, b| a.mtime.cmp(&b.mtime).then_with(|| a.entry_name.cmp(&b.entry_name)));
+    records.sort_by(|a, b| {
+        a.mtime
+            .cmp(&b.mtime)
+            .then_with(|| a.entry_name.cmp(&b.entry_name))
+    });
     records
 }
 

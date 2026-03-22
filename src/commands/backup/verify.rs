@@ -46,7 +46,10 @@ pub(crate) fn cmd_backup_verify(
                 backup_type: "zip".to_string(),
                 corrupted_files: Vec::new(),
             };
-            out_println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+            out_println!(
+                "{}",
+                serde_json::to_string_pretty(&payload).unwrap_or_default()
+            );
         }
         return Err(CliError::with_details(
             2,
@@ -65,7 +68,10 @@ pub(crate) fn cmd_backup_verify(
                     backup_type: "dir".to_string(),
                     corrupted_files: Vec::new(),
                 };
-                out_println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+                out_println!(
+                    "{}",
+                    serde_json::to_string_pretty(&payload).unwrap_or_default()
+                );
             } else {
                 println!("✔ All files OK: {name}");
             }
@@ -80,7 +86,10 @@ pub(crate) fn cmd_backup_verify(
                     backup_type: "dir".to_string(),
                     corrupted_files: files.clone(),
                 };
-                out_println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+                out_println!(
+                    "{}",
+                    serde_json::to_string_pretty(&payload).unwrap_or_default()
+                );
             }
             eprintln!("✘ CORRUPTED backup: {name}");
             for f in &files {
@@ -100,7 +109,10 @@ pub(crate) fn cmd_backup_verify(
                     backup_type: "dir".to_string(),
                     corrupted_files: Vec::new(),
                 };
-                out_println!("{}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+                out_println!(
+                    "{}",
+                    serde_json::to_string_pretty(&payload).unwrap_or_default()
+                );
             }
             Err(CliError::with_details(
                 2,

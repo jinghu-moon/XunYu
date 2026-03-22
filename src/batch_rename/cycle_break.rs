@@ -16,10 +16,12 @@ pub fn break_cycles(ops: Vec<RenameOp>, existing: &[PathBuf]) -> Vec<RenameOp> {
     // Build from→to map (string keys for easy lookup)
     let map: HashMap<String, String> = ops
         .iter()
-        .map(|o| (
-            o.from.to_string_lossy().into_owned(),
-            o.to.to_string_lossy().into_owned(),
-        ))
+        .map(|o| {
+            (
+                o.from.to_string_lossy().into_owned(),
+                o.to.to_string_lossy().into_owned(),
+            )
+        })
         .collect();
 
     // Detect all cycles using DFS
@@ -48,7 +50,10 @@ pub fn break_cycles(ops: Vec<RenameOp>, existing: &[PathBuf]) -> Vec<RenameOp> {
     for op in &ops {
         let from_s = op.from.to_string_lossy().into_owned();
         if !cycle_nodes.contains(&from_s) {
-            result.push(RenameOp { from: op.from.clone(), to: op.to.clone() });
+            result.push(RenameOp {
+                from: op.from.clone(),
+                to: op.to.clone(),
+            });
         }
     }
 
@@ -109,7 +114,6 @@ pub fn break_cycles(ops: Vec<RenameOp>, existing: &[PathBuf]) -> Vec<RenameOp> {
     result
 }
 
-
 // ─── Cycle detection ─────────────────────────────────────────────────────────
 
 /// Returns each detected cycle as a Vec of node strings (the cycle path).
@@ -164,8 +168,9 @@ fn gen_tmp_name(base: &str, avoid: &HashSet<String>, cycle_idx: usize) -> String
     // Preserve the directory part of base if present
     let base_path = PathBuf::from(base);
     if let Some(parent) = base_path.parent()
-        && parent != std::path::Path::new("") {
-            return parent.join(&candidate).to_string_lossy().into_owned();
-        }
+        && parent != std::path::Path::new("")
+    {
+        return parent.join(&candidate).to_string_lossy().into_owned();
+    }
     candidate
 }

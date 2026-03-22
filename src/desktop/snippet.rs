@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex};
 use windows_sys::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
 };
-use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE,
+    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, SendInput,
     VK_BACK, VK_CONTROL, VK_OEM_COMMA, VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_PLUS, VK_RETURN,
     VK_SPACE, VK_TAB, VK_V,
 };
@@ -26,10 +26,7 @@ const ELECTRON_APPS: &[&str] = &[
     "teams.exe",
 ];
 
-const UWP_HOSTS: &[&str] = &[
-    "applicationframehost.exe",
-    "winstore.app.exe",
-];
+const UWP_HOSTS: &[&str] = &["applicationframehost.exe", "winstore.app.exe"];
 
 pub(crate) type CharBuf = Arc<Mutex<VecDeque<char>>>;
 
@@ -82,8 +79,14 @@ pub(crate) fn on_key(
 
     if is_terminator {
         let guard = buf.lock().unwrap();
-        let s: String = guard.iter().rev().skip(1).collect::<String>()
-            .chars().rev().collect();
+        let s: String = guard
+            .iter()
+            .rev()
+            .skip(1)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
         for snippet in snippets {
             if snippet.immediate {
                 continue;
@@ -153,8 +156,7 @@ fn expand_dynamic(template: &str) -> String {
 
 fn is_clipboard_app(exe: &str) -> bool {
     let lower = exe.to_lowercase();
-    ELECTRON_APPS.iter().any(|&a| lower == a)
-        || UWP_HOSTS.iter().any(|&a| lower == a)
+    ELECTRON_APPS.iter().any(|&a| lower == a) || UWP_HOSTS.iter().any(|&a| lower == a)
 }
 
 pub(crate) fn send_unicode_string(s: &str, tag: usize) {
@@ -162,7 +164,8 @@ pub(crate) fn send_unicode_string(s: &str, tag: usize) {
         return;
     }
     unsafe {
-        let inputs: Vec<INPUT> = s.encode_utf16()
+        let inputs: Vec<INPUT> = s
+            .encode_utf16()
             .flat_map(|c| {
                 [
                     make_keyboard_input(0, c, KEYEVENTF_UNICODE, tag),
@@ -173,7 +176,11 @@ pub(crate) fn send_unicode_string(s: &str, tag: usize) {
         if inputs.is_empty() {
             return;
         }
-        SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
     }
 }
 
@@ -183,7 +190,11 @@ pub(crate) fn send_single_key(vk: u16, tag: usize) {
             make_keyboard_input(vk, 0, 0, tag),
             make_keyboard_input(vk, 0, KEYEVENTF_KEYUP, tag),
         ];
-        SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
     }
 }
 
@@ -204,7 +215,11 @@ fn inject_via_clipboard(text: &str, tag: usize) {
             make_keyboard_input(VK_V, 0, KEYEVENTF_KEYUP, tag),
             make_keyboard_input(VK_CONTROL, 0, KEYEVENTF_KEYUP, tag),
         ];
-        SendInput(inputs.len() as u32, inputs.as_ptr(), std::mem::size_of::<INPUT>() as i32);
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
     }
 
     let old_clone = old.clone();

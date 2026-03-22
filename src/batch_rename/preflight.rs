@@ -13,19 +13,11 @@ use crate::batch_rename::types::RenameOp;
 #[derive(Debug)]
 pub enum PreflightError {
     /// Target filename contains a Windows-illegal character.
-    IllegalChar {
-        target: PathBuf,
-        chars: Vec<char>,
-    },
+    IllegalChar { target: PathBuf, chars: Vec<char> },
     /// Target stem matches a Windows reserved device name.
-    ReservedName {
-        target: PathBuf,
-        name: String,
-    },
+    ReservedName { target: PathBuf, name: String },
     /// A set of ops form a rename cycle (a→b→…→a).
-    Cycle {
-        files: Vec<PathBuf>,
-    },
+    Cycle { files: Vec<PathBuf> },
     /// Two ops share the same target (or target already exists on disk).
     Conflict(String),
 }
@@ -59,13 +51,18 @@ fn check_illegal_chars(ops: &[RenameOp], errors: &mut Vec<PreflightError>) {
         // Also check the original target string for characters that Windows
         // path parsing would silently swallow (e.g. colon as drive separator).
         let raw = op.to.to_string_lossy();
-        let raw_filename = raw
-            .rsplit(['/', '\\'])
-            .next()
-            .unwrap_or(&raw);
+        let raw_filename = raw.rsplit(['/', '\\']).next().unwrap_or(&raw);
 
-        let check = if raw_filename.len() > name.len() { raw_filename } else { &name };
-        let found: Vec<char> = ILLEGAL.iter().copied().filter(|&c| check.contains(c)).collect();
+        let check = if raw_filename.len() > name.len() {
+            raw_filename
+        } else {
+            &name
+        };
+        let found: Vec<char> = ILLEGAL
+            .iter()
+            .copied()
+            .filter(|&c| check.contains(c))
+            .collect();
         if !found.is_empty() {
             errors.push(PreflightError::IllegalChar {
                 target: op.to.clone(),
@@ -79,9 +76,8 @@ fn check_illegal_chars(ops: &[RenameOp], errors: &mut Vec<PreflightError>) {
 
 /// Windows reserved device names (case-insensitive, match stem only).
 const RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
 fn check_reserved_names(ops: &[RenameOp], errors: &mut Vec<PreflightError>) {

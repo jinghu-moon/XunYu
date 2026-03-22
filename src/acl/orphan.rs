@@ -21,7 +21,11 @@ pub struct OrphanEntry {
 /// * `recursive = false` → scan root only
 ///
 /// Returns one [`OrphanEntry`] per orphaned ACE found (may be multiple per path).
-pub(crate) fn scan_orphans(root: &Path, recursive: bool, config: &AclConfig) -> Result<Vec<OrphanEntry>> {
+pub(crate) fn scan_orphans(
+    root: &Path,
+    recursive: bool,
+    config: &AclConfig,
+) -> Result<Vec<OrphanEntry>> {
     // Build target list
     let mut targets: Vec<PathBuf> = vec![root.to_path_buf()];
     if recursive {

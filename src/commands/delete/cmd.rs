@@ -65,7 +65,11 @@ pub(crate) fn cmd_delete(args: DeleteCmd) -> CliResult {
         }
         if fatal {
             details.push("Fix: Provide valid paths for delete.".to_string());
-            return Err(CliError::with_details(2, "Invalid path input.".to_string(), &details));
+            return Err(CliError::with_details(
+                2,
+                "Invalid path input.".to_string(),
+                &details,
+            ));
         }
     }
 

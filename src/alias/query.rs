@@ -9,9 +9,12 @@ pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
     if args.json {
         let mut out = serde_json::Map::new();
         if show_cmd {
-            let filtered: std::collections::BTreeMap<_, _> = cfg.alias.iter()
+            let filtered: std::collections::BTreeMap<_, _> = cfg
+                .alias
+                .iter()
                 .filter(|(_, a)| {
-                    args.tag.as_deref()
+                    args.tag
+                        .as_deref()
                         .map(|t| a.tags.iter().any(|tag| tag == t))
                         .unwrap_or(true)
                 })
@@ -19,9 +22,12 @@ pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
             out.insert("alias".to_string(), serde_json::to_value(&filtered)?);
         }
         if show_app {
-            let filtered: std::collections::BTreeMap<_, _> = cfg.app.iter()
+            let filtered: std::collections::BTreeMap<_, _> = cfg
+                .app
+                .iter()
                 .filter(|(_, a)| {
-                    args.tag.as_deref()
+                    args.tag
+                        .as_deref()
                         .map(|t| a.tags.iter().any(|tag| tag == t))
                         .unwrap_or(true)
                 })

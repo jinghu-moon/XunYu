@@ -4,9 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Local};
 use heck::{ToKebabCase, ToPascalCase, ToSnakeCase};
 use regex::Regex;
-use chrono::{DateTime, Local};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::batch_rename::types::{CaseStyle, RenameOp};
@@ -21,47 +21,95 @@ pub struct ReplacePair {
 
 /// Which rename mode is active.
 pub enum RenameMode {
-    Regex { pattern: String, replace: String },
+    Regex {
+        pattern: String,
+        replace: String,
+    },
     Case(CaseStyle),
     Prefix(String),
     Suffix(String),
     StripPrefix(String),
     StripSuffix(String),
     Replace(Vec<ReplacePair>),
-    RenameExt { from: String, to: String },
+    RenameExt {
+        from: String,
+        to: String,
+    },
     /// Apply case transformation to the extension only.
     ExtCase(CaseStyle),
     /// Insert a string at a given character position in the stem.
-    InsertAt { pos: usize, insert: String },
+    InsertAt {
+        pos: usize,
+        insert: String,
+    },
     /// Extended sequence: prefix position or stem-replace.
-    SeqExt { start: usize, pad: usize, prefix: bool, only: bool },
+    SeqExt {
+        start: usize,
+        pad: usize,
+        prefix: bool,
+        only: bool,
+    },
     /// Remove bracketed content from stem and trim whitespace.
-    StripBrackets { round: bool, square: bool, curly: bool },
+    StripBrackets {
+        round: bool,
+        square: bool,
+        curly: bool,
+    },
     /// Trim whitespace or specific characters from stem ends.
-    Trim { chars: Option<String> },
+    Trim {
+        chars: Option<String>,
+    },
     /// Slice the stem using Python-style indices (negative = from end).
-    Slice { start: Option<i64>, end: Option<i64> },
+    Slice {
+        start: Option<i64>,
+        end: Option<i64>,
+    },
     /// Insert file date (mtime or ctime) into the stem.
-    InsertDate { fmt: String, use_ctime: bool, prefix: bool },
+    InsertDate {
+        fmt: String,
+        use_ctime: bool,
+        prefix: bool,
+    },
     /// Pad the last numeric group in the stem to a fixed width.
-    NormalizeSeq { pad: usize },
+    NormalizeSeq {
+        pad: usize,
+    },
     /// Rename using a template string with variables like {stem}, {ext}, {n}, etc.
-    Template { tpl: String, start: usize, pad: usize },
+    Template {
+        tpl: String,
+        start: usize,
+        pad: usize,
+    },
     /// Remove all occurrences of specified characters from the stem.
-    RemoveChars { chars: String },
+    RemoveChars {
+        chars: String,
+    },
     /// Add an extension to files that have no extension.
-    AddExt { ext: String },
+    AddExt {
+        ext: String,
+    },
     /// Replace the last numeric group in each stem with a new sequential number.
-    Renumber { start: usize, pad: usize },
+    Renumber {
+        start: usize,
+        pad: usize,
+    },
     /// Normalize Unicode form of the stem (nfc, nfd, nfkc, nfkd).
-    NormalizeUnicode { form: String },
+    NormalizeUnicode {
+        form: String,
+    },
 }
 
 /// Apply multiple rename steps in sequence. Each step's output becomes the next step's input.
 /// Empty steps returns noop ops (from == to).
 pub fn compute_ops_chain(files: &[PathBuf], steps: &[RenameMode]) -> CliResult<Vec<RenameOp>> {
     if steps.is_empty() {
-        return Ok(files.iter().map(|f| RenameOp { from: f.clone(), to: f.clone() }).collect());
+        return Ok(files
+            .iter()
+            .map(|f| RenameOp {
+                from: f.clone(),
+                to: f.clone(),
+            })
+            .collect());
     }
     // First step uses original files
     let first_ops = compute_ops(files, &steps[0])?;
@@ -69,11 +117,18 @@ pub fn compute_ops_chain(files: &[PathBuf], steps: &[RenameMode]) -> CliResult<V
     let mut result: Vec<RenameOp> = first_ops;
     for step in &steps[1..] {
         // Move `to` out of result to avoid clone; compute_ops needs owned Vec<PathBuf>
-        let current_tos: Vec<PathBuf> = result.iter_mut().map(|o| std::mem::take(&mut o.to)).collect();
+        let current_tos: Vec<PathBuf> = result
+            .iter_mut()
+            .map(|o| std::mem::take(&mut o.to))
+            .collect();
         let next_ops = compute_ops(&current_tos, step)?;
         // Restore: keep original `from`, take new `to`, restore intermediate as `to`
         for ((r, new_op), intermediate) in result.iter_mut().zip(next_ops).zip(current_tos) {
-            r.to = if new_op.to != intermediate { new_op.to } else { intermediate };
+            r.to = if new_op.to != intermediate {
+                new_op.to
+            } else {
+                intermediate
+            };
         }
     }
     Ok(result)
@@ -88,15 +143,28 @@ pub fn compute_ops(files: &[PathBuf], mode: &RenameMode) -> CliResult<Vec<Rename
         RenameMode::Suffix(s) => mode_suffix(files, s),
         RenameMode::StripPrefix(s) => mode_strip_prefix(files, s),
         RenameMode::StripSuffix(s) => mode_strip_suffix(files, s),
-        RenameMode::SeqExt { start, pad, prefix, only } => mode_seq_ext(files, *start, *pad, *prefix, *only),
+        RenameMode::SeqExt {
+            start,
+            pad,
+            prefix,
+            only,
+        } => mode_seq_ext(files, *start, *pad, *prefix, *only),
         RenameMode::Replace(pairs) => mode_replace(files, pairs),
         RenameMode::RenameExt { from, to } => mode_rename_ext(files, from, to),
         RenameMode::ExtCase(style) => mode_ext_case(files, style),
         RenameMode::InsertAt { pos, insert } => mode_insert_at(files, *pos, insert),
-        RenameMode::StripBrackets { round, square, curly } => mode_strip_brackets(files, *round, *square, *curly),
+        RenameMode::StripBrackets {
+            round,
+            square,
+            curly,
+        } => mode_strip_brackets(files, *round, *square, *curly),
         RenameMode::Trim { chars } => mode_trim(files, chars.as_deref()),
         RenameMode::Slice { start, end } => mode_slice(files, *start, *end),
-        RenameMode::InsertDate { fmt, use_ctime, prefix } => mode_insert_date(files, fmt, *use_ctime, *prefix),
+        RenameMode::InsertDate {
+            fmt,
+            use_ctime,
+            prefix,
+        } => mode_insert_date(files, fmt, *use_ctime, *prefix),
         RenameMode::NormalizeSeq { pad } => mode_normalize_seq(files, *pad),
         RenameMode::Template { tpl, start, pad } => mode_template(files, tpl, *start, *pad),
         RenameMode::RemoveChars { chars } => mode_remove_chars(files, chars),
@@ -294,7 +362,13 @@ fn mode_insert_at(files: &[PathBuf], pos: usize, insert: &str) -> CliResult<Vec<
         .collect())
 }
 
-fn mode_seq_ext(files: &[PathBuf], start: usize, pad: usize, prefix: bool, only: bool) -> CliResult<Vec<RenameOp>> {
+fn mode_seq_ext(
+    files: &[PathBuf],
+    start: usize,
+    pad: usize,
+    prefix: bool,
+    only: bool,
+) -> CliResult<Vec<RenameOp>> {
     Ok(files
         .iter()
         .enumerate()
@@ -316,7 +390,12 @@ fn mode_seq_ext(files: &[PathBuf], start: usize, pad: usize, prefix: bool, only:
         .collect())
 }
 
-fn mode_strip_brackets(files: &[PathBuf], round: bool, square: bool, curly: bool) -> CliResult<Vec<RenameOp>> {
+fn mode_strip_brackets(
+    files: &[PathBuf],
+    round: bool,
+    square: bool,
+    curly: bool,
+) -> CliResult<Vec<RenameOp>> {
     Ok(files
         .iter()
         .map(|f| {
@@ -326,21 +405,27 @@ fn mode_strip_brackets(files: &[PathBuf], round: bool, square: bool, curly: bool
                 // Remove (...) including surrounding whitespace, repeatedly
                 loop {
                     let new = remove_bracket_pair(&s, '(', ')');
-                    if new == s { break; }
+                    if new == s {
+                        break;
+                    }
                     s = new;
                 }
             }
             if square {
                 loop {
                     let new = remove_bracket_pair(&s, '[', ']');
-                    if new == s { break; }
+                    if new == s {
+                        break;
+                    }
                     s = new;
                 }
             }
             if curly {
                 loop {
                     let new = remove_bracket_pair(&s, '{', '}');
-                    if new == s { break; }
+                    if new == s {
+                        break;
+                    }
                     s = new;
                 }
             }
@@ -356,13 +441,14 @@ fn mode_strip_brackets(files: &[PathBuf], round: bool, square: bool, curly: bool
 /// Remove the first matching bracket pair and content, plus surrounding spaces.
 fn remove_bracket_pair(s: &str, open: char, close: char) -> String {
     if let Some(start) = s.find(open)
-        && let Some(end) = s[start..].find(close) {
-            let end_abs = start + end + close.len_utf8();
-            // Also consume leading/trailing spaces around the bracket
-            let before = s[..start].trim_end();
-            let after = s[end_abs..].trim_start();
-            return format!("{} {}", before, after).trim().to_owned();
-        }
+        && let Some(end) = s[start..].find(close)
+    {
+        let end_abs = start + end + close.len_utf8();
+        // Also consume leading/trailing spaces around the bracket
+        let before = s[..start].trim_end();
+        let after = s[end_abs..].trim_start();
+        return format!("{} {}", before, after).trim().to_owned();
+    }
     s.to_owned()
 }
 
@@ -437,28 +523,43 @@ fn title_case(s: &str) -> String {
     result
 }
 
-fn mode_insert_date(files: &[PathBuf], fmt: &str, use_ctime: bool, prefix: bool) -> CliResult<Vec<RenameOp>> {
+fn mode_insert_date(
+    files: &[PathBuf],
+    fmt: &str,
+    use_ctime: bool,
+    prefix: bool,
+) -> CliResult<Vec<RenameOp>> {
     files
         .iter()
         .map(|f| {
             let (stem, ext) = split_stem_ext(f);
             // Get file timestamp
-            let meta = f.metadata()
-                .map_err(|e| CliError::new(1, format!("Cannot read metadata for '{}': {}", f.display(), e)))?;
+            let meta = f.metadata().map_err(|e| {
+                CliError::new(
+                    1,
+                    format!("Cannot read metadata for '{}': {}", f.display(), e),
+                )
+            })?;
             let sys_time = if use_ctime {
                 // On Windows, created() is the creation time
                 meta.created().or_else(|_| meta.modified())
             } else {
                 meta.modified()
-            }.map_err(|e| CliError::new(1, format!("Cannot read file time for '{}': {}", f.display(), e)))?;
+            }
+            .map_err(|e| {
+                CliError::new(
+                    1,
+                    format!("Cannot read file time for '{}': {}", f.display(), e),
+                )
+            })?;
 
             let dt: DateTime<Local> = sys_time.into();
             let date_str = dt.format(fmt).to_string();
 
             let new_stem = if prefix {
-                format!("{}_{}" , date_str, stem)
+                format!("{}_{}", date_str, stem)
             } else {
-                format!("{}_{}" , stem, date_str)
+                format!("{}_{}", stem, date_str)
             };
             Ok(RenameOp {
                 from: f.clone(),
@@ -509,14 +610,20 @@ fn pad_last_number(s: &str, pad: usize) -> String {
 
 /// Apply a template string to each file.
 /// Supported variables: {stem}, {ext}, {n}, {upper}, {lower}, {parent}.
-fn mode_template(files: &[PathBuf], tpl: &str, start: usize, pad: usize) -> CliResult<Vec<RenameOp>> {
+fn mode_template(
+    files: &[PathBuf],
+    tpl: &str,
+    start: usize,
+    pad: usize,
+) -> CliResult<Vec<RenameOp>> {
     Ok(files
         .iter()
         .enumerate()
         .map(|(i, f)| {
             let (stem, ext) = split_stem_ext(f);
             let n = format!("{:0>width$}", start + i, width = pad);
-            let parent = f.parent()
+            let parent = f
+                .parent()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
                 .unwrap_or("");
@@ -556,7 +663,10 @@ fn mode_add_ext(files: &[PathBuf], ext: &str) -> CliResult<Vec<RenameOp>> {
         .iter()
         .map(|f| {
             if f.extension().is_some() {
-                RenameOp { from: f.clone(), to: f.clone() }
+                RenameOp {
+                    from: f.clone(),
+                    to: f.clone(),
+                }
             } else {
                 let name = f.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 RenameOp {
@@ -607,11 +717,11 @@ fn mode_normalize_unicode(files: &[PathBuf], form: &str) -> CliResult<Vec<Rename
         .map(|f| {
             let (stem, ext) = split_stem_ext(f);
             let new_stem = match form.to_ascii_lowercase().as_str() {
-                "nfc"  => stem.nfc().collect::<String>(),
-                "nfd"  => stem.nfd().collect::<String>(),
+                "nfc" => stem.nfc().collect::<String>(),
+                "nfd" => stem.nfd().collect::<String>(),
                 "nfkc" => stem.nfkc().collect::<String>(),
                 "nfkd" => stem.nfkd().collect::<String>(),
-                _      => stem.clone(),
+                _ => stem.clone(),
             };
             RenameOp {
                 from: f.clone(),

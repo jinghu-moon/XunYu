@@ -27,7 +27,7 @@ use zeroize::Zeroize;
 use windows::Win32::Foundation::{HLOCAL, LocalFree};
 #[cfg(windows)]
 use windows::Win32::Security::Cryptography::{
-    CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB, CryptProtectData, CryptUnprotectData,
+    CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN, CryptProtectData, CryptUnprotectData,
 };
 #[cfg(windows)]
 use windows::core::PCWSTR;
@@ -138,7 +138,9 @@ fn env_usize(key: &str, default: usize) -> usize {
 }
 
 fn filevault_workers() -> usize {
-    let default = thread::available_parallelism().map(|value| value.get()).unwrap_or(1);
+    let default = thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(1);
     env_usize("XUN_FILEVAULT_WORKERS", default).clamp(1, 16)
 }
 
@@ -210,7 +212,6 @@ impl VaultMode {
     fn as_u8(self) -> u8 {
         self as u8
     }
-
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -272,7 +273,6 @@ impl HeaderMacAlgorithm {
     fn as_u8(self) -> u8 {
         self as u8
     }
-
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -287,7 +287,9 @@ impl KdfKind {
         match value.trim().to_ascii_lowercase().as_str() {
             "argon2id" => Ok(Self::Argon2id),
             "pbkdf2-sha256" | "pbkdf2" => Ok(Self::Pbkdf2Sha256),
-            other => Err(FileVaultError::InvalidArgument(format!("unsupported kdf: {other}"))),
+            other => Err(FileVaultError::InvalidArgument(format!(
+                "unsupported kdf: {other}"
+            ))),
         }
     }
 }
@@ -716,7 +718,8 @@ pub fn encrypt_file(options: &EncryptOptions) -> Result<Value, FileVaultError> {
                     if fail_after_frames == Some(journal.frames_written) {
                         drop(job_tx);
                         return Err(FileVaultError::Resume(
-                            "simulated crash after streaming frames; use `vault resume`".to_string(),
+                            "simulated crash after streaming frames; use `vault resume`"
+                                .to_string(),
                         ));
                     }
                     next_write += 1;
@@ -758,7 +761,8 @@ pub fn encrypt_file(options: &EncryptOptions) -> Result<Value, FileVaultError> {
 
     let payload_digest: [u8; 32] = payload_hasher.finalize().into();
     timing.record("payload digest");
-    let header_mac = compute_header_mac(&payload_digest, &fixed_header_bytes, &variable_header_bytes)?;
+    let header_mac =
+        compute_header_mac(&payload_digest, &fixed_header_bytes, &variable_header_bytes)?;
     temp.seek(SeekFrom::Start(header_mac_offset))?;
     temp.write_all(&header_mac)?;
     let footer = CommitFooter {
@@ -959,15 +963,20 @@ pub fn decrypt_file(options: &DecryptOptions) -> Result<Value, FileVaultError> {
         let current = source.stream_position()?;
         if current != footer_offset {
             let _ = fs::remove_file(&temp_output);
-            return Err(FileVaultError::Verify("frame layout length mismatch".to_string()));
+            return Err(FileVaultError::Verify(
+                "frame layout length mismatch".to_string(),
+            ));
         }
     }
     if payload_digest != footer.payload_digest {
         let _ = fs::remove_file(&temp_output);
         return Err(FileVaultError::Verify("frame digest mismatch".to_string()));
     }
-    let expected_header_mac =
-        compute_header_mac(&payload_digest, &parsed.fixed_header_bytes, &parsed.variable_header_bytes)?;
+    let expected_header_mac = compute_header_mac(
+        &payload_digest,
+        &parsed.fixed_header_bytes,
+        &parsed.variable_header_bytes,
+    )?;
     if expected_header_mac != parsed.header_mac || expected_header_mac != footer.header_mac {
         let _ = fs::remove_file(&temp_output);
         return Err(FileVaultError::Verify("header mac mismatch".to_string()));
@@ -1043,7 +1052,9 @@ pub fn resume_file(path: &Path) -> Result<Value, FileVaultError> {
     let journal = read_journal(&journal_path)?;
     let fixed_header_bytes = vec_from_b64(&journal.fixed_header_b64)?;
     if fixed_header_bytes.len() != FIXED_HEADER_LEN {
-        return Err(FileVaultError::Resume("fixed header length mismatch in journal".to_string()));
+        return Err(FileVaultError::Resume(
+            "fixed header length mismatch in journal".to_string(),
+        ));
     }
     let fixed_header = decode_fixed_header(
         fixed_header_bytes
@@ -1094,11 +1105,18 @@ pub fn resume_file(path: &Path) -> Result<Value, FileVaultError> {
         fixed_header.frame_count,
         None,
     )?;
-    let header_mac = compute_header_mac(&payload_digest, fixed_header_bytes.as_slice().try_into().unwrap(), &variable_header_bytes)?;
+    let header_mac = compute_header_mac(
+        &payload_digest,
+        fixed_header_bytes.as_slice().try_into().unwrap(),
+        &variable_header_bytes,
+    )?;
     temp.seek(SeekFrom::Start(journal.header_mac_offset))?;
     temp.write_all(&header_mac)?;
     temp.seek(SeekFrom::End(0))?;
-    temp.write_all(&encode_footer(&CommitFooter { payload_digest, header_mac }))?;
+    temp.write_all(&encode_footer(&CommitFooter {
+        payload_digest,
+        header_mac,
+    }))?;
     temp.flush()?;
     commit_temp_into_place(&temp_path, &output_path)?;
     fs::remove_file(journal_path)?;
@@ -1146,7 +1164,10 @@ pub fn rewrap_file(options: &RewrapOptions) -> Result<Value, FileVaultError> {
         );
     }
     if let Some(keyfile) = options.add_keyfile.as_deref() {
-        replace_slot(&mut slots, build_keyfile_slot(keyfile, &file_key, options.kdf)?);
+        replace_slot(
+            &mut slots,
+            build_keyfile_slot(keyfile, &file_key, options.kdf)?,
+        );
     }
     if let Some(recovery_key) = options.add_recovery_key.as_deref() {
         replace_slot(&mut slots, build_recovery_slot(recovery_key, &file_key)?);
@@ -1173,7 +1194,11 @@ pub fn rewrap_file(options: &RewrapOptions) -> Result<Value, FileVaultError> {
     let mut fixed_header = parsed.fixed_header.clone();
     fixed_header.variable_header_len = variable_header_bytes.len() as u32;
     let fixed_header_bytes = encode_fixed_header(&fixed_header);
-    let header_mac = compute_header_mac(&footer.payload_digest, &fixed_header_bytes, &variable_header_bytes)?;
+    let header_mac = compute_header_mac(
+        &footer.payload_digest,
+        &fixed_header_bytes,
+        &variable_header_bytes,
+    )?;
     let new_footer = CommitFooter {
         payload_digest: footer.payload_digest,
         header_mac,
@@ -1292,7 +1317,9 @@ fn parse_vault(path: &Path) -> Result<ParsedVault, FileVaultError> {
     let mut file = File::open(path)?;
     let file_len = file.metadata()?.len();
     if file_len < (FIXED_HEADER_LEN + HEADER_MAC_LEN) as u64 {
-        return Err(FileVaultError::InvalidFormat("file too small for v13 header".to_string()));
+        return Err(FileVaultError::InvalidFormat(
+            "file too small for v13 header".to_string(),
+        ));
     }
 
     let mut fixed_header_bytes = [0u8; FIXED_HEADER_LEN];
@@ -1303,7 +1330,8 @@ fn parse_vault(path: &Path) -> Result<ParsedVault, FileVaultError> {
     let variable_header: VariableHeader = serde_json::from_slice(&variable_header_bytes)?;
     let mut header_mac = [0u8; HEADER_MAC_LEN];
     file.read_exact(&mut header_mac)?;
-    let first_frame_offset = (FIXED_HEADER_LEN + variable_header_bytes.len() + HEADER_MAC_LEN) as u64;
+    let first_frame_offset =
+        (FIXED_HEADER_LEN + variable_header_bytes.len() + HEADER_MAC_LEN) as u64;
 
     let mut footer = None;
     let mut footer_offset = None;
@@ -1347,7 +1375,11 @@ fn parse_vault(path: &Path) -> Result<ParsedVault, FileVaultError> {
     })
 }
 
-fn verify_parsed(path: &Path, parsed: &ParsedVault, json_only: bool) -> Result<Value, FileVaultError> {
+fn verify_parsed(
+    path: &Path,
+    parsed: &ParsedVault,
+    json_only: bool,
+) -> Result<Value, FileVaultError> {
     let footer = match parsed.footer.as_ref() {
         Some(footer) => footer,
         None => {
@@ -1392,8 +1424,11 @@ fn verify_parsed(path: &Path, parsed: &ParsedVault, json_only: bool) -> Result<V
         return Err(FileVaultError::Verify(value.to_string()));
     }
 
-    let expected_header_mac =
-        compute_header_mac(&payload_digest, &parsed.fixed_header_bytes, &parsed.variable_header_bytes)?;
+    let expected_header_mac = compute_header_mac(
+        &payload_digest,
+        &parsed.fixed_header_bytes,
+        &parsed.variable_header_bytes,
+    )?;
     if expected_header_mac != parsed.header_mac || expected_header_mac != footer.header_mac {
         let value = json!({
             "status": "corrupt",
@@ -1439,7 +1474,11 @@ fn verify_frame_decryption(
     Ok(())
 }
 
-fn build_password_slot(password: &str, file_key: &[u8], kdf_kind: KdfKind) -> Result<SlotRecord, FileVaultError> {
+fn build_password_slot(
+    password: &str,
+    file_key: &[u8],
+    kdf_kind: KdfKind,
+) -> Result<SlotRecord, FileVaultError> {
     let salt = random_bytes(16)?;
     let kdf = KdfConfig::new(kdf_kind, &salt);
     let wrap_key = derive_password_key(password.as_bytes(), &kdf)?;
@@ -1452,7 +1491,11 @@ fn build_password_slot(password: &str, file_key: &[u8], kdf_kind: KdfKind) -> Re
     })
 }
 
-fn build_keyfile_slot(path: &Path, file_key: &[u8], kdf_kind: KdfKind) -> Result<SlotRecord, FileVaultError> {
+fn build_keyfile_slot(
+    path: &Path,
+    file_key: &[u8],
+    kdf_kind: KdfKind,
+) -> Result<SlotRecord, FileVaultError> {
     let keyfile_bytes = fs::read(path)?;
     let salt = random_bytes(16)?;
     let kdf = KdfConfig::new(kdf_kind, &salt);
@@ -1487,10 +1530,16 @@ fn build_dpapi_slot(file_key: &[u8]) -> Result<SlotRecord, FileVaultError> {
     })
 }
 
-fn unlock_file_key(header: &VariableHeader, unlock: &UnlockOptions) -> Result<Vec<u8>, FileVaultError> {
+fn unlock_file_key(
+    header: &VariableHeader,
+    unlock: &UnlockOptions,
+) -> Result<Vec<u8>, FileVaultError> {
     let mut attempts = Vec::new();
     if let Some(password) = unlock.password.as_deref() {
-        attempts.push((SlotKind::Password, UnlockMaterial::Raw(password.as_bytes().to_vec())));
+        attempts.push((
+            SlotKind::Password,
+            UnlockMaterial::Raw(password.as_bytes().to_vec()),
+        ));
     }
     if let Some(keyfile) = unlock.keyfile.as_deref() {
         attempts.push((SlotKind::Keyfile, UnlockMaterial::Raw(fs::read(keyfile)?)));
@@ -1505,7 +1554,9 @@ fn unlock_file_key(header: &VariableHeader, unlock: &UnlockOptions) -> Result<Ve
         attempts.push((SlotKind::Dpapi, UnlockMaterial::Dpapi));
     }
     if attempts.is_empty() {
-        return Err(FileVaultError::Slot("no unlock material provided".to_string()));
+        return Err(FileVaultError::Slot(
+            "no unlock material provided".to_string(),
+        ));
     }
 
     for slot in &header.slots {
@@ -1518,7 +1569,9 @@ fn unlock_file_key(header: &VariableHeader, unlock: &UnlockOptions) -> Result<Ve
             }
         }
     }
-    Err(FileVaultError::Slot("no slot matched supplied unlock material".to_string()))
+    Err(FileVaultError::Slot(
+        "no slot matched supplied unlock material".to_string(),
+    ))
 }
 
 enum UnlockMaterial {
@@ -1531,10 +1584,9 @@ fn unwrap_slot(slot: &SlotRecord, material: &UnlockMaterial) -> Result<Vec<u8>, 
     match (slot.kind, material) {
         (SlotKind::Password, UnlockMaterial::Raw(bytes))
         | (SlotKind::Keyfile, UnlockMaterial::Raw(bytes)) => {
-            let kdf = slot
-                .kdf
-                .as_ref()
-                .ok_or_else(|| FileVaultError::Slot("missing kdf config for wrapped slot".to_string()))?;
+            let kdf = slot.kdf.as_ref().ok_or_else(|| {
+                FileVaultError::Slot("missing kdf config for wrapped slot".to_string())
+            })?;
             let wrap_key = derive_password_key(bytes, kdf)?;
             unwrap_key_material(&wrap_key, slot, slot.kind)
         }
@@ -1542,8 +1594,12 @@ fn unwrap_slot(slot: &SlotRecord, material: &UnlockMaterial) -> Result<Vec<u8>, 
             let wrap_key = derive_recovery_key(value)?;
             unwrap_key_material(&wrap_key, slot, slot.kind)
         }
-        (SlotKind::Dpapi, UnlockMaterial::Dpapi) => unwrap_dpapi(&vec_from_b64(&slot.wrapped_key_b64)?),
-        _ => Err(FileVaultError::Slot("unlock material type mismatch".to_string())),
+        (SlotKind::Dpapi, UnlockMaterial::Dpapi) => {
+            unwrap_dpapi(&vec_from_b64(&slot.wrapped_key_b64)?)
+        }
+        _ => Err(FileVaultError::Slot(
+            "unlock material type mismatch".to_string(),
+        )),
     }
 }
 
@@ -1591,16 +1647,29 @@ fn encrypt_frame(
     let aad = frame_aad(sequence, plaintext.len() as u32);
     match algorithm {
         PayloadAlgorithm::Aes256Gcm => {
-            let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| FileVaultError::Crypto("aes256-gcm init"))?;
+            let cipher = Aes256Gcm::new_from_slice(key)
+                .map_err(|_| FileVaultError::Crypto("aes256-gcm init"))?;
             cipher
-                .encrypt(Nonce::from_slice(&nonce), Payload { msg: plaintext, aad: &aad })
+                .encrypt(
+                    Nonce::from_slice(&nonce),
+                    Payload {
+                        msg: plaintext,
+                        aad: &aad,
+                    },
+                )
                 .map_err(|_| FileVaultError::Crypto("aes256-gcm encrypt"))
         }
         PayloadAlgorithm::XChaCha20Poly1305 => {
             let cipher = XChaCha20Poly1305::new_from_slice(key)
                 .map_err(|_| FileVaultError::Crypto("xchacha20 init"))?;
             cipher
-                .encrypt(XNonce::from_slice(&nonce), chacha20poly1305::aead::Payload { msg: plaintext, aad: &aad })
+                .encrypt(
+                    XNonce::from_slice(&nonce),
+                    chacha20poly1305::aead::Payload {
+                        msg: plaintext,
+                        aad: &aad,
+                    },
+                )
                 .map_err(|_| FileVaultError::Crypto("xchacha20 encrypt"))
         }
     }
@@ -1618,24 +1687,42 @@ fn decrypt_frame(
     let aad = frame_aad(sequence, plaintext_len);
     match algorithm {
         PayloadAlgorithm::Aes256Gcm => {
-            let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| FileVaultError::Crypto("aes256-gcm init"))?;
+            let cipher = Aes256Gcm::new_from_slice(key)
+                .map_err(|_| FileVaultError::Crypto("aes256-gcm init"))?;
             cipher
-                .decrypt(Nonce::from_slice(&nonce), Payload { msg: ciphertext, aad: &aad })
+                .decrypt(
+                    Nonce::from_slice(&nonce),
+                    Payload {
+                        msg: ciphertext,
+                        aad: &aad,
+                    },
+                )
                 .map_err(|_| FileVaultError::Crypto("aes256-gcm decrypt"))
         }
         PayloadAlgorithm::XChaCha20Poly1305 => {
             let cipher = XChaCha20Poly1305::new_from_slice(key)
                 .map_err(|_| FileVaultError::Crypto("xchacha20 init"))?;
             cipher
-                .decrypt(XNonce::from_slice(&nonce), chacha20poly1305::aead::Payload { msg: ciphertext, aad: &aad })
+                .decrypt(
+                    XNonce::from_slice(&nonce),
+                    chacha20poly1305::aead::Payload {
+                        msg: ciphertext,
+                        aad: &aad,
+                    },
+                )
                 .map_err(|_| FileVaultError::Crypto("xchacha20 decrypt"))
         }
     }
 }
 
-fn wrap_key_material(wrap_key: &[u8], file_key: &[u8], kind: SlotKind) -> Result<(Vec<u8>, Vec<u8>), FileVaultError> {
+fn wrap_key_material(
+    wrap_key: &[u8],
+    file_key: &[u8],
+    kind: SlotKind,
+) -> Result<(Vec<u8>, Vec<u8>), FileVaultError> {
     let nonce = random_bytes(12)?;
-    let cipher = Aes256Gcm::new_from_slice(wrap_key).map_err(|_| FileVaultError::Crypto("slot aes-gcm init"))?;
+    let cipher = Aes256Gcm::new_from_slice(wrap_key)
+        .map_err(|_| FileVaultError::Crypto("slot aes-gcm init"))?;
     let wrapped = cipher
         .encrypt(
             Nonce::from_slice(&nonce),
@@ -1648,14 +1735,19 @@ fn wrap_key_material(wrap_key: &[u8], file_key: &[u8], kind: SlotKind) -> Result
     Ok((nonce, wrapped))
 }
 
-fn unwrap_key_material(wrap_key: &[u8], slot: &SlotRecord, kind: SlotKind) -> Result<Vec<u8>, FileVaultError> {
+fn unwrap_key_material(
+    wrap_key: &[u8],
+    slot: &SlotRecord,
+    kind: SlotKind,
+) -> Result<Vec<u8>, FileVaultError> {
     let nonce = vec_from_b64(
         slot.nonce_b64
             .as_deref()
             .ok_or_else(|| FileVaultError::Slot("wrapped slot missing nonce".to_string()))?,
     )?;
     let wrapped = vec_from_b64(&slot.wrapped_key_b64)?;
-    let cipher = Aes256Gcm::new_from_slice(wrap_key).map_err(|_| FileVaultError::Crypto("slot aes-gcm init"))?;
+    let cipher = Aes256Gcm::new_from_slice(wrap_key)
+        .map_err(|_| FileVaultError::Crypto("slot aes-gcm init"))?;
     cipher
         .decrypt(
             Nonce::from_slice(&nonce),
@@ -1667,7 +1759,10 @@ fn unwrap_key_material(wrap_key: &[u8], slot: &SlotRecord, kind: SlotKind) -> Re
         .map_err(|_| FileVaultError::Slot("slot unwrap failed".to_string()))
 }
 
-fn encrypt_filename_metadata(path: &Path, file_key: &[u8]) -> Result<Option<FilenameInfo>, FileVaultError> {
+fn encrypt_filename_metadata(
+    path: &Path,
+    file_key: &[u8],
+) -> Result<Option<FilenameInfo>, FileVaultError> {
     let name = match path.file_name().and_then(|value| value.to_str()) {
         Some(name) if !name.is_empty() => name,
         _ => return Ok(None),
@@ -1723,7 +1818,9 @@ fn compute_payload_digest(
         file.read_exact(&mut ciphertext)
             .map_err(|_| FileVaultError::Verify("frame payload truncated".to_string()))?;
         if crc32(&ciphertext) != header.ciphertext_crc32 {
-            return Err(FileVaultError::Verify(format!("frame crc mismatch at index {expected_seq}")));
+            return Err(FileVaultError::Verify(format!(
+                "frame crc mismatch at index {expected_seq}"
+            )));
         }
         hasher.update(header_bytes);
         hasher.update(&ciphertext);
@@ -1731,7 +1828,9 @@ fn compute_payload_digest(
     if let Some(footer_offset) = footer_offset {
         let current = file.stream_position()?;
         if current != footer_offset {
-            return Err(FileVaultError::Verify("frame layout length mismatch".to_string()));
+            return Err(FileVaultError::Verify(
+                "frame layout length mismatch".to_string(),
+            ));
         }
     }
     Ok(hasher.finalize().into())
@@ -1775,11 +1874,15 @@ fn decode_fixed_header(bytes: [u8; FIXED_HEADER_LEN]) -> Result<FixedHeader, Fil
     }
     let version = u16::from_le_bytes(bytes[8..10].try_into().unwrap());
     if version != FORMAT_VERSION {
-        return Err(FileVaultError::InvalidFormat(format!("unsupported version: {version}")));
+        return Err(FileVaultError::InvalidFormat(format!(
+            "unsupported version: {version}"
+        )));
     }
     let header_mac_len = u32::from_le_bytes(bytes[36..40].try_into().unwrap());
     if header_mac_len as usize != HEADER_MAC_LEN {
-        return Err(FileVaultError::InvalidFormat("header mac length mismatch".to_string()));
+        return Err(FileVaultError::InvalidFormat(
+            "header mac length mismatch".to_string(),
+        ));
     }
     let mut nonce_seed = [0u8; 16];
     nonce_seed.copy_from_slice(&bytes[48..64]);
@@ -1831,7 +1934,9 @@ fn encode_footer(footer: &CommitFooter) -> [u8; FOOTER_LEN] {
 
 fn decode_footer(bytes: [u8; FOOTER_LEN]) -> Result<CommitFooter, FileVaultError> {
     if &bytes[..8] != COMMIT_MAGIC {
-        return Err(FileVaultError::InvalidFormat("footer magic mismatch".to_string()));
+        return Err(FileVaultError::InvalidFormat(
+            "footer magic mismatch".to_string(),
+        ));
     }
     let mut payload_digest = [0u8; 32];
     payload_digest.copy_from_slice(&bytes[8..40]);
@@ -1917,7 +2022,11 @@ fn replace_existing_file(temp_path: &Path, output_path: &Path) -> Result<(), Fil
     Ok(())
 }
 
-fn copy_exact_bytes(source: &mut File, target: &mut File, mut remaining: u64) -> Result<(), FileVaultError> {
+fn copy_exact_bytes(
+    source: &mut File,
+    target: &mut File,
+    mut remaining: u64,
+) -> Result<(), FileVaultError> {
     let mut buffer = vec![0u8; 256 * 1024];
     while remaining > 0 {
         let to_read = remaining.min(buffer.len() as u64) as usize;
@@ -1929,7 +2038,10 @@ fn copy_exact_bytes(source: &mut File, target: &mut File, mut remaining: u64) ->
 }
 
 fn unlock_supplied(unlock: &UnlockOptions) -> bool {
-    unlock.password.is_some() || unlock.keyfile.is_some() || unlock.recovery_key.is_some() || unlock.dpapi
+    unlock.password.is_some()
+        || unlock.keyfile.is_some()
+        || unlock.recovery_key.is_some()
+        || unlock.dpapi
 }
 
 fn now_unix_secs() -> u64 {
@@ -2015,7 +2127,9 @@ fn wrap_dpapi(bytes: &[u8]) -> Result<Vec<u8>, FileVaultError> {
 
 #[cfg(not(windows))]
 fn wrap_dpapi(_bytes: &[u8]) -> Result<Vec<u8>, FileVaultError> {
-    Err(FileVaultError::Unsupported("dpapi is only available on Windows".to_string()))
+    Err(FileVaultError::Unsupported(
+        "dpapi is only available on Windows".to_string(),
+    ))
 }
 
 #[cfg(windows)]
@@ -2044,5 +2158,7 @@ fn unwrap_dpapi(bytes: &[u8]) -> Result<Vec<u8>, FileVaultError> {
 
 #[cfg(not(windows))]
 fn unwrap_dpapi(_bytes: &[u8]) -> Result<Vec<u8>, FileVaultError> {
-    Err(FileVaultError::Unsupported("dpapi is only available on Windows".to_string()))
+    Err(FileVaultError::Unsupported(
+        "dpapi is only available on Windows".to_string(),
+    ))
 }

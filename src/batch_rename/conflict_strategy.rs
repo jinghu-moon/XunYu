@@ -53,7 +53,11 @@ fn apply_abort(ops: Vec<RenameOp>, existing: &HashSet<PathBuf>) -> CliResult<Vec
     if conflicts.is_empty() {
         Ok(ops)
     } else {
-        Err(CliError::with_details(1, "Conflicts detected.", &conflicts.iter().map(|s| s.as_str()).collect::<Vec<_>>()))
+        Err(CliError::with_details(
+            1,
+            "Conflicts detected.",
+            &conflicts.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+        ))
     }
 }
 
@@ -61,7 +65,8 @@ fn apply_abort(ops: Vec<RenameOp>, existing: &HashSet<PathBuf>) -> CliResult<Vec
 
 fn apply_skip(ops: Vec<RenameOp>, existing: &HashSet<PathBuf>) -> Vec<RenameOp> {
     // First pass: count how many ops share each target.
-    let mut target_count: std::collections::HashMap<PathBuf, usize> = std::collections::HashMap::new();
+    let mut target_count: std::collections::HashMap<PathBuf, usize> =
+        std::collections::HashMap::new();
     for op in &ops {
         *target_count.entry(op.to.clone()).or_insert(0) += 1;
     }
@@ -82,7 +87,10 @@ fn apply_rename_seq(ops: Vec<RenameOp>, existing: &HashSet<PathBuf>) -> Vec<Rena
             if seen.contains(&op.to) {
                 let unique = make_unique(&op.to, &seen);
                 seen.insert(unique.clone());
-                RenameOp { from: op.from, to: unique }
+                RenameOp {
+                    from: op.from,
+                    to: unique,
+                }
             } else {
                 seen.insert(op.to.clone());
                 op
@@ -94,7 +102,9 @@ fn apply_rename_seq(ops: Vec<RenameOp>, existing: &HashSet<PathBuf>) -> Vec<Rena
 fn make_unique(path: &Path, seen: &HashSet<PathBuf>) -> PathBuf {
     let parent = path.parent().unwrap_or(std::path::Path::new(""));
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-    let ext = path.extension().and_then(|e| e.to_str())
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
         .map(|e| format!(".{}", e))
         .unwrap_or_default();
     let mut i = 1usize;

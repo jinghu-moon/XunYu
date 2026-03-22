@@ -266,7 +266,11 @@ mod tests {
     #[test]
     fn empty_sid_list_all_no_rule() {
         // 空 SID 列表：即使 ACL 有规则，也不匹配任何主体
-        let s = snapshot(vec![make_ace(SID_A, RIGHT_READ_DATA | RIGHT_DELETE, AceType::Allow)]);
+        let s = snapshot(vec![make_ace(
+            SID_A,
+            RIGHT_READ_DATA | RIGHT_DELETE,
+            AceType::Allow,
+        )]);
         let ea = compute_effective_access(&s, &[]);
         assert_eq!(ea.read, TriState::NoRule);
         assert_eq!(ea.delete, TriState::NoRule);
@@ -282,10 +286,21 @@ mod tests {
             make_ace(SID_B, RIGHT_DELETE, AceType::Allow),
         ]);
         let ea = compute_effective_access(&s, &[SID_A.to_string(), SID_B.to_string()]);
-        assert_eq!(ea.effective_mask & RIGHT_DELETE, 0, "effective mask should have DELETE cleared");
-        assert_eq!(ea.deny_mask & RIGHT_DELETE, RIGHT_DELETE, "deny mask should include DELETE");
-        assert_eq!(ea.delete, TriState::Deny,
-            "deny from SID_A should take precedence over allow from SID_B");
+        assert_eq!(
+            ea.effective_mask & RIGHT_DELETE,
+            0,
+            "effective mask should have DELETE cleared"
+        );
+        assert_eq!(
+            ea.deny_mask & RIGHT_DELETE,
+            RIGHT_DELETE,
+            "deny mask should include DELETE"
+        );
+        assert_eq!(
+            ea.delete,
+            TriState::Deny,
+            "deny from SID_A should take precedence over allow from SID_B"
+        );
     }
 
     #[test]
@@ -310,7 +325,9 @@ mod tests {
         assert_eq!(ea.read, TriState::Allow);
         assert_eq!(ea.write, TriState::Allow);
         assert_eq!(ea.execute, TriState::NoRule);
-        assert_eq!(ea.effective_mask & (RIGHT_READ_DATA | RIGHT_WRITE_DATA),
-            RIGHT_READ_DATA | RIGHT_WRITE_DATA);
+        assert_eq!(
+            ea.effective_mask & (RIGHT_READ_DATA | RIGHT_WRITE_DATA),
+            RIGHT_READ_DATA | RIGHT_WRITE_DATA
+        );
     }
 }

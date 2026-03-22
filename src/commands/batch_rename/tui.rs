@@ -170,7 +170,12 @@ impl App {
         }
 
         self.message = Some((
-            format!("{} renamed, {} failed. Undo: xun brn {} --undo", success, errors, self.scan_root.display()),
+            format!(
+                "{} renamed, {} failed. Undo: xun brn {} --undo",
+                success,
+                errors,
+                self.scan_root.display()
+            ),
             errors > 0,
         ));
     }

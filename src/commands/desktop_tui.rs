@@ -14,7 +14,10 @@ use std::io;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
-use crate::config::{DesktopAwakeConfig, DesktopDaemonConfig, DesktopLayout, DesktopRemap, DesktopSnippet, DesktopThemeConfig, DesktopWorkspace};
+use crate::config::{
+    DesktopAwakeConfig, DesktopDaemonConfig, DesktopLayout, DesktopRemap, DesktopSnippet,
+    DesktopThemeConfig, DesktopWorkspace,
+};
 use crate::desktop::awake::{AwakeMode, AwakeState};
 use crate::desktop::theme::ThemeMode;
 use crate::output::{CliError, CliResult};
@@ -38,7 +41,10 @@ pub(crate) fn run_desktop_tui() -> CliResult {
     result
 }
 
-fn run_loop(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, app: &mut App) -> CliResult {
+fn run_loop(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    app: &mut App,
+) -> CliResult {
     loop {
         terminal
             .draw(|f| draw_ui(f, app))
@@ -324,7 +330,11 @@ impl App {
                 .get(idx)
                 .map(|s| {
                     let app = s.app.as_deref().unwrap_or("any");
-                    let mode = if s.immediate { "immediate" } else { "terminator" };
+                    let mode = if s.immediate {
+                        "immediate"
+                    } else {
+                        "terminator"
+                    };
                     let paste = s.paste.as_deref().unwrap_or("sendinput");
                     format!(
                         "Trigger: {}\nExpand: {}\nApp: {}\nMode: {}\nPaste: {}",
@@ -358,12 +368,7 @@ impl App {
                         .take(6)
                         .collect::<Vec<_>>()
                         .join("\n");
-                    format!(
-                        "Name: {}\nApps: {}\n{}",
-                        w.name,
-                        w.apps.len(),
-                        apps
-                    )
+                    format!("Name: {}\nApps: {}\n{}", w.name, w.apps.len(), apps)
                 })
                 .unwrap_or_else(|| "No workspaces configured.".to_string()),
             Panel::Hosts => self
@@ -743,7 +748,11 @@ impl App {
         let app = normalize_option(prompt_optional("App (optional)")?);
         let immediate = prompt_yes_no("Trigger immediately?", false)?;
         let clipboard = prompt_yes_no("Paste via clipboard?", false)?;
-        let paste = if clipboard { Some("clipboard".to_string()) } else { None };
+        let paste = if clipboard {
+            Some("clipboard".to_string())
+        } else {
+            None
+        };
 
         let mut cfg = crate::config::load_config();
         let mut updated = false;
@@ -940,7 +949,11 @@ impl App {
                 .into_iter()
                 .filter(|p| !p.window_title.trim().is_empty())
             {
-                let exe = if proc.exe_path.is_empty() { proc.name } else { proc.exe_path };
+                let exe = if proc.exe_path.is_empty() {
+                    proc.name
+                } else {
+                    proc.exe_path
+                };
                 let key = exe.to_lowercase();
                 if !seen.insert(key) {
                     continue;
@@ -961,10 +974,12 @@ impl App {
         if let Some(existing) = cfg.desktop.workspaces.iter_mut().find(|w| w.name == name) {
             existing.apps = apps;
         } else {
-            cfg.desktop.workspaces.push(crate::config::DesktopWorkspace {
-                name: name.clone(),
-                apps,
-            });
+            cfg.desktop
+                .workspaces
+                .push(crate::config::DesktopWorkspace {
+                    name: name.clone(),
+                    apps,
+                });
         }
         crate::config::save_config(&cfg)
             .map_err(|e| CliError::new(1, format!("Failed to save config: {e}")))?;
@@ -1159,7 +1174,10 @@ fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
         .split(f.area());
 
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(" xun desktop tui ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " xun desktop tui ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::raw("| "),
         Span::styled(app.panel().label(), Style::default().fg(Color::Cyan)),
     ]))
@@ -1178,7 +1196,11 @@ fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
         .collect();
     let menu = List::new(menu_items)
         .block(Block::default().borders(Borders::ALL).title("Panels"))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     f.render_stateful_widget(menu, body[0], &mut app.menu_state);
 
     let right = Layout::default()
@@ -1189,7 +1211,11 @@ fn draw_ui(f: &mut ratatui::Frame, app: &mut App) {
     let items = app.build_list_items();
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title("Items"))
-        .highlight_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        );
     f.render_stateful_widget(list, right[0], &mut app.list_state);
 
     let detail = Paragraph::new(app.detail_text())
@@ -1244,7 +1270,12 @@ fn prompt_optional(prompt: &str) -> CliResult<Option<String>> {
 }
 
 fn prompt_yes_no(prompt: &str, default: bool) -> CliResult<bool> {
-    prompt_interactive(|| Confirm::new().with_prompt(prompt).default(default).interact())
+    prompt_interactive(|| {
+        Confirm::new()
+            .with_prompt(prompt)
+            .default(default)
+            .interact()
+    })
 }
 
 fn prompt_u32(prompt: &str, default: u32) -> CliResult<u32> {
@@ -1396,7 +1427,10 @@ fn apply_layout_by_name(name: &str, move_existing: bool) -> CliResult<(usize, us
                 .filter(|i| !used_zones.contains(i))
                 .collect();
             let windows = crate::proc::list_all(false);
-            for proc in windows.into_iter().filter(|p| !p.window_title.trim().is_empty()) {
+            for proc in windows
+                .into_iter()
+                .filter(|p| !p.window_title.trim().is_empty())
+            {
                 if remaining.is_empty() {
                     break;
                 }
@@ -1431,7 +1465,8 @@ fn apply_layout_by_name(name: &str, move_existing: bool) -> CliResult<(usize, us
 
     let mut moved = 0usize;
     for (pid, zone) in assignments {
-        let hwnd = window_api::find_hwnd_by_pid(pid).map_err(|e| map_window_api_error("apply", e))?;
+        let hwnd =
+            window_api::find_hwnd_by_pid(pid).map_err(|e| map_window_api_error("apply", e))?;
         let rect = window_api::WindowRect {
             left: zone.x,
             top: zone.y,

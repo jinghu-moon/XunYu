@@ -357,31 +357,33 @@ pub fn force_reset_clean_v3(
 ) -> Result<RepairStats> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
-    use windows::Win32::Security::{
-        ACE_FLAGS, ACL_REVISION, AddAccessAllowedAceEx, InitializeAcl,
-    };
     use windows::Win32::Security::Authorization::{
-        ProgressInvokeEveryObject, TreeSetNamedSecurityInfoW, TREE_SEC_INFO_RESET,
+        ProgressInvokeEveryObject, TREE_SEC_INFO_RESET, TreeSetNamedSecurityInfoW,
     };
+    use windows::Win32::Security::{ACE_FLAGS, ACL_REVISION, AddAccessAllowedAceEx, InitializeAcl};
 
     let t0 = Instant::now();
 
     enable_repair_privileges().context("force_reset_clean_v3: privilege")?;
     let t_priv = t0.elapsed();
 
-    let admins_sid = lookup_account_sid(ADMINS_SID_STR)
-        .context("force_reset_clean_v3: Administrators SID")?;
-    let system_sid = lookup_account_sid("S-1-5-18")
-        .context("force_reset_clean_v3: SYSTEM SID")?;
+    let admins_sid =
+        lookup_account_sid(ADMINS_SID_STR).context("force_reset_clean_v3: Administrators SID")?;
+    let system_sid = lookup_account_sid("S-1-5-18").context("force_reset_clean_v3: SYSTEM SID")?;
 
     let extra_sids: Vec<Vec<u8>> = extra_principals
         .iter()
         .filter_map(|p| {
             let name = p.trim();
-            if name.is_empty() { return None; }
+            if name.is_empty() {
+                return None;
+            }
             match lookup_account_sid(name) {
                 Ok(sid) => Some(sid),
-                Err(e) => { eprintln!("[warn] 无法解析账户 '{name}': {e:#}"); None }
+                Err(e) => {
+                    eprintln!("[warn] 无法解析账户 '{name}': {e:#}");
+                    None
+                }
             }
         })
         .collect();
@@ -397,14 +399,14 @@ pub fn force_reset_clean_v3(
     // Safety: TreeSetNamedSecurityInfoW invokes the callback synchronously on
     // the calling thread — no cross-thread aliasing.
     struct CallbackState {
-        ok_count:  *const AtomicUsize,
+        ok_count: *const AtomicUsize,
         fail_list: *const Mutex<Vec<(PathBuf, String)>>,
-        bar:       *const ProgressBar,
+        bar: *const ProgressBar,
     }
     unsafe impl Send for CallbackState {}
     unsafe impl Sync for CallbackState {}
 
-    let ok_count  = AtomicUsize::new(0);
+    let ok_count = AtomicUsize::new(0);
     let fail_list: Mutex<Vec<(PathBuf, String)>> = Mutex::new(Vec::new());
     let bar = if quiet {
         ProgressBar::hidden()
@@ -412,7 +414,7 @@ pub fn force_reset_clean_v3(
         let b = ProgressBar::new_spinner();
         b.set_style(
             ProgressStyle::with_template(
-                "{spinner:.cyan} [{elapsed_precise}] {pos} 对象已处理  {msg}"
+                "{spinner:.cyan} [{elapsed_precise}] {pos} 对象已处理  {msg}",
             )
             .unwrap_or_else(|_| ProgressStyle::default_spinner()),
         );
@@ -422,20 +424,22 @@ pub fn force_reset_clean_v3(
     };
 
     let cb_state = CallbackState {
-        ok_count:  &ok_count  as *const _,
+        ok_count: &ok_count as *const _,
         fail_list: &fail_list as *const _,
-        bar:       &bar       as *const _,
+        bar: &bar as *const _,
     };
 
     unsafe extern "system" fn progress_cb(
-        name:         windows::core::PCWSTR,
-        status:       u32,
-        _invoke:      *mut windows::Win32::Security::Authorization::PROG_INVOKE_SETTING,
-        args:         *const std::ffi::c_void,
+        name: windows::core::PCWSTR,
+        status: u32,
+        _invoke: *mut windows::Win32::Security::Authorization::PROG_INVOKE_SETTING,
+        args: *const std::ffi::c_void,
         security_set: windows::Win32::Foundation::BOOL,
     ) {
         // Only process post-set callbacks to avoid double-counting.
-        if args.is_null() || !security_set.as_bool() { return; }
+        if args.is_null() || !security_set.as_bool() {
+            return;
+        }
         unsafe {
             let state = &*(args as *const CallbackState);
             if status == 0 {
@@ -446,8 +450,12 @@ pub fn force_reset_clean_v3(
                 let path = {
                     let mut len = 0usize;
                     let ptr = name.0;
-                    while !ptr.add(len).is_null() && *ptr.add(len) != 0 { len += 1; }
-                    PathBuf::from(String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len)))
+                    while !ptr.add(len).is_null() && *ptr.add(len) != 0 {
+                        len += 1;
+                    }
+                    PathBuf::from(String::from_utf16_lossy(std::slice::from_raw_parts(
+                        ptr, len,
+                    )))
                 };
                 let err_msg = format!("{}", AclError::from_win32(status));
                 if let Ok(mut g) = (*state.fail_list).lock() {
@@ -480,22 +488,27 @@ pub fn force_reset_clean_v3(
         let ace_size = |sl: u32| {
             std::mem::size_of::<windows::Win32::Security::ACCESS_ALLOWED_ACE>() as u32 + sl - 4
         };
-        let extra_size: u32 = extra_sids.iter().map(|s| {
-            ace_size(sid_len(PSID(s.as_ptr() as *mut _)))
-        }).sum();
+        let extra_size: u32 = extra_sids
+            .iter()
+            .map(|s| ace_size(sid_len(PSID(s.as_ptr() as *mut _))))
+            .sum();
         let acl_size = std::mem::size_of::<ACL>() as u32
             + ace_size(sid_len(admins))
             + ace_size(sid_len(system))
-            + extra_size + 16;
+            + extra_size
+            + 16;
 
         let mut acl_buf = vec![0u8; acl_size as usize];
         let new_acl = acl_buf.as_mut_ptr() as *mut ACL;
         InitializeAcl(new_acl, acl_size, ACL_REVISION)
-            .map_err(|_| AclError::last_win32()).context("v3: InitializeAcl")?;
+            .map_err(|_| AclError::last_win32())
+            .context("v3: InitializeAcl")?;
         AddAccessAllowedAceEx(new_acl, ACL_REVISION, ace_flags, FULL_CONTROL, admins)
-            .map_err(|_| AclError::last_win32()).context("v3: AddAce Administrators")?;
+            .map_err(|_| AclError::last_win32())
+            .context("v3: AddAce Administrators")?;
         AddAccessAllowedAceEx(new_acl, ACL_REVISION, ace_flags, FULL_CONTROL, system)
-            .map_err(|_| AclError::last_win32()).context("v3: AddAce SYSTEM")?;
+            .map_err(|_| AclError::last_win32())
+            .context("v3: AddAce SYSTEM")?;
         for (i, s) in extra_sids.iter().enumerate() {
             let esid = PSID(s.as_ptr() as *mut _);
             AddAccessAllowedAceEx(new_acl, ACL_REVISION, ace_flags, FULL_CONTROL, esid)
@@ -507,8 +520,13 @@ pub fn force_reset_clean_v3(
             DACL_SECURITY_INFORMATION.0 | OWNER_SECURITY_INFORMATION.0 | 0x8000_0000,
         );
         let status = SetNamedSecurityInfoW(
-            PCWSTR(pw.as_ptr()), SE_FILE_OBJECT, si_root,
-            admins, PSID::default(), Some(new_acl), None,
+            PCWSTR(pw.as_ptr()),
+            SE_FILE_OBJECT,
+            si_root,
+            admins,
+            PSID::default(),
+            Some(new_acl),
+            None,
         );
         check_win32(status, "v3: write root DACL")?;
         let t_root = t0.elapsed();
@@ -529,17 +547,31 @@ pub fn force_reset_clean_v3(
         );
         let t_tree = t0.elapsed();
 
-        let ok  = ok_count.load(Ordering::Relaxed);
+        let ok = ok_count.load(Ordering::Relaxed);
         let failures = fail_list.lock().unwrap();
-        bar.finish_with_message(format!(
-            "完成  ✓ {} / ✗ {}", ok, failures.len()
-        ));
+        bar.finish_with_message(format!("完成  ✓ {} / ✗ {}", ok, failures.len()));
 
         eprintln!("[timing-v3] privilege:  {:>8.2?}", t_priv);
-        eprintln!("[timing-v3] sid_resolve:{:>8.2?}  (+{:.2?})", t_sid,   t_sid   - t_priv);
-        eprintln!("[timing-v3] root_owner: {:>8.2?}  (+{:.2?})", t_owner, t_owner - t_sid);
-        eprintln!("[timing-v3] root_dacl:  {:>8.2?}  (+{:.2?})", t_root,  t_root  - t_owner);
-        eprintln!("[timing-v3] tree_reset: {:>8.2?}  (+{:.2?})", t_tree,  t_tree  - t_root);
+        eprintln!(
+            "[timing-v3] sid_resolve:{:>8.2?}  (+{:.2?})",
+            t_sid,
+            t_sid - t_priv
+        );
+        eprintln!(
+            "[timing-v3] root_owner: {:>8.2?}  (+{:.2?})",
+            t_owner,
+            t_owner - t_sid
+        );
+        eprintln!(
+            "[timing-v3] root_dacl:  {:>8.2?}  (+{:.2?})",
+            t_root,
+            t_root - t_owner
+        );
+        eprintln!(
+            "[timing-v3] tree_reset: {:>8.2?}  (+{:.2?})",
+            t_tree,
+            t_tree - t_root
+        );
         eprintln!("[timing-v3] total_wall: {:>8.2?}", t_tree);
 
         // Check overall status after collecting per-object errors
@@ -551,8 +583,10 @@ pub fn force_reset_clean_v3(
             owner_ok: ok,
             owner_fail: vec![],
             acl_ok: ok,
-            acl_fail: failures.iter().map(|(p, e)| (p.clone(), e.clone())).collect(),
+            acl_fail: failures
+                .iter()
+                .map(|(p, e)| (p.clone(), e.clone()))
+                .collect(),
         })
     }
 }
-

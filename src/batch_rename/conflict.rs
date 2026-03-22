@@ -32,18 +32,25 @@ impl ConflictInfo {
         match self.kind {
             ConflictKind::WouldOverwrite => format!(
                 "[overwrite] {} → {} (target already exists)",
-                self.sources[0].file_name().and_then(|n| n.to_str()).unwrap_or("?"),
+                self.sources[0]
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?"),
                 self.target.display(),
             ),
             ConflictKind::DuplicateTarget => {
-                let srcs: Vec<&str> = self.sources
+                let srcs: Vec<&str> = self
+                    .sources
                     .iter()
                     .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
                     .collect();
                 format!(
                     "[duplicate] {} file(s) → {} (same target name)",
                     srcs.len(),
-                    self.target.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
+                    self.target
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("?"),
                 )
             }
         }

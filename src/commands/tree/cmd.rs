@@ -29,7 +29,11 @@ pub(crate) fn cmd_tree(args: TreeCmd) -> CliResult {
                     .iter()
                     .map(|i| format!("{} ({})", i.raw, i.detail))
                     .collect();
-                return Err(CliError::with_details(2, "Invalid path.".to_string(), &details));
+                return Err(CliError::with_details(
+                    2,
+                    "Invalid path.".to_string(),
+                    &details,
+                ));
             }
             match validation.ok.into_iter().next() {
                 Some(pb) => pb,

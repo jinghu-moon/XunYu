@@ -57,7 +57,11 @@ fn cmd_enc(args: VaultEncCmd) -> CliResult {
         chunk_size: args.chunk_size,
     };
     let value = encrypt_file(&options).map_err(map_error)?;
-    emit_result(&value, args.json, &format!("已加密到 {}", options.output.display()));
+    emit_result(
+        &value,
+        args.json,
+        &format!("已加密到 {}", options.output.display()),
+    );
     Ok(())
 }
 
@@ -134,7 +138,11 @@ fn cmd_resume(args: VaultResumeCmd) -> CliResult {
 
 fn cmd_cleanup(args: VaultCleanupCmd) -> CliResult {
     let value = cleanup_artifacts(Path::new(&args.path)).map_err(map_error)?;
-    emit_result(&value, args.json, &format!("已清理 {} 的临时文件", args.path));
+    emit_result(
+        &value,
+        args.json,
+        &format!("已清理 {} 的临时文件", args.path),
+    );
     Ok(())
 }
 
@@ -163,7 +171,11 @@ fn cmd_rewrap(args: VaultRewrapCmd) -> CliResult {
         kdf: KdfKind::from_cli(&args.kdf).map_err(map_error)?,
     })
     .map_err(map_error)?;
-    emit_result(&value, args.json, &format!("已更新 {} 的 slots", path.display()));
+    emit_result(
+        &value,
+        args.json,
+        &format!("已更新 {} 的 slots", path.display()),
+    );
     Ok(())
 }
 
@@ -185,7 +197,11 @@ fn cmd_recover_key(args: VaultRecoverKeyCmd) -> CliResult {
         output: output.clone(),
     })
     .map_err(map_error)?;
-    emit_result(&value, args.json, &format!("已导出 recovery key 到 {}", output.display()));
+    emit_result(
+        &value,
+        args.json,
+        &format!("已导出 recovery key 到 {}", output.display()),
+    );
     Ok(())
 }
 
@@ -221,7 +237,11 @@ fn emit_result(value: &serde_json::Value, json_mode: bool, human: &str) {
     }
 }
 
-fn validate_path(raw: &str, policy: &crate::path_guard::PathPolicy, label: &str) -> CliResult<PathBuf> {
+fn validate_path(
+    raw: &str,
+    policy: &crate::path_guard::PathPolicy,
+    label: &str,
+) -> CliResult<PathBuf> {
     let validation = crate::path_guard::validate_paths(vec![raw.to_string()], policy);
     if !validation.issues.is_empty() {
         let mut details: Vec<String> = validation
@@ -230,7 +250,11 @@ fn validate_path(raw: &str, policy: &crate::path_guard::PathPolicy, label: &str)
             .map(|issue| format!("Invalid {label} path: {} ({})", issue.raw, issue.detail))
             .collect();
         details.push(format!("Fix: Provide a valid {label} path."));
-        return Err(CliError::with_details(2, "Invalid path input.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid path input.".to_string(),
+            &details,
+        ));
     }
     validation
         .ok

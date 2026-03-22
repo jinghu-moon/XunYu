@@ -14,7 +14,11 @@ fn validate_protect_path(raw: &str) -> CliResult<()> {
             .iter()
             .map(|i| format!("{} ({})", i.raw, i.detail))
             .collect();
-        return Err(CliError::with_details(2, "Invalid path.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid path.".to_string(),
+            &details,
+        ));
     }
     Ok(())
 }

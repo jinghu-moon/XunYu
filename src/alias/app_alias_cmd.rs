@@ -23,7 +23,11 @@ pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddCmd) -> Result<()> {
     if let Some(alias) = cfg.app.get(&args.name) {
         ctx.sync_app_alias_shim(&args.name, alias)?;
     }
-    if previous_app.as_ref().is_some_and(|alias| alias.register_apppaths) && args.no_apppaths {
+    if previous_app
+        .as_ref()
+        .is_some_and(|alias| alias.register_apppaths)
+        && args.no_apppaths
+    {
         let _ = apppaths::unregister(&args.name);
     }
     if !args.no_apppaths {

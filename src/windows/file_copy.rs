@@ -78,9 +78,7 @@ mod tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
 
-    use super::{
-        FileCopyBackend, detect_copy_backend_with,
-    };
+    use super::{FileCopyBackend, detect_copy_backend_with};
 
     #[test]
     fn detect_copy_backend_uses_supplied_default_when_env_missing() {

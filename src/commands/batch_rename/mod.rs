@@ -7,7 +7,9 @@ mod tui;
 
 use comfy_table::{Cell, Color, Table};
 
-use crate::batch_rename::collect::{SortBy, collect_dirs_depth, collect_files_depth, collect_files, sort_files_by};
+use crate::batch_rename::collect::{
+    SortBy, collect_dirs_depth, collect_files, collect_files_depth, sort_files_by,
+};
 use crate::batch_rename::compute::{RenameMode, ReplacePair, compute_ops, compute_ops_chain};
 use crate::batch_rename::conflict::{ConflictInfo, ConflictKind, detect_conflicts};
 use crate::batch_rename::output_format::{ops_to_csv, ops_to_json};
@@ -47,7 +49,11 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     // Resolve rename steps (multi-step pipeline)
     let t0 = std::time::Instant::now();
     let steps = resolve_steps(&args)?;
-    t_print!("resolve_steps: {:.2}ms (n={})", t0.elapsed().as_secs_f64() * 1000.0, steps.len());
+    t_print!(
+        "resolve_steps: {:.2}ms (n={})",
+        t0.elapsed().as_secs_f64() * 1000.0,
+        steps.len()
+    );
 
     let t0 = std::time::Instant::now();
     let mut policy = if args.apply {
@@ -57,7 +63,10 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     };
     policy.allow_relative = true;
     let validation = validate_paths(vec![args.path.clone()], &policy);
-    t_print!("validate_path: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
+    t_print!(
+        "validate_path: {:.2}ms",
+        t0.elapsed().as_secs_f64() * 1000.0
+    );
     if !validation.issues.is_empty() {
         let details: Vec<String> = validation
             .issues
@@ -78,7 +87,9 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
 
     // Collect files (with optional filter/exclude/depth)
     let t0 = std::time::Instant::now();
-    let depth = args.depth.map(|d| if d == 0 { 1 } else { d })
+    let depth = args
+        .depth
+        .map(|d| if d == 0 { 1 } else { d })
         .or(if args.recursive { None } else { Some(1) });
     let mut files = if args.filter.is_some() || args.exclude.is_some() || args.depth.is_some() {
         collect_files_depth(
@@ -107,7 +118,11 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
         let by = parse_sort_by(sort_str)?;
         sort_files_by(&mut files, by);
     }
-    t_print!("collect_files: {:.2}ms (n={})", t0.elapsed().as_secs_f64() * 1000.0, files.len());
+    t_print!(
+        "collect_files: {:.2}ms (n={})",
+        t0.elapsed().as_secs_f64() * 1000.0,
+        files.len()
+    );
     if files.is_empty() {
         ui_println!("No matching files found in '{}'.", scan_root);
         return Ok(());
@@ -120,19 +135,34 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     } else {
         compute_ops_chain(&files, &steps)?
     };
-    t_print!("compute_ops: {:.2}ms (n={})", t0.elapsed().as_secs_f64() * 1000.0, ops.len());
+    t_print!(
+        "compute_ops: {:.2}ms (n={})",
+        t0.elapsed().as_secs_f64() * 1000.0,
+        ops.len()
+    );
 
     // Filter out no-ops (from == to)
     let t0 = std::time::Instant::now();
     let (effective_ops, noop_ops): (Vec<_>, Vec<_>) = ops.into_iter().partition(|o| o.from != o.to);
     let ops = effective_ops;
-    t_print!("filter_noop: {:.2}ms (effective={} skipped={})", t0.elapsed().as_secs_f64() * 1000.0, ops.len(), noop_ops.len());
+    t_print!(
+        "filter_noop: {:.2}ms (effective={} skipped={})",
+        t0.elapsed().as_secs_f64() * 1000.0,
+        ops.len(),
+        noop_ops.len()
+    );
 
     // Warn about strip_prefix no-ops when strip_prefix is the only step
     if steps.len() == 1 && matches!(steps[0], RenameMode::StripPrefix(_)) && !noop_ops.is_empty() {
-        ui_println!("Warning: {} file(s) did not have the prefix and were skipped:", noop_ops.len());
+        ui_println!(
+            "Warning: {} file(s) did not have the prefix and were skipped:",
+            noop_ops.len()
+        );
         for op in &noop_ops {
-            ui_println!("  {}", op.from.file_name().and_then(|n| n.to_str()).unwrap_or("?"));
+            ui_println!(
+                "  {}",
+                op.from.file_name().and_then(|n| n.to_str()).unwrap_or("?")
+            );
         }
     }
 
@@ -144,7 +174,11 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
     // Conflict detection
     let t0 = std::time::Instant::now();
     let conflicts = detect_conflicts(&ops, args.apply);
-    t_print!("detect_conflicts: {:.2}ms (conflicts={})", t0.elapsed().as_secs_f64() * 1000.0, conflicts.len());
+    t_print!(
+        "detect_conflicts: {:.2}ms (conflicts={})",
+        t0.elapsed().as_secs_f64() * 1000.0,
+        conflicts.len()
+    );
     if !conflicts.is_empty() {
         print_conflict_table(&conflicts);
         return Err(CliError::new(1, "Resolve conflicts before renaming."));
@@ -174,21 +208,36 @@ pub(crate) fn cmd_brn(args: BrnCmd) -> CliResult {
         }
         let t0 = std::time::Instant::now();
         let r = apply_renames(&ops, std::path::Path::new(&scan_root), fmt);
-        t_print!("apply_renames: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
-        t_print!("cmd_brn total: {:.2}ms", t_total.elapsed().as_secs_f64() * 1000.0);
+        t_print!(
+            "apply_renames: {:.2}ms",
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
+        t_print!(
+            "cmd_brn total: {:.2}ms",
+            t_total.elapsed().as_secs_f64() * 1000.0
+        );
         r
     } else {
         #[cfg(feature = "tui")]
         {
             if can_interact() && fmt == "table" {
-                t_print!("cmd_brn total (pre-tui): {:.2}ms", t_total.elapsed().as_secs_f64() * 1000.0);
+                t_print!(
+                    "cmd_brn total (pre-tui): {:.2}ms",
+                    t_total.elapsed().as_secs_f64() * 1000.0
+                );
                 return tui::run_brn_tui(ops, std::path::PathBuf::from(&scan_root));
             }
         }
         let t0 = std::time::Instant::now();
         preview_ops(&ops, false, fmt);
-        t_print!("preview_table: {:.2}ms", t0.elapsed().as_secs_f64() * 1000.0);
-        t_print!("cmd_brn total: {:.2}ms", t_total.elapsed().as_secs_f64() * 1000.0);
+        t_print!(
+            "preview_table: {:.2}ms",
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
+        t_print!(
+            "cmd_brn total: {:.2}ms",
+            t_total.elapsed().as_secs_f64() * 1000.0
+        );
         Ok(())
     }
 }
@@ -205,7 +254,9 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
 
     // 1. Trim
     if args.trim {
-        steps.push(RenameMode::Trim { chars: args.trim_chars.clone() });
+        steps.push(RenameMode::Trim {
+            chars: args.trim_chars.clone(),
+        });
     }
 
     // 2. Strip brackets
@@ -216,15 +267,25 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
                 "round" | "()" => round = true,
                 "square" | "[]" => square = true,
                 "curly" | "{}" => curly = true,
-                "all" => { round = true; square = true; curly = true; }
-                other => return Err(CliError::with_details(
-                    2,
-                    format!("Unknown bracket type: '{}'", other),
-                    &["Fix: Use round, square, curly, or all (comma-separated)."],
-                )),
+                "all" => {
+                    round = true;
+                    square = true;
+                    curly = true;
+                }
+                other => {
+                    return Err(CliError::with_details(
+                        2,
+                        format!("Unknown bracket type: '{}'", other),
+                        &["Fix: Use round, square, curly, or all (comma-separated)."],
+                    ));
+                }
             }
         }
-        steps.push(RenameMode::StripBrackets { round, square, curly });
+        steps.push(RenameMode::StripBrackets {
+            round,
+            square,
+            curly,
+        });
     }
 
     // 3. Strip prefix
@@ -239,7 +300,9 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
 
     // 5. Remove chars
     if let Some(ref chars) = args.remove_chars {
-        steps.push(RenameMode::RemoveChars { chars: chars.clone() });
+        steps.push(RenameMode::RemoveChars {
+            chars: chars.clone(),
+        });
     }
 
     // 6. Literal replace (--from / --to)
@@ -300,7 +363,10 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
     // 10. Rename ext (format: old:new)
     if let Some(ref spec) = args.rename_ext {
         let (from_ext, to_ext) = parse_colon_pair(spec, "--rename-ext", "old:new (e.g. jpeg:jpg)")?;
-        steps.push(RenameMode::RenameExt { from: from_ext, to: to_ext });
+        steps.push(RenameMode::RenameExt {
+            from: from_ext,
+            to: to_ext,
+        });
     }
 
     // 11. Add ext
@@ -310,34 +376,44 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
 
     // 12. Insert at (format: pos:text)
     if let Some(ref spec) = args.insert_at {
-        let colon = spec.find(':').ok_or_else(|| CliError::with_details(
-            2,
-            "--insert-at requires format pos:text (e.g. 3:_)",
-            &["Fix: Use --insert-at <position>:<text>."],
-        ))?;
-        let pos: usize = spec[..colon].parse().map_err(|_| CliError::with_details(
-            2,
-            format!("--insert-at: invalid position '{}'", &spec[..colon]),
-            &["Fix: Position must be a non-negative integer."],
-        ))?;
+        let colon = spec.find(':').ok_or_else(|| {
+            CliError::with_details(
+                2,
+                "--insert-at requires format pos:text (e.g. 3:_)",
+                &["Fix: Use --insert-at <position>:<text>."],
+            )
+        })?;
+        let pos: usize = spec[..colon].parse().map_err(|_| {
+            CliError::with_details(
+                2,
+                format!("--insert-at: invalid position '{}'", &spec[..colon]),
+                &["Fix: Position must be a non-negative integer."],
+            )
+        })?;
         let insert = spec[colon + 1..].to_owned();
         steps.push(RenameMode::InsertAt { pos, insert });
     }
 
     // 13. Slice (format: start:end, both optional)
     if let Some(ref spec) = args.slice {
-        let colon = spec.find(':').ok_or_else(|| CliError::with_details(
-            2,
-            "--slice requires format start:end (e.g. 0:8 or -4:)",
-            &["Fix: Use --slice <start>:<end> with optional negative indices."],
-        ))?;
-        let parse_idx = |s: &str| -> CliResult<Option<i64>> {
-            if s.is_empty() { return Ok(None); }
-            s.parse::<i64>().map(Some).map_err(|_| CliError::with_details(
+        let colon = spec.find(':').ok_or_else(|| {
+            CliError::with_details(
                 2,
-                format!("--slice: invalid index '{}'", s),
-                &["Fix: Use integers (can be negative for from-end indexing)."],
-            ))
+                "--slice requires format start:end (e.g. 0:8 or -4:)",
+                &["Fix: Use --slice <start>:<end> with optional negative indices."],
+            )
+        })?;
+        let parse_idx = |s: &str| -> CliResult<Option<i64>> {
+            if s.is_empty() {
+                return Ok(None);
+            }
+            s.parse::<i64>().map(Some).map_err(|_| {
+                CliError::with_details(
+                    2,
+                    format!("--slice: invalid index '{}'", s),
+                    &["Fix: Use integers (can be negative for from-end indexing)."],
+                )
+            })
         };
         let start = parse_idx(&spec[..colon])?;
         let end = parse_idx(&spec[colon + 1..])?;
@@ -354,13 +430,19 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
         let prefix = match pos_str {
             "prefix" => true,
             "suffix" | "" => false,
-            other => return Err(CliError::with_details(
-                2,
-                format!("--insert-date: unknown position '{}'", other),
-                &["Fix: Use prefix:<fmt> or suffix:<fmt> (e.g. prefix:%Y%m%d)."],
-            )),
+            other => {
+                return Err(CliError::with_details(
+                    2,
+                    format!("--insert-date: unknown position '{}'", other),
+                    &["Fix: Use prefix:<fmt> or suffix:<fmt> (e.g. prefix:%Y%m%d)."],
+                ));
+            }
         };
-        steps.push(RenameMode::InsertDate { fmt, use_ctime: args.ctime, prefix });
+        steps.push(RenameMode::InsertDate {
+            fmt,
+            use_ctime: args.ctime,
+            prefix,
+        });
     } else if args.ctime {
         return Err(CliError::with_details(
             2,
@@ -379,11 +461,13 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
         let form_lc = form.to_ascii_lowercase();
         match form_lc.as_str() {
             "nfc" | "nfd" | "nfkc" | "nfkd" => {}
-            other => return Err(CliError::with_details(
-                2,
-                format!("--normalize-unicode: unknown form '{}'", other),
-                &["Fix: Use nfc, nfd, nfkc, or nfkd."],
-            )),
+            other => {
+                return Err(CliError::with_details(
+                    2,
+                    format!("--normalize-unicode: unknown form '{}'", other),
+                    &["Fix: Use nfc, nfd, nfkc, or nfkd."],
+                ));
+            }
         }
         steps.push(RenameMode::NormalizeUnicode { form: form_lc });
     }
@@ -421,7 +505,9 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
         return Err(CliError::with_details(
             2,
             "No rename step specified.",
-            &["Fix: Use --trim, --strip-prefix, --strip-suffix, --strip-brackets, --remove-chars, --from, --regex, --case, --ext-case, --rename-ext, --add-ext, --insert-at, --slice, --insert-date, --normalize-seq, --normalize-unicode, --template, --prefix, --suffix, or --seq."],
+            &[
+                "Fix: Use --trim, --strip-prefix, --strip-suffix, --strip-brackets, --remove-chars, --from, --regex, --case, --ext-case, --rename-ext, --add-ext, --insert-at, --slice, --insert-date, --normalize-seq, --normalize-unicode, --template, --prefix, --suffix, or --seq.",
+            ],
         ));
     }
 
@@ -430,11 +516,13 @@ fn resolve_steps(args: &BrnCmd) -> CliResult<Vec<RenameMode>> {
 
 /// Parse a "key:value" pair, returning (key, value) as owned Strings.
 fn parse_colon_pair(spec: &str, flag: &str, example: &str) -> CliResult<(String, String)> {
-    let colon = spec.find(':').ok_or_else(|| CliError::with_details(
-        2,
-        format!("{} requires format {} (got '{}')", flag, example, spec),
-        &[] as &[&str],
-    ))?;
+    let colon = spec.find(':').ok_or_else(|| {
+        CliError::with_details(
+            2,
+            format!("{} requires format {} (got '{}')", flag, example, spec),
+            &[] as &[&str],
+        )
+    })?;
     Ok((spec[..colon].to_owned(), spec[colon + 1..].to_owned()))
 }
 
@@ -551,15 +639,13 @@ fn print_conflict_table(conflicts: &[ConflictInfo]) {
             ConflictKind::WouldOverwrite => ("overwrite", "target already exists on disk"),
             ConflictKind::DuplicateTarget => ("duplicate", "multiple files map to same name"),
         };
-        let sources_str = c.sources
+        let sources_str = c
+            .sources
             .iter()
             .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
             .collect::<Vec<_>>()
             .join("\n");
-        let target_str = c.target
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("?");
+        let target_str = c.target.file_name().and_then(|n| n.to_str()).unwrap_or("?");
         table.add_row(vec![
             Cell::new(kind_label).fg(Color::Yellow),
             Cell::new(&sources_str).fg(Color::Red),
@@ -587,7 +673,11 @@ fn confirm_apply(count: usize) -> CliResult<bool> {
 
 // ─── Apply ───────────────────────────────────────────────────────────────────
 
-fn apply_renames(ops: &[crate::batch_rename::types::RenameOp], scan_root: &std::path::Path, fmt: &str) -> CliResult {
+fn apply_renames(
+    ops: &[crate::batch_rename::types::RenameOp],
+    scan_root: &std::path::Path,
+    fmt: &str,
+) -> CliResult {
     let mut records: Vec<UndoRecord> = Vec::new();
     let mut success = 0usize;
     let mut errors = 0usize;
@@ -624,13 +714,16 @@ fn apply_renames(ops: &[crate::batch_rename::types::RenameOp], scan_root: &std::
 
     if fmt == "json" {
         // Structured JSON output for dashboard
-        let ops_json: Vec<serde_json::Value> = done_ops.iter().map(|(op, ok)| {
-            serde_json::json!({
-                "from": op.from.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
-                "to":   op.to.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
-                "ok":   ok,
+        let ops_json: Vec<serde_json::Value> = done_ops
+            .iter()
+            .map(|(op, ok)| {
+                serde_json::json!({
+                    "from": op.from.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
+                    "to":   op.to.file_name().and_then(|n| n.to_str()).unwrap_or("?"),
+                    "ok":   ok,
+                })
             })
-        }).collect();
+            .collect();
         let result = serde_json::json!({
             "total":   ops.len(),
             "success": success,

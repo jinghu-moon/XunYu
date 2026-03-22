@@ -1,9 +1,9 @@
 use windows_sys::Win32::Foundation::{BOOL, GetLastError, HWND, LPARAM, RECT};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowTextW, GetWindowThreadProcessId, GetWindowLongW, GetWindowRect,
-    IsWindowVisible, MoveWindow, SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongW,
-    SetWindowPos, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, LWA_ALPHA, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
+    EnumWindows, GWL_EXSTYLE, GetWindowLongW, GetWindowRect, GetWindowTextW,
+    GetWindowThreadProcessId, HWND_NOTOPMOST, HWND_TOPMOST, IsWindowVisible, LWA_ALPHA, MoveWindow,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetLayeredWindowAttributes,
+    SetWindowLongW, SetWindowPos, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
 };
 
 #[derive(Debug)]
@@ -50,7 +50,9 @@ unsafe extern "system" fn enum_windows_by_pid(hwnd: HWND, lparam: LPARAM) -> BOO
     }
 
     let mut pid = 0u32;
-    unsafe { GetWindowThreadProcessId(hwnd, &mut pid); }
+    unsafe {
+        GetWindowThreadProcessId(hwnd, &mut pid);
+    }
     if pid == 0 {
         return 1;
     }
@@ -81,7 +83,9 @@ unsafe extern "system" fn enum_windows_by_pid(hwnd: HWND, lparam: LPARAM) -> BOO
 
 pub(crate) fn find_hwnd_by_pid(pid: u32) -> Result<isize, WindowApiError> {
     let mut search = WindowSearch { pid, hwnd: 0 };
-    unsafe { EnumWindows(Some(enum_windows_by_pid), &mut search as *mut _ as LPARAM); }
+    unsafe {
+        EnumWindows(Some(enum_windows_by_pid), &mut search as *mut _ as LPARAM);
+    }
     if search.hwnd == 0 {
         return Err(WindowApiError::NotFound);
     }
@@ -122,7 +126,16 @@ pub(crate) fn focus_window(hwnd: isize) -> Result<(), WindowApiError> {
 
 pub(crate) fn move_window(hwnd: isize, x: i32, y: i32) -> Result<(), WindowApiError> {
     let rect = get_window_rect_raw(hwnd as HWND)?;
-    let ok = unsafe { MoveWindow(hwnd as HWND, x, y, rect.right - rect.left, rect.bottom - rect.top, 1) };
+    let ok = unsafe {
+        MoveWindow(
+            hwnd as HWND,
+            x,
+            y,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            1,
+        )
+    };
     if ok == 0 {
         return Err(WindowApiError::os_error("MoveWindow"));
     }
@@ -137,7 +150,6 @@ pub(crate) fn resize_window(hwnd: isize, width: i32, height: i32) -> Result<(), 
     }
     Ok(())
 }
-
 
 pub(crate) fn set_topmost(hwnd: isize, enable: bool) -> Result<(), WindowApiError> {
     let insert_after = if enable { HWND_TOPMOST } else { HWND_NOTOPMOST };

@@ -7,24 +7,24 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::ffi::OsStringExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
+use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
+use windows_sys::Wdk::Storage::FileSystem::{FILE_BASIC_INFORMATION, FILE_STAT_INFORMATION};
 use windows_sys::Win32::Foundation::{
-    BOOL, GetLastError, HMODULE, INVALID_HANDLE_VALUE, NTSTATUS, STATUS_ACCESS_DENIED,
-    STATUS_BAD_NETWORK_PATH, STATUS_INVALID_PARAMETER, STATUS_NAME_TOO_LONG,
+    BOOL, ERROR_NO_MORE_FILES, GetLastError, HMODULE, INVALID_HANDLE_VALUE, NTSTATUS,
+    STATUS_ACCESS_DENIED, STATUS_BAD_NETWORK_PATH, STATUS_INVALID_PARAMETER, STATUS_NAME_TOO_LONG,
     STATUS_NOT_SUPPORTED, STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND,
-    STATUS_SHARING_VIOLATION, UNICODE_STRING, ERROR_NO_MORE_FILES,
+    STATUS_SHARING_VIOLATION, UNICODE_STRING,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FindClose, FindFirstFileExW, FindNextFileW, GetFileAttributesW,
-    GetFileInformationByHandleEx, GetFinalPathNameByHandleW, GetFullPathNameW, FileAttributeTagInfo,
-    FindExInfoBasic, FindExSearchNameMatch, WIN32_FIND_DATAW, FILE_ATTRIBUTE_DIRECTORY,
-    FILE_ATTRIBUTE_TAG_INFO, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
-    FILE_SHARE_READ, FILE_SHARE_WRITE, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS,
+    CreateFileW, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_NAME_NORMALIZED,
+    FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    FileAttributeTagInfo, FindClose, FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW,
+    FindNextFileW, GetFileAttributesW, GetFileInformationByHandleEx, GetFinalPathNameByHandleW,
+    GetFullPathNameW, INVALID_FILE_ATTRIBUTES, OPEN_EXISTING, VOLUME_NAME_DOS, WIN32_FIND_DATAW,
 };
 use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
-use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
-use windows_sys::Wdk::Storage::FileSystem::{FILE_BASIC_INFORMATION, FILE_STAT_INFORMATION};
 
 use crate::path_guard::policy::{PathIssueKind, PathPolicy};
 
@@ -62,15 +62,26 @@ pub(crate) fn get_full_path(path: &Path) -> Result<PathBuf, PathIssueKind> {
         buf.push(0);
 
         let mut out: Vec<u16> = vec![0u16; 260];
-        let mut written =
-            unsafe { GetFullPathNameW(buf.as_ptr(), out.len() as u32, out.as_mut_ptr(), std::ptr::null_mut()) };
+        let mut written = unsafe {
+            GetFullPathNameW(
+                buf.as_ptr(),
+                out.len() as u32,
+                out.as_mut_ptr(),
+                std::ptr::null_mut(),
+            )
+        };
         if written == 0 {
             return Err(PathIssueKind::IoError);
         }
         if written as usize > out.len() {
             out.resize(written as usize, 0);
             written = unsafe {
-                GetFullPathNameW(buf.as_ptr(), out.len() as u32, out.as_mut_ptr(), std::ptr::null_mut())
+                GetFullPathNameW(
+                    buf.as_ptr(),
+                    out.len() as u32,
+                    out.as_mut_ptr(),
+                    std::ptr::null_mut(),
+                )
             };
             if written == 0 {
                 return Err(PathIssueKind::IoError);
@@ -315,8 +326,11 @@ fn nt_status_is_success(status: NTSTATUS) -> bool {
 }
 
 fn load_get_file_info_by_name() -> Option<GetFileInformationByNameFn> {
-    load_proc(&["kernel32.dll", "kernelbase.dll"], b"GetFileInformationByName\0")
-        .map(|ptr| unsafe { std::mem::transmute(ptr) })
+    load_proc(
+        &["kernel32.dll", "kernelbase.dll"],
+        b"GetFileInformationByName\0",
+    )
+    .map(|ptr| unsafe { std::mem::transmute(ptr) })
 }
 
 fn load_nt_query_attributes_file() -> Option<NtQueryAttributesFileFn> {
@@ -373,7 +387,9 @@ fn build_nt_path(wide: &[u16]) -> Vec<u16> {
         out.extend_from_slice(&slice[8..]);
         return out;
     }
-    if slice.starts_with(&[SLASH, SLASH, QMARK, SLASH]) || slice.starts_with(&[SLASH, SLASH, DOT, SLASH]) {
+    if slice.starts_with(&[SLASH, SLASH, QMARK, SLASH])
+        || slice.starts_with(&[SLASH, SLASH, DOT, SLASH])
+    {
         let mut out = Vec::with_capacity(slice.len());
         out.extend_from_slice(&[SLASH, QMARK, QMARK, SLASH]);
         out.extend_from_slice(&slice[4..]);
@@ -442,7 +458,9 @@ where
 }
 
 fn entry_name_len(name: &[u16]) -> usize {
-    name.iter().position(|&value| value == 0).unwrap_or(name.len())
+    name.iter()
+        .position(|&value| value == 0)
+        .unwrap_or(name.len())
 }
 
 fn is_dot_entry(name: &[u16], len: usize) -> bool {
@@ -458,7 +476,11 @@ fn ensure_long_prefix(wide: &mut Vec<u16>) {
     const QMARK: u16 = b'?' as u16;
     const DOT: u16 = b'.' as u16;
 
-    if wide.len() >= 4 && wide[0] == SLASH && wide[1] == SLASH && wide[2] == QMARK && wide[3] == SLASH
+    if wide.len() >= 4
+        && wide[0] == SLASH
+        && wide[1] == SLASH
+        && wide[2] == QMARK
+        && wide[3] == SLASH
     {
         return;
     }

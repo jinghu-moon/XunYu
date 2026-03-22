@@ -32,7 +32,13 @@ pub(crate) struct GridLayout {
 
 impl Default for GridLayout {
     fn default() -> Self {
-        Self { rows: 2, cols: 2, gap: 8, padding: 0, monitor: 0 }
+        Self {
+            rows: 2,
+            cols: 2,
+            gap: 8,
+            padding: 0,
+            monitor: 0,
+        }
     }
 }
 
@@ -68,8 +74,18 @@ unsafe extern "system" fn monitor_callback(
     let monitors = unsafe { &mut *(lparam as *mut Vec<MonitorArea>) };
     let mut info = MONITORINFO {
         cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-        rcMonitor: RECT { left: 0, top: 0, right: 0, bottom: 0 },
-        rcWork: RECT { left: 0, top: 0, right: 0, bottom: 0 },
+        rcMonitor: RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        },
+        rcWork: RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        },
         dwFlags: 0,
     };
     let ok = unsafe { GetMonitorInfoW(hmonitor, &mut info) };
@@ -145,7 +161,10 @@ pub(crate) fn preview_ascii(zones: &[ZoneRect], monitor: &MonitorArea) -> String
     }
     let cols = estimate_columns(zones);
     let mut out = String::new();
-    out.push_str(&format!("Monitor {} ({}x{})\n", monitor.index, monitor.w, monitor.h));
+    out.push_str(&format!(
+        "Monitor {} ({}x{})\n",
+        monitor.index, monitor.w, monitor.h
+    ));
     for (idx, zone) in zones.iter().enumerate() {
         out.push_str(&format!(
             "  #{:<2} x={:<4} y={:<4} w={:<4} h={:<4}\n",

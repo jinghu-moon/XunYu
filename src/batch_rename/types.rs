@@ -1,7 +1,7 @@
 // batch_rename/types.rs
 
-use std::path::PathBuf;
 use serde::Serialize;
+use std::path::PathBuf;
 
 /// One rename operation: original path → new path.
 #[derive(Clone, Serialize)]

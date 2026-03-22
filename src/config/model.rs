@@ -285,9 +285,17 @@ pub(crate) struct DesktopWorkspaceApp {
 pub(crate) struct DesktopThemeConfig {
     #[serde(default, rename = "followNightlight")]
     pub(crate) follow_nightlight: bool,
-    #[serde(default, rename = "scheduleLightAt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "scheduleLightAt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) schedule_light_at: Option<String>,
-    #[serde(default, rename = "scheduleDarkAt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "scheduleDarkAt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub(crate) schedule_dark_at: Option<String>,
 }
 

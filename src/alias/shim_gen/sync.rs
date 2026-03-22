@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use super::io::{atomic_write_bytes, files_equal, files_equal_path, link_template, same_file_index};
+use super::io::{
+    atomic_write_bytes, files_equal, files_equal_path, link_template, same_file_index,
+};
 use super::render::{is_gui_exe_path, shell_alias_to_shim_with_template};
 use super::*;
 
@@ -14,12 +16,18 @@ struct TemplateCache<'a> {
     gui: TemplateAsset<'a>,
 }
 
-fn load_template_cache<'a>(template_console: &'a Path, template_gui: &'a Path) -> Result<TemplateCache<'a>> {
+fn load_template_cache<'a>(
+    template_console: &'a Path,
+    template_gui: &'a Path,
+) -> Result<TemplateCache<'a>> {
     Ok(TemplateCache {
         console: TemplateAsset {
             path: template_console,
             bytes: fs::read(template_console).with_context(|| {
-                format!("Failed to read shim template: {}", template_console.display())
+                format!(
+                    "Failed to read shim template: {}",
+                    template_console.display()
+                )
             })?,
         },
         gui: TemplateAsset {
@@ -80,7 +88,8 @@ fn create_shim_with_cache(
         && fs::read_to_string(&shim_path)
             .map(|v| v == shim_content)
             .unwrap_or(false)
-        && (same_file_index(&exe_path, template.path) || files_equal(&exe_path, template.bytes.as_slice()))
+        && (same_file_index(&exe_path, template.path)
+            || files_equal(&exe_path, template.bytes.as_slice()))
     {
         return Ok(());
     }
@@ -188,7 +197,11 @@ pub fn config_to_sync_entries(cfg: &Config) -> Vec<SyncEntry> {
         let use_gui_template = *gui_cache
             .entry(alias.exe.clone())
             .or_insert_with(|| is_gui_exe_path(&alias.exe));
-        entries.push(app_alias_to_sync_entry_with_gui(name, alias, use_gui_template));
+        entries.push(app_alias_to_sync_entry_with_gui(
+            name,
+            alias,
+            use_gui_template,
+        ));
     }
     entries
 }

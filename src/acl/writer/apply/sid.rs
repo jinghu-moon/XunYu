@@ -1,7 +1,7 @@
 use anyhow::Result;
 use windows::Win32::Foundation::{HLOCAL, LocalFree};
-use windows::Win32::Security::{GetLengthSid, LookupAccountNameW, PSID};
 use windows::Win32::Security::Authorization::ConvertStringSidToSidW;
+use windows::Win32::Security::{GetLengthSid, LookupAccountNameW, PSID};
 use windows::core::{PCWSTR, PWSTR};
 
 use crate::acl::error::AclError;
@@ -89,20 +89,14 @@ mod tests {
     fn lookup_account_sid_rejects_invalid_sid_string() {
         let err = lookup_account_sid("S-1-5-XYZ").unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("invalid principal"),
-            "unexpected error: {msg}"
-        );
+        assert!(msg.contains("invalid principal"), "unexpected error: {msg}");
     }
 
     #[test]
     fn lookup_account_sid_rejects_unknown_account() {
         let err = lookup_account_sid("BUILTIN\\NoSuchAccount_ThisShouldNotExist").unwrap_err();
         let msg = err.to_string();
-        assert!(
-            msg.contains("invalid principal"),
-            "unexpected error: {msg}"
-        );
+        assert!(msg.contains("invalid principal"), "unexpected error: {msg}");
     }
 
     #[test]

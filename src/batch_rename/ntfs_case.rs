@@ -36,9 +36,7 @@ fn is_case_only(op: &RenameOp) -> bool {
     let from_name = op.from.file_name().and_then(|n| n.to_str());
     let to_name = op.to.file_name().and_then(|n| n.to_str());
     match (from_name, to_name) {
-        (Some(f), Some(t)) => {
-            f != t && f.to_lowercase() == t.to_lowercase()
-        }
+        (Some(f), Some(t)) => f != t && f.to_lowercase() == t.to_lowercase(),
         _ => false,
     }
 }

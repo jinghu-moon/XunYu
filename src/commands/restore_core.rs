@@ -1,5 +1,5 @@
-use std::fs;
 use std::ffi::OsString;
+use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Instant;
@@ -66,9 +66,7 @@ pub(crate) fn is_backup_internal_name(name: &str) -> bool {
     Path::new(name)
         .file_name()
         .and_then(|file_name| file_name.to_str())
-        .is_some_and(|file_name| {
-            file_name == BACKUP_META_FILE || file_name == BACKUP_MANIFEST_FILE
-        })
+        .is_some_and(|file_name| file_name == BACKUP_META_FILE || file_name == BACKUP_MANIFEST_FILE)
 }
 
 pub(crate) fn is_backup_internal_rel_path(rel: &Path) -> bool {
@@ -147,7 +145,10 @@ pub(crate) fn restore_from_dir(
 
         let dst = dest_root.join(rel);
         if dry_run {
-            ui_println!("DRY RUN: would restore {}", norm_path_display(&rel.to_string_lossy()));
+            ui_println!(
+                "DRY RUN: would restore {}",
+                norm_path_display(&rel.to_string_lossy())
+            );
             return;
         }
         if let Err(e) = copy_file(src_path, &dst, copy_backend) {
@@ -185,7 +186,11 @@ pub(crate) fn restore_from_zip(
     let mut archive = zip::ZipArchive::new(file_handle)
         .map_err(|e| CliError::new(1, format!("Read zip failed: {e}")))?;
     if timing {
-        emit_restore_core_timing("open-zip", t_open.elapsed(), Some(zip_path.display().to_string()));
+        emit_restore_core_timing(
+            "open-zip",
+            t_open.elapsed(),
+            Some(zip_path.display().to_string()),
+        );
     }
 
     let want = file.map(|path| path.to_string_lossy().replace('\\', "/"));
@@ -227,7 +232,10 @@ pub(crate) fn restore_from_zip(
         matched = true;
         let rel = PathBuf::from(name.replace('/', "\\"));
         let dst = dest_root.join(&rel);
-        if let Some(parent) = dst.parent() && !dry_run && created_dirs.insert(parent.to_path_buf()) {
+        if let Some(parent) = dst.parent()
+            && !dry_run
+            && created_dirs.insert(parent.to_path_buf())
+        {
             let _ = fs::create_dir_all(parent);
         }
         if dry_run {
@@ -362,7 +370,11 @@ where
     let mut archive = zip::ZipArchive::new(file_handle)
         .map_err(|e| CliError::new(1, format!("Read zip failed: {e}")))?;
     if timing {
-        emit_restore_core_timing("open-zip", t_open.elapsed(), Some(zip_path.display().to_string()));
+        emit_restore_core_timing(
+            "open-zip",
+            t_open.elapsed(),
+            Some(zip_path.display().to_string()),
+        );
     }
 
     let mut restored = 0usize;
@@ -399,7 +411,9 @@ where
             restored += 1;
             continue;
         }
-        if let Some(parent) = dst.parent() && created_dirs.insert(parent.to_path_buf()) {
+        if let Some(parent) = dst.parent()
+            && created_dirs.insert(parent.to_path_buf())
+        {
             let _ = fs::create_dir_all(parent);
         }
         match fs::File::create(&dst) {
@@ -489,9 +503,13 @@ mod tests {
     #[test]
     fn restore_timing_enabled_accepts_command_and_restore_env_names() {
         let env = HashMap::from([("XUN_CMD_TIMING", OsString::from("1"))]);
-        assert!(super::restore_timing_enabled_with(|name| env.get(name).cloned()));
+        assert!(super::restore_timing_enabled_with(|name| env
+            .get(name)
+            .cloned()));
 
         let env = HashMap::from([("XUN_RESTORE_TIMING", OsString::from("1"))]);
-        assert!(super::restore_timing_enabled_with(|name| env.get(name).cloned()));
+        assert!(super::restore_timing_enabled_with(|name| env
+            .get(name)
+            .cloned()));
     }
 }

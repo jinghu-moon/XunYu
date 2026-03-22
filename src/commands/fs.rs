@@ -19,7 +19,11 @@ pub(crate) fn cmd_rm(args: RmCmd) -> CliResult {
             .iter()
             .map(|i| format!("{} ({})", i.raw, i.detail))
             .collect();
-        return Err(CliError::with_details(2, "Invalid path.".to_string(), &details));
+        return Err(CliError::with_details(
+            2,
+            "Invalid path.".to_string(),
+            &details,
+        ));
     }
     let Some(path_buf) = validation.ok.into_iter().next() else {
         return Err(CliError::with_details(

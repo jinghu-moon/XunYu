@@ -90,7 +90,8 @@ pub fn validate_alias_name(name: &str) -> Result<()> {
         bail!(
             "Alias name {:?} contains invalid character {:?}. \
              Characters / \\ : * ? \" < > | are not allowed.",
-            name, ch
+            name,
+            ch
         );
     }
     if name.contains(' ') {
@@ -100,10 +101,7 @@ pub fn validate_alias_name(name: &str) -> Result<()> {
         );
     }
     if name.starts_with('.') || name.ends_with('.') {
-        bail!(
-            "Alias name {:?} cannot start or end with a dot.",
-            name
-        );
+        bail!("Alias name {:?} cannot start or end with a dot.", name);
     }
     Ok(())
 }

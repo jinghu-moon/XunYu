@@ -25,11 +25,20 @@ struct BrnTimer {
 impl BrnTimer {
     fn new(label: &'static str) -> Self {
         let enabled = std::env::var_os("XUN_BRN_TIMING").is_some();
-        Self { label, t0: std::time::Instant::now(), enabled }
+        Self {
+            label,
+            t0: std::time::Instant::now(),
+            enabled,
+        }
     }
     fn lap(&self, tag: &str) {
         if self.enabled {
-            eprintln!("[brn-timing] {}::{} = {:?}", self.label, tag, self.t0.elapsed());
+            eprintln!(
+                "[brn-timing] {}::{} = {:?}",
+                self.label,
+                tag,
+                self.t0.elapsed()
+            );
         }
     }
 }
@@ -85,7 +94,12 @@ fn append_line(path: &Path, batch: &UndoBatch) -> CliResult<u64> {
         .append(true)
         .create(true)
         .open(path)
-        .map_err(|e| CliError::new(1, format!("Cannot open undo log '{}': {}", path.display(), e)))?;
+        .map_err(|e| {
+            CliError::new(
+                1,
+                format!("Cannot open undo log '{}': {}", path.display(), e),
+            )
+        })?;
     writeln!(file, "{}", line)
         .map_err(|e| CliError::new(1, format!("Cannot write undo log: {}", e)))?;
     // seek(End) 获取写入后总大小，无需额外 stat 系统调用
@@ -105,7 +119,12 @@ fn append_lines(path: &Path, batches: &[UndoBatch]) -> CliResult<u64> {
         .append(true)
         .create(true)
         .open(path)
-        .map_err(|e| CliError::new(1, format!("Cannot open undo log '{}': {}", path.display(), e)))?;
+        .map_err(|e| {
+            CliError::new(
+                1,
+                format!("Cannot open undo log '{}': {}", path.display(), e),
+            )
+        })?;
     for batch in batches {
         let line = serde_json::to_string(batch)
             .map_err(|e| CliError::new(1, format!("Failed to serialize undo batch: {}", e)))?;
@@ -121,8 +140,12 @@ fn read_log(path: &Path) -> CliResult<Vec<UndoBatch>> {
     if !path.exists() {
         return Ok(vec![]);
     }
-    let data = fs::read_to_string(path)
-        .map_err(|e| CliError::new(1, format!("Cannot read undo log '{}': {}", path.display(), e)))?;
+    let data = fs::read_to_string(path).map_err(|e| {
+        CliError::new(
+            1,
+            format!("Cannot read undo log '{}': {}", path.display(), e),
+        )
+    })?;
     let mut batches = Vec::new();
     for line in data.lines() {
         let trimmed = line.trim();
@@ -149,8 +172,12 @@ fn write_log(path: &Path, batches: &[UndoBatch]) -> CliResult {
         out.push_str(&line);
         out.push('\n');
     }
-    fs::write(path, out.as_bytes())
-        .map_err(|e| CliError::new(1, format!("Cannot write undo log '{}': {}", path.display(), e)))
+    fs::write(path, out.as_bytes()).map_err(|e| {
+        CliError::new(
+            1,
+            format!("Cannot write undo log '{}': {}", path.display(), e),
+        )
+    })
 }
 
 /// 若文件行数超过 `max`，丢弃最旧的行，重写文件。
@@ -194,7 +221,10 @@ fn migrate_legacy(dir: &Path) -> CliResult {
     }
     // legacy flat Vec<UndoRecord>
     if let Ok(records) = serde_json::from_str::<Vec<UndoRecord>>(&data) {
-        let batch = UndoBatch { ts: 0, ops: records };
+        let batch = UndoBatch {
+            ts: 0,
+            ops: records,
+        };
         write_log(&dir.join(UNDO_LOG), &[batch])?;
         let _ = fs::remove_file(&legacy);
         return Ok(());
@@ -225,7 +255,10 @@ pub fn push_undo(dir: &Path, records: &[UndoRecord]) -> CliResult {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let batch = UndoBatch { ts, ops: records.to_vec() };
+    let batch = UndoBatch {
+        ts,
+        ops: records.to_vec(),
+    };
     t.lap("build_batch");
 
     let undo_path = dir.join(UNDO_LOG);
@@ -281,13 +314,18 @@ pub fn run_undo_steps(dir: &str, steps: usize) -> CliResult {
     for batch in &to_process {
         for op in &batch.ops {
             let src = Path::new(&op.from); // 当前存在的文件
-            let dst = Path::new(&op.to);   // 还原目标
+            let dst = Path::new(&op.to); // 还原目标
             if let Err(e) = fs::rename(src, dst)
                 && e.kind() != std::io::ErrorKind::NotFound
             {
                 return Err(CliError::new(
                     1,
-                    format!("Undo rename failed '{}' -> '{}': {}", src.display(), dst.display(), e),
+                    format!(
+                        "Undo rename failed '{}' -> '{}': {}",
+                        src.display(),
+                        dst.display(),
+                        e
+                    ),
                 ));
             }
         }
@@ -334,14 +372,19 @@ pub fn run_redo_steps(dir: &str, steps: usize) -> CliResult {
     // redo 时将原始文件（to）重新改名为（from）
     for batch in &to_process {
         for op in &batch.ops {
-            let src = Path::new(&op.to);  // 当前存在的（原始名）
+            let src = Path::new(&op.to); // 当前存在的（原始名）
             let dst = Path::new(&op.from); // 重新变成重命名后的名
             if let Err(e) = fs::rename(src, dst)
                 && e.kind() != std::io::ErrorKind::NotFound
             {
                 return Err(CliError::new(
                     1,
-                    format!("Redo rename failed '{}' -> '{}': {}", src.display(), dst.display(), e),
+                    format!(
+                        "Redo rename failed '{}' -> '{}': {}",
+                        src.display(),
+                        dst.display(),
+                        e
+                    ),
                 ));
             }
         }
@@ -374,7 +417,10 @@ pub fn run_undo(dir: &str) -> CliResult {
     if !undo_path.exists() {
         return Err(CliError::new(
             1,
-            format!("Undo file '{}' not found. Nothing to undo.", undo_path.display()),
+            format!(
+                "Undo file '{}' not found. Nothing to undo.",
+                undo_path.display()
+            ),
         ));
     }
     run_undo_steps(dir, 1)

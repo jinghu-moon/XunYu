@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use regex::Regex;
 
-use crate::path_guard::string_check::reserved_names as path_guard_reserved_names;
 use crate::output::emit_warning;
+use crate::path_guard::string_check::reserved_names as path_guard_reserved_names;
 use crate::util::split_csv;
 
 use super::DEFAULT_EXCLUDES;

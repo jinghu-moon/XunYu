@@ -135,7 +135,10 @@ fn parse_hosts() -> Result<Vec<HostEntry>, CliError> {
         };
 
         let (entry_part, comment) = if let Some(idx) = content_part.find(" # ") {
-            (&content_part[..idx], Some(content_part[idx + 3..].trim().to_string()))
+            (
+                &content_part[..idx],
+                Some(content_part[idx + 3..].trim().to_string()),
+            )
         } else {
             (content_part, None)
         };
@@ -206,4 +209,3 @@ fn map_hosts_io_error(err: std::io::Error) -> CliError {
         CliError::new(2, format!("Hosts file error: {err}"))
     }
 }
-

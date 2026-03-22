@@ -38,10 +38,7 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
 }
 
 /// Collect a contiguous run of ASCII digits as a u64.
-fn collect_digits(
-    s: &str,
-    iter: &mut std::iter::Peekable<std::str::CharIndices>,
-) -> u64 {
+fn collect_digits(s: &str, iter: &mut std::iter::Peekable<std::str::CharIndices>) -> u64 {
     let mut num: u64 = 0;
     while let Some(&(_, c)) = iter.peek() {
         if c.is_ascii_digit() {

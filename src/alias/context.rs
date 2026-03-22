@@ -18,7 +18,10 @@ macro_rules! t_print {
 #[inline]
 pub(super) fn t_print_total(label: &str, t0: std::time::Instant) {
     if timing_enabled() {
-        eprintln!("[timing] {label}: total={:.1}ms", t0.elapsed().as_secs_f64() * 1000.0);
+        eprintln!(
+            "[timing] {label}: total={:.1}ms",
+            t0.elapsed().as_secs_f64() * 1000.0
+        );
     }
 }
 
@@ -170,7 +173,11 @@ impl AliasCtx {
             }
             let t_b = std::time::Instant::now();
             let result = backend.update(cfg);
-            t_print!("sync_shells: {}={:.1}ms", backend.name(), t_b.elapsed().as_secs_f64() * 1000.0);
+            t_print!(
+                "sync_shells: {}={:.1}ms",
+                backend.name(),
+                t_b.elapsed().as_secs_f64() * 1000.0
+            );
             match result {
                 Ok(shell::UpdateResult::Written { path }) => {
                     ui_println!("Updated {} profile: {}", backend.name(), path.display());
@@ -183,7 +190,10 @@ impl AliasCtx {
                 }
             }
         }
-        t_print!("sync_shells: total={:.1}ms", t_shells.elapsed().as_secs_f64() * 1000.0);
+        t_print!(
+            "sync_shells: total={:.1}ms",
+            t_shells.elapsed().as_secs_f64() * 1000.0
+        );
         Ok(())
     }
 }

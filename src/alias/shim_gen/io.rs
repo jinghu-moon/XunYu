@@ -37,17 +37,12 @@ pub(super) fn files_equal(path_a: &Path, bytes_b: &[u8]) -> bool {
 #[cfg(windows)]
 pub(super) fn same_file_index(path_a: &Path, path_b: &Path) -> bool {
     use std::os::windows::prelude::*;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
     use windows_sys::Win32::Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
     };
-    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
 
-    let open = |p: &Path| {
-        std::fs::OpenOptions::new()
-            .read(true)
-            .open(p)
-            .ok()
-    };
+    let open = |p: &Path| std::fs::OpenOptions::new().read(true).open(p).ok();
     let info = |f: &std::fs::File| -> Option<(u64, u64)> {
         let mut info = unsafe { std::mem::zeroed::<BY_HANDLE_FILE_INFORMATION>() };
         let handle = f.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;

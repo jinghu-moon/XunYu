@@ -13,9 +13,9 @@ use crate::cli::{
     DesktopSubCommand, DesktopThemeCmd, DesktopThemeScheduleCmd, DesktopThemeSetCmd,
     DesktopThemeStatusCmd, DesktopThemeSubCommand, DesktopThemeToggleCmd, DesktopWindowCmd,
     DesktopWindowFocusCmd, DesktopWindowMoveCmd, DesktopWindowResizeCmd, DesktopWindowSubCommand,
-    DesktopWindowTopCmd, DesktopWindowTransparentCmd, DesktopWorkspaceCmd, DesktopWorkspaceLaunchCmd,
-    DesktopWorkspaceListCmd, DesktopWorkspaceRemoveCmd, DesktopWorkspaceSaveCmd,
-    DesktopWorkspaceSubCommand,
+    DesktopWindowTopCmd, DesktopWindowTransparentCmd, DesktopWorkspaceCmd,
+    DesktopWorkspaceLaunchCmd, DesktopWorkspaceListCmd, DesktopWorkspaceRemoveCmd,
+    DesktopWorkspaceSaveCmd, DesktopWorkspaceSubCommand,
 };
 use crate::desktop;
 use crate::output::{CliError, CliResult};
@@ -226,9 +226,7 @@ fn cmd_remap_add(args: DesktopRemapAddCmd) -> CliResult {
         if text.is_empty() {
             return Err(CliError::new(2, "Remap text is empty."));
         }
-    } else if !to.eq_ignore_ascii_case("disable")
-        && desktop::hotkey::parse_hotkey(to).is_none()
-    {
+    } else if !to.eq_ignore_ascii_case("disable") && desktop::hotkey::parse_hotkey(to).is_none() {
         return Err(CliError::with_details(
             2,
             format!("Invalid remap target: {to}"),
@@ -332,7 +330,11 @@ fn cmd_remap_remove(args: DesktopRemapRemoveCmd) -> CliResult {
     }
 
     if args.dry_run {
-        ui_println!("Dry-run: Remap would be removed: {} ({} rule(s))", from, removed);
+        ui_println!(
+            "Dry-run: Remap would be removed: {} ({} rule(s))",
+            from,
+            removed
+        );
         return Ok(());
     }
 
@@ -435,7 +437,11 @@ fn cmd_snippet_add(args: DesktopSnippetAddCmd) -> CliResult {
         .map_err(|e| CliError::new(1, format!("Failed to save config: {e}")))?;
 
     let app_label = app.as_deref().unwrap_or("any");
-    let mode = if args.immediate { "immediate" } else { "terminator" };
+    let mode = if args.immediate {
+        "immediate"
+    } else {
+        "terminator"
+    };
     let paste_label = paste.as_deref().unwrap_or("sendinput");
     if updated {
         ui_println!(
@@ -489,7 +495,11 @@ fn cmd_snippet_list(_args: DesktopSnippetListCmd) -> CliResult {
 
     for snippet in &cfg.desktop.snippets {
         let app = snippet.app.as_deref().unwrap_or("any");
-        let mode = if snippet.immediate { "immediate" } else { "terminator" };
+        let mode = if snippet.immediate {
+            "immediate"
+        } else {
+            "terminator"
+        };
         let paste = snippet.paste.as_deref().unwrap_or("sendinput");
         ui_println!(
             "{} => {} [{} | {} | {}]",
@@ -576,24 +586,17 @@ fn build_grid_layout(
     }
 }
 
-fn map_window_api_error(
-    action: &str,
-    err: window_api::WindowApiError,
-) -> CliError {
+fn map_window_api_error(action: &str, err: window_api::WindowApiError) -> CliError {
     match err {
-        window_api::WindowApiError::NotFound => {
-            CliError::new(2, "No matching window found.")
-        }
-        window_api::WindowApiError::OsError { action: op, code } => {
-            CliError::with_details(
-                2,
-                format!("Failed to {action} window."),
-                &[
-                    format!("Win32: {op} (code={code})"),
-                    "Fix: retry with admin rights.".to_string(),
-                ],
-            )
-        }
+        window_api::WindowApiError::NotFound => CliError::new(2, "No matching window found."),
+        window_api::WindowApiError::OsError { action: op, code } => CliError::with_details(
+            2,
+            format!("Failed to {action} window."),
+            &[
+                format!("Win32: {op} (code={code})"),
+                "Fix: retry with admin rights.".to_string(),
+            ],
+        ),
     }
 }
 
@@ -715,7 +718,10 @@ fn cmd_layout_apply(args: DesktopLayoutApplyCmd) -> CliResult {
                 .filter(|i| !used_zones.contains(i))
                 .collect();
             let windows = crate::proc::list_all(false);
-            for proc in windows.into_iter().filter(|p| !p.window_title.trim().is_empty()) {
+            for proc in windows
+                .into_iter()
+                .filter(|p| !p.window_title.trim().is_empty())
+            {
                 if remaining.is_empty() {
                     break;
                 }
@@ -750,16 +756,15 @@ fn cmd_layout_apply(args: DesktopLayoutApplyCmd) -> CliResult {
 
     let mut moved = 0usize;
     for (pid, zone) in assignments {
-        let hwnd = window_api::find_hwnd_by_pid(pid)
-            .map_err(|e| map_window_api_error("apply", e))?;
+        let hwnd =
+            window_api::find_hwnd_by_pid(pid).map_err(|e| map_window_api_error("apply", e))?;
         let rect = window_api::WindowRect {
             left: zone.x,
             top: zone.y,
             right: zone.x + zone.w,
             bottom: zone.y + zone.h,
         };
-        window_api::apply_window_rect(hwnd, rect)
-            .map_err(|e| map_window_api_error("apply", e))?;
+        window_api::apply_window_rect(hwnd, rect).map_err(|e| map_window_api_error("apply", e))?;
         moved += 1;
     }
 
@@ -810,7 +815,14 @@ fn cmd_layout_list(_args: DesktopLayoutListCmd) -> CliResult {
         let rows = layout.template.rows.unwrap_or(0);
         let cols = layout.template.cols.unwrap_or(0);
         let gap = layout.template.gap.unwrap_or(0);
-        ui_println!("{}    {}    {}x{}    gap={}", layout.name, tpl, rows, cols, gap);
+        ui_println!(
+            "{}    {}    {}x{}    gap={}",
+            layout.name,
+            tpl,
+            rows,
+            cols,
+            gap
+        );
     }
     Ok(())
 }
@@ -852,7 +864,11 @@ fn cmd_workspace_save(args: DesktopWorkspaceSaveCmd) -> CliResult {
             .into_iter()
             .filter(|p| !p.window_title.trim().is_empty())
         {
-            let exe = if proc.exe_path.is_empty() { proc.name } else { proc.exe_path };
+            let exe = if proc.exe_path.is_empty() {
+                proc.name
+            } else {
+                proc.exe_path
+            };
             let key = exe.to_lowercase();
             if !seen.insert(key) {
                 continue;
@@ -872,10 +888,12 @@ fn cmd_workspace_save(args: DesktopWorkspaceSaveCmd) -> CliResult {
     if let Some(existing) = cfg.desktop.workspaces.iter_mut().find(|w| w.name == name) {
         existing.apps = apps;
     } else {
-        cfg.desktop.workspaces.push(crate::config::DesktopWorkspace {
-            name: name.to_string(),
-            apps,
-        });
+        cfg.desktop
+            .workspaces
+            .push(crate::config::DesktopWorkspace {
+                name: name.to_string(),
+                apps,
+            });
     }
 
     crate::config::save_config(&cfg)
@@ -941,11 +959,18 @@ fn cmd_workspace_launch(args: DesktopWorkspaceLaunchCmd) -> CliResult {
         if let Some(args_raw) = &app.args {
             cmd.args(args_raw.split_whitespace());
         }
-        let _ = cmd.spawn().map_err(|e| CliError::new(2, format!("Failed to launch {}: {e}", app.path)))?;
+        let _ = cmd
+            .spawn()
+            .map_err(|e| CliError::new(2, format!("Failed to launch {}: {e}", app.path)))?;
         launched += 1;
     }
 
-    ui_println!("Workspace launched: {} (moved {}, launched {})", name, moved, launched);
+    ui_println!(
+        "Workspace launched: {} (moved {}, launched {})",
+        name,
+        moved,
+        launched
+    );
     if args.move_existing {
         ui_println!("Move existing windows enabled.");
     }
@@ -993,7 +1018,8 @@ fn cmd_window(args: DesktopWindowCmd) -> CliResult {
 }
 
 fn cmd_window_focus(args: DesktopWindowFocusCmd) -> CliResult {
-    let target = desktop::window::resolve_window_target(args.app.as_deref(), args.title.as_deref())?;
+    let target =
+        desktop::window::resolve_window_target(args.app.as_deref(), args.title.as_deref())?;
     desktop::window::focus_window(&target)
 }
 
@@ -1046,7 +1072,7 @@ fn cmd_theme_set(args: DesktopThemeSetCmd) -> CliResult {
                 2,
                 format!("Invalid theme mode: {}", args.mode),
                 &["Fix: use light or dark."],
-            ))
+            ));
         }
     };
     desktop::theme::set_theme(&mode)?;
@@ -1157,7 +1183,11 @@ fn cmd_hosts_add(args: DesktopHostsAddCmd) -> CliResult {
     }
     if args.dry_run {
         let entry = desktop::hosts::preview_add_entry(ip, host)?;
-        ui_println!("Dry-run: Hosts entry would be added: {} {}", entry.ip, entry.host);
+        ui_println!(
+            "Dry-run: Hosts entry would be added: {} {}",
+            entry.ip,
+            entry.host
+        );
         return Ok(());
     }
     desktop::hosts::add_entry(ip, host)?;
@@ -1246,5 +1276,3 @@ fn cmd_app_list(_args: DesktopAppListCmd) -> CliResult {
     }
     Ok(())
 }
-
-

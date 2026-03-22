@@ -15,7 +15,10 @@ pub(crate) struct WindowTarget {
     pub(crate) hwnd: isize,
 }
 
-pub(crate) fn resolve_window_target(app: Option<&str>, title: Option<&str>) -> Result<WindowTarget, CliError> {
+pub(crate) fn resolve_window_target(
+    app: Option<&str>,
+    title: Option<&str>,
+) -> Result<WindowTarget, CliError> {
     let Some(target) = pick_window(app, title) else {
         return Err(CliError::new(2, "No matching window found."));
     };
@@ -23,8 +26,12 @@ pub(crate) fn resolve_window_target(app: Option<&str>, title: Option<&str>) -> R
 }
 
 fn pick_window(app: Option<&str>, title: Option<&str>) -> Option<WindowTarget> {
-    let app = app.map(|value| value.trim()).filter(|value| !value.is_empty());
-    let title = title.map(|value| value.trim()).filter(|value| !value.is_empty());
+    let app = app
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    let title = title
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
 
     if app.is_none() && title.is_none() {
         return proc::list_all(false)
@@ -95,7 +102,10 @@ fn map_window_error(action: &str, err: window_api::WindowApiError) -> CliError {
         window_api::WindowApiError::OsError { action: op, code } => CliError::with_details(
             2,
             format!("Failed to {action} window."),
-            &[format!("Win32: {op} (code={code})"), "Fix: retry with admin rights.".to_string()],
+            &[
+                format!("Win32: {op} (code={code})"),
+                "Fix: retry with admin rights.".to_string(),
+            ],
         ),
     }
 }
