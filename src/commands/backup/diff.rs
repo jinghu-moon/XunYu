@@ -61,8 +61,8 @@ pub(crate) fn compute_diff(
     for (rel, scanned) in current {
         if let Some(old_meta) = old.remove(rel) {
             let size_changed = scanned.size != old_meta.size;
-            // 精确 mtime 比较，无容差
-            let time_changed = scanned.modified > old_meta.modified;
+            // 只要 mtime 不同就视为变更。备份场景宁可多备份，不能漏备份。
+            let time_changed = scanned.modified != old_meta.modified;
             if size_changed || time_changed {
                 let delta = scanned.size as i64 - old_meta.size as i64;
                 entries.push(DiffEntry {
@@ -321,5 +321,45 @@ fn print_colored_path(rel: &str) {
         );
     } else {
         eprint!("{}", yellow.apply_to(rel));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::time::{Duration, SystemTime};
+
+    use super::{DiffKind, compute_diff};
+    use crate::commands::backup::baseline::FileMeta;
+    use crate::commands::backup::scan::ScannedFile;
+
+    #[test]
+    fn compute_diff_marks_mtime_difference_as_modified_even_if_not_newer() {
+        let path = std::path::PathBuf::from("C:\\tmp\\a.txt");
+        let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(200);
+        let older = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+
+        let mut current = HashMap::new();
+        current.insert(
+            "a.txt".to_string(),
+            ScannedFile {
+                path: path.clone(),
+                size: 10,
+                modified: older,
+            },
+        );
+
+        let mut old = HashMap::new();
+        old.insert(
+            "a.txt".to_string(),
+            FileMeta {
+                size: 10,
+                modified: newer,
+            },
+        );
+
+        let diff = compute_diff(&current, &mut old, false);
+        assert_eq!(diff.len(), 1);
+        assert!(matches!(diff[0].kind, DiffKind::Modified));
     }
 }
