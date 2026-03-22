@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 
 use console::Style;
 use rayon::prelude::*;
@@ -135,7 +135,7 @@ pub(crate) fn print_diff(entries: &[DiffEntry], show_unchanged: bool) {
                 } else if e.size_delta < 0 {
                     ("\u{2193}", fmt_size(e.size_delta)) // ↓
                 } else {
-                    ("\u{2022}", String::new())          // •
+                    ("\u{2022}", String::new()) // •
                 };
                 let color_style = if e.size_delta > 0 { &yellow } else { &blue };
                 eprint!("{} ", color_style.apply_to(sym));
@@ -284,7 +284,13 @@ fn try_hard_link(job: &CopyJob) -> bool {
     };
     use windows_sys::Win32::Storage::FileSystem::CreateHardLinkW;
 
-    unsafe { CreateHardLinkW(link_wide.dst.as_ptr(), link_wide.src.as_ptr(), std::ptr::null()) != 0 }
+    unsafe {
+        CreateHardLinkW(
+            link_wide.dst.as_ptr(),
+            link_wide.src.as_ptr(),
+            std::ptr::null(),
+        ) != 0
+    }
 }
 
 #[cfg(not(windows))]

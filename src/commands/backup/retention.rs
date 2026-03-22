@@ -96,8 +96,7 @@ pub(crate) fn apply_retention_policy(
         const WEEK: u64 = 7 * DAY;
         const MONTH: u64 = 30 * DAY; // 近似
 
-        let mut seen_days: std::collections::HashMap<u64, usize> =
-            std::collections::HashMap::new();
+        let mut seen_days: std::collections::HashMap<u64, usize> = std::collections::HashMap::new();
         let mut seen_weeks: std::collections::HashMap<u64, usize> =
             std::collections::HashMap::new();
         let mut seen_months: std::collections::HashMap<u64, usize> =
@@ -178,7 +177,11 @@ mod tests {
             .args(["-NoProfile", "-NonInteractive", "-Command", &script])
             .status()
             .unwrap();
-        assert!(status.success(), "failed to set mtime for {}", dir.display());
+        assert!(
+            status.success(),
+            "failed to set mtime for {}",
+            dir.display()
+        );
     }
 
     #[test]

@@ -62,7 +62,7 @@ cargo build --bin xun --bin xyu
 cargo build --bin xun --bin xyu --features "dashboard,diff"
 cargo build --bin xun --bin xyu --features "tui"
 cargo check --all-features
-cargo test --test test_naming_commands
+cargo test --test general_naming
 ```
 
 ## 当前已验证结果
@@ -73,7 +73,7 @@ cargo test --test test_naming_commands
 - `cargo build --bin xun --bin xyu --features "dashboard,diff"`
 - `cargo build --bin xun --bin xyu --features "tui"`
 - `cargo check --all-features`
-- `cargo test --test test_naming_commands`
+- `cargo test --test general_naming`
 
 ## 产物与命名约定
 

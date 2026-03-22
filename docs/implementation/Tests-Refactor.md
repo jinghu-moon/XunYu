@@ -1,174 +1,239 @@
-# XunYu 测试重构与全自动验收方案
+# XunYu 测试体系重构
 
-> 目标：在 **无需人工干预** 的前提下，完成可重复、可扩展、可并行的测试体系重构，并覆盖 `lock/protect/crypt` 验收项。  
-> 范围：`tests/` 工作区拆分、E2E 自动化、性能门槛、CI 执行矩阵。
+> 状态说明（2026-03-22）：本文件描述当前已落地的测试架构，不再对应历史 `tests/test_*.rs` 平铺结构。
 
----
+## 1. 目标
 
-## 1. 外部参考（Web）
+本轮测试体系重构有 4 个明确目标：
 
-1. Rust 官方测试组织建议（单元测试 vs 集成测试）  
-   `https://doc.rust-lang.org/book/ch11-03-test-organization.html`
-2. `assert_cmd`：CLI 集成测试最佳实践（命令执行、退出码、stdout/stderr 断言）  
-   `https://github.com/assert-rs/assert_cmd`
-3. `cargo-nextest`：并行执行、重试、过滤与 CI 友好输出  
-   `https://github.com/nextest-rs/nextest`
-4. `insta`：快照测试（稳定输出结构比对）  
-   `https://github.com/mitsuhiko/insta`
-5. CLI Guidelines（人机可读 + 机器可读并存）  
-   `https://clig.dev`
+1. 将测试分为 `通用（general）`、`模块（modules）`、`特殊（special）` 三类。
+2. 将共享能力统一收敛到 `tests/support/`，避免测试入口之间互相拖带。
+3. 关闭 Cargo 的自动测试发现，改用显式 `[[test]]` 目标矩阵。
+4. 让 feature 测试、性能测试、白盒测试都有独立入口，便于精准回归。
 
----
-
-## 2. 现状问题
-
-1. `tests/integration_tests.rs` 体量过大，职责混杂，定位失败成本高。  
-2. E2E（特别是 `lock/protect`）自动化覆盖不足，仍有人工验收依赖。  
-3. 部分测试基建耦合在单文件内，复用困难。  
-4. 性能门槛与功能验收未形成统一执行入口。  
-5. 历史配置中存在失效测试目标时，会阻断全量测试链路。
-
----
-
-## 3. 重构原则
-
-1. **零人工干预**：默认非交互，测试中不依赖 TTY 弹窗输入。  
-2. **分层清晰**：基础行为 / 网络与端口 / E2E / 性能测试分文件治理。  
-3. **结果可诊断**：失败信息必须包含命令、退出码、stdout、stderr。  
-4. **稳定优先**：避免依赖不确定环境；必须依赖时给出隔离策略。  
-5. **可并行执行**：支持 `cargo nextest` 并行与过滤运行。  
-
-补充（2026-02）：
-- Dashboard Web UI 不引入 DOM/Snapshot 自动化测试，采用手动验证清单（见 `Test-Env.md` 的 Dashboard 章节）。
-
----
-
-## 4. 目录拆分方案
+## 2. 目录结构
 
 ```text
 tests/
-  common/
-    mod.rs                  # TestEnv、run_ok/run_err、共享工具
-  test_basic.rs             # 书签/tree/bak 等基础行为
-  test_proxy_net.rs         # proxy/ports/kill 网络与端口
-  test_lock_e2e.rs          # lock/rm --unlock 端到端
-  test_protect_e2e.rs       # protect 拦截/放行 + audit 验证
-  test_dry_run_format.rs    # 危险命令 dry-run 与格式稳定性
-  test_performance.rs       # lock who + 批量 rm 性能门槛
+  support/
+    mod.rs
+  general/
+    cli_core.rs
+    cli_core_cases/
+    ctx.rs
+    delete.rs
+    dry_run.rs
+    find.rs
+    naming.rs
+  modules/
+    backup_restore.rs
+    backup_restore_cases/
+    acl.rs
+    acl_cases/
+    alias.rs
+    alias_cases/
+    batch_rename.rs
+    crypt_e2e.rs
+    dashboard.rs
+    diff.rs
+    filevault_formats.rs
+    filevault_v13.rs
+    lock_e2e.rs
+    protect_e2e.rs
+    proxy.rs
+    redirect_e2e.rs
+    redirect_tools.rs
+    redirect_undo.rs
+    redirect_watch.rs
+  special/
+    acl_stress.rs
+    alias_perf.rs
+    filevault_performance.rs
+    path_guard_bench.rs
+    path_guard_integration.rs
+    path_guard_trace.rs
+    path_guard_unit.rs
+    performance.rs
+    redirect_watch_core.rs
 ```
 
----
+补充说明：
 
-## 5. 共享测试基座设计（`tests/common/mod.rs`）
+1. 原始用例文件已经物理迁到 `general/cli_core_cases/`、`modules/backup_restore_cases/`、`modules/acl_cases/`、`modules/alias_cases/`。
+2. `general/modules/special` 目录下的是新的 Cargo test target 入口，不再承载大量具体断言实现。
+3. `tests/support/mod.rs` 是唯一共享测试基座，负责 `TestEnv`、命令执行、性能辅助、Windows 测量工具等。
 
-1. `TestEnv`  
-   - 每个测试独立根目录（建议 `std::env::temp_dir()` 下随机目录）。  
-   - 注入 `USERPROFILE/HOME` 到测试目录，隔离用户环境。  
-   - 默认注入 `XUN_NON_INTERACTIVE=1`，禁用交互依赖。  
-2. 进程执行辅助  
-   - `run_ok`：断言成功并打印完整失败上下文。  
-   - `run_err`：断言失败并打印完整失败上下文。  
-   - `run_ok_status`：性能压测场景减少输出开销。  
-3. 文件与性能辅助  
-   - 混合文件生成器（短路径/长路径/Unicode 名称）。  
-   - 时间阈值断言与环境变量覆盖（便于 CI 调优）。
+## 3. 三类测试的职责边界
 
----
+### 3.1 通用（general）
 
-## 6. E2E 自动化策略
+用于验证跨模块、默认能力、CLI 基本约定。
 
-### 6.1 lock E2E（`test_lock_e2e.rs`）
+典型内容：
 
-1. 使用子进程持有文件锁（不要由测试主进程自己持锁，避免自杀）。  
-2. `xun lock who --format json` 验证锁持有 PID 命中。  
-3. `xun rm --unlock --force-kill --yes` 自动解锁删除并验证目标消失。  
-4. 非交互路径验证：缺少必要参数时应返回明确退出码与错误信息。
+1. 书签、列表、树、标签、导入导出。
+2. `ctx`、`find`、`delete`、命名命令。
+3. `dry-run` 这类跨命令的一致性行为。
 
-### 6.2 protect E2E（`test_protect_e2e.rs`）
+### 3.2 模块（modules）
 
-1. `protect set` 建立规则后，普通 `rm` 必须拦截。  
-2. `rm --force --reason "...\" --yes` 放行删除成功。  
-3. 解析 `audit.jsonl`，验证动作、结果、reason 持久化正确。
+用于验证单个业务模块的功能正确性。
 
-### 6.3 dry-run 与格式（`test_dry_run_format.rs`）
+典型内容：
 
-1. `rm/mv/ren --dry-run` 后目标状态不变。  
-2. `--format json` 断言字段存在且类型稳定。  
-3. 对危险命令统一验证“只演练不落地”。
+1. `backup/restore`
+2. `acl`
+3. `alias`
+4. `redirect`
+5. `crypt/filevault`
+6. `proxy`
+7. `dashboard`
+8. `batch_rename`
+9. `diff`
+10. `lock/protect`
 
----
+原则：
 
-## 7. 性能验收策略（`test_performance.rs`）
+1. 模块测试只覆盖模块自身能力。
+2. 某个模块需要 feature 时，用 `required-features` 显式声明，不再依赖“跑到一半才因 feature 不匹配失败”。
 
-默认门槛（可被环境变量覆盖）：
+### 3.3 特殊（special）
 
-1. `lock who` 单文件探测 `< 200ms`。  
-2. 无占用的 1k 文件批量删除 `< 5s`。
+用于承载不适合放进常规模块回归链的测试。
 
-建议：
+典型内容：
 
-1. 将绝对门槛参数化：`XUN_TEST_LOCK_WHO_MAX_MS`、`XUN_TEST_RM_1K_MAX_MS`。  
-2. 在 CI 上保留稳定默认值，在性能专用机器执行更严格门槛。  
-3. 对超时失败输出“数据规模 + 实际耗时 + 机器信息”。
+1. 性能测试
+2. 压力测试
+3. trace / bench / 内部白盒测试
+4. 资源占用观测
 
----
+原则：
 
-## 8. 依赖建议（仅测试域）
+1. 特殊测试必须有独立目标，不拖慢默认回归。
+2. `#[ignore]` 只用于需要显式触发的性能类场景，不再用来掩盖结构混乱。
 
-`[dev-dependencies]` 可选：
+## 4. Cargo 策略
 
-1. `assert_cmd`：CLI 进程断言更简洁。  
-2. `predicates`：stdout/stderr 断言表达力更强。  
-3. `tempfile`：临时目录管理更安全。  
-4. `serial_test`：需要串行化的系统级测试可控执行。  
-5. `insta`：稳定输出快照（可用于 JSON/table 回归保护）。
+当前 `Cargo.toml` 已启用：
 
-说明：以上仅用于测试，不影响 release 二进制打包内容。
+1. `autotests = false`
+2. 所有集成测试通过 `[[test]]` 显式注册
+3. feature 模块使用 `required-features`
 
----
+这样做的直接收益：
 
-## 9. CI 执行矩阵（全自动）
+1. 测试入口是可枚举、可治理的。
+2. `alias`、`redirect`、`crypt` 这类 feature 模块不会误伤默认测试链。
+3. 后续新增测试时，只要决定属于哪一类，再新增一个明确 target 即可。
 
-### 9.1 基线
+## 5. 推荐运行方式
+
+### 5.1 默认回归
 
 ```bash
-cargo check
-cargo check --all-features
-cargo test
-cargo test --all-features
+cargo test --test general_cli_core
+cargo test --test general_ctx
+cargo test --test module_backup_restore
+cargo test --test module_acl
 ```
 
-### 9.2 推荐（并行 + 稳定）
+### 5.2 feature 模块回归
 
 ```bash
-cargo nextest run
-cargo nextest run --all-features
+cargo test --test module_alias --features alias
+cargo test --test module_redirect_e2e --features redirect
+cargo test --test module_protect_e2e --features lock,protect
+cargo test --test module_filevault_v13 --features crypt
 ```
 
-### 9.3 分层回归（按文件过滤）
+### 5.3 特殊测试
 
 ```bash
-cargo test --test test_lock_e2e --features lock
-cargo test --test test_protect_e2e --features lock,protect
-cargo test --test test_performance --features lock
+cargo test --test special_performance -- --ignored --nocapture
+cargo test --test special_alias_perf --features alias -- --nocapture
+cargo test --test special_filevault_performance --features crypt -- --ignored --nocapture
 ```
 
----
+### 5.4 backup / restore 精准回归
 
-## 10. 分阶段落地计划
+```bash
+pwsh -File "tools/test-safe.ps1" -Preset backup
+pwsh -File "tools/test-safe.ps1" -Preset restore
+```
 
-1. Phase A：抽出 `tests/common/mod.rs`，保留旧测试不动，先建立复用基座。  
-2. Phase B：新增 `test_lock_e2e.rs`、`test_protect_e2e.rs`、`test_dry_run_format.rs`。  
-3. Phase C：迁移基础与网络测试到 `test_basic.rs`、`test_proxy_net.rs`。  
-4. Phase D：迁移性能测试到 `test_performance.rs` 并参数化门槛。  
-5. Phase E：删除旧大文件，收敛到新结构并更新文档与 CI。
+### 5.5 三类测试批量运行
 
----
+```bash
+pwsh -File "tools/test-suite.ps1" -Scope general
+pwsh -File "tools/test-suite.ps1" -Scope modules
+pwsh -File "tools/test-suite.ps1" -Scope special
+pwsh -File "tools/test-suite.ps1" -Scope all -KeepGoing
+```
 
-## 11. 验收标准（Definition of Done）
+说明：
 
-1. `cargo test --all-features` 无人工输入、可一次跑完。  
-2. `lock/protect/dry-run` 核心验收项均有自动化测试。  
-3. 测试失败时可直接定位问题命令与上下文。  
-4. 测试目录结构清晰，新增用例无需改动历史大文件。  
-5. CI 可并行执行，回归时长可控。
+1. 默认 `Runner=auto`，若本机安装了 `cargo-nextest` 会优先使用，否则回退到 `cargo test`。
+2. `special` 默认会带上 `ignored` 测试一起执行。
+3. `module_alias` / `special_alias_perf` 会先自动构建 `alias-shim`。
+
+### 5.6 nextest 配置
+
+仓库已提供 `.config/nextest.toml`，主要策略如下：
+
+1. `profile.default` 默认排除 `special_*` 测试。
+2. `profile.ci` 默认跑全量。
+3. `lock/protect/redirect` 这类 Windows 资源敏感测试放入串行测试组。
+4. `special` 中的重型测试放入独占测试组。
+
+若本机尚未安装：
+
+```bash
+cargo install cargo-nextest --locked
+```
+
+## 6. 支撑脚本
+
+### 6.1 `tools/test-safe.ps1`
+
+用于精准执行测试，并在 `LNK1104` 时自动尝试排查锁定者。
+
+当前预设：
+
+1. `backup` -> `module_backup_restore`
+2. `restore` -> `module_backup_restore`
+3. `alias` -> `module_alias`，并自动构建 `alias-shim`
+
+### 6.2 `tools/find-locker.ps1`
+
+用于定位测试产物被占用的进程。
+
+当前已兼容新测试目标命名：
+
+1. `general_*`
+2. `module_*`
+3. `special_*`
+
+### 6.3 `tools/test-suite.ps1`
+
+用于按测试类别批量执行目标：
+
+1. `general`
+2. `modules`
+3. `special`
+4. `default`（`general + modules`）
+5. `all`
+
+可选执行器：
+
+1. `cargo`
+2. `nextest`
+3. `auto`
+
+## 7. 后续建议
+
+下一阶段可以继续做 3 件事：
+
+1. 给 `general/modules/special` 增加按类型批量运行脚本。
+2. 引入 `cargo nextest` 配置文件，固化 CI 与本地一致的并行策略。
+3. 针对高重复测试逐步引入 `rstest` 或快照测试，而不是在本轮同时大面积改断言风格。

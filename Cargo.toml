@@ -4,6 +4,7 @@ default-members = ["."]
 
 [package]
 autobins = false
+autotests = false
 name        = "xun"
 version     = "0.1.0"
 edition     = "2024"
@@ -256,6 +257,142 @@ name = "backup_hotpath_bench_divan"
 harness = false
 
 [[test]]
-name = "test_alias"
-path = "tests/test_alias.rs"
+name = "general_cli_core"
+path = "tests/general/cli_core.rs"
+
+[[test]]
+name = "general_ctx"
+path = "tests/general/ctx.rs"
+
+[[test]]
+name = "general_delete"
+path = "tests/general/delete.rs"
+
+[[test]]
+name = "general_dry_run"
+path = "tests/general/dry_run.rs"
+required-features = ["lock"]
+
+[[test]]
+name = "general_find"
+path = "tests/general/find.rs"
+
+[[test]]
+name = "general_naming"
+path = "tests/general/naming.rs"
+
+[[test]]
+name = "module_backup_restore"
+path = "tests/modules/backup_restore.rs"
+
+[[test]]
+name = "module_acl"
+path = "tests/modules/acl.rs"
+
+[[test]]
+name = "module_alias"
+path = "tests/modules/alias.rs"
 required-features = ["alias"]
+
+[[test]]
+name = "module_batch_rename"
+path = "tests/modules/batch_rename.rs"
+required-features = ["batch_rename"]
+
+[[test]]
+name = "module_crypt_e2e"
+path = "tests/modules/crypt_e2e.rs"
+required-features = ["crypt"]
+
+[[test]]
+name = "module_dashboard"
+path = "tests/modules/dashboard.rs"
+required-features = ["dashboard"]
+
+[[test]]
+name = "module_diff"
+path = "tests/modules/diff.rs"
+required-features = ["diff"]
+
+[[test]]
+name = "module_filevault_formats"
+path = "tests/modules/filevault_formats.rs"
+required-features = ["crypt"]
+
+[[test]]
+name = "module_filevault_v13"
+path = "tests/modules/filevault_v13.rs"
+required-features = ["crypt"]
+
+[[test]]
+name = "module_lock_e2e"
+path = "tests/modules/lock_e2e.rs"
+required-features = ["lock"]
+
+[[test]]
+name = "module_protect_e2e"
+path = "tests/modules/protect_e2e.rs"
+required-features = ["lock", "protect"]
+
+[[test]]
+name = "module_proxy"
+path = "tests/modules/proxy.rs"
+
+[[test]]
+name = "module_redirect_e2e"
+path = "tests/modules/redirect_e2e.rs"
+required-features = ["redirect"]
+
+[[test]]
+name = "module_redirect_tools"
+path = "tests/modules/redirect_tools.rs"
+required-features = ["redirect"]
+
+[[test]]
+name = "module_redirect_undo"
+path = "tests/modules/redirect_undo.rs"
+required-features = ["redirect"]
+
+[[test]]
+name = "module_redirect_watch"
+path = "tests/modules/redirect_watch.rs"
+required-features = ["redirect"]
+
+[[test]]
+name = "special_acl_stress"
+path = "tests/special/acl_stress.rs"
+
+[[test]]
+name = "special_alias_perf"
+path = "tests/special/alias_perf.rs"
+required-features = ["alias"]
+
+[[test]]
+name = "special_filevault_performance"
+path = "tests/special/filevault_performance.rs"
+required-features = ["crypt"]
+
+[[test]]
+name = "special_path_guard_bench"
+path = "tests/special/path_guard_bench.rs"
+
+[[test]]
+name = "special_path_guard_integration"
+path = "tests/special/path_guard_integration.rs"
+
+[[test]]
+name = "special_path_guard_trace"
+path = "tests/special/path_guard_trace.rs"
+
+[[test]]
+name = "special_path_guard_unit"
+path = "tests/special/path_guard_unit.rs"
+
+[[test]]
+name = "special_performance"
+path = "tests/special/performance.rs"
+
+[[test]]
+name = "special_redirect_watch_core"
+path = "tests/special/redirect_watch_core.rs"
+required-features = ["redirect"]

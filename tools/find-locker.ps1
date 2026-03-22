@@ -42,7 +42,7 @@ function Show-ProcessCandidates {
     Write-Section "Process Candidates"
     $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object {
         $_.Path -like "$depsDir\*.exe" -or
-        $_.ProcessName -match '^(cargo|rustc|link|xun|xyu|test_.*|path_guard_bench|acl_test)$'
+        $_.ProcessName -match '^(cargo|rustc|link|xun|xyu|test_.*|general_.*|module_.*|special_.*|path_guard_bench|acl_test)$'
     } | Select-Object ProcessName, Id, Path
 
     if ($procs) {

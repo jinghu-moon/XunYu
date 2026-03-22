@@ -8,7 +8,7 @@ Three runs are compared:
 - Run C (parallel workers=4): release perf run with `XUN_FILEVAULT_WORKERS=4` (throughput only).
 
 Both runs used:
-- `cargo test --release --test test_filevault_performance --features crypt -- --ignored --nocapture`
+- `cargo test --release --test special_filevault_performance --features crypt -- --ignored --nocapture`
 - `chunk_size=262144` (default)
 - small-batch: `count=256`, buckets `1/2/4/8/16/32/64 KiB`
 - large list: `2048/4096/8192 MiB`

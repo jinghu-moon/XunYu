@@ -797,7 +797,7 @@ fn map_acl_diff_entry(entry: &acl::types::AceEntry) -> AclDiffEntryDetails {
     AclDiffEntryDetails {
         principal: entry.principal.clone(),
         sid: entry.raw_sid.clone(),
-        rights: entry.rights_display(),
+        rights: entry.rights_display().to_string(),
         ace_type: entry.ace_type.to_string(),
         source: if entry.is_inherited {
             "inherited".to_string()

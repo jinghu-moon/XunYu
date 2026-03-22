@@ -78,7 +78,11 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     };
     let cfg = config::load_config(&root);
     if timing {
-        emit_backup_timing("config", t_config.elapsed(), Some(root.display().to_string()));
+        emit_backup_timing(
+            "config",
+            t_config.elapsed(),
+            Some(root.display().to_string()),
+        );
     }
 
     if !args.op_args.is_empty() {
@@ -100,19 +104,17 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 let tag = args.op_args.get(1).map(|s| s.as_str());
                 find::cmd_backup_find(&root, &cfg, tag, None, None)
             }
-            _ => {
-                Err(CliError::with_details(
-                    2,
-                    format!("Unknown backup operation: {op}"),
-                    &[
-                        "Fix: Use `xun backup` to create a backup.",
-                        "Fix: Use `xun backup list` to list backups.",
-                        "Fix: Use `xun backup verify <name>` to verify integrity.",
-                        "Fix: Use `xun backup find [tag]` to search backups.",
-                        "Fix: Use `xun restore <name>` to restore a backup.",
-                    ],
-                ))
-            }
+            _ => Err(CliError::with_details(
+                2,
+                format!("Unknown backup operation: {op}"),
+                &[
+                    "Fix: Use `xun backup` to create a backup.",
+                    "Fix: Use `xun backup list` to list backups.",
+                    "Fix: Use `xun backup verify <name>` to verify integrity.",
+                    "Fix: Use `xun backup find [tag]` to search backups.",
+                    "Fix: Use `xun restore <name>` to restore a backup.",
+                ],
+            )),
         };
         if timing {
             emit_backup_timing("subcommand", t_sub.elapsed(), Some(op.to_string()));
@@ -488,7 +490,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         {
             let mut file_hashes = std::collections::HashMap::new();
             for (rel, src) in &current {
-                if let Some(hash) = checksum::file_blake3(src) {
+                if let Some(hash) = checksum::file_blake3(&src.path) {
                     file_hashes.insert(rel.clone(), hash);
                 }
             }

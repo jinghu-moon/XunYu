@@ -1,0 +1,46 @@
+[store]
+dir = "target/nextest"
+
+[profile.default]
+default-filter = "not (binary_id(special_acl_stress) or binary_id(special_alias_perf) or binary_id(special_filevault_performance) or binary_id(special_path_guard_bench) or binary_id(special_path_guard_integration) or binary_id(special_path_guard_trace) or binary_id(special_path_guard_unit) or binary_id(special_performance) or binary_id(special_redirect_watch_core))"
+failure-output = "immediate-final"
+success-output = "never"
+status-level = "pass"
+slow-timeout = { period = "60s", terminate-after = 2 }
+retries = 0
+test-threads = "num-cpus"
+
+[profile.ci]
+default-filter = "all()"
+failure-output = "final"
+success-output = "never"
+status-level = "skip"
+slow-timeout = { period = "90s", terminate-after = 2 }
+retries = { backoff = "fixed", count = 1, delay = "2s" }
+test-threads = "num-cpus"
+
+[test-groups]
+windows-exclusive = { max-threads = 1 }
+special-heavy = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = "binary_id(module_lock_e2e) or binary_id(module_protect_e2e) or binary_id(module_redirect_e2e) or binary_id(module_redirect_tools) or binary_id(module_redirect_undo) or binary_id(module_redirect_watch)"
+platform = "cfg(windows)"
+test-group = "windows-exclusive"
+
+[[profile.default.overrides]]
+filter = "binary_id(special_acl_stress) or binary_id(special_alias_perf) or binary_id(special_filevault_performance) or binary_id(special_path_guard_bench) or binary_id(special_path_guard_trace) or binary_id(special_performance)"
+platform = "cfg(windows)"
+test-group = "special-heavy"
+threads-required = 1
+
+[[profile.ci.overrides]]
+filter = "binary_id(module_lock_e2e) or binary_id(module_protect_e2e) or binary_id(module_redirect_e2e) or binary_id(module_redirect_tools) or binary_id(module_redirect_undo) or binary_id(module_redirect_watch)"
+platform = "cfg(windows)"
+test-group = "windows-exclusive"
+
+[[profile.ci.overrides]]
+filter = "binary_id(special_acl_stress) or binary_id(special_alias_perf) or binary_id(special_filevault_performance) or binary_id(special_path_guard_bench) or binary_id(special_path_guard_trace) or binary_id(special_performance)"
+platform = "cfg(windows)"
+test-group = "special-heavy"
+threads-required = 1

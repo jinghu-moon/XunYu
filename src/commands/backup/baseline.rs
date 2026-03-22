@@ -76,7 +76,8 @@ fn read_baseline_dir(dir: &Path, base: &Path, old: &mut HashMap<String, FileMeta
                 continue;
             };
             let rel = path.strip_prefix(base).unwrap_or(&path);
-            if is_backup_internal_name(rel.file_name().and_then(|s| s.to_str()).unwrap_or_default()) {
+            if is_backup_internal_name(rel.file_name().and_then(|s| s.to_str()).unwrap_or_default())
+            {
                 continue;
             }
             old.insert(

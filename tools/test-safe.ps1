@@ -24,21 +24,21 @@ if ($Preset) {
     switch ($Preset) {
         "backup" {
             $Mode = "test"
-            $Target = "test_basic"
+            $Target = "module_backup_restore"
             if (-not $Filter) {
                 $Filter = "backup_"
             }
         }
         "restore" {
             $Mode = "test"
-            $Target = "test_basic"
+            $Target = "module_backup_restore"
             if (-not $Filter) {
                 $Filter = "restore_"
             }
         }
         "alias" {
             $Mode = "test"
-            $Target = "test_alias"
+            $Target = "module_alias"
             if (-not $Filter) {
                 $Filter = "alias_"
             }
@@ -93,7 +93,7 @@ function Ensure-AliasShim {
     }
 }
 
-if ($Target -eq "test_alias") {
+if ($Target -eq "module_alias" -or $Target -eq "special_alias_perf") {
     Ensure-AliasShim
 }
 

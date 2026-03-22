@@ -156,7 +156,7 @@ $summary = [ordered]@{
     generatedAt = (Get-Date).ToString('o')
     dir = $resolvedDir
     commit = $commit
-    command = 'cargo test --test test_alias perf_ --features alias -- --nocapture --test-threads=1'
+    command = 'cargo test --test special_alias_perf perf_ --features alias -- --nocapture --test-threads=1'
     runFiles = @($runFiles | ForEach-Object { $_.FullName })
     totalRuntimeSeconds = [pscustomobject]@{
         runs = [pscustomobject]$runTotals
