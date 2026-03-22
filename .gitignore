@@ -16,6 +16,7 @@
 /*.zip
 /.agents/
 /deliverables/
+/logs/
 *.log
 *.zip
 *.pyc
