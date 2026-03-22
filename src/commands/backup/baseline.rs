@@ -18,6 +18,10 @@ pub(crate) fn read_baseline(prev: &Path) -> HashMap<String, FileMeta> {
     old
 }
 
+fn is_backup_internal_name(name: &str) -> bool {
+    matches!(name, ".bak-meta.json" | ".bak-manifest.json")
+}
+
 fn read_baseline_zip(zip_path: &Path, old: &mut HashMap<String, FileMeta>) {
     let Ok(file) = fs::File::open(zip_path) else {
         return;
@@ -34,6 +38,9 @@ fn read_baseline_zip(zip_path: &Path, old: &mut HashMap<String, FileMeta>) {
         }
         let name = entry.name().replace('/', "\\");
         if name.is_empty() {
+            continue;
+        }
+        if is_backup_internal_name(name.rsplit('\\').next().unwrap_or(&name)) {
             continue;
         }
         let modified = entry
@@ -69,6 +76,9 @@ fn read_baseline_dir(dir: &Path, base: &Path, old: &mut HashMap<String, FileMeta
                 continue;
             };
             let rel = path.strip_prefix(base).unwrap_or(&path);
+            if is_backup_internal_name(rel.file_name().and_then(|s| s.to_str()).unwrap_or_default()) {
+                continue;
+            }
             old.insert(
                 rel_key(rel),
                 FileMeta {
@@ -115,5 +125,26 @@ fn zip_datetime_to_systime(dt: zip::DateTime) -> SystemTime {
         SystemTime::UNIX_EPOCH
     } else {
         SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::read_baseline;
+
+    #[test]
+    fn read_baseline_dir_skips_internal_backup_files() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "ok").unwrap();
+        std::fs::write(dir.path().join(".bak-meta.json"), "{}").unwrap();
+        std::fs::write(dir.path().join(".bak-manifest.json"), "{}").unwrap();
+
+        let baseline = read_baseline(dir.path());
+        assert!(baseline.contains_key("a.txt"));
+        assert!(!baseline.contains_key(".bak-meta.json"));
+        assert!(!baseline.contains_key(".bak-manifest.json"));
+        assert_eq!(baseline.len(), 1);
     }
 }
