@@ -493,6 +493,23 @@ fn bak_list_shows_human_readable_mtime() {
     );
 }
 
+#[test]
+fn backup_list_empty_reports_no_backups() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_list_empty");
+    fs::create_dir_all(&root).unwrap();
+
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "list"]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("No backups found"),
+        "empty list should explain no backups found, got: {stderr}"
+    );
+}
+
 // ─── 新增：verify 命令 ────────────────────────────────────────────────────────
 
 #[test]
@@ -540,6 +557,47 @@ fn bak_verify_no_manifest_returns_error() {
     );
 }
 
+#[test]
+fn bak_verify_zip_backup_reports_not_supported() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_verify_zip");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": true },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "ziponly"]),
+    );
+
+    let zip_name = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.strip_suffix(".zip").map(str::to_string)
+        })
+        .expect("zip backup should exist");
+
+    let out = run_err(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "verify", &zip_name]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("Verify is only supported for directory backups"),
+        "zip verify should explain unsupported mode, got: {stderr}"
+    );
+}
+
 // ─── 新增：find 命令 ──────────────────────────────────────────────────────────
 
 #[test]
@@ -575,6 +633,90 @@ fn bak_find_lists_backups_with_meta() {
     assert!(
         stderr.contains("v1") || stderr.contains("myfind"),
         "find output should list backup (got: {stderr})"
+    );
+}
+
+#[test]
+fn bak_find_filters_backups_by_tag() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_find_tag");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "tagged"]),
+    );
+    fs::write(root.join("a.txt"), "changed").unwrap();
+    run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "-m", "plain"]),
+    );
+
+    let backups_root = root.join("A_backups");
+    let mut entries: Vec<_> = fs::read_dir(&backups_root)
+        .unwrap()
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    let tagged_backup = entries
+        .iter()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .expect("v1 backup should exist")
+        .path();
+    let plain_backup = entries
+        .iter()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v2-"))
+        .expect("v2 backup should exist")
+        .path();
+
+    fs::write(
+        tagged_backup.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_700_000_000u64,
+            "desc": "tagged",
+            "tags": ["demo"],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(
+        plain_backup.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_700_000_100u64,
+            "desc": "plain",
+            "tags": [],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let out = run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "find", "demo"]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("tagged"), "filtered find should keep tagged backup");
+    assert!(
+        !stderr.contains("plain"),
+        "filtered find should exclude untagged backup, got: {stderr}"
     );
 }
 

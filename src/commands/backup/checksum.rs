@@ -76,3 +76,53 @@ pub(crate) fn verify_manifest(backup_path: &Path) -> VerifyResult {
 fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+#[cfg(all(test, feature = "bak"))]
+mod tests {
+    use std::collections::HashMap;
+
+    use tempfile::tempdir;
+
+    use super::{VerifyResult, file_blake3, verify_manifest, write_manifest};
+
+    #[test]
+    fn verify_manifest_roundtrip_ok() {
+        let dir = tempdir().unwrap();
+        let backup_root = dir.path();
+        std::fs::write(backup_root.join("a.txt"), b"alpha").unwrap();
+        std::fs::write(backup_root.join("b.txt"), b"beta").unwrap();
+
+        let mut files = HashMap::new();
+        files.insert(
+            "a.txt".to_string(),
+            file_blake3(&backup_root.join("a.txt")).unwrap(),
+        );
+        files.insert(
+            "b.txt".to_string(),
+            file_blake3(&backup_root.join("b.txt")).unwrap(),
+        );
+        write_manifest(backup_root, &files);
+
+        assert!(matches!(verify_manifest(backup_root), VerifyResult::Ok));
+    }
+
+    #[test]
+    fn verify_manifest_detects_corrupted_files() {
+        let dir = tempdir().unwrap();
+        let backup_root = dir.path();
+        std::fs::write(backup_root.join("a.txt"), b"alpha").unwrap();
+
+        let mut files = HashMap::new();
+        files.insert(
+            "a.txt".to_string(),
+            file_blake3(&backup_root.join("a.txt")).unwrap(),
+        );
+        write_manifest(backup_root, &files);
+        std::fs::write(backup_root.join("a.txt"), b"changed").unwrap();
+
+        match verify_manifest(backup_root) {
+            VerifyResult::Corrupted(files) => assert_eq!(files, vec!["a.txt".to_string()]),
+            _other => panic!("expected corrupted manifest result, got unexpected variant"),
+        }
+    }
+}

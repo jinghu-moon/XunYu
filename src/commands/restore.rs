@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::Instant;
 
 use crate::cli::RestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
@@ -12,7 +14,33 @@ use super::restore_core;
 
 use backup_config::BackupConfig;
 
+fn restore_timing_enabled() -> bool {
+    restore_timing_enabled_with(|name| std::env::var_os(name))
+}
+
+fn restore_timing_enabled_with<F>(mut get_env: F) -> bool
+where
+    F: FnMut(&str) -> Option<OsString>,
+{
+    ["XUN_CMD_TIMING", "XUN_RESTORE_TIMING"]
+        .into_iter()
+        .any(|name| get_env(name).is_some())
+}
+
+fn emit_restore_timing(label: &str, elapsed: std::time::Duration, extra: Option<String>) {
+    match extra {
+        Some(extra) if !extra.is_empty() => {
+            eprintln!("  [{label:<10}] {:>5}ms  {extra}", elapsed.as_millis());
+        }
+        _ => eprintln!("  [{label:<10}] {:>5}ms", elapsed.as_millis()),
+    }
+}
+
 pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
+    let t_total = Instant::now();
+    let timing = restore_timing_enabled();
+
+    let t_config = Instant::now();
     let root = match &args.dir {
         Some(d) => PathBuf::from(d),
         None => std::env::current_dir()
@@ -20,17 +48,29 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     };
     let cfg = backup_config::load_config(&root);
     let backups_root = root.join(&cfg.storage.backups_dir);
+    if timing {
+        emit_restore_timing("config", t_config.elapsed(), Some(root.display().to_string()));
+    }
 
     // 解析备份源路径
+    let t_source = Instant::now();
     let src = resolve_backup_src(&backups_root, &args.name_or_path)?;
+    if timing {
+        emit_restore_timing("source", t_source.elapsed(), Some(src.display().to_string()));
+    }
 
     // --snapshot：还原前先备份当前状态
     if args.snapshot && !args.dry_run {
         eprintln!("Creating pre-restore snapshot...");
+        let t_snapshot = Instant::now();
         run_snapshot_backup(&root, &cfg)?;
+        if timing {
+            emit_restore_timing("snapshot", t_snapshot.elapsed(), None);
+        }
     }
 
     // 确定目标根目录
+    let t_dest = Instant::now();
     let dest_root = match &args.to {
         Some(d) => {
             let p = PathBuf::from(d);
@@ -41,9 +81,13 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
         }
         None => root.clone(),
     };
+    if timing {
+        emit_restore_timing("dest", t_dest.elapsed(), Some(dest_root.display().to_string()));
+    }
 
     // 交互确认
     if !args.yes && can_interact() {
+        let t_preview = Instant::now();
         show_restore_preview(&dest_root, &cfg, &src);
         let ok = dialoguer::Confirm::new()
             .with_prompt("Restore may overwrite files. Continue?")
@@ -53,9 +97,12 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
         if !ok {
             return Err(CliError::new(3, "Cancelled."));
         }
+        if timing {
+            emit_restore_timing("preview", t_preview.elapsed(), None);
+        }
     }
 
-    let t_start = std::time::Instant::now();
+    let t_start = Instant::now();
     let (restored, failed) = if let Some(ref glob_pat) = args.glob {
         restore_with_glob(&src, &dest_root, glob_pat, args.dry_run)?
     } else if let Some(ref file) = args.file {
@@ -65,6 +112,21 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     };
 
     let elapsed = t_start.elapsed();
+    if timing {
+        let mode = if args.glob.is_some() {
+            "glob"
+        } else if args.file.is_some() {
+            "file"
+        } else {
+            "all"
+        };
+        emit_restore_timing(
+            "execute",
+            elapsed,
+            Some(format!("mode={mode} restored={restored} failed={failed}")),
+        );
+        emit_restore_timing("total", t_total.elapsed(), None);
+    }
     eprintln!(
         "Restored: {}  Failed: {}  Time: {:.2}s",
         restored,
@@ -341,9 +403,13 @@ fn glob_match_parts(pat: &[u8], s: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::ffi::OsString;
     use std::time::{Duration, SystemTime};
 
-    use super::{RestorePreviewItem, RestorePreviewKind, build_restore_preview_items, glob_match};
+    use super::{
+        RestorePreviewItem, RestorePreviewKind, build_restore_preview_items, glob_match,
+        restore_timing_enabled_with,
+    };
     use crate::commands::backup::FileMeta;
 
     #[test]
@@ -422,5 +488,14 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn restore_timing_enabled_accepts_command_and_restore_env_names() {
+        let env = HashMap::from([("XUN_CMD_TIMING", OsString::from("1"))]);
+        assert!(restore_timing_enabled_with(|name| env.get(name).cloned()));
+
+        let env = HashMap::from([("XUN_RESTORE_TIMING", OsString::from("1"))]);
+        assert!(restore_timing_enabled_with(|name| env.get(name).cloned()));
     }
 }

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::SystemTime;
 
 use console::Style;
@@ -14,6 +13,12 @@ pub(crate) struct DiffStats {
     pub(crate) new: u32,
     pub(crate) modified: u32,
     pub(crate) deleted: u32,
+    pub(crate) bytes_copied: u64,
+}
+
+struct CopyJob {
+    src: PathBuf,
+    dst: PathBuf,
 }
 
 /// diff 条目（纯数据）
@@ -148,18 +153,55 @@ pub(crate) fn print_diff(entries: &[DiffEntry], show_unchanged: bool) {
 
 /// 纯写入：将 new/modified（以及可选 unchanged）条目并行复制到 dest
 pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) -> DiffStats {
-    // 阶段1：串行预建目录（避免并发 create_dir_all 竞争）
+    // 阶段1：预计算复制任务和目录，避免在并行阶段重复做路径转换/分支判断
     let mut dir_set = std::collections::HashSet::new();
+    let mut jobs: Vec<CopyJob> = Vec::new();
+    let mut cnt_new = 0u32;
+    let mut cnt_mod = 0u32;
+    let mut cnt_del = 0u32;
+
     for e in entries {
-        let needs_copy = match e.kind {
-            DiffKind::New | DiffKind::Modified => e.src_path.is_some(),
-            DiffKind::Unchanged => !incremental && e.src_path.is_some(),
-            DiffKind::Deleted => false,
-        };
-        if needs_copy {
-            let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-            if let Some(p) = dst.parent() {
-                dir_set.insert(p.to_path_buf());
+        match e.kind {
+            DiffKind::New => {
+                cnt_new += 1;
+                if let Some(src) = &e.src_path {
+                    let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+                    if let Some(parent) = dst.parent() {
+                        dir_set.insert(parent.to_path_buf());
+                    }
+                    jobs.push(CopyJob {
+                        src: src.clone(),
+                        dst,
+                    });
+                }
+            }
+            DiffKind::Modified => {
+                cnt_mod += 1;
+                if let Some(src) = &e.src_path {
+                    let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+                    if let Some(parent) = dst.parent() {
+                        dir_set.insert(parent.to_path_buf());
+                    }
+                    jobs.push(CopyJob {
+                        src: src.clone(),
+                        dst,
+                    });
+                }
+            }
+            DiffKind::Unchanged => {
+                if !incremental && let Some(src) = &e.src_path {
+                    let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+                    if let Some(parent) = dst.parent() {
+                        dir_set.insert(parent.to_path_buf());
+                    }
+                    jobs.push(CopyJob {
+                        src: src.clone(),
+                        dst,
+                    });
+                }
+            }
+            DiffKind::Deleted => {
+                cnt_del += 1;
             }
         }
     }
@@ -167,43 +209,18 @@ pub(crate) fn apply_diff(entries: &[DiffEntry], dest: &Path, incremental: bool) 
         let _ = fs::create_dir_all(dir);
     }
 
-    // 阶段2：rayon 并行复制
-    let cnt_new = AtomicU32::new(0);
-    let cnt_mod = AtomicU32::new(0);
-    let cnt_del = AtomicU32::new(0);
-
-    entries.par_iter().for_each(|e| match e.kind {
-        DiffKind::New => {
-            if let Some(src) = &e.src_path {
-                let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-                let _ = fs::copy(src, &dst);
-            }
-            cnt_new.fetch_add(1, Ordering::Relaxed);
-        }
-        DiffKind::Modified => {
-            if let Some(src) = &e.src_path {
-                let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-                let _ = fs::copy(src, &dst);
-            }
-            cnt_mod.fetch_add(1, Ordering::Relaxed);
-        }
-        DiffKind::Unchanged => {
-            if !incremental
-                && let Some(src) = &e.src_path
-            {
-                let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-                let _ = fs::copy(src, &dst);
-            }
-        }
-        DiffKind::Deleted => {
-            cnt_del.fetch_add(1, Ordering::Relaxed);
-        }
-    });
+    // 阶段2：并行复制。对当前样本（500 个小文件）实测并行优于串行，
+    // 因此保留并行策略，只减少并行阶段里的重复路径计算。
+    let bytes_copied: u64 = jobs
+        .par_iter()
+        .map(|job| fs::copy(&job.src, &job.dst).unwrap_or(0))
+        .sum();
 
     DiffStats {
-        new: cnt_new.into_inner(),
-        modified: cnt_mod.into_inner(),
-        deleted: cnt_del.into_inner(),
+        new: cnt_new,
+        modified: cnt_mod,
+        deleted: cnt_del,
+        bytes_copied,
     }
 }
 

@@ -38,25 +38,39 @@ fn backup_timing_enabled_with<F>(mut get_env: F) -> bool
 where
     F: FnMut(&str) -> Option<OsString>,
 {
-    ["XUN_BACKUP_TIMING", "XUN_BAK_TIMING"]
+    ["XUN_CMD_TIMING", "XUN_BACKUP_TIMING", "XUN_BAK_TIMING"]
         .into_iter()
         .any(|name| get_env(name).is_some())
+}
+
+fn emit_backup_timing(label: &str, elapsed: std::time::Duration, extra: Option<String>) {
+    match extra {
+        Some(extra) if !extra.is_empty() => {
+            eprintln!("  [{label:<10}] {:>5}ms  {extra}", elapsed.as_millis());
+        }
+        _ => eprintln!("  [{label:<10}] {:>5}ms", elapsed.as_millis()),
+    }
 }
 
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let t_total = Instant::now();
     let timing = backup_timing_enabled();
 
+    let t_config = Instant::now();
     let root = match &args.dir {
         Some(d) => PathBuf::from(d),
         None => std::env::current_dir()
             .map_err(|e| CliError::new(1, format!("Failed to get current directory: {e}")))?,
     };
     let cfg = config::load_config(&root);
+    if timing {
+        emit_backup_timing("config", t_config.elapsed(), Some(root.display().to_string()));
+    }
 
     if !args.op_args.is_empty() {
         let op = args.op_args[0].as_str();
-        match op.to_ascii_lowercase().as_str() {
+        let t_sub = Instant::now();
+        let result = match op.to_ascii_lowercase().as_str() {
             "list" => return list::cmd_backup_list(&root, &cfg),
             "verify" => {
                 let Some(name) = args.op_args.get(1).map(|s| s.as_str()) else {
@@ -66,14 +80,14 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                         &["Fix: Use `xun backup verify <name>`."],
                     ));
                 };
-                return verify::cmd_backup_verify(&root, &cfg, name);
+                verify::cmd_backup_verify(&root, &cfg, name)
             }
             "find" => {
                 let tag = args.op_args.get(1).map(|s| s.as_str());
-                return find::cmd_backup_find(&root, &cfg, tag, None, None);
+                find::cmd_backup_find(&root, &cfg, tag, None, None)
             }
             _ => {
-                return Err(CliError::with_details(
+                Err(CliError::with_details(
                     2,
                     format!("Unknown backup operation: {op}"),
                     &[
@@ -83,11 +97,17 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                         "Fix: Use `xun backup find [tag]` to search backups.",
                         "Fix: Use `xun restore <name>` to restore a backup.",
                     ],
-                ));
+                ))
             }
+        };
+        if timing {
+            emit_backup_timing("subcommand", t_sub.elapsed(), Some(op.to_string()));
+            emit_backup_timing("total", t_total.elapsed(), None);
         }
+        return result;
     }
 
+    let t_rules = Instant::now();
     let mut include_roots: Vec<String> = Vec::new();
     let mut include_patterns: Vec<String> = Vec::new();
     for inc in &cfg.include {
@@ -123,10 +143,30 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     } else {
         cfg.storage.compress
     };
+    if timing {
+        emit_backup_timing(
+            "rules",
+            t_rules.elapsed(),
+            Some(format!(
+                "roots={} include_globs={} exclude_globs={} compress={compress}",
+                include_roots.len(),
+                include_patterns.len(),
+                exclude_patterns.len()
+            )),
+        );
+    }
 
     // 1. Version scanning
+    let t_version = Instant::now();
     let backups_root = root.join(&cfg.storage.backups_dir);
     let ver = version::scan_versions(&backups_root, &cfg.naming.prefix);
+    if timing {
+        emit_backup_timing(
+            "version",
+            t_version.elapsed(),
+            Some(format!("next=v{}", ver.next_version)),
+        );
+    }
 
     let dim = Style::new().dim();
     let yellow = Style::new().yellow();
@@ -140,6 +180,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     }
 
     // 2. Get description
+    let t_desc = Instant::now();
     let desc = if let Some(ref m) = args.msg {
         m.clone()
     } else if !can_interact() {
@@ -156,8 +197,12 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             trimmed.to_string()
         }
     };
+    if timing {
+        emit_backup_timing("desc", t_desc.elapsed(), Some(desc.clone()));
+    }
 
     // 3. Build folder name
+    let t_prepare = Instant::now();
     let date_str = time_fmt::format_now(&cfg.naming.date_format);
     let incr_suffix = if args.incremental { "-incr" } else { "" };
     let folder_name = format!(
@@ -167,6 +212,9 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let dest_dir = backups_root.join(&folder_name);
     if !args.dry_run {
         let _ = fs::create_dir_all(&dest_dir);
+    }
+    if timing {
+        emit_backup_timing("prepare", t_prepare.elapsed(), Some(folder_name.clone()));
     }
 
     // 4. Scan + diff + copy
@@ -194,13 +242,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         sp.finish_and_clear();
     }
     if timing {
-        eprintln!(
-            "{}",
-            dim.apply_to(format!(
-                "  [scan]  {:>6} files  {:>5}ms",
-                current.len(),
-                elapsed_scan.as_millis()
-            ))
+        emit_backup_timing(
+            "scan",
+            elapsed_scan,
+            Some(format!("files={}", current.len())),
         );
     }
 
@@ -210,12 +255,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         None => HashMap::new(),
     };
     if timing {
-        eprintln!(
-            "{}",
-            dim.apply_to(format!(
-                "  [baseline] {:>5}ms",
-                t_baseline.elapsed().as_millis()
-            ))
+        emit_backup_timing(
+            "baseline",
+            t_baseline.elapsed(),
+            Some(format!("entries={}", baseline.len())),
         );
     }
 
@@ -225,16 +268,21 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let t_diff = Instant::now();
     let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
     if timing {
-        eprintln!(
-            "{}",
-            dim.apply_to(format!(
-                "  [diff]   {:>6} entries  {:>5}ms",
-                diff_entries.len(),
-                t_diff.elapsed().as_millis()
-            ))
+        emit_backup_timing(
+            "diff",
+            t_diff.elapsed(),
+            Some(format!("entries={}", diff_entries.len())),
         );
     }
+    let t_diff_print = Instant::now();
     diff::print_diff(&diff_entries, show_unchanged);
+    if timing {
+        emit_backup_timing(
+            "diff-print",
+            t_diff_print.elapsed(),
+            Some(format!("lines={}", diff_entries.len())),
+        );
+    }
 
     let t_copy = Instant::now();
     let stats = if !args.dry_run {
@@ -275,18 +323,14 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             new: 0,
             modified: 0,
             deleted: 0,
+            bytes_copied: 0,
         }
     };
     if timing {
-        eprintln!(
-            "{}",
-            dim.apply_to(format!(
-                "  [copy]   +{}~{}-{}  {:>5}ms",
-                stats.new,
-                stats.modified,
-                stats.deleted,
-                t_copy.elapsed().as_millis()
-            ))
+        emit_backup_timing(
+            "copy",
+            t_copy.elapsed(),
+            Some(format!("+{} ~{} -{}", stats.new, stats.modified, stats.deleted)),
         );
     }
 
@@ -302,6 +346,9 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             &white,
         );
         eprintln!();
+        if timing {
+            emit_backup_timing("total", t_total.elapsed(), None);
+        }
         return Ok(());
     }
 
@@ -334,10 +381,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 final_path = zip_path;
                 is_zip = true;
                 if timing {
-                    eprintln!(
-                        "{}",
-                        dim.apply_to(format!("  [zip]    {:>5}ms", elapsed_zip.as_millis()))
-                    );
+                    emit_backup_timing("zip", elapsed_zip, Some("compressed".to_string()));
                 }
             }
             Err(e) => {
@@ -368,16 +412,15 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let t_retention = Instant::now();
     let cleaned = retention::apply_retention_policy(&backups_root, &cfg.naming.prefix, &ret_cfg);
     if timing {
-        eprintln!(
-            "{}",
-            dim.apply_to(format!(
-                "  [retention] cleaned={cleaned}  {:>5}ms",
-                t_retention.elapsed().as_millis()
-            ))
+        emit_backup_timing(
+            "retention",
+            t_retention.elapsed(),
+            Some(format!("cleaned={cleaned}")),
         );
     }
 
     // 6b. 写入备份元数据
+    let t_meta = Instant::now();
     let backup_meta = meta::BackupMeta {
         version: 1,
         ts: meta::now_unix_secs(),
@@ -411,12 +454,16 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             let _ = fs::write(&meta_path, json);
         }
     }
+    if timing {
+        emit_backup_timing("meta", t_meta.elapsed(), Some(format!("zip={is_zip}")));
+    }
 
     // 7. Report
+    let t_report = Instant::now();
     let size_bytes = if is_zip {
         fs::metadata(&final_path).map(|m| m.len()).unwrap_or(0)
     } else {
-        util::dir_size(&final_path)
+        stats.bytes_copied
     };
     let size_display = if size_bytes > 1_048_576 {
         format!("{:.2} MB", size_bytes as f64 / 1_048_576.0)
@@ -456,6 +503,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         &dim,
     );
     println!();
+    if timing {
+        emit_backup_timing("report", t_report.elapsed(), Some(size_display));
+        emit_backup_timing("total", t_total.elapsed(), None);
+    }
     Ok(())
 }
 

@@ -153,3 +153,79 @@ pub(crate) fn apply_retention_policy(
     }
     cleaned
 }
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    use tempfile::tempdir;
+
+    use super::apply_retention_policy;
+    use crate::commands::backup::config::RetentionCfg;
+
+    fn write_backup_dir(root: &std::path::Path, name: &str, iso_utc: &str) {
+        let dir = root.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("data.txt"), name).unwrap();
+
+        let escaped = dir.display().to_string().replace('\'', "''");
+        let script = format!(
+            "$p='{escaped}'; \
+             $ts=[datetime]::Parse('{iso_utc}').ToUniversalTime(); \
+             (Get-Item $p).LastWriteTimeUtc=$ts"
+        );
+        let status = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .status()
+            .unwrap();
+        assert!(status.success(), "failed to set mtime for {}", dir.display());
+    }
+
+    #[test]
+    fn keep_weekly_preserves_recent_week_representatives() {
+        let dir = tempdir().unwrap();
+        write_backup_dir(dir.path(), "v1-old", "2026-01-01T00:00:00Z");
+        write_backup_dir(dir.path(), "v2-mid", "2026-01-08T00:00:00Z");
+        write_backup_dir(dir.path(), "v3-new", "2026-01-15T00:00:00Z");
+
+        let cleaned = apply_retention_policy(
+            dir.path(),
+            "v",
+            &RetentionCfg {
+                max_backups: 1,
+                delete_count: 1,
+                keep_weekly: 2,
+                ..RetentionCfg::default()
+            },
+        );
+
+        assert_eq!(cleaned, 1);
+        assert!(!dir.path().join("v1-old").exists());
+        assert!(dir.path().join("v2-mid").exists());
+        assert!(dir.path().join("v3-new").exists());
+    }
+
+    #[test]
+    fn keep_monthly_preserves_recent_month_representatives() {
+        let dir = tempdir().unwrap();
+        write_backup_dir(dir.path(), "v1-jan", "2026-01-01T00:00:00Z");
+        write_backup_dir(dir.path(), "v2-feb", "2026-02-01T00:00:00Z");
+        write_backup_dir(dir.path(), "v3-mar", "2026-03-01T00:00:00Z");
+
+        let cleaned = apply_retention_policy(
+            dir.path(),
+            "v",
+            &RetentionCfg {
+                max_backups: 1,
+                delete_count: 1,
+                keep_monthly: 2,
+                ..RetentionCfg::default()
+            },
+        );
+
+        assert_eq!(cleaned, 1);
+        assert!(!dir.path().join("v1-jan").exists());
+        assert!(dir.path().join("v2-feb").exists());
+        assert!(dir.path().join("v3-mar").exists());
+    }
+}

@@ -6,6 +6,7 @@ use common::*;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::thread;
 use std::time::Instant;
 
 fn find_projects_dir() -> PathBuf {
@@ -16,6 +17,69 @@ fn find_projects_dir() -> PathBuf {
 
 fn find_projects_glob() -> String {
     std::env::var("XUN_TEST_FIND_GLOB").unwrap_or_else(|_| "*.js".to_string())
+}
+
+const PERF_BACKUP_CFG_NO_COMPRESS: &str = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "perf" },
+  "retention": { "maxBackups": 20, "deleteCount": 1 },
+  "include": [ "src", "public" ],
+  "exclude": []
+}"#;
+
+const PERF_BACKUP_CFG_COMPRESS: &str = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": true },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "perf" },
+  "retention": { "maxBackups": 20, "deleteCount": 1 },
+  "include": [ "src", "public" ],
+  "exclude": []
+}"#;
+
+fn populate_backup_perf_files(root: &std::path::Path, total: usize) {
+    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    for dir in dirs {
+        fs::create_dir_all(root.join(dir)).unwrap();
+    }
+    for i in 0..total {
+        let dir = dirs[i % dirs.len()];
+        let size = 500 + (i * 53) % 2500;
+        fs::write(
+            root.join(dir).join(format!("file_{i:04}.ts")),
+            "x".repeat(size),
+        )
+        .unwrap();
+    }
+}
+
+fn write_backup_perf_config(root: &std::path::Path, compress: bool) {
+    let content = if compress {
+        PERF_BACKUP_CFG_COMPRESS
+    } else {
+        PERF_BACKUP_CFG_NO_COMPRESS
+    };
+    fs::write(root.join(".xun-bak.json"), content).unwrap();
+}
+
+fn find_backup_name(
+    backups_root: &std::path::Path,
+    prefix: &str,
+    suffix: Option<&str>,
+) -> String {
+    fs::read_dir(backups_root)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .find(|name| {
+            name.starts_with(prefix) && suffix.is_none_or(|suffix| name.ends_with(suffix))
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "backup {}*{} not found in {}",
+                prefix,
+                suffix.unwrap_or(""),
+                backups_root.display()
+            )
+        })
 }
 
 #[test]
@@ -243,6 +307,141 @@ fn perf_find_projects_js_working_set_peak() {
     if let Some(max_ws) = env_u64("XUN_TEST_FIND_JS_WS_PEAK_MAX") {
         assert!(peak <= max_ws, "working set peak {peak} > {max_ws}");
     }
+}
+
+#[test]
+#[ignore]
+fn perf_backup_full_500_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("perf-backup-full");
+    let files = env_usize("XUN_TEST_BACKUP_PERF_FILES", 500);
+    fs::create_dir_all(&root).unwrap();
+    populate_backup_perf_files(&root, files);
+    write_backup_perf_config(&root, false);
+
+    let start = Instant::now();
+    run_ok_status(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "perf-full"]),
+    );
+    let elapsed = start.elapsed();
+    eprintln!("perf: backup_full files={} elapsed_ms={}", files, elapsed.as_millis());
+    assert_under_ms("backup-full", elapsed, "XUN_TEST_BACKUP_FULL_MAX_MS");
+}
+
+#[test]
+#[ignore]
+fn perf_backup_incremental_50_changed_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("perf-backup-incremental");
+    let files = env_usize("XUN_TEST_BACKUP_PERF_FILES", 500);
+    let changed = env_usize("XUN_TEST_BACKUP_PERF_CHANGED", 50);
+    fs::create_dir_all(&root).unwrap();
+    populate_backup_perf_files(&root, files);
+    write_backup_perf_config(&root, false);
+
+    run_ok_status(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "baseline"]),
+    );
+
+    thread::sleep(std::time::Duration::from_millis(50));
+    let dirs = ["src/components", "src/utils", "src/hooks", "src/pages", "public"];
+    for i in 0..changed {
+        let dir = dirs[i % dirs.len()];
+        fs::write(
+            root.join(dir).join(format!("file_{i:04}.ts")),
+            format!("modified-{i}-{}", "y".repeat(512)),
+        )
+        .unwrap();
+    }
+
+    let start = Instant::now();
+    run_ok_status(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "perf-incremental",
+        "--incremental",
+    ]));
+    let elapsed = start.elapsed();
+    eprintln!(
+        "perf: backup_incremental files={} changed={} elapsed_ms={}",
+        files,
+        changed,
+        elapsed.as_millis()
+    );
+    assert_under_ms(
+        "backup-incremental",
+        elapsed,
+        "XUN_TEST_BACKUP_INCREMENTAL_MAX_MS",
+    );
+}
+
+#[test]
+#[ignore]
+fn perf_restore_dir_500_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("perf-restore-dir");
+    let dest = env.root.join("perf-restore-dir-output");
+    let files = env_usize("XUN_TEST_BACKUP_PERF_FILES", 500);
+    fs::create_dir_all(&root).unwrap();
+    populate_backup_perf_files(&root, files);
+    write_backup_perf_config(&root, false);
+
+    run_ok_status(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "restore-dir"]),
+    );
+    let name = find_backup_name(&root.join("A_backups"), "v1-", None);
+
+    let start = Instant::now();
+    run_ok_status(env.cmd().args([
+        "restore",
+        &name,
+        "-C",
+        root.to_str().unwrap(),
+        "--to",
+        dest.to_str().unwrap(),
+        "-y",
+    ]));
+    let elapsed = start.elapsed();
+    eprintln!("perf: restore_dir files={} elapsed_ms={}", files, elapsed.as_millis());
+    assert_under_ms("restore-dir", elapsed, "XUN_TEST_RESTORE_DIR_MAX_MS");
+}
+
+#[test]
+#[ignore]
+fn perf_restore_zip_500_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("perf-restore-zip");
+    let dest = env.root.join("perf-restore-zip-output");
+    let files = env_usize("XUN_TEST_BACKUP_PERF_FILES", 500);
+    fs::create_dir_all(&root).unwrap();
+    populate_backup_perf_files(&root, files);
+    write_backup_perf_config(&root, true);
+
+    run_ok_status(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "restore-zip"]),
+    );
+    let zip_name = find_backup_name(&root.join("A_backups"), "v1-", Some(".zip"));
+    let name = zip_name.trim_end_matches(".zip").to_string();
+
+    let start = Instant::now();
+    run_ok_status(env.cmd().args([
+        "restore",
+        &name,
+        "-C",
+        root.to_str().unwrap(),
+        "--to",
+        dest.to_str().unwrap(),
+        "-y",
+    ]));
+    let elapsed = start.elapsed();
+    eprintln!("perf: restore_zip files={} elapsed_ms={}", files, elapsed.as_millis());
+    assert_under_ms("restore-zip", elapsed, "XUN_TEST_RESTORE_ZIP_MAX_MS");
 }
 
 #[cfg(feature = "lock")]

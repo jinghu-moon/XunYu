@@ -26,6 +26,7 @@ mod util;
 mod windows;
 
 use std::path::Path;
+use std::time::Instant;
 
 #[cfg(feature = "protect")]
 pub(crate) mod protect;
@@ -88,6 +89,21 @@ fn normalize_top_level_aliases(raw_args: &mut [String]) {
     }
 }
 
+fn env_flag_present(names: &[&str]) -> bool {
+    names.iter().any(|name| std::env::var_os(name).is_some())
+}
+
+fn command_timing_enabled(cmd: &cli::SubCommand) -> bool {
+    if env_flag_present(&["XUN_CMD_TIMING"]) {
+        return true;
+    }
+    match cmd {
+        cli::SubCommand::Backup(_) => env_flag_present(&["XUN_BACKUP_TIMING", "XUN_BAK_TIMING"]),
+        cli::SubCommand::Restore(_) => env_flag_present(&["XUN_RESTORE_TIMING"]),
+        _ => false,
+    }
+}
+
 fn wants_version_only(args: &[String]) -> bool {
     let cli_args = match args.get(1..) {
         Some(value) if !value.is_empty() => value,
@@ -98,7 +114,9 @@ fn wants_version_only(args: &[String]) -> bool {
 }
 
 pub fn run_from_env(invoked_name: Option<&str>) {
+    let t_total = Instant::now();
     let mut raw_args: Vec<String> = std::env::args().collect();
+    let t_prepare = Instant::now();
     if raw_args.len() > 1 && raw_args[1] == "del" {
         raw_args[1] = "delete".to_string();
     }
@@ -108,6 +126,7 @@ pub fn run_from_env(invoked_name: Option<&str>) {
         }
     }
     normalize_top_level_aliases(&mut raw_args);
+    let elapsed_prepare = t_prepare.elapsed();
 
     let cmd = resolve_command_name(&raw_args, invoked_name);
     if wants_version_only(&raw_args) {
@@ -116,6 +135,7 @@ pub fn run_from_env(invoked_name: Option<&str>) {
     }
 
     let args: Vec<&str> = raw_args.iter().map(|arg| arg.as_str()).collect();
+    let t_parse = Instant::now();
     let args: cli::Xun = <cli::Xun as argh::FromArgs>::from_args(&[cmd.as_str()], &args[1..])
         .unwrap_or_else(|early_exit| {
             std::process::exit(match early_exit.status {
@@ -133,14 +153,29 @@ Run {} --help for more information.",
                 }
             })
         });
+    let elapsed_parse = t_parse.elapsed();
+    let timing = command_timing_enabled(&args.cmd);
 
     if args.version {
         out_println!("{} {}", cmd, env!("CARGO_PKG_VERSION"));
         return;
     }
 
+    let t_runtime = Instant::now();
     runtime::init(&args);
-    if let Err(err) = commands::dispatch(args) {
+    let elapsed_runtime = t_runtime.elapsed();
+    let t_dispatch = Instant::now();
+    let result = commands::dispatch(args);
+    let elapsed_dispatch = t_dispatch.elapsed();
+    if timing {
+        eprintln!("xun timing:");
+        eprintln!("  [prepare] {:>5}ms", elapsed_prepare.as_millis());
+        eprintln!("  [parse]   {:>5}ms", elapsed_parse.as_millis());
+        eprintln!("  [runtime] {:>5}ms", elapsed_runtime.as_millis());
+        eprintln!("  [dispatch]{:>5}ms", elapsed_dispatch.as_millis());
+        eprintln!("  [total]   {:>5}ms", t_total.elapsed().as_millis());
+    }
+    if let Err(err) = result {
         output::print_cli_error(&err);
         std::process::exit(err.code);
     }

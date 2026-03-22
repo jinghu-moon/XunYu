@@ -201,7 +201,14 @@
 | 9.9 | `bak` 增量检测：删除文件标记 `-` | `backup.rs` 旧版本有但新版本无的文件 | ✅ `test_basic::bak_incremental_reports_deleted_file_with_minus` |
 | 9.10 | `bak` 版本号自增（v1, v2, v3...） | `backup.rs` 版本号解析和递增 | ✅ `test_basic::bak_version_increments_v1_v2` |
 | 9.11 | `backup list` 输出现有备份列表（`bak list` 为别名） | `backup/list.rs:13` `cmd_backup_list()` | ✅ `test_basic::bak_list_shows_human_readable_mtime` |
-| 9.12 | `restore --file` 可恢复单个文件 | `restore.rs:15` `cmd_restore()` / `restore.rs:125` `restore_single_file()` | ✅ `test_basic::restore::restore_cmd_file_from_dir_backup` / `test_basic::restore::restore_cmd_file_from_zip_backup` |
+| 9.12 | `backup list` 在空目录下提示无备份 | `backup/list.rs` 空列表分支 | ✅ `test_basic::backup_list_empty_reports_no_backups` |
+| 9.13 | `bak verify` 对 zip 备份返回不支持错误 | `backup/verify.rs` zip 分支 | ✅ `test_basic::bak_verify_zip_backup_reports_not_supported` |
+| 9.14 | `bak find <tag>` 按标签过滤备份 | `backup/find.rs` tag 过滤 | ✅ `test_basic::bak_find_filters_backups_by_tag` |
+| 9.15 | retention `keepWeekly` 保留最近周代表 | `backup/retention.rs` weekly 保留分支 | ✅ `commands::backup::retention::tests::keep_weekly_preserves_recent_week_representatives` |
+| 9.16 | retention `keepMonthly` 保留最近月代表 | `backup/retention.rs` monthly 保留分支 | ✅ `commands::backup::retention::tests::keep_monthly_preserves_recent_month_representatives` |
+| 9.17 | manifest 校验支持成功与损坏分支（feature: `bak`） | `backup/checksum.rs` `verify_manifest()` | ✅ `commands::backup::checksum::tests::verify_manifest_roundtrip_ok` / `verify_manifest_detects_corrupted_files` |
+| 9.18 | `restore_core` 统计部分恢复失败数量 | `restore_core.rs` `restore_many_from_dir()` | ✅ `commands::restore_core::tests::restore_many_from_dir_counts_partial_failures` |
+| 9.19 | `restore --file` 可恢复单个文件 | `restore.rs:15` `cmd_restore()` / `restore.rs:125` `restore_single_file()` | ✅ `test_basic::restore::restore_cmd_file_from_dir_backup` / `test_basic::restore::restore_cmd_file_from_zip_backup` |
 
 ## 10. 端口管理 (`src/ports.rs` + `src/commands/ports.rs`)
 
@@ -441,6 +448,10 @@
 | 18.5 | CPU 峰值控制（`#[ignore]`） | `test_performance.rs` `resource_cpu_peak_percent` | ✅ `test_performance::resource_cpu_peak_percent` |
 | 18.6 | `lock who` 单文件耗时阈值（feature: lock） | `test_performance.rs` `perf_lock_who_single_file_under_200ms` | ✅ `test_performance::perf_lock_who_single_file_under_200ms` |
 | 18.7 | `rm` 删除 1k 文件耗时阈值（feature: lock） | `test_performance.rs` `perf_rm_delete_1k_files_under_5s` | ✅ `test_performance::perf_rm_delete_1k_files_under_5s` |
+| 18.8 | `backup` 500 文件全量备份耗时（`#[ignore]`） | `test_performance.rs` `perf_backup_full_500_files` | ✅ `test_performance::perf_backup_full_500_files` |
+| 18.9 | `backup --incremental` 50 文件变更耗时（`#[ignore]`） | `test_performance.rs` `perf_backup_incremental_50_changed_files` | ✅ `test_performance::perf_backup_incremental_50_changed_files` |
+| 18.10 | `restore` 目录备份全量恢复耗时（`#[ignore]`） | `test_performance.rs` `perf_restore_dir_500_files` | ✅ `test_performance::perf_restore_dir_500_files` |
+| 18.11 | `restore` zip 备份全量恢复耗时（`#[ignore]`） | `test_performance.rs` `perf_restore_zip_500_files` | ✅ `test_performance::perf_restore_zip_500_files` |
 
 ---
 

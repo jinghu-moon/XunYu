@@ -1,4 +1,4 @@
-//! bak 模块端到端基准测试
+//! backup/restore 模块端到端基准测试
 //!
 //! 覆盖维度：
 //!   1. full_backup_500    - 500 文件全量备份（目录）
@@ -62,25 +62,23 @@ const BAK_CFG_COMPRESS: &str = r#"{
   "exclude": []
 }"#;
 
-fn run_bak(root: &PathBuf, extra_args: &[&str]) {
+fn run_backup(root: &PathBuf, extra_args: &[&str]) {
     let status = Command::new(xun_bin())
-        .arg("bak")
+        .arg("backup")
         .arg("-C")
         .arg(root)
         .arg("-m")
         .arg("bench")
-        .arg("-y")
         .args(extra_args)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .expect("failed to run xun bak");
-    assert!(status.success(), "xun bak failed");
+        .expect("failed to run xun backup");
+    assert!(status.success(), "xun backup failed");
 }
 
-fn run_bak_restore(root: &PathBuf, name: &str, extra_args: &[&str]) {
+fn run_restore(root: &PathBuf, name: &str, extra_args: &[&str]) {
     let status = Command::new(xun_bin())
-        .arg("bak")
         .arg("restore")
         .arg(name)
         .arg("-C")
@@ -90,8 +88,8 @@ fn run_bak_restore(root: &PathBuf, name: &str, extra_args: &[&str]) {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
-        .expect("failed to run xun bak restore");
-    assert!(status.success(), "xun bak restore failed");
+        .expect("failed to run xun restore");
+    assert!(status.success(), "xun restore failed");
 }
 
 fn find_backup(backups: &PathBuf, prefix: &str, suffix: &str) -> String {
@@ -116,7 +114,7 @@ fn full_backup_500_dir(bencher: Bencher) {
         // 每次清空备份目录重跑，确保每次都是全量 v1
         let backups = tmp.join("A_backups");
         let _ = fs::remove_dir_all(&backups);
-        run_bak(&tmp, &[]);
+        run_backup(&tmp, &[]);
     });
 
     let _ = fs::remove_dir_all(&tmp);
@@ -132,7 +130,7 @@ fn incremental_50_changed(bencher: Bencher) {
     fs::write(tmp.join(".xun-bak.json"), BAK_CFG_NO_COMPRESS).unwrap();
 
     // 先建全量基线 v1
-    run_bak(&tmp, &[]);
+    run_backup(&tmp, &[]);
 
     // 修改 50 个文件作为增量变更夹具（bench 前准备好，bench 中只跑 bak）
     for i in 0..50usize {
@@ -158,7 +156,7 @@ fn incremental_50_changed(bencher: Bencher) {
                 }
             }
         }
-        run_bak(&tmp, &["--incremental"]);
+        run_backup(&tmp, &["--incremental"]);
     });
 
     let _ = fs::remove_dir_all(&tmp);
@@ -176,7 +174,7 @@ fn full_backup_500_zip(bencher: Bencher) {
     bencher.bench(|| {
         let backups = tmp.join("A_backups");
         let _ = fs::remove_dir_all(&backups);
-        run_bak(&tmp, &[]);
+        run_backup(&tmp, &[]);
     });
 
     let _ = fs::remove_dir_all(&tmp);
@@ -190,7 +188,7 @@ fn restore_full_dir(bencher: Bencher) {
     let _ = fs::remove_dir_all(&tmp);
     populate_files(&tmp, 500);
     fs::write(tmp.join(".xun-bak.json"), BAK_CFG_NO_COMPRESS).unwrap();
-    run_bak(&tmp, &[]);
+    run_backup(&tmp, &[]);
 
     let backups = tmp.join("A_backups");
     let name = find_backup(&backups, "v1-", "");
@@ -198,7 +196,7 @@ fn restore_full_dir(bencher: Bencher) {
     assert!(!name.ends_with(".zip"), "expected dir backup");
 
     bencher.bench(|| {
-        run_bak_restore(&tmp, &name, &[]);
+        run_restore(&tmp, &name, &[]);
     });
 
     let _ = fs::remove_dir_all(&tmp);
@@ -212,7 +210,7 @@ fn restore_zip(bencher: Bencher) {
     let _ = fs::remove_dir_all(&tmp);
     populate_files(&tmp, 500);
     fs::write(tmp.join(".xun-bak.json"), BAK_CFG_COMPRESS).unwrap();
-    run_bak(&tmp, &[]);
+    run_backup(&tmp, &[]);
 
     let backups = tmp.join("A_backups");
     let zip_name = find_backup(&backups, "v1-", ".zip");
@@ -220,7 +218,7 @@ fn restore_zip(bencher: Bencher) {
     let name = zip_name.trim_end_matches(".zip").to_string();
 
     bencher.bench(|| {
-        run_bak_restore(&tmp, &name, &[]);
+        run_restore(&tmp, &name, &[]);
     });
 
     let _ = fs::remove_dir_all(&tmp);
