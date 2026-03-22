@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::time::SystemTime;
 
 use comfy_table::{Attribute, Cell, Color, Table};
 use serde::Serialize;
@@ -8,8 +7,8 @@ use serde::Serialize;
 use crate::output::{CliResult, apply_pretty_table_style, print_table};
 
 use super::config::BackupConfig;
+use super::meta::collect_backup_records;
 use super::time_fmt::fmt_unix_ts;
-use super::util::dir_size;
 
 #[derive(Clone, Serialize)]
 struct BackupListItem {
@@ -24,42 +23,16 @@ pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig, json: bool) -> Cl
     let backups_root = root.join(&cfg.storage.backups_dir);
     let _ = fs::create_dir_all(&backups_root);
 
-    let mut items: Vec<BackupListItem> = Vec::new();
-    if let Ok(rd) = fs::read_dir(&backups_root) {
-        for e in rd.flatten() {
-            let path = e.path();
-            let name = e.file_name().to_string_lossy().into_owned();
-            if !name.starts_with(&cfg.naming.prefix) {
-                continue;
-            }
-            let meta = e.metadata().ok();
-            let mtime = meta
-                .as_ref()
-                .and_then(|m| m.modified().ok())
-                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            let (is_zip, size) = if path.is_dir() {
-                (false, dir_size(&path))
-            } else if path.extension().is_some_and(|e| e == "zip") {
-                (true, meta.as_ref().map(|m| m.len()).unwrap_or(0))
-            } else {
-                continue;
-            };
-            items.push(BackupListItem {
-                name,
-                is_zip,
-                mtime_unix: mtime,
-                mtime_display: fmt_unix_ts(mtime),
-                size_bytes: size,
-            });
-        }
-    }
-    items.sort_by(|a, b| {
-        a.mtime_unix
-            .cmp(&b.mtime_unix)
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    let items: Vec<BackupListItem> = collect_backup_records(&backups_root, &cfg.naming.prefix)
+        .into_iter()
+        .map(|record| BackupListItem {
+            name: record.entry_name,
+            is_zip: record.is_zip,
+            mtime_unix: record.mtime,
+            mtime_display: fmt_unix_ts(record.mtime),
+            size_bytes: record.size_bytes,
+        })
+        .collect();
 
     if items.is_empty() {
         if json {

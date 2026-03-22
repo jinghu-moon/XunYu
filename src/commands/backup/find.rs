@@ -1,6 +1,5 @@
 //! `xun backup find` — 按标签/时间过滤备份
 
-use std::fs;
 use std::path::Path;
 
 use comfy_table::{Attribute, Cell, Color, Table};
@@ -9,7 +8,7 @@ use serde::Serialize;
 use crate::output::{CliResult, apply_pretty_table_style, print_table};
 
 use super::config::BackupConfig;
-use super::meta::read_meta;
+use super::meta::{BackupStats, collect_backup_records};
 use super::time_fmt::fmt_unix_ts;
 
 pub(crate) fn cmd_backup_find(
@@ -30,70 +29,44 @@ pub(crate) fn cmd_backup_find(
         incremental: bool,
         desc: String,
         tags: Vec<String>,
-        stats: super::meta::BackupStats,
+        stats: BackupStats,
+        size_bytes: u64,
     }
 
     let mut results: Vec<BackupFindItem> = Vec::new();
 
-    if let Ok(rd) = fs::read_dir(&backups_root) {
-        for e in rd.flatten() {
-            let name = e.file_name().to_string_lossy().into_owned();
-            if !name.starts_with(&cfg.naming.prefix) {
-                continue;
-            }
-            // 跳过 .zip/.meta.json 伴随文件，只处理目录和 zip
-            if name.ends_with(".meta.json") {
-                continue;
-            }
+    for record in collect_backup_records(&backups_root, &cfg.naming.prefix) {
+        let Some(m) = record.meta else { continue };
 
-            let backup_path = e.path();
-            // 目录备份：读 .bak-meta.json
-            let meta = if backup_path.is_dir() {
-                read_meta(&backup_path)
-            } else if name.ends_with(".zip") {
-                // zip 备份：尝试读旁边的 .meta.json
-                let stem = name.strip_suffix(".zip").unwrap_or(&name);
-                read_meta(&backups_root.join(format!("{stem}.meta.json")))
-            } else {
-                continue;
-            };
-
-            let Some(m) = meta else { continue };
-
-            // 时间过滤
-            if let Some(s) = since
-                && m.ts < s
-            {
-                continue;
-            }
-            if let Some(u) = until
-                && m.ts > u
-            {
-                continue;
-            }
-
-            // 标签过滤
-            if let Some(t) = tag
-                && !m.tags.iter().any(|tag| tag == t)
-            {
-                continue;
-            }
-
-            let display_name = if name.ends_with(".zip") {
-                name.strip_suffix(".zip").unwrap_or(&name).to_string()
-            } else {
-                name
-            };
-            results.push(BackupFindItem {
-                name: display_name,
-                ts: m.ts,
-                time_display: fmt_unix_ts(m.ts),
-                incremental: m.incremental,
-                desc: m.desc,
-                tags: m.tags,
-                stats: m.stats,
-            });
+        // 时间过滤
+        if let Some(s) = since
+            && m.ts < s
+        {
+            continue;
         }
+        if let Some(u) = until
+            && m.ts > u
+        {
+            continue;
+        }
+
+        // 标签过滤
+        if let Some(t) = tag
+            && !m.tags.iter().any(|tag| tag == t)
+        {
+            continue;
+        }
+
+        results.push(BackupFindItem {
+            name: record.display_name,
+            ts: m.ts,
+            time_display: fmt_unix_ts(m.ts),
+            incremental: m.incremental,
+            desc: m.desc,
+            tags: m.tags,
+            stats: m.stats,
+            size_bytes: record.size_bytes,
+        });
     }
 
     results.sort_by(|a, b| a.ts.cmp(&b.ts).then_with(|| a.name.cmp(&b.name)));

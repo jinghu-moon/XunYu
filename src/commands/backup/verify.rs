@@ -1,6 +1,5 @@
 //! `xun backup verify <name>` — blake3 完整性校验
 
-use std::fs;
 use std::path::Path;
 
 use serde::Serialize;
@@ -9,6 +8,7 @@ use crate::output::{CliError, CliResult};
 
 use super::checksum::{VerifyResult, verify_manifest};
 use super::config::BackupConfig;
+use super::meta::collect_backup_records;
 
 #[derive(Serialize)]
 struct BackupVerifyResultView {
@@ -110,24 +110,8 @@ pub(crate) fn cmd_backup_verify(
 }
 
 fn locate_backup(backups_root: &Path, name: &str) -> Option<std::path::PathBuf> {
-    // 精确匹配 dir 或 zip
-    let dir = backups_root.join(name);
-    if dir.is_dir() {
-        return Some(dir);
-    }
-    let zip = backups_root.join(format!("{name}.zip"));
-    if zip.is_file() {
-        return Some(zip);
-    }
-    // 前缀模糊匹配
-    if let Ok(rd) = fs::read_dir(backups_root) {
-        for e in rd.flatten() {
-            let entry_name = e.file_name().to_string_lossy().into_owned();
-            let stem = entry_name.strip_suffix(".zip").unwrap_or(&entry_name);
-            if stem == name || entry_name == name {
-                return Some(e.path());
-            }
-        }
-    }
-    None
+    collect_backup_records(backups_root, "")
+        .into_iter()
+        .find(|record| record.entry_name == name || record.display_name == name)
+        .map(|record| record.path)
 }

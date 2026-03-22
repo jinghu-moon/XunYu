@@ -463,6 +463,11 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             deleted: stats.deleted,
         },
         incremental: args.incremental,
+        size_bytes: if is_zip {
+            fs::metadata(&final_path).map(|m| m.len()).unwrap_or(0)
+        } else {
+            stats.logical_bytes
+        },
     };
     // 目录备份直接写元数据；zip 备份写入已删除的 dest_dir（zip 前）不可用，改写到 backups_root 旁
     if !is_zip {
@@ -490,11 +495,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
 
     // 7. Report
     let t_report = Instant::now();
-    let size_bytes = if is_zip {
-        fs::metadata(&final_path).map(|m| m.len()).unwrap_or(0)
-    } else {
-        stats.logical_bytes
-    };
+    let size_bytes = backup_meta.size_bytes;
     let size_display = if size_bytes > 1_048_576 {
         format!("{:.2} MB", size_bytes as f64 / 1_048_576.0)
     } else {
