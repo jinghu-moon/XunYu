@@ -160,3 +160,55 @@ fn split_update_reuses_old_blob_and_restores_new_state() {
         "f".repeat(180)
     );
 }
+
+#[test]
+fn split_phase_one_flush_crash_recovers_previous_checkpoint() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "a".repeat(180)).unwrap();
+    fs::write(source.join("b.txt"), "b".repeat(180)).unwrap();
+    fs::write(source.join("c.txt"), "c".repeat(180)).unwrap();
+    fs::write(source.join("d.txt"), "d".repeat(180)).unwrap();
+    fs::write(source.join("e.txt"), "e".repeat(180)).unwrap();
+    let base = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(&base, &source, &split_update_options()).unwrap();
+    let before = ContainerReader::open(&base).unwrap();
+    let previous_checkpoint_offset = before.footer.checkpoint_offset;
+    let previous_snapshot_id = before.checkpoint.snapshot_id;
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    fs::write(source.join("b.txt"), "bb".repeat(120)).unwrap();
+    fs::write(source.join("f.txt"), "f".repeat(180)).unwrap();
+    ContainerWriter::update(&base, &source, &split_update_options()).unwrap();
+
+    let after = ContainerReader::open(&base).unwrap();
+    let last_volume = after.volume_paths.last().unwrap().clone();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&last_volume)
+        .unwrap()
+        .set_len(after.footer.checkpoint_offset)
+        .unwrap();
+
+    let recovered = ContainerReader::open(&base).unwrap();
+    assert_eq!(
+        recovered.footer.checkpoint_offset,
+        previous_checkpoint_offset
+    );
+    assert_eq!(recovered.checkpoint.snapshot_id, previous_snapshot_id);
+
+    let restore_dir = dir.path().join("restore_phase_one");
+    let result = recovered.restore_all(&restore_dir).unwrap();
+    assert_eq!(result.restored_files, 5);
+    assert_eq!(
+        fs::read_to_string(restore_dir.join("a.txt")).unwrap(),
+        "a".repeat(180)
+    );
+    assert_eq!(
+        fs::read_to_string(restore_dir.join("b.txt")).unwrap(),
+        "b".repeat(180)
+    );
+    assert!(!restore_dir.join("f.txt").exists());
+}

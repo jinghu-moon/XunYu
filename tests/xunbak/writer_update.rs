@@ -271,3 +271,43 @@ fn update_overwrites_old_footer_and_appends_new_snapshot() {
         &updated_bytes[updated_bytes.len() - FOOTER_SIZE..]
     );
 }
+
+#[test]
+fn phase_one_flush_crash_recovers_previous_checkpoint() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "v1").unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(&container, &source, &none_options()).unwrap();
+    let before = ContainerReader::open(&container).unwrap();
+    let previous_checkpoint_offset = before.footer.checkpoint_offset;
+    let previous_snapshot_id = before.checkpoint.snapshot_id;
+
+    std::thread::sleep(Duration::from_millis(20));
+    fs::write(source.join("a.txt"), "v2").unwrap();
+    fs::write(source.join("b.txt"), "new").unwrap();
+    ContainerWriter::update(&container, &source, &none_options()).unwrap();
+
+    let after = ContainerReader::open(&container).unwrap();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&container)
+        .unwrap()
+        .set_len(after.footer.checkpoint_offset)
+        .unwrap();
+
+    let recovered = ContainerReader::open(&container).unwrap();
+    assert_eq!(
+        recovered.footer.checkpoint_offset,
+        previous_checkpoint_offset
+    );
+    assert_eq!(recovered.checkpoint.snapshot_id, previous_snapshot_id);
+
+    let restore_dir = dir.path().join("restore_after_phase_one");
+    let result = recovered.restore_all(&restore_dir).unwrap();
+    assert_eq!(result.restored_files, 1);
+    assert_eq!(fs::read_to_string(restore_dir.join("a.txt")).unwrap(), "v1");
+    assert!(!restore_dir.join("b.txt").exists());
+}

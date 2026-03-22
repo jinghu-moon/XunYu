@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rayon::prelude::*;
-use serde_json::json;
+use serde::Serialize;
 use ulid::Ulid;
 
 use crate::xunbak::blob::write_blob_record;
@@ -103,6 +103,17 @@ pub struct DiffEntry {
     pub kind: DiffKind,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct SnapshotContext {
+    hostname: String,
+    username: String,
+    os: String,
+    arch: String,
+    xunyu_version: String,
+    command_mode: String,
+    compression_profile: u8,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum WriterError {
     #[error("I/O error: {0}")]
@@ -147,7 +158,7 @@ impl ContainerWriter {
             base_snapshot_id: None,
             created_at: now_unix_secs(),
             source_root: String::new(),
-            snapshot_context: json!({}),
+            snapshot_context: collect_snapshot_context("create", Codec::NONE),
             file_count: 0,
             total_raw_bytes: 0,
             entries: vec![],
@@ -328,15 +339,7 @@ impl ContainerWriter {
             base_snapshot_id: None,
             created_at: now_unix_secs(),
             source_root: source_dir.to_string_lossy().into_owned(),
-            snapshot_context: json!({
-                "hostname": std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string()),
-                "username": std::env::var("USERNAME").unwrap_or_else(|_| "unknown-user".to_string()),
-                "os": std::env::consts::OS,
-                "arch": std::env::consts::ARCH,
-                "xunyu_version": env!("CARGO_PKG_VERSION"),
-                "command_mode": "backup",
-                "compression_profile": options.codec.as_u8(),
-            }),
+            snapshot_context: collect_snapshot_context("backup", options.codec),
             file_count: entries.len() as u64,
             total_raw_bytes,
             entries,
@@ -543,15 +546,7 @@ impl ContainerWriter {
             base_snapshot_id: None,
             created_at: now_unix_secs(),
             source_root: source_dir.to_string_lossy().into_owned(),
-            snapshot_context: json!({
-                "hostname": std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string()),
-                "username": std::env::var("USERNAME").unwrap_or_else(|_| "unknown-user".to_string()),
-                "os": std::env::consts::OS,
-                "arch": std::env::consts::ARCH,
-                "xunyu_version": env!("CARGO_PKG_VERSION"),
-                "command_mode": "update",
-                "compression_profile": options.codec.as_u8(),
-            }),
+            snapshot_context: collect_snapshot_context("update", options.codec),
             file_count: entry_count,
             total_raw_bytes,
             entries,
@@ -744,6 +739,19 @@ fn sum_unique_blob_bytes(entries: &[ManifestEntry]) -> u64 {
     seen.values().copied().sum()
 }
 
+fn collect_snapshot_context(command_mode: &str, codec: Codec) -> serde_json::Value {
+    serde_json::to_value(SnapshotContext {
+        hostname: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string()),
+        username: std::env::var("USERNAME").unwrap_or_else(|_| "unknown-user".to_string()),
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+        xunyu_version: env!("CARGO_PKG_VERSION").to_string(),
+        command_mode: command_mode.to_string(),
+        compression_profile: codec.as_u8(),
+    })
+    .expect("snapshot context must be serializable")
+}
+
 fn unique_blob_count(entries: &[ManifestEntry]) -> usize {
     let mut seen = HashMap::new();
     for entry in entries {
@@ -921,6 +929,12 @@ impl VolumeOutput {
         Ok(())
     }
 
+    fn sync_current(&mut self) -> Result<(), WriterError> {
+        self.file
+            .sync_all()
+            .map_err(|err| WriterError::Io(err.to_string()))
+    }
+
     fn total_volumes(&self) -> u16 {
         self.paths.len() as u16
     }
@@ -947,6 +961,7 @@ impl VolumeOutput {
     }
 
     fn rotate(&mut self) -> Result<(), WriterError> {
+        self.sync_current()?;
         self.current_index = self.current_index.saturating_add(1);
         let path = split_volume_path(&self.base_path, self.current_index);
         let mut file = File::create(&path).map_err(|err| WriterError::Io(err.to_string()))?;
@@ -1130,15 +1145,7 @@ fn backup_split_with_progress(
         base_snapshot_id: None,
         created_at: now_unix_secs(),
         source_root: source_dir.to_string_lossy().into_owned(),
-        snapshot_context: json!({
-            "hostname": std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string()),
-            "username": std::env::var("USERNAME").unwrap_or_else(|_| "unknown-user".to_string()),
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "xunyu_version": env!("CARGO_PKG_VERSION"),
-            "command_mode": "backup",
-            "compression_profile": options.codec.as_u8(),
-        }),
+        snapshot_context: collect_snapshot_context("backup", options.codec),
         file_count: entries.len() as u64,
         total_raw_bytes,
         entries,
@@ -1151,6 +1158,7 @@ fn backup_split_with_progress(
     let manifest_trailing = checkpoint_record_len + FOOTER_SIZE as u64;
     let (manifest_volume_index, manifest_offset) =
         output.write_record(&manifest_record, manifest_trailing)?;
+    output.sync_current()?;
     let total_volumes = output.total_volumes();
     let manifest_payload = &manifest_record[RECORD_PREFIX_SIZE..];
     let manifest_hash = compute_manifest_hash(manifest_payload);
@@ -1176,6 +1184,7 @@ fn backup_split_with_progress(
     debug_assert_eq!(manifest_volume_index, output.current_index);
     output.write_record(&checkpoint_record, FOOTER_SIZE as u64)?;
     output.write_footer(checkpoint_offset)?;
+    output.sync_current()?;
 
     Ok(BackupResult {
         container_path: output.last_volume_path().to_path_buf(),
@@ -1334,15 +1343,7 @@ fn update_split_with_progress(
         base_snapshot_id: None,
         created_at: now_unix_secs(),
         source_root: source_dir.to_string_lossy().into_owned(),
-        snapshot_context: json!({
-            "hostname": std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string()),
-            "username": std::env::var("USERNAME").unwrap_or_else(|_| "unknown-user".to_string()),
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "xunyu_version": env!("CARGO_PKG_VERSION"),
-            "command_mode": "update",
-            "compression_profile": options.codec.as_u8(),
-        }),
+        snapshot_context: collect_snapshot_context("update", options.codec),
         file_count: entry_count,
         total_raw_bytes,
         entries,
@@ -1355,6 +1356,7 @@ fn update_split_with_progress(
     let manifest_trailing = checkpoint_record_len + FOOTER_SIZE as u64;
     let (_manifest_volume_index, manifest_offset) =
         output.write_record(&manifest_record, manifest_trailing)?;
+    output.sync_current()?;
     let total_volumes = output.total_volumes();
     let manifest_payload = &manifest_record[RECORD_PREFIX_SIZE..];
     let manifest_hash = compute_manifest_hash(manifest_payload);
@@ -1379,6 +1381,7 @@ fn update_split_with_progress(
     write_checkpoint_record(&mut checkpoint_record, &checkpoint_payload)?;
     output.write_record(&checkpoint_record, FOOTER_SIZE as u64)?;
     output.write_footer(checkpoint_offset)?;
+    output.sync_current()?;
 
     Ok(UpdateResult {
         container_path: output.last_volume_path().to_path_buf(),

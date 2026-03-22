@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{Cursor, Seek, SeekFrom};
 
 use tempfile::tempdir;
+use ulid::Ulid;
 use xun::xunbak::checkpoint::read_checkpoint_record;
 use xun::xunbak::constants::{Codec, FOOTER_SIZE, HEADER_SIZE, RecordType};
 use xun::xunbak::footer::Footer;
@@ -167,5 +168,54 @@ fn backup_reuses_blob_for_duplicate_content_in_same_run() {
     assert_eq!(
         manifest.body.entries[0].blob_len,
         manifest.body.entries[1].blob_len
+    );
+}
+
+#[test]
+fn backup_manifest_includes_snapshot_context_and_ulid_snapshot_id() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+    let bytes = fs::read(&container).unwrap();
+    let footer =
+        Footer::from_bytes(&bytes[bytes.len() - FOOTER_SIZE..], bytes.len() as u64).unwrap();
+    let mut cursor = Cursor::new(bytes.as_slice());
+    cursor
+        .seek(SeekFrom::Start(footer.checkpoint_offset))
+        .unwrap();
+    let checkpoint = read_checkpoint_record(&mut cursor).unwrap();
+    cursor
+        .seek(SeekFrom::Start(checkpoint.payload.manifest_offset))
+        .unwrap();
+    let manifest = read_manifest_record(&mut cursor).unwrap();
+
+    assert!(Ulid::from_string(&manifest.body.snapshot_id).is_ok());
+
+    let context = manifest.body.snapshot_context.as_object().unwrap();
+    let expected_hostname =
+        std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string());
+    let expected_username =
+        std::env::var("USERNAME").unwrap_or_else(|_| "unknown-user".to_string());
+    assert_eq!(
+        context.get("hostname").and_then(|value| value.as_str()),
+        Some(expected_hostname.as_str())
+    );
+    assert_eq!(
+        context.get("username").and_then(|value| value.as_str()),
+        Some(expected_username.as_str())
+    );
+    assert_eq!(
+        context.get("os").and_then(|value| value.as_str()),
+        Some(std::env::consts::OS)
+    );
+    assert_eq!(
+        context
+            .get("xunyu_version")
+            .and_then(|value| value.as_str()),
+        Some(env!("CARGO_PKG_VERSION"))
     );
 }

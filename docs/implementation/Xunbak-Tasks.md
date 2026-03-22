@@ -265,7 +265,7 @@
 - [x] **测试**：读取 Footer → `checkpoint_offset` 指向合法 checkpoint
 - [x] **测试**：读取 Checkpoint → `blob_count = 0`，`file_count` in manifest = 0
 - [x] **测试**：读取 Manifest → `entries = []`，`removed = []`
-- [ ] **测试**：verify quick 通过
+- [x] **测试**：verify quick 通过
 - [x] 实现 `src/xunbak/writer.rs`：`ContainerWriter::create(path) -> Result<Self>`
 
 ### 9.2 单文件写入
@@ -280,9 +280,9 @@
 
 ### 9.3 快照上下文元数据（§26）
 
-- [ ] **测试**：manifest 中包含 `snapshot_context`，含 `hostname / username / os / xunyu_version`
-- [ ] **测试**：`snapshot_id` 为合法 ULID
-- [ ] 实现 `SnapshotContext` 收集
+- [x] **测试**：manifest 中包含 `snapshot_context`，含 `hostname / username / os / xunyu_version`
+- [x] **测试**：`snapshot_id` 为合法 ULID
+- [x] 实现 `SnapshotContext` 收集
 
 ---
 
@@ -312,9 +312,10 @@
 
 ### 10.4 两阶段 flush（§13.3）
 
-- [ ] **测试**：模拟第一阶段 flush 后、第二阶段 flush 前崩溃 → 旧 checkpoint 仍有效
-- [ ] **测试**：旧 footer 仍指向旧 checkpoint → 恢复到旧快照完整性正确
-- [ ] 实现两阶段 flush 逻辑（blob+manifest → fsync → checkpoint+footer → fsync）
+- [x] **测试**：模拟第一阶段 flush 后、第二阶段 flush 前崩溃 → 旧 checkpoint 仍有效
+- [x] **测试**：无完整新 footer 时仍回退到旧 checkpoint → 恢复到旧快照完整性正确
+- [x] 实现两阶段 flush 逻辑（blob+manifest → fsync → checkpoint+footer → fsync）
+> 说明：当前单文件与分卷 update 均采用两阶段写入；若崩溃发生在第二阶段前，reader 通过 fallback 扫描回退到旧 checkpoint，而不是依赖旧 footer 继续存在。
 
 ---
 
@@ -370,7 +371,7 @@
 
 - [x] **测试**：按 `blob_offset` seek → 读取 → 解压 → `blake3(content) == content_hash`
 - [x] **测试**：blob 数据被篡改 → hash 不匹配 → `Err(BlobIntegrityError)`
-- [ ] **测试**：恢复读取计划按 `blob_offset` 升序（顺序 I/O 优化）
+- [x] **测试**：恢复读取计划按 `blob_offset` 升序（顺序 I/O 优化）
 - [x] 实现 `read_and_verify_blob(reader, entry) -> Vec<u8>`
 
 ### 12.5 空容器恢复（§13.6）

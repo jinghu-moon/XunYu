@@ -85,7 +85,7 @@ impl ContainerReader {
             (vec![primary_path.clone()], primary_path.clone(), file_size)
         };
 
-        let (footer, checkpoint) = {
+        let (footer, checkpoint, used_fallback) = {
             let mut last_file =
                 File::open(&last_path).map_err(|err| ReaderError::Io(err.to_string()))?;
             match read_footer(&mut last_file, last_size) {
@@ -94,7 +94,7 @@ impl ContainerReader {
                         .seek(SeekFrom::Start(footer.checkpoint_offset))
                         .map_err(|err| ReaderError::Io(err.to_string()))?;
                     let checkpoint = read_checkpoint_record(&mut last_file)?.payload;
-                    (footer, checkpoint)
+                    (footer, checkpoint, false)
                 }
                 Err(_) => {
                     let (offset, checkpoint) = fallback_scan(&volume_paths)?;
@@ -103,25 +103,39 @@ impl ContainerReader {
                             checkpoint_offset: offset,
                         },
                         checkpoint,
+                        true,
                     )
                 }
             }
         };
 
-        if header.header.flags & FLAG_SPLIT != 0
-            && checkpoint.total_volumes as usize != volume_paths.len()
-        {
-            return Err(ReaderError::UnrecoverableContainer);
-        }
-
+        let mut active_volume_paths = volume_paths;
+        let active_file_size = if header.header.flags & FLAG_SPLIT != 0 {
+            let expected = checkpoint.total_volumes as usize;
+            let actual = active_volume_paths.len();
+            if expected == 0 || expected > actual {
+                return Err(ReaderError::UnrecoverableContainer);
+            }
+            if expected != actual {
+                if !used_fallback {
+                    return Err(ReaderError::UnrecoverableContainer);
+                }
+                active_volume_paths.truncate(expected);
+            }
+            std::fs::metadata(active_volume_paths.last().expect("checked non-empty"))
+                .map_err(|err| ReaderError::Io(err.to_string()))?
+                .len()
+        } else {
+            last_size
+        };
         Ok(Self {
             path: primary_path,
-            file_size: last_size,
+            file_size: active_file_size,
             header,
             footer,
             checkpoint,
-            is_split: volume_paths.len() > 1,
-            volume_paths,
+            is_split: active_volume_paths.len() > 1,
+            volume_paths: active_volume_paths,
         })
     }
 
@@ -362,6 +376,67 @@ fn split_base_path(path: &Path) -> PathBuf {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::sorted_restore_entries;
+    use crate::xunbak::constants::Codec;
+    use crate::xunbak::manifest::{ManifestBody, ManifestEntry};
+
+    fn entry(path: &str, volume_index: u16, blob_offset: u64) -> ManifestEntry {
+        ManifestEntry {
+            path: path.to_string(),
+            blob_id: [0; 32],
+            content_hash: [0; 32],
+            size: 1,
+            mtime_ns: 0,
+            created_time_ns: 0,
+            win_attributes: 0,
+            codec: Codec::NONE,
+            blob_offset,
+            blob_len: 64,
+            volume_index,
+            parts: None,
+            ext: None,
+        }
+    }
+
+    #[test]
+    fn restore_plan_sorts_by_volume_then_blob_offset() {
+        let manifest = ManifestBody {
+            snapshot_id: "01JTESTSNAPSHOTID0000000000".to_string(),
+            base_snapshot_id: None,
+            created_at: 0,
+            source_root: ".".to_string(),
+            snapshot_context: serde_json::json!({}),
+            file_count: 4,
+            total_raw_bytes: 4,
+            entries: vec![
+                entry("d.txt", 1, 120),
+                entry("b.txt", 0, 90),
+                entry("a.txt", 0, 40),
+                entry("c.txt", 1, 30),
+            ],
+            removed: vec![],
+        };
+
+        let planned = sorted_restore_entries(&manifest, |_| true);
+        let ordered: Vec<(u16, u64, &str)> = planned
+            .into_iter()
+            .map(|entry| (entry.volume_index, entry.blob_offset, entry.path.as_str()))
+            .collect();
+
+        assert_eq!(
+            ordered,
+            vec![
+                (0, 40, "a.txt"),
+                (0, 90, "b.txt"),
+                (1, 30, "c.txt"),
+                (1, 120, "d.txt"),
+            ]
+        );
+    }
+}
+
 fn is_split_member_path(path: &Path) -> bool {
     let name = path
         .file_name()
@@ -383,10 +458,8 @@ impl ContainerReader {
         F: FnMut(&ManifestEntry) -> bool,
     {
         let mut restored = 0usize;
-        for entry in &manifest.entries {
-            if !predicate(entry) {
-                continue;
-            }
+        let mut entries = sorted_restore_entries(manifest, |entry| predicate(entry));
+        for entry in entries.drain(..) {
             let content = self.read_and_verify_blob(entry)?;
             let dest = target_dir.join(entry.path.replace('/', "\\"));
             if let Some(parent) = dest.parent() {
@@ -400,6 +473,27 @@ impl ContainerReader {
             restored_files: restored,
         })
     }
+}
+
+fn sorted_restore_entries<'a, F>(
+    manifest: &'a ManifestBody,
+    mut predicate: F,
+) -> Vec<&'a ManifestEntry>
+where
+    F: FnMut(&ManifestEntry) -> bool,
+{
+    let mut entries: Vec<&ManifestEntry> = manifest
+        .entries
+        .iter()
+        .filter(|entry| predicate(entry))
+        .collect();
+    entries.sort_by(|left, right| {
+        left.volume_index
+            .cmp(&right.volume_index)
+            .then(left.blob_offset.cmp(&right.blob_offset))
+            .then(left.path.cmp(&right.path))
+    });
+    entries
 }
 
 fn glob_match(pattern: &str, path: &str) -> bool {

@@ -7,6 +7,7 @@ use xun::xunbak::constants::{FOOTER_SIZE, HEADER_SIZE};
 use xun::xunbak::footer::Footer;
 use xun::xunbak::header::Header;
 use xun::xunbak::manifest::read_manifest_record;
+use xun::xunbak::verify::{VerifyLevel, verify_quick_path};
 use xun::xunbak::writer::ContainerWriter;
 
 #[test]
@@ -69,4 +70,15 @@ fn empty_container_checkpoint_and_manifest_are_consistent() {
     assert_eq!(manifest.body.file_count, 0);
     assert!(manifest.body.entries.is_empty());
     assert!(manifest.body.removed.is_empty());
+}
+
+#[test]
+fn empty_container_quick_verify_passes() {
+    let dir = tempdir().unwrap();
+    let container = dir.path().join("empty.xunbak");
+    ContainerWriter::create(&container).unwrap();
+
+    let report = verify_quick_path(&container);
+    assert!(report.passed);
+    assert_eq!(report.level, VerifyLevel::Quick);
 }
