@@ -571,6 +571,49 @@ fn backup_skip_if_unchanged_still_creates_version_when_changed() {
 }
 
 #[test]
+fn backup_skip_if_unchanged_from_config_skips_new_version() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_skip_unchanged_cfg");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": [],
+  "skipIfUnchanged": true
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2"]),
+    );
+
+    let backups = root.join("A_backups");
+    let versions: Vec<String> = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("v") && n.contains('-') && !n.ends_with(".meta.json"))
+        .collect();
+    assert_eq!(
+        versions.len(),
+        1,
+        "config skipIfUnchanged should skip creating a new version"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("no changes detected"));
+}
+
+#[test]
 fn backup_full_reuses_unchanged_files_via_hardlink() {
     let env = TestEnv::new();
     let root = env.root.join("proj_full_hardlink");

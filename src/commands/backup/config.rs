@@ -17,6 +17,8 @@ pub(crate) struct BackupConfig {
     pub(crate) exclude: Vec<String>,
     #[serde(default, rename = "useGitignore")]
     pub(crate) use_gitignore: bool,
+    #[serde(default, rename = "skipIfUnchanged")]
+    pub(crate) skip_if_unchanged: bool,
 }
 
 #[derive(Deserialize)]
@@ -117,6 +119,7 @@ impl Default for BackupConfig {
             .map(String::from)
             .collect(),
             use_gitignore: false,
+            skip_if_unchanged: false,
         }
     }
 }
@@ -144,7 +147,8 @@ const DEFAULT_CONFIG_JSON: &str = r#"{
     \"node_modules\", \"dist\", \"build\", \".git\", \".DS_Store\", \".log\",
     \"src/assets/font\"
   ],
-  \"useGitignore\": false
+  \"useGitignore\": false,
+  \"skipIfUnchanged\": false
 }"#;
 
 pub(crate) const CONFIG_FILE: &str = ".xun-bak.json";

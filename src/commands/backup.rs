@@ -298,7 +298,8 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         );
     }
 
-    if args.skip_if_unchanged && !has_changes {
+    let skip_if_unchanged = args.skip_if_unchanged || cfg.skip_if_unchanged;
+    if skip_if_unchanged && !has_changes {
         let white = Style::new().white();
         eprintln!();
         report::report("Skipped", "no changes detected", &white);
