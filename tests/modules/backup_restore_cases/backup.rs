@@ -1,4 +1,5 @@
 use crate::common::*;
+use serde_json::Value;
 use std::fs;
 use std::os::windows::io::AsRawHandle;
 use std::thread;
@@ -712,15 +713,76 @@ fn backup_list_empty_reports_no_backups() {
     let root = env.root.join("proj_list_empty");
     fs::create_dir_all(&root).unwrap();
 
-    let out = run_ok(
-        env.cmd()
-            .args(["backup", "-C", root.to_str().unwrap(), "list"]),
-    );
+    let out = run_ok(env.cmd().args(["backup", "-C", root.to_str().unwrap(), "list"]));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("No backups found"),
         "empty list should explain no backups found, got: {stderr}"
     );
+}
+
+#[test]
+fn backup_list_subcommand_form_works() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_list_subcommand");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    fs::write(
+        root.join(".xun-bak.json"),
+        r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#,
+    )
+    .unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "list-sub"]),
+    );
+
+    let out = run_ok(env.cmd().args(["backup", "-C", root.to_str().unwrap(), "list"]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("v1-"),
+        "backup list subcommand should print backup entries, got: {stderr}"
+    );
+}
+
+#[test]
+fn backup_list_json_outputs_machine_readable_entries() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_list_json");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "json"]),
+    );
+
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "list", "--json"]),
+    );
+    let value: Value = serde_json::from_slice(&out.stdout).expect("list json should be valid");
+    let items = value.as_array().expect("list json should be an array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["is_zip"], false);
+    assert!(items[0]["size_bytes"].as_u64().unwrap_or(0) > 0);
 }
 
 // ─── 新增：verify 命令 ────────────────────────────────────────────────────────
@@ -757,16 +819,14 @@ fn bak_verify_no_manifest_returns_error() {
         .to_string_lossy()
         .into_owned();
 
-    // 未启用 bak feature，无 manifest 文件 → verify 应报错（NoManifest）
-    let out = env
-        .cmd()
-        .args(["bak", "-C", root.to_str().unwrap(), "verify", &v1_name])
-        .output()
-        .unwrap();
-    // 无 manifest 时应以非零退出码退出
+    let out = run_ok(
+        env.cmd()
+            .args(["bak", "-C", root.to_str().unwrap(), "verify", &v1_name]),
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        !out.status.success(),
-        "verify should fail when no manifest exists"
+        stdout.contains("All files OK"),
+        "verify should succeed for new directory backup, got: {stdout}"
     );
 }
 
@@ -811,6 +871,53 @@ fn bak_verify_zip_backup_reports_not_supported() {
     );
 }
 
+#[test]
+fn bak_verify_subcommand_form_works() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_verify_subcommand");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    fs::write(
+        root.join(".xun-bak.json"),
+        r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#,
+    )
+    .unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "verify-sub"]),
+    );
+
+    let v1_name = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.path().is_dir())
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "verify",
+        &v1_name,
+    ]));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("All files OK"),
+        "backup verify subcommand should succeed, got: {stdout}"
+    );
+}
+
 // ─── 新增：find 命令 ──────────────────────────────────────────────────────────
 
 #[test]
@@ -846,6 +953,64 @@ fn bak_find_lists_backups_with_meta() {
     assert!(
         stderr.contains("v1") || stderr.contains("myfind"),
         "find output should list backup (got: {stderr})"
+    );
+}
+
+#[test]
+fn bak_find_subcommand_form_works() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_find_subcommand");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    fs::write(
+        root.join(".xun-bak.json"),
+        r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#,
+    )
+    .unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "find-sub"]),
+    );
+
+    let backup_dir = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.path().is_dir())
+        .expect("backup dir should exist")
+        .path();
+    fs::write(
+        backup_dir.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_700_000_000u64,
+            "desc": "find-sub",
+            "tags": ["demo"],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "find",
+        "demo",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("find-sub"),
+        "backup find subcommand should find tagged backup, got: {stderr}"
     );
 }
 
@@ -930,6 +1095,115 @@ fn bak_find_filters_backups_by_tag() {
     assert!(
         !stderr.contains("plain"),
         "filtered find should exclude untagged backup, got: {stderr}"
+    );
+}
+
+#[test]
+fn bak_find_json_outputs_structured_fields() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_find_json");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "json-find"]),
+    );
+
+    let backup_dir = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.path().is_dir())
+        .expect("backup dir should exist")
+        .path();
+    fs::write(
+        backup_dir.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_700_000_000u64,
+            "desc": "json-find",
+            "tags": ["demo"],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let out = run_ok(
+        env.cmd().args([
+            "backup",
+            "-C",
+            root.to_str().unwrap(),
+            "find",
+            "demo",
+            "--json",
+        ]),
+    );
+    let value: Value = serde_json::from_slice(&out.stdout).expect("find json should be valid");
+    let items = value.as_array().expect("find json should be an array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["desc"], "json-find");
+    assert_eq!(items[0]["tags"][0], "demo");
+    assert_eq!(items[0]["stats"]["new"], 1);
+}
+
+#[test]
+fn bak_verify_json_outputs_ok_status() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_verify_json");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "verify-json"]),
+    );
+
+    let v1_name = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.path().is_dir())
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "verify",
+        &v1_name,
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).expect("verify json should be valid");
+    assert_eq!(value["status"], "ok");
+    assert_eq!(value["backup_type"], "dir");
+    assert_eq!(
+        value["corrupted_files"]
+            .as_array()
+            .expect("corrupted_files should be an array")
+            .len(),
+        0
     );
 }
 

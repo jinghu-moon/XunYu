@@ -54,7 +54,7 @@ pub use alias::{
     AliasWhichCmd,
 };
 mod restore;
-pub use backup::BackupCmd;
+pub use backup::{BackupCmd, BackupSubCommand};
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
 pub use bookmarks::{

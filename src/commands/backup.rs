@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use console::Style;
 
-use crate::cli::BackupCmd;
+use crate::cli::{BackupCmd, BackupSubCommand};
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
 use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
@@ -29,7 +29,7 @@ mod verify;
 mod version;
 mod zip;
 
-pub(crate) use baseline::{FileMeta, read_baseline};
+pub(crate) use baseline::read_baseline;
 
 #[doc(hidden)]
 pub(crate) fn bench_read_baseline_len(prev: &Path) -> usize {
@@ -85,39 +85,21 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         );
     }
 
-    if !args.op_args.is_empty() {
-        let op = args.op_args[0].as_str();
+    if let Some(subcommand) = args.cmd {
         let t_sub = Instant::now();
-        let result = match op.to_ascii_lowercase().as_str() {
-            "list" => return list::cmd_backup_list(&root, &cfg),
-            "verify" => {
-                let Some(name) = args.op_args.get(1).map(|s| s.as_str()) else {
-                    return Err(CliError::with_details(
-                        2,
-                        "Missing backup name.".to_string(),
-                        &["Fix: Use `xun backup verify <name>`."],
-                    ));
-                };
-                verify::cmd_backup_verify(&root, &cfg, name)
-            }
-            "find" => {
-                let tag = args.op_args.get(1).map(|s| s.as_str());
-                find::cmd_backup_find(&root, &cfg, tag, None, None)
-            }
-            _ => Err(CliError::with_details(
-                2,
-                format!("Unknown backup operation: {op}"),
-                &[
-                    "Fix: Use `xun backup` to create a backup.",
-                    "Fix: Use `xun backup list` to list backups.",
-                    "Fix: Use `xun backup verify <name>` to verify integrity.",
-                    "Fix: Use `xun backup find [tag]` to search backups.",
-                    "Fix: Use `xun restore <name>` to restore a backup.",
-                ],
-            )),
+        let (label, result) = match subcommand {
+            BackupSubCommand::List(cmd) => ("list", list::cmd_backup_list(&root, &cfg, cmd.json)),
+            BackupSubCommand::Verify(cmd) => (
+                "verify",
+                verify::cmd_backup_verify(&root, &cfg, &cmd.name, cmd.json),
+            ),
+            BackupSubCommand::Find(cmd) => (
+                "find",
+                find::cmd_backup_find(&root, &cfg, cmd.tag.as_deref(), None, None, cmd.json),
+            ),
         };
         if timing {
-            emit_backup_timing("subcommand", t_sub.elapsed(), Some(op.to_string()));
+            emit_backup_timing("subcommand", t_sub.elapsed(), Some(label.to_string()));
             emit_backup_timing("total", t_total.elapsed(), None);
         }
         return result;
@@ -486,7 +468,6 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     if !is_zip {
         meta::write_meta(&final_path, &backup_meta);
         // 生成 blake3 manifest（目录备份）
-        #[cfg(feature = "bak")]
         {
             let mut file_hashes = std::collections::HashMap::new();
             for (rel, src) in &current {

@@ -150,7 +150,7 @@ pub(crate) fn restore_from_dir(
             ui_println!("DRY RUN: would restore {}", norm_path_display(&rel.to_string_lossy()));
             return;
         }
-        if let Err(e) = fs::copy(src_path, &dst) {
+        if let Err(e) = copy_file(src_path, &dst, copy_backend) {
             eprintln!(
                 "Restore error {}: {e}",
                 norm_path_display(&rel.to_string_lossy())

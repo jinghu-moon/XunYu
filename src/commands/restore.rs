@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
 use crate::cli::RestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
+use serde::Serialize;
 
 use super::backup::config as backup_config;
-use super::backup::{FileMeta, read_baseline};
 use super::restore_core;
 
 use backup_config::BackupConfig;
@@ -34,6 +34,18 @@ fn emit_restore_timing(label: &str, elapsed: std::time::Duration, extra: Option<
         }
         _ => eprintln!("  [{label:<10}] {:>5}ms", elapsed.as_millis()),
     }
+}
+
+#[derive(Serialize)]
+struct RestoreExecutionSummary {
+    action: String,
+    source: String,
+    destination: String,
+    mode: String,
+    dry_run: bool,
+    snapshot: bool,
+    restored: usize,
+    failed: usize,
 }
 
 pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
@@ -88,7 +100,11 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     // 交互确认
     if !args.yes && can_interact() {
         let t_preview = Instant::now();
-        show_restore_preview(&dest_root, &cfg, &src);
+        show_restore_preview(
+            &dest_root,
+            &src,
+            PreviewMode::from_args(args.file.as_deref(), args.glob.as_deref()),
+        );
         let ok = dialoguer::Confirm::new()
             .with_prompt("Restore may overwrite files. Continue?")
             .default(false)
@@ -110,6 +126,28 @@ pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
     } else {
         restore_all(&src, &dest_root, args.dry_run)?
     };
+
+    if args.json {
+        let mode = if args.glob.is_some() {
+            "glob"
+        } else if args.file.is_some() {
+            "file"
+        } else {
+            "all"
+        };
+        let action = if args.dry_run { "preview" } else { "restore" };
+        let summary = RestoreExecutionSummary {
+            action: action.to_string(),
+            source: src.display().to_string(),
+            destination: dest_root.display().to_string(),
+            mode: mode.to_string(),
+            dry_run: args.dry_run,
+            snapshot: args.snapshot && !args.dry_run,
+            restored,
+            failed,
+        };
+        out_println!("{}", serde_json::to_string_pretty(&summary).unwrap_or_default());
+    }
 
     let elapsed = t_start.elapsed();
     if timing {
@@ -222,10 +260,14 @@ fn restore_single_file(
 }
 
 /// restore 前展示将被覆盖的文件列表（modify/new 文件数）
-fn show_restore_preview(root: &Path, cfg: &BackupConfig, backup_src: &Path) {
-    let backup_snapshot = read_baseline(backup_src);
-    let current_snapshot = read_baseline(root);
-    let entries = build_restore_preview_items(&backup_snapshot, &current_snapshot);
+fn show_restore_preview(root: &Path, backup_src: &Path, mode: PreviewMode<'_>) {
+    let entries = match build_restore_preview_items(backup_src, root, mode) {
+        Ok(items) => items,
+        Err(err) => {
+            eprintln!("  preview unavailable: {}", err.message);
+            return;
+        }
+    };
 
     let overwrite_count = entries
         .iter()
@@ -258,7 +300,31 @@ fn show_restore_preview(root: &Path, cfg: &BackupConfig, backup_src: &Path) {
         eprintln!("  ... and {} more", shown - max_show);
     }
     eprintln!("  Total: {} overwrite, {} new", overwrite_count, new_count);
-    let _ = cfg;
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PreviewMode<'a> {
+    All,
+    File(&'a str),
+    Glob(&'a str),
+}
+
+impl<'a> PreviewMode<'a> {
+    fn from_args(file: Option<&'a str>, glob: Option<&'a str>) -> Self {
+        match (file, glob) {
+            (Some(file), _) => Self::File(file),
+            (None, Some(glob)) => Self::Glob(glob),
+            (None, None) => Self::All,
+        }
+    }
+
+    fn matches_path(&self, rel: &str) -> bool {
+        match self {
+            PreviewMode::All => true,
+            PreviewMode::File(file) => rel.eq_ignore_ascii_case(&file.replace('/', "\\")),
+            PreviewMode::Glob(glob) => glob_match(glob, &rel.replace('\\', "/")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -274,35 +340,182 @@ struct RestorePreviewItem {
 }
 
 fn build_restore_preview_items(
-    backup_snapshot: &HashMap<String, FileMeta>,
-    current_snapshot: &HashMap<String, FileMeta>,
-) -> Vec<RestorePreviewItem> {
-    let mut items = Vec::new();
+    backup_src: &Path,
+    dest_root: &Path,
+    mode: PreviewMode<'_>,
+) -> Result<Vec<RestorePreviewItem>, CliError> {
+    if backup_src.extension().and_then(|e| e.to_str()) == Some("zip") {
+        build_restore_preview_items_from_zip(backup_src, dest_root, mode)
+    } else {
+        build_restore_preview_items_from_dir(backup_src, dest_root, mode)
+    }
+}
 
-    for (rel, backup_meta) in backup_snapshot {
-        if restore_core::is_backup_internal_name(rel) {
-            continue;
-        }
-        match current_snapshot.get(rel) {
-            Some(current_meta)
-                if backup_meta.size != current_meta.size
-                    || backup_meta.modified > current_meta.modified =>
-            {
-                items.push(RestorePreviewItem {
-                    rel: rel.clone(),
-                    kind: RestorePreviewKind::Overwrite,
-                });
+fn build_restore_preview_items_from_dir(
+    backup_src: &Path,
+    dest_root: &Path,
+    mode: PreviewMode<'_>,
+) -> Result<Vec<RestorePreviewItem>, CliError> {
+    let mut items = Vec::new();
+    let mut stack = vec![backup_src.to_path_buf()];
+
+    while let Some(current) = stack.pop() {
+        let read_dir = fs::read_dir(&current)
+            .map_err(|e| CliError::new(1, format!("Preview scan failed: {e}")))?;
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(_) => continue,
+            };
+            if file_type.is_dir() {
+                stack.push(path);
+                continue;
             }
-            Some(_) => {}
-            None => items.push(RestorePreviewItem {
-                rel: rel.clone(),
-                kind: RestorePreviewKind::New,
-            }),
+
+            let rel = match path.strip_prefix(backup_src) {
+                Ok(rel) => rel.to_string_lossy().replace('/', "\\"),
+                Err(_) => continue,
+            };
+            if restore_core::is_backup_internal_name(&rel) || !mode.matches_path(&rel) {
+                continue;
+            }
+
+            let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+            match classify_preview_item(&path, &dst, &rel)? {
+                Some(item) => items.push(item),
+                None => {}
+            }
         }
     }
 
     items.sort_by(|a, b| a.rel.cmp(&b.rel));
-    items
+    Ok(items)
+}
+
+fn build_restore_preview_items_from_zip(
+    backup_src: &Path,
+    dest_root: &Path,
+    mode: PreviewMode<'_>,
+) -> Result<Vec<RestorePreviewItem>, CliError> {
+    let file = fs::File::open(backup_src)
+        .map_err(|e| CliError::new(1, format!("Preview open zip failed: {e}")))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| CliError::new(1, format!("Preview read zip failed: {e}")))?;
+    let mut items = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| CliError::new(1, format!("Preview zip entry failed: {e}")))?;
+        if entry.is_dir() {
+            continue;
+        }
+        let rel = entry.name().replace('/', "\\");
+        if !restore_core::is_safe_zip_entry(entry.name())
+            || restore_core::is_backup_internal_name(&rel)
+            || !mode.matches_path(&rel)
+        {
+            continue;
+        }
+
+        let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+        match classify_preview_item_zip(&mut entry, &dst, &rel)? {
+            Some(item) => items.push(item),
+            None => {}
+        }
+    }
+
+    items.sort_by(|a, b| a.rel.cmp(&b.rel));
+    Ok(items)
+}
+
+fn classify_preview_item(
+    src: &Path,
+    dst: &Path,
+    rel: &str,
+) -> Result<Option<RestorePreviewItem>, CliError> {
+    if !dst.exists() {
+        return Ok(Some(RestorePreviewItem {
+            rel: rel.to_string(),
+            kind: RestorePreviewKind::New,
+        }));
+    }
+
+    if paths_differ(src, dst)? {
+        return Ok(Some(RestorePreviewItem {
+            rel: rel.to_string(),
+            kind: RestorePreviewKind::Overwrite,
+        }));
+    }
+
+    Ok(None)
+}
+
+fn classify_preview_item_zip<R: Read>(
+    entry: &mut R,
+    dst: &Path,
+    rel: &str,
+) -> Result<Option<RestorePreviewItem>, CliError> {
+    if !dst.exists() {
+        return Ok(Some(RestorePreviewItem {
+            rel: rel.to_string(),
+            kind: RestorePreviewKind::New,
+        }));
+    }
+
+    if reader_differs_from_file(entry, dst)? {
+        return Ok(Some(RestorePreviewItem {
+            rel: rel.to_string(),
+            kind: RestorePreviewKind::Overwrite,
+        }));
+    }
+
+    Ok(None)
+}
+
+fn paths_differ(src: &Path, dst: &Path) -> Result<bool, CliError> {
+    let src_meta = fs::metadata(src).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    let dst_meta = fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    if !src_meta.is_file() || !dst_meta.is_file() {
+        return Ok(true);
+    }
+    if src_meta.len() != dst_meta.len() {
+        return Ok(true);
+    }
+
+    let mut src_file =
+        fs::File::open(src).map_err(|e| CliError::new(1, format!("Preview open failed: {e}")))?;
+    reader_differs_from_file(&mut src_file, dst)
+}
+
+fn reader_differs_from_file<R: Read>(reader: &mut R, dst: &Path) -> Result<bool, CliError> {
+    let dst_meta = fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    if !dst_meta.is_file() {
+        return Ok(true);
+    }
+    let mut dst_file =
+        fs::File::open(dst).map_err(|e| CliError::new(1, format!("Preview open failed: {e}")))?;
+
+    let mut src_buf = [0u8; 8192];
+    let mut dst_buf = [0u8; 8192];
+    loop {
+        let src_read = reader
+            .read(&mut src_buf)
+            .map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+        let dst_read = dst_file
+            .read(&mut dst_buf)
+            .map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+        if src_read != dst_read {
+            return Ok(true);
+        }
+        if src_read == 0 {
+            return Ok(false);
+        }
+        if src_buf[..src_read] != dst_buf[..dst_read] {
+            return Ok(true);
+        }
+    }
 }
 
 /// glob 模式还原
@@ -330,7 +543,7 @@ fn restore_with_glob(
 fn run_snapshot_backup(root: &Path, _cfg: &BackupConfig) -> CliResult {
     use crate::cli::BackupCmd;
     let args = BackupCmd {
-        op_args: vec![],
+        cmd: None,
         msg: Some("pre_restore".to_string()),
         dir: Some(root.to_string_lossy().into_owned()),
         dry_run: false,
@@ -405,13 +618,14 @@ fn glob_match_parts(pat: &[u8], s: &[u8]) -> bool {
 mod tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
-    use std::time::{Duration, SystemTime};
+    use std::io::Write;
+    use tempfile::tempdir;
 
     use super::{
-        RestorePreviewItem, RestorePreviewKind, build_restore_preview_items, glob_match,
+        PreviewMode, RestorePreviewItem, RestorePreviewKind, build_restore_preview_items,
+        glob_match,
         restore_timing_enabled_with,
     };
-    use crate::commands::backup::FileMeta;
 
     #[test]
     fn glob_exact() {
@@ -439,56 +653,79 @@ mod tests {
     }
 
     #[test]
-    fn restore_preview_items_skip_internal_files_and_detect_changes() {
-        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(200);
-        let older = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    fn restore_preview_items_respect_file_mode() {
+        let backup = tempdir().unwrap();
+        let dest = tempdir().unwrap();
+        std::fs::write(backup.path().join("a.txt"), "backup-a").unwrap();
+        std::fs::write(backup.path().join("b.txt"), "backup-b").unwrap();
+        std::fs::write(dest.path().join("a.txt"), "current-a").unwrap();
 
-        let mut backup_snapshot = HashMap::new();
-        backup_snapshot.insert(
-            "a.txt".to_string(),
-            FileMeta {
-                size: 10,
-                modified: now,
-            },
-        );
-        backup_snapshot.insert(
-            "b.txt".to_string(),
-            FileMeta {
-                size: 20,
-                modified: now,
-            },
-        );
-        backup_snapshot.insert(
-            ".bak-meta.json".to_string(),
-            FileMeta {
-                size: 1,
-                modified: now,
-            },
-        );
-
-        let mut current_snapshot = HashMap::new();
-        current_snapshot.insert(
-            "a.txt".to_string(),
-            FileMeta {
-                size: 9,
-                modified: older,
-            },
-        );
-
-        let items = build_restore_preview_items(&backup_snapshot, &current_snapshot);
+        let items = build_restore_preview_items(
+            backup.path(),
+            dest.path(),
+            PreviewMode::File("a.txt"),
+        )
+        .unwrap();
         assert_eq!(
             items,
-            vec![
-                RestorePreviewItem {
-                    rel: "a.txt".to_string(),
-                    kind: RestorePreviewKind::Overwrite,
-                },
-                RestorePreviewItem {
-                    rel: "b.txt".to_string(),
-                    kind: RestorePreviewKind::New,
-                },
-            ]
+            vec![RestorePreviewItem {
+                rel: "a.txt".to_string(),
+                kind: RestorePreviewKind::Overwrite,
+            }]
         );
+    }
+
+    #[test]
+    fn restore_preview_items_detect_same_size_content_change() {
+        let backup = tempdir().unwrap();
+        let dest = tempdir().unwrap();
+        std::fs::write(backup.path().join("same.txt"), "aaaa").unwrap();
+        std::fs::write(dest.path().join("same.txt"), "bbbb").unwrap();
+
+        let items = build_restore_preview_items(
+            backup.path(),
+            dest.path(),
+            PreviewMode::All,
+        )
+        .unwrap();
+        assert_eq!(
+            items,
+            vec![RestorePreviewItem {
+                rel: "same.txt".to_string(),
+                kind: RestorePreviewKind::Overwrite,
+            }]
+        );
+    }
+
+    #[test]
+    fn restore_preview_items_zip_respect_glob_and_skip_unchanged() {
+        let dir = tempdir().unwrap();
+        let zip_path = dir.path().join("preview.zip");
+        let dest = tempdir().unwrap();
+
+        let cursor = std::io::Cursor::new(Vec::<u8>::new());
+        let mut writer = zip::ZipWriter::new(cursor);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        writer.start_file("src/a.txt", options).unwrap();
+        writer.write_all(b"same").unwrap();
+        writer.start_file("src/b.rs", options).unwrap();
+        writer.write_all(b"skip").unwrap();
+        writer.start_file("../evil.txt", options).unwrap();
+        writer.write_all(b"bad").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        std::fs::write(&zip_path, bytes).unwrap();
+
+        std::fs::create_dir_all(dest.path().join("src")).unwrap();
+        std::fs::write(dest.path().join("src").join("a.txt"), "same").unwrap();
+
+        let items = build_restore_preview_items(
+            &zip_path,
+            dest.path(),
+            PreviewMode::Glob("**/*.txt"),
+        )
+        .unwrap();
+        assert!(items.is_empty(), "unchanged matched file should not appear in preview");
     }
 
     #[test]

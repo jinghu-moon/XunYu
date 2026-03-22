@@ -4,9 +4,8 @@ use argh::FromArgs;
 #[derive(FromArgs)]
 #[argh(subcommand, name = "backup")]
 pub struct BackupCmd {
-    /// operation and args: `list` | `verify <name>` | `find [tag]` (default: create backup)
-    #[argh(positional)]
-    pub op_args: Vec<String>,
+    #[argh(subcommand)]
+    pub cmd: Option<BackupSubCommand>,
 
     /// backup description
     #[argh(option, short = 'm')]
@@ -42,4 +41,47 @@ pub struct BackupCmd {
     /// skip creating a new backup when no changes are detected
     #[argh(switch)]
     pub skip_if_unchanged: bool,
+}
+
+#[derive(FromArgs)]
+#[argh(subcommand)]
+pub enum BackupSubCommand {
+    List(BackupListCmd),
+    Verify(BackupVerifyCmd),
+    Find(BackupFindCmd),
+}
+
+/// List available backups.
+#[derive(FromArgs)]
+#[argh(subcommand, name = "list")]
+pub struct BackupListCmd {
+    /// output machine-readable JSON
+    #[argh(switch)]
+    pub json: bool,
+}
+
+/// Verify integrity of a directory backup.
+#[derive(FromArgs)]
+#[argh(subcommand, name = "verify")]
+pub struct BackupVerifyCmd {
+    /// backup name
+    #[argh(positional)]
+    pub name: String,
+
+    /// output machine-readable JSON
+    #[argh(switch)]
+    pub json: bool,
+}
+
+/// Find backups by tag or other metadata filters.
+#[derive(FromArgs)]
+#[argh(subcommand, name = "find")]
+pub struct BackupFindCmd {
+    /// tag filter
+    #[argh(positional)]
+    pub tag: Option<String>,
+
+    /// output machine-readable JSON
+    #[argh(switch)]
+    pub json: bool,
 }

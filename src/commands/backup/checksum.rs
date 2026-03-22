@@ -1,5 +1,4 @@
 //! blake3 完整性校验：生成/验证 .bak-manifest.json
-//! 仅在 feature="bak" 时启用 blake3 哈希；否则跳过校验。
 
 use std::collections::HashMap;
 use std::fs;
@@ -22,16 +21,9 @@ pub(crate) enum VerifyResult {
     NoManifest,
 }
 
-/// 计算单个文件的 blake3 哈希；失败返回 None
-#[cfg(feature = "bak")]
 pub(crate) fn file_blake3(path: &Path) -> Option<[u8; 32]> {
     let data = fs::read(path).ok()?;
     Some(*blake3::hash(&data).as_bytes())
-}
-
-#[cfg(not(feature = "bak"))]
-pub(crate) fn file_blake3(_path: &Path) -> Option<[u8; 32]> {
-    None
 }
 
 /// 将文件哈希写入 backup_path/.bak-manifest.json
@@ -77,7 +69,7 @@ fn hex_encode(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-#[cfg(all(test, feature = "bak"))]
+#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 

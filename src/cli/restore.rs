@@ -35,4 +35,8 @@ pub struct RestoreCmd {
     /// skip confirmation prompt
     #[argh(switch, short = 'y')]
     pub yes: bool,
+
+    /// output machine-readable JSON summary
+    #[argh(switch)]
+    pub json: bool,
 }

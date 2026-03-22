@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use comfy_table::{Attribute, Cell, Color, Table};
+use serde::Serialize;
 
 use crate::output::{CliResult, apply_pretty_table_style, print_table};
 
@@ -10,19 +11,20 @@ use super::config::BackupConfig;
 use super::time_fmt::fmt_unix_ts;
 use super::util::dir_size;
 
-pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig) -> CliResult {
+#[derive(Clone, Serialize)]
+struct BackupListItem {
+    name: String,
+    is_zip: bool,
+    mtime_unix: u64,
+    mtime_display: String,
+    size_bytes: u64,
+}
+
+pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig, json: bool) -> CliResult {
     let backups_root = root.join(&cfg.storage.backups_dir);
     let _ = fs::create_dir_all(&backups_root);
 
-    #[derive(Clone)]
-    struct Item {
-        name: String,
-        is_zip: bool,
-        mtime: u64,
-        size: u64,
-    }
-
-    let mut items: Vec<Item> = Vec::new();
+    let mut items: Vec<BackupListItem> = Vec::new();
     if let Ok(rd) = fs::read_dir(&backups_root) {
         for e in rd.flatten() {
             let path = e.path();
@@ -44,18 +46,32 @@ pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig) -> CliResult {
             } else {
                 continue;
             };
-            items.push(Item {
+            items.push(BackupListItem {
                 name,
                 is_zip,
-                mtime,
-                size,
+                mtime_unix: mtime,
+                mtime_display: fmt_unix_ts(mtime),
+                size_bytes: size,
             });
         }
     }
-    items.sort_by(|a, b| a.mtime.cmp(&b.mtime).then_with(|| a.name.cmp(&b.name)));
+    items.sort_by(|a, b| {
+        a.mtime_unix
+            .cmp(&b.mtime_unix)
+            .then_with(|| a.name.cmp(&b.name))
+    });
 
     if items.is_empty() {
+        if json {
+            out_println!("[]");
+            return Ok(());
+        }
         ui_println!("No backups found: {}", backups_root.display());
+        return Ok(());
+    }
+
+    if json {
+        out_println!("{}", serde_json::to_string_pretty(&items).unwrap_or_default());
         return Ok(());
     }
 
@@ -79,8 +95,8 @@ pub(crate) fn cmd_backup_list(root: &Path, cfg: &BackupConfig) -> CliResult {
         table.add_row(vec![
             Cell::new(it.name).fg(Color::Cyan),
             Cell::new(if it.is_zip { "zip" } else { "dir" }).fg(Color::Yellow),
-            Cell::new(fmt_unix_ts(it.mtime)).fg(Color::Magenta),
-            Cell::new(it.size).fg(Color::Green),
+            Cell::new(it.mtime_display).fg(Color::Magenta),
+            Cell::new(it.size_bytes).fg(Color::Green),
         ]);
     }
     print_table(&table);

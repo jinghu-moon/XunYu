@@ -1,4 +1,5 @@
 use crate::common::*;
+use serde_json::Value;
 use std::fs;
 use std::io::{Cursor, Write};
 
@@ -706,4 +707,29 @@ fn restore_cmd_snapshot_skipped_on_dry_run() {
         backup_count, 1,
         "dry-run with --snapshot should not create a new backup, got {backup_count}"
     );
+}
+
+#[test]
+fn restore_cmd_json_outputs_summary() {
+    let proj = BakProject::new("proj_restore_json", false);
+    let name = proj.backup_name("v1-", None);
+
+    fs::remove_file(proj.root.join("a.txt")).unwrap();
+    fs::remove_file(proj.root.join("b.txt")).unwrap();
+
+    let out = run_ok(proj.env.cmd().args([
+        "restore",
+        &name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+        "--json",
+    ]));
+
+    let value: Value = serde_json::from_slice(&out.stdout).expect("restore json should be valid");
+    assert_eq!(value["action"], "restore");
+    assert_eq!(value["mode"], "all");
+    assert_eq!(value["restored"], 2);
+    assert_eq!(value["failed"], 0);
+    assert_eq!(value["dry_run"], false);
 }
