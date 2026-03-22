@@ -1158,6 +1158,87 @@ fn bak_find_json_outputs_structured_fields() {
 }
 
 #[test]
+fn bak_find_since_until_filters_backups_by_time() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_find_since_until");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "data").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "old"]),
+    );
+    fs::write(root.join("a.txt"), "changed").unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "new"]),
+    );
+
+    let backups_root = root.join("A_backups");
+    let mut entries: Vec<_> = fs::read_dir(&backups_root)
+        .unwrap()
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    let old_backup = entries[0].path();
+    let new_backup = entries[1].path();
+
+    fs::write(
+        old_backup.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_700_000_000u64,
+            "desc": "old",
+            "tags": [],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false,
+            "size_bytes": 4
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(
+        new_backup.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_800_000_000u64,
+            "desc": "new",
+            "tags": [],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false,
+            "size_bytes": 7
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "find",
+        "--since",
+        "2026-01-01T00:00:00Z",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).expect("find json should be valid");
+    let items = value.as_array().expect("find json should be an array");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["desc"], "new");
+}
+
+#[test]
 fn bak_verify_json_outputs_ok_status() {
     let env = TestEnv::new();
     let root = env.root.join("proj_verify_json");

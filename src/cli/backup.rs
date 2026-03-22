@@ -81,6 +81,14 @@ pub struct BackupFindCmd {
     #[argh(positional)]
     pub tag: Option<String>,
 
+    /// lower bound time filter: RFC3339 | YYYY-MM-DD | YYYY-MM-DD HH:MM:SS
+    #[argh(option)]
+    pub since: Option<String>,
+
+    /// upper bound time filter: RFC3339 | YYYY-MM-DD | YYYY-MM-DD HH:MM:SS
+    #[argh(option)]
+    pub until: Option<String>,
+
     /// output machine-readable JSON
     #[argh(switch)]
     pub json: bool,

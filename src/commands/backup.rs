@@ -95,7 +95,18 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             ),
             BackupSubCommand::Find(cmd) => (
                 "find",
-                find::cmd_backup_find(&root, &cfg, cmd.tag.as_deref(), None, None, cmd.json),
+                {
+                    let since = find::parse_time_filter_bound(cmd.since.as_deref(), false)?;
+                    let until = find::parse_time_filter_bound(cmd.until.as_deref(), true)?;
+                    find::cmd_backup_find(
+                        &root,
+                        &cfg,
+                        cmd.tag.as_deref(),
+                        since,
+                        until,
+                        cmd.json,
+                    )
+                },
             ),
         };
         if timing {

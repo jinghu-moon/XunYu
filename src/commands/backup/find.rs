@@ -2,10 +2,11 @@
 
 use std::path::Path;
 
+use chrono::{DateTime, Local, LocalResult, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use comfy_table::{Attribute, Cell, Color, Table};
 use serde::Serialize;
 
-use crate::output::{CliResult, apply_pretty_table_style, print_table};
+use crate::output::{CliError, CliResult, apply_pretty_table_style, print_table};
 
 use super::config::BackupConfig;
 use super::meta::{BackupStats, collect_backup_records};
@@ -114,4 +115,101 @@ pub(crate) fn cmd_backup_find(
     }
     print_table(&table);
     Ok(())
+}
+
+pub(crate) fn parse_time_filter_bound(
+    raw: Option<&str>,
+    upper_bound: bool,
+) -> Result<Option<u64>, CliError> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(CliError::with_details(
+            2,
+            format!(
+                "Invalid {} filter: empty value",
+                if upper_bound { "until" } else { "since" }
+            ),
+            &[r#"Fix: Use RFC3339, YYYY-MM-DD, or YYYY-MM-DD HH:MM:SS."#],
+        ));
+    }
+
+    if let Ok(dt) = DateTime::parse_from_rfc3339(trimmed) {
+        return Ok(Some(dt.timestamp().max(0) as u64));
+    }
+
+    if let Ok(dt) = NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S") {
+        return local_naive_to_unix(dt, upper_bound).map(Some);
+    }
+
+    if let Ok(date) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        let dt = if upper_bound {
+            date.and_hms_opt(23, 59, 59)
+        } else {
+            date.and_hms_opt(0, 0, 0)
+        }
+        .ok_or_else(|| invalid_time_filter(raw, upper_bound))?;
+        return local_naive_to_unix(dt, upper_bound).map(Some);
+    }
+
+    Err(invalid_time_filter(raw, upper_bound))
+}
+
+fn local_naive_to_unix(naive: NaiveDateTime, upper_bound: bool) -> Result<u64, CliError> {
+    match Local.from_local_datetime(&naive) {
+        LocalResult::Single(dt) => Ok(dt.with_timezone(&Utc).timestamp().max(0) as u64),
+        LocalResult::Ambiguous(a, b) => {
+            let dt = if upper_bound { b } else { a };
+            Ok(dt.with_timezone(&Utc).timestamp().max(0) as u64)
+        }
+        LocalResult::None => Err(CliError::with_details(
+            2,
+            "Invalid local time value.".to_string(),
+            &[r#"Fix: Use RFC3339, YYYY-MM-DD, or YYYY-MM-DD HH:MM:SS."#],
+        )),
+    }
+}
+
+fn invalid_time_filter(raw: &str, upper_bound: bool) -> CliError {
+    CliError::with_details(
+        2,
+        format!(
+            "Invalid {} filter: {}",
+            if upper_bound { "until" } else { "since" },
+            raw
+        ),
+        &[r#"Fix: Use RFC3339, YYYY-MM-DD, or YYYY-MM-DD HH:MM:SS."#],
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_time_filter_bound;
+
+    #[test]
+    fn parse_time_filter_bound_date_spans_full_day() {
+        let since = parse_time_filter_bound(Some("2026-03-22"), false)
+            .unwrap()
+            .expect("since should parse");
+        let until = parse_time_filter_bound(Some("2026-03-22"), true)
+            .unwrap()
+            .expect("until should parse");
+        assert_eq!(until.saturating_sub(since), 86_399);
+    }
+
+    #[test]
+    fn parse_time_filter_bound_accepts_rfc3339() {
+        let ts = parse_time_filter_bound(Some("2026-03-22T10:00:00Z"), false)
+            .unwrap()
+            .expect("rfc3339 should parse");
+        assert_eq!(ts, 1_774_173_600);
+    }
+
+    #[test]
+    fn parse_time_filter_bound_rejects_invalid_value() {
+        let err = parse_time_filter_bound(Some("not-a-time"), false).unwrap_err();
+        assert!(err.message.contains("Invalid since filter"));
+    }
 }
