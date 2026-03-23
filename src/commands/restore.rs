@@ -5,8 +5,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
 use crate::backup_export::artifact_source::read_artifact_entries;
-use crate::backup_export::reader::copy_entry_to_path;
-use crate::backup_export::source::SourceEntry;
+use crate::backup_export::sevenz_io::{restore_7z_entries, restore_7z_single};
 use crate::cli::RestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
@@ -268,7 +267,7 @@ fn restore_all(src: &Path, dest_root: &Path, dry_run: bool) -> Result<(usize, us
     if src.extension().and_then(|e| e.to_str()) == Some("zip") {
         restore_core::restore_many_from_zip(src, dest_root, dry_run, |_| true)
     } else if is_7z_path(src) {
-        restore_many_from_artifact(src, dest_root, dry_run, |_| true)
+        restore_7z_entries(src, dest_root, dry_run, |_| true)
     } else {
         Ok(restore_core::restore_many_from_dir(
             src,
@@ -309,7 +308,7 @@ fn restore_single_file(
     if src.extension().and_then(|e| e.to_str()) == Some("zip") {
         restore_core::restore_from_zip(src, dest_root, Some(&rel), dry_run)?;
     } else if is_7z_path(src) {
-        restore_single_from_artifact(src, dest_root, &rel.to_string_lossy(), dry_run)?;
+        restore_7z_single(src, dest_root, &rel.to_string_lossy(), dry_run)?;
     } else {
         restore_core::restore_from_dir(src, dest_root, Some(&rel), dry_run)?;
     }
@@ -615,9 +614,7 @@ fn restore_with_glob(
             glob_match(glob_pat, name)
         })
     } else if is_7z_path(src) {
-        restore_many_from_artifact(src, dest_root, dry_run, |entry| {
-            glob_match(glob_pat, &entry.path)
-        })
+        restore_7z_entries(src, dest_root, dry_run, |name| glob_match(glob_pat, name))
     } else {
         Ok(restore_core::restore_many_from_dir(
             src,
@@ -636,60 +633,6 @@ fn is_7z_path(path: &Path) -> bool {
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.ends_with(".7z.001"))
-}
-
-fn restore_single_from_artifact(
-    src: &Path,
-    dest_root: &Path,
-    wanted: &str,
-    dry_run: bool,
-) -> Result<(), CliError> {
-    let entries = read_artifact_entries(src)?;
-    let wanted = wanted.replace('\\', "/");
-    let entry = entries
-        .iter()
-        .find(|entry| entry.path.eq_ignore_ascii_case(&wanted))
-        .ok_or_else(|| {
-            CliError::new(
-                1,
-                format!("Restore failed: file not found in backup: {wanted}"),
-            )
-        })?;
-    restore_selected_artifact_entry(entry, dest_root, dry_run)
-}
-
-fn restore_many_from_artifact<F>(
-    src: &Path,
-    dest_root: &Path,
-    dry_run: bool,
-    filter: F,
-) -> Result<(usize, usize), CliError>
-where
-    F: Fn(&SourceEntry) -> bool,
-{
-    let entries = read_artifact_entries(src)?;
-    let mut restored = 0usize;
-
-    for entry in entries.iter().filter(|entry| filter(entry)) {
-        restore_selected_artifact_entry(entry, dest_root, dry_run)?;
-        restored += 1;
-    }
-
-    Ok((restored, 0))
-}
-
-fn restore_selected_artifact_entry(
-    entry: &SourceEntry,
-    dest_root: &Path,
-    dry_run: bool,
-) -> Result<(), CliError> {
-    let rel = PathBuf::from(entry.path.replace('/', "\\"));
-    let dst = dest_root.join(&rel);
-    if dry_run {
-        ui_println!("DRY RUN: would restore {}", rel.display());
-        return Ok(());
-    }
-    copy_entry_to_path(entry, &dst)
 }
 
 /// snapshot：调用 cmd_backup 备份当前状态（desc = pre_restore）

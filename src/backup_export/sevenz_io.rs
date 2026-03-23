@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sevenz_rust2::encoder_options::Lzma2Options;
 use sevenz_rust2::{
-    Archive, ArchiveEntry, ArchiveReader, ArchiveWriter, EncoderConfiguration, EncoderMethod,
-    Password, SourceReader,
+    ArchiveEntry, ArchiveReader, ArchiveWriter, EncoderConfiguration, EncoderMethod, Password,
+    SourceReader,
 };
 
 use crate::backup_export::reader::open_entry_reader;
@@ -141,40 +141,87 @@ fn write_entries_with_writer<W: Write + Seek>(
 }
 
 pub(crate) fn list_7z_entries(path: &Path) -> Result<Vec<SourceEntry>, CliError> {
-    if resolve_multivolume_base(path).is_some() {
-        let temp = materialize_split_archive(path)?;
-        let reader = ArchiveReader::open(&temp, Password::empty())
-            .map_err(|err| CliError::new(1, format!("Read split 7z failed {}: {err}", path.display())))?;
-        let result = collect_entries_from_archive(reader.archive(), path);
-        let _ = fs::remove_file(&temp);
-        return result;
-    }
-
-    let reader = ArchiveReader::open(path, Password::empty())
-        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
-    collect_entries_from_archive(reader.archive(), path)
+    with_archive_reader(path, |reader, logical_path| {
+        collect_entries_from_archive(reader.archive(), logical_path)
+    })
 }
 
 pub(crate) fn read_7z_file(src: &Path, name: &str) -> Result<Vec<u8>, CliError> {
-    if resolve_multivolume_base(src).is_some() {
-        let temp = materialize_split_archive(src)?;
-        let mut reader = ArchiveReader::open(&temp, Password::empty())
-            .map_err(|err| CliError::new(1, format!("Read split 7z failed {}: {err}", src.display())))?;
-        let result = reader
+    with_archive_reader(src, |reader, _| {
+        reader
             .read_file(name)
-            .map_err(|err| CliError::new(1, format!("Read 7z file failed {name}: {err}")));
-        let _ = fs::remove_file(&temp);
-        return result;
+            .map_err(|err| CliError::new(1, format!("Read 7z file failed {name}: {err}")))
+    })
+}
+
+pub(crate) fn restore_7z_entries<F>(
+    path: &Path,
+    destination: &Path,
+    dry_run: bool,
+    mut filter: F,
+) -> Result<(usize, usize), CliError>
+where
+    F: FnMut(&str) -> bool,
+{
+    let mut restored = 0usize;
+    with_archive_reader(path, |reader, _| {
+        reader
+            .for_each_entries(|entry, data| {
+                if entry.is_directory() || !entry.has_stream() {
+                    return Ok(true);
+                }
+                let name = entry.name().replace('\\', "/");
+                if crate::commands::restore_core::is_backup_internal_name(&name) || !filter(&name) {
+                    return Ok(true);
+                }
+                let dest = destination.join(name.replace('/', "\\"));
+                if dry_run {
+                    crate::output::ui_println(format_args!("DRY RUN: would restore {}", dest.strip_prefix(destination).unwrap_or(&dest).display()));
+                    restored += 1;
+                    return Ok(true);
+                }
+                if let Some(parent) = dest.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let mut file = fs::File::create(&dest)?;
+                std::io::copy(data, &mut file)?;
+                if let Err(err) = apply_archive_entry_metadata(&file, &dest, entry) {
+                    return Err(std::io::Error::other(err.message).into());
+                }
+                restored += 1;
+                Ok(true)
+            })
+            .map_err(|err| CliError::new(1, format!("Restore 7z failed: {err}")))?;
+        Ok((restored, 0))
+    })
+}
+
+pub(crate) fn restore_7z_single(
+    path: &Path,
+    destination: &Path,
+    wanted: &str,
+    dry_run: bool,
+) -> Result<(usize, usize), CliError> {
+    let wanted = wanted.replace('\\', "/");
+    let mut found = false;
+    let result = restore_7z_entries(path, destination, dry_run, |name| {
+        let matched = name.eq_ignore_ascii_case(&wanted);
+        if matched {
+            found = true;
+        }
+        matched
+    })?;
+    if !found {
+        return Err(CliError::new(
+            1,
+            format!("Restore failed: file not found in backup: {wanted}"),
+        ));
     }
-    let mut reader = ArchiveReader::open(src, Password::empty())
-        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", src.display())))?;
-    reader
-        .read_file(name)
-        .map_err(|err| CliError::new(1, format!("Read 7z file failed {name}: {err}")))
+    Ok(result)
 }
 
 fn collect_entries_from_archive(
-    archive: &Archive,
+    archive: &sevenz_rust2::Archive,
     path: &Path,
 ) -> Result<Vec<SourceEntry>, CliError> {
     let mut entries = Vec::new();
@@ -211,6 +258,24 @@ fn collect_entries_from_archive(
     Ok(entries)
 }
 
+fn with_archive_reader<T>(
+    path: &Path,
+    f: impl FnOnce(&mut ArchiveReader<fs::File>, &Path) -> Result<T, CliError>,
+) -> Result<T, CliError> {
+    if resolve_multivolume_base(path).is_some() {
+        let temp = materialize_split_archive(path)?;
+        let mut reader = ArchiveReader::open(&temp, Password::empty())
+            .map_err(|err| CliError::new(1, format!("Read split 7z failed {}: {err}", path.display())))?;
+        let result = f(&mut reader, path);
+        let _ = fs::remove_file(&temp);
+        return result;
+    }
+
+    let mut reader = ArchiveReader::open(path, Password::empty())
+        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
+    f(&mut reader, path)
+}
+
 fn materialize_split_archive(path: &Path) -> Result<std::path::PathBuf, CliError> {
     let base = resolve_multivolume_base(path).ok_or_else(|| {
         CliError::new(1, format!("Split 7z base path not found: {}", path.display()))
@@ -236,6 +301,49 @@ fn materialize_split_archive(path: &Path) -> Result<std::path::PathBuf, CliError
         })?;
     }
     Ok(temp)
+}
+
+#[cfg(windows)]
+fn apply_archive_entry_metadata(
+    file: &fs::File,
+    path: &Path,
+    entry: &ArchiveEntry,
+) -> Result<(), CliError> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::FileTimesExt;
+    use windows_sys::Win32::Storage::FileSystem::SetFileAttributesW;
+
+    let mut file_times = fs::FileTimes::new();
+    if entry.has_last_modified_date {
+        file_times = file_times.set_modified(entry.last_modified_date().into());
+    }
+    #[cfg(any(windows, target_os = "macos"))]
+    if entry.has_creation_date {
+        file_times = file_times.set_created(entry.creation_date().into());
+    }
+    let _ = file.set_times(file_times);
+
+    if entry.has_windows_attributes {
+        let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        wide.push(0);
+        let ok = unsafe { SetFileAttributesW(wide.as_ptr(), entry.windows_attributes()) };
+        if ok == 0 {
+            return Err(CliError::new(
+                1,
+                format!("SetFileAttributesW failed for {}", path.display()),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn apply_archive_entry_metadata(
+    _file: &fs::File,
+    _path: &Path,
+    _entry: &ArchiveEntry,
+) -> Result<(), CliError> {
+    Ok(())
 }
 
 fn method_config(method: SevenZMethod, level: u32) -> EncoderConfiguration {
