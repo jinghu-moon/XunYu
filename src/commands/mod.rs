@@ -3,6 +3,7 @@ pub(crate) mod acl_cmd;
 pub(crate) mod alias;
 pub(crate) mod app_config;
 pub(crate) mod backup;
+pub(crate) mod backup_convert;
 pub(crate) mod bookmarks;
 pub(crate) mod completion;
 pub(crate) mod ctx;

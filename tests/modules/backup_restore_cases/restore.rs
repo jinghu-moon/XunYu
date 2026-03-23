@@ -2,6 +2,8 @@ use crate::common::*;
 use serde_json::Value;
 use std::fs;
 use std::io::{Cursor, Write};
+use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::MetadataExt;
 
 const CFG_NO_COMPRESS: &str = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.txt"],"exclude":[]}"#;
 const CFG_COMPRESS: &str = r#"{"storage":{"backupsDir":"A_backups","compress":true},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.txt"],"exclude":[]}"#;
@@ -62,6 +64,38 @@ fn write_test_zip(path: &std::path::Path, entries: &[(&str, &[u8])]) {
     fs::write(path, bytes).unwrap();
 }
 
+fn fixture_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("xunbak_sample")
+}
+
+fn set_windows_attributes(path: &std::path::Path, attrs: u32) {
+    use windows_sys::Win32::Storage::FileSystem::SetFileAttributesW;
+
+    let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+    wide.push(0);
+    let ok = unsafe { SetFileAttributesW(wide.as_ptr(), attrs) };
+    assert_ne!(ok, 0, "failed to set attributes for {}", path.display());
+}
+
+fn copy_tree(src: &std::path::Path, dst: &std::path::Path) {
+    fs::create_dir_all(dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&src_path, &dst_path);
+            continue;
+        }
+        fs::copy(&src_path, &dst_path).unwrap();
+        let attrs = fs::metadata(&src_path).unwrap().file_attributes();
+        set_windows_attributes(&dst_path, attrs);
+    }
+}
+
 #[test]
 fn restore_cmd_by_name() {
     let proj = BakProject::new("proj_restore_by_name", false);
@@ -80,6 +114,207 @@ fn restore_cmd_by_name() {
     assert!(proj.root.join("b.txt").exists());
     assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
     assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_restore_subcommand_by_name() {
+    let proj = BakProject::new("proj_backup_restore_subcommand", false);
+    let name = proj.backup_name("v1-", None);
+
+    fs::remove_file(proj.root.join("a.txt")).unwrap();
+    fs::remove_file(proj.root.join("b.txt")).unwrap();
+
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        &name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert!(proj.root.join("a.txt").exists());
+    assert!(proj.root.join("b.txt").exists());
+    assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_restore_subcommand_directory_artifact_by_path() {
+    let proj = BakProject::new("proj_backup_restore_dir_artifact", false);
+    let name = proj.backup_name("v1-", None);
+    let backup_path = proj.root.join("A_backups").join(&name);
+
+    fs::remove_file(proj.root.join("a.txt")).unwrap();
+    fs::remove_file(proj.root.join("b.txt")).unwrap();
+
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        backup_path.to_str().unwrap(),
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_restore_subcommand_file_from_directory_artifact_by_path() {
+    let proj = BakProject::new("proj_backup_restore_dir_file", false);
+    let name = proj.backup_name("v1-", None);
+    let backup_path = proj.root.join("A_backups").join(&name);
+
+    fs::write(proj.root.join("a.txt"), "changed").unwrap();
+
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        backup_path.to_str().unwrap(),
+        "-C",
+        proj.root.to_str().unwrap(),
+        "--file",
+        "a.txt",
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_restore_subcommand_glob_from_directory_artifact_by_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_restore_dir_glob");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.rs"), "fn main(){}").unwrap();
+
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.rs"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let backup_path = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.rs")).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        backup_path.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--glob",
+        "*.txt",
+        "-y",
+    ]));
+
+    assert!(root.join("a.txt").exists());
+    assert!(!root.join("b.rs").exists());
+}
+
+#[test]
+fn backup_restore_subcommand_zip_by_name() {
+    let proj = BakProject::new("proj_backup_restore_zip_subcommand", true);
+    let zip_name = proj.backup_name("v1-", Some(".zip"));
+    let name = zip_name.trim_end_matches(".zip");
+
+    fs::remove_file(proj.root.join("a.txt")).unwrap();
+    fs::remove_file(proj.root.join("b.txt")).unwrap();
+
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert!(proj.root.join("a.txt").exists());
+    assert!(proj.root.join("b.txt").exists());
+    assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_restore_subcommand_file_from_zip_backup() {
+    let proj = BakProject::new("proj_backup_restore_zip_file", true);
+    let zip_name = proj.backup_name("v1-", Some(".zip"));
+    let name = zip_name.trim_end_matches(".zip");
+
+    fs::remove_file(proj.root.join("a.txt")).unwrap();
+
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "--file",
+        "a.txt",
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_restore_subcommand_glob_from_zip_backup() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_restore_zip_glob");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.rs"), "fn main(){}").unwrap();
+
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":true},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.rs"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let zip_name = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.starts_with("v1-") && name.ends_with(".zip")
+        })
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+    let name = zip_name.trim_end_matches(".zip").to_string();
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.rs")).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        &name,
+        "-C",
+        root.to_str().unwrap(),
+        "--glob",
+        "*.txt",
+        "-y",
+    ]));
+
+    assert!(root.join("a.txt").exists());
+    assert!(!root.join("b.rs").exists());
 }
 
 #[test]
@@ -257,6 +492,505 @@ fn restore_cmd_zip_by_name() {
     assert!(proj.root.join("b.txt").exists());
     assert_eq!(fs::read_to_string(proj.root.join("a.txt")).unwrap(), "aaa");
     assert_eq!(fs::read_to_string(proj.root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn restore_cmd_7z_by_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_7z");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+    fs::write(root.join(".xun-bak.json"), CFG_NO_COMPRESS).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.txt")).unwrap();
+
+    run_ok(env.cmd().args([
+        "restore",
+        root.join("artifact.7z").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_create_dir_then_restore_by_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_create_dir_restore");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+    fs::write(root.join(".xun-bak.json"), CFG_NO_COMPRESS).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        "artifact_dir",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.txt")).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact_dir").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_create_zip_then_restore_by_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_create_zip_restore");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+    fs::write(root.join(".xun-bak.json"), CFG_NO_COMPRESS).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.txt")).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.zip").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn backup_create_split_7z_then_restore_by_base_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_create_split_7z_restore");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(root.join("b.txt"), "b".repeat(1200)).unwrap();
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.txt"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--no-compress",
+        "--split-size",
+        "1400",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.txt")).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.7z").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "a".repeat(1200));
+    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "b".repeat(1200));
+}
+
+#[test]
+fn backup_create_split_7z_then_restore_by_first_volume_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_create_split_7z_restore_first_volume");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(root.join("b.txt"), "b".repeat(1200)).unwrap();
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.txt"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--no-compress",
+        "--split-size",
+        "1400",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.txt")).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.7z.001").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "a".repeat(1200));
+    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "b".repeat(1200));
+}
+
+#[test]
+fn backup_create_zip_fixture_roundtrip_preserves_unicode_spaces_empty_and_deep_paths() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_fixture_zip");
+    copy_tree(&fixture_root(), &root);
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["README.md","empty.txt","中文目录","path with spaces","deep","config","docs","src","assets"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "fixture.zip",
+    ]));
+
+    let restore = env.root.join("fixture_zip_restore");
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("fixture.zip").to_str().unwrap(),
+        "--to",
+        restore.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(
+        fs::read_to_string(restore.join("中文目录").join("说明.txt")).unwrap(),
+        fs::read_to_string(root.join("中文目录").join("说明.txt")).unwrap()
+    );
+    assert_eq!(
+        fs::read_to_string(
+            restore
+                .join("path with spaces")
+                .join("nested folder")
+                .join("notes file.txt")
+        )
+        .unwrap(),
+        fs::read_to_string(
+            root.join("path with spaces")
+                .join("nested folder")
+                .join("notes file.txt")
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        fs::metadata(restore.join("empty.txt")).unwrap().len(),
+        0,
+        "empty file should remain empty"
+    );
+    assert_eq!(
+        fs::read_to_string(
+            restore
+                .join("deep")
+                .join("level1")
+                .join("level2")
+                .join("level3")
+                .join("level4")
+                .join("leaf.txt")
+        )
+        .unwrap(),
+        fs::read_to_string(
+            root.join("deep")
+                .join("level1")
+                .join("level2")
+                .join("level3")
+                .join("level4")
+                .join("leaf.txt")
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn backup_create_7z_fixture_roundtrip_preserves_unicode_spaces_empty_and_deep_paths() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_fixture_7z");
+    copy_tree(&fixture_root(), &root);
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["README.md","empty.txt","中文目录","path with spaces","deep","config","docs","src","assets"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "fixture.7z",
+    ]));
+
+    let restore = env.root.join("fixture_7z_restore");
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("fixture.7z").to_str().unwrap(),
+        "--to",
+        restore.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(
+        fs::read_to_string(restore.join("中文目录").join("说明.txt")).unwrap(),
+        fs::read_to_string(root.join("中文目录").join("说明.txt")).unwrap()
+    );
+    assert_eq!(
+        fs::read_to_string(
+            restore
+                .join("path with spaces")
+                .join("nested folder")
+                .join("notes file.txt")
+        )
+        .unwrap(),
+        fs::read_to_string(
+            root.join("path with spaces")
+                .join("nested folder")
+                .join("notes file.txt")
+        )
+        .unwrap()
+    );
+    assert_eq!(fs::metadata(restore.join("empty.txt")).unwrap().len(), 0);
+    assert_eq!(
+        fs::read_to_string(
+            restore
+                .join("deep")
+                .join("level1")
+                .join("level2")
+                .join("level3")
+                .join("level4")
+                .join("leaf.txt")
+        )
+        .unwrap(),
+        fs::read_to_string(
+            root.join("deep")
+                .join("level1")
+                .join("level2")
+                .join("level3")
+                .join("level4")
+                .join("leaf.txt")
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        fs::metadata(root.join("config").join("readonly_file.txt"))
+            .unwrap()
+            .file_attributes()
+            & 0x0000_0001,
+        fs::metadata(restore.join("config").join("readonly_file.txt"))
+            .unwrap()
+            .file_attributes()
+            & 0x0000_0001
+    );
+}
+
+#[test]
+fn backup_create_split_7z_fixture_roundtrip_preserves_unicode_spaces_empty_and_deep_paths() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_fixture_split_7z");
+    copy_tree(&fixture_root(), &root);
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["README.md","empty.txt","中文目录","path with spaces","deep","config","docs","src","assets"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "fixture_split.7z",
+        "--split-size",
+        "40000",
+    ]));
+
+    let restore = env.root.join("fixture_split_7z_restore");
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("fixture_split.7z").to_str().unwrap(),
+        "--to",
+        restore.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    assert_eq!(
+        fs::read_to_string(restore.join("中文目录").join("说明.txt")).unwrap(),
+        fs::read_to_string(root.join("中文目录").join("说明.txt")).unwrap()
+    );
+    assert_eq!(
+        fs::read_to_string(
+            restore
+                .join("path with spaces")
+                .join("nested folder")
+                .join("notes file.txt")
+        )
+        .unwrap(),
+        fs::read_to_string(
+            root.join("path with spaces")
+                .join("nested folder")
+                .join("notes file.txt")
+        )
+        .unwrap()
+    );
+    assert_eq!(fs::metadata(restore.join("empty.txt")).unwrap().len(), 0);
+    assert_eq!(
+        fs::read_to_string(
+            restore
+                .join("deep")
+                .join("level1")
+                .join("level2")
+                .join("level3")
+                .join("level4")
+                .join("leaf.txt")
+        )
+        .unwrap(),
+        fs::read_to_string(
+            root.join("deep")
+                .join("level1")
+                .join("level2")
+                .join("level3")
+                .join("level4")
+                .join("leaf.txt")
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn restore_cmd_file_from_7z_backup() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_file_7z");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+    fs::write(root.join(".xun-bak.json"), CFG_NO_COMPRESS).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+
+    run_ok(env.cmd().args([
+        "restore",
+        root.join("artifact.7z").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--file",
+        "a.txt",
+        "-y",
+    ]));
+
+    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "aaa");
+    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "bbb");
+}
+
+#[test]
+fn restore_cmd_glob_from_7z_backup() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_glob_7z");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.rs"), "fn main(){}").unwrap();
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","b.rs"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    fs::remove_file(root.join("a.txt")).unwrap();
+    fs::remove_file(root.join("b.rs")).unwrap();
+
+    run_ok(env.cmd().args([
+        "restore",
+        root.join("artifact.7z").to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--glob",
+        "*.txt",
+        "-y",
+    ]));
+
+    assert!(root.join("a.txt").exists());
+    assert!(!root.join("b.rs").exists());
 }
 
 #[test]

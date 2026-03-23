@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use crate::backup_export::output_plan::{
+    XunbakOutputPlan, XunbakSingleUpdatePlan, XunbakSplitOutputPlan, XunbakSplitUpdatePlan,
+};
 use crate::cli::{BackupCmd, VerifyCmd};
 use crate::output::{CliError, CliResult};
 use crate::xunbak::codec::{CompressionMode, parse_compression_arg};
@@ -48,9 +51,11 @@ pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
     };
 
     if container_exists(&container) {
-        let result =
-            ContainerWriter::update_with_progress(&container, root, &options, &mut progress)
-                .map_err(|err| CliError::new(2, err.to_string()))?;
+        let result = if options.split_size.is_none() {
+            update_single_file_container_with_staging(&container, root, &options, &mut progress)?
+        } else {
+            update_split_container_with_staging(&container, root, &options, &mut progress)?
+        };
         eprintln!(
             "Updated xunbak: {}  files={}  new_blobs={}",
             result.container_path.display(),
@@ -58,9 +63,49 @@ pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
             result.added_blob_count
         );
     } else {
-        let result =
-            ContainerWriter::backup_with_progress(&container, root, &options, &mut progress)
-                .map_err(|err| CliError::new(2, err.to_string()))?;
+        let result = if options.split_size.is_none() {
+            let plan =
+                XunbakOutputPlan::prepare(&container, crate::backup_formats::OverwriteMode::Fail)?;
+            let result = ContainerWriter::backup_with_progress(
+                plan.temp_path(),
+                root,
+                &options,
+                &mut progress,
+            )
+            .map_err(|err| CliError::new(2, err.to_string()));
+            match result {
+                Ok(result) => {
+                    plan.finalize()?;
+                    result
+                }
+                Err(err) => {
+                    let _ = plan.cleanup();
+                    return Err(err);
+                }
+            }
+        } else {
+            let plan = XunbakSplitOutputPlan::prepare(
+                &container,
+                crate::backup_formats::OverwriteMode::Fail,
+            )?;
+            let result = ContainerWriter::backup_with_progress(
+                plan.temp_base_path(),
+                root,
+                &options,
+                &mut progress,
+            )
+            .map_err(|err| CliError::new(2, err.to_string()));
+            match result {
+                Ok(result) => {
+                    plan.finalize()?;
+                    result
+                }
+                Err(err) => {
+                    let _ = plan.cleanup();
+                    return Err(err);
+                }
+            }
+        };
         eprintln!(
             "Created xunbak: {}  files={}  blobs={}",
             result.container_path.display(),
@@ -151,17 +196,29 @@ fn resolve_container_path(root: &Path, raw: &str) -> PathBuf {
 }
 
 fn parse_backup_options(args: &BackupCmd) -> Result<BackupOptions, CliError> {
-    if args.no_compress {
+    build_backup_options_from_raw(
+        args.compression.as_deref(),
+        args.split_size.as_deref(),
+        args.no_compress,
+    )
+}
+
+pub(crate) fn build_backup_options_from_raw(
+    compression: Option<&str>,
+    split_size: Option<&str>,
+    no_compress: bool,
+) -> Result<BackupOptions, CliError> {
+    if no_compress {
         return Ok(BackupOptions {
             codec: crate::xunbak::constants::Codec::NONE,
             zstd_level: 1,
-            split_size: parse_split_size(args.split_size.as_deref())?,
+            split_size: parse_split_size(split_size)?,
         });
     }
 
-    match args.compression.as_deref() {
+    match compression {
         None => Ok(BackupOptions {
-            split_size: parse_split_size(args.split_size.as_deref())?,
+            split_size: parse_split_size(split_size)?,
             ..BackupOptions::default()
         }),
         Some(raw) => {
@@ -169,27 +226,27 @@ fn parse_backup_options(args: &BackupCmd) -> Result<BackupOptions, CliError> {
                 CompressionMode::None => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::NONE,
                     zstd_level: 1,
-                    split_size: parse_split_size(args.split_size.as_deref())?,
+                    split_size: parse_split_size(split_size)?,
                 }),
                 CompressionMode::Zstd { level } => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::ZSTD,
                     zstd_level: level,
-                    split_size: parse_split_size(args.split_size.as_deref())?,
+                    split_size: parse_split_size(split_size)?,
                 }),
                 CompressionMode::Lz4 => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::LZ4,
                     zstd_level: 1,
-                    split_size: parse_split_size(args.split_size.as_deref())?,
+                    split_size: parse_split_size(split_size)?,
                 }),
                 CompressionMode::Lzma => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::LZMA,
                     zstd_level: 1,
-                    split_size: parse_split_size(args.split_size.as_deref())?,
+                    split_size: parse_split_size(split_size)?,
                 }),
                 CompressionMode::Auto => Ok(BackupOptions {
                     codec: crate::xunbak::constants::Codec::ZSTD,
                     zstd_level: 1,
-                    split_size: parse_split_size(args.split_size.as_deref())?,
+                    split_size: parse_split_size(split_size)?,
                 }),
             }
         }
@@ -213,6 +270,53 @@ fn estimate_total_files(root: &Path) -> usize {
         total
     }
     count(root)
+}
+
+fn update_single_file_container_with_staging(
+    container: &Path,
+    root: &Path,
+    options: &BackupOptions,
+    progress: &mut dyn FnMut(ProgressEvent),
+) -> CliResult<crate::xunbak::writer::UpdateResult> {
+    let plan = XunbakSingleUpdatePlan::prepare(container)?;
+    let result = ContainerWriter::update_with_progress(plan.work_path(), root, options, progress)
+        .map_err(|err| CliError::new(2, err.to_string()));
+    match result {
+        Ok(update_result) => {
+            plan.commit()?;
+            Ok(update_result)
+        }
+        Err(err) => {
+            let _ = plan.rollback();
+            Err(err)
+        }
+    }
+}
+
+fn update_split_container_with_staging(
+    container: &Path,
+    root: &Path,
+    options: &BackupOptions,
+    progress: &mut dyn FnMut(ProgressEvent),
+) -> CliResult<crate::xunbak::writer::UpdateResult> {
+    let plan = XunbakSplitUpdatePlan::prepare(container)?;
+    let result =
+        ContainerWriter::update_with_progress(plan.work_base_path(), root, options, progress)
+            .map_err(|err| CliError::new(2, err.to_string()));
+    match result {
+        Ok(update_result) => {
+            plan.commit()?;
+            Ok(crate::xunbak::writer::UpdateResult {
+                container_path: container.to_path_buf(),
+                added_blob_count: update_result.added_blob_count,
+                file_count: update_result.file_count,
+            })
+        }
+        Err(err) => {
+            let _ = plan.rollback();
+            Err(err)
+        }
+    }
 }
 
 fn parse_split_size(raw: Option<&str>) -> Result<Option<u64>, CliError> {

@@ -197,6 +197,7 @@ zstd = { version = "0.13", optional = true }
 ulid = { version = "1", optional = true }
 memchr  = { version = "2" }
 indexmap = { version = "2", features = ["std"] }
+sevenz-rust2 = { path = "refer/sevenz-rust2-main" }
 
 # —— Diff 模块依赖（feature = "diff"）——
 imara-diff             = { version = "0.2",  optional = true }
@@ -263,6 +264,11 @@ harness = false
 
 [[bench]]
 name = "xunbak_bench_divan"
+harness = false
+required-features = ["xunbak"]
+
+[[bench]]
+name = "backup_export_bench_divan"
 harness = false
 required-features = ["xunbak"]
 

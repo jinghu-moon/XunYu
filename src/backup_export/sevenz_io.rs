@@ -1,0 +1,314 @@
+use std::fs;
+use std::io::Cursor;
+use std::io::{Read, Seek, Write};
+use std::path::Path;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use sevenz_rust2::encoder_options::Lzma2Options;
+use sevenz_rust2::{
+    Archive, ArchiveEntry, ArchiveReader, ArchiveWriter, EncoderConfiguration, EncoderMethod,
+    Password, SourceReader,
+};
+
+use crate::backup_export::reader::open_entry_reader;
+use crate::backup_export::sevenz_segmented::{list_numbered_outputs, resolve_multivolume_base};
+use crate::backup_export::source::SourceEntry;
+use crate::output::CliError;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SevenZMethod {
+    Copy,
+    Lzma2,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SevenZWriteOptions {
+    pub solid: bool,
+    pub method: SevenZMethod,
+    pub level: u32,
+    pub sidecar: Option<Vec<u8>>,
+}
+
+impl Default for SevenZWriteOptions {
+    fn default() -> Self {
+        Self {
+            solid: false,
+            method: SevenZMethod::Lzma2,
+            level: 1,
+            sidecar: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SevenZWriteSummary {
+    pub entry_count: usize,
+    pub bytes_in: u64,
+}
+
+pub(crate) fn write_entries_to_7z(
+    entries: &[&SourceEntry],
+    destination: &Path,
+    options: &SevenZWriteOptions,
+) -> Result<SevenZWriteSummary, CliError> {
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            CliError::new(
+                1,
+                format!("Create 7z parent failed {}: {err}", parent.display()),
+            )
+        })?;
+    }
+
+    let writer = ArchiveWriter::create(destination)
+        .map_err(|err| CliError::new(1, format!("Create 7z failed: {err}")))?;
+    let writer = write_entries_with_writer(entries, writer, options)?;
+    writer
+        .finish()
+        .map_err(|err| CliError::new(1, format!("Finalize 7z failed: {err}")))?;
+
+    Ok(SevenZWriteSummary {
+        entry_count: entries.len(),
+        bytes_in: entries.iter().map(|entry| entry.size).sum(),
+    })
+}
+
+pub(crate) fn write_entries_to_7z_split(
+    entries: &[&SourceEntry],
+    destination_base: &Path,
+    split_size: u64,
+    options: &SevenZWriteOptions,
+) -> Result<SevenZWriteSummary, CliError> {
+    if let Some(parent) = destination_base.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            CliError::new(
+                1,
+                format!("Create 7z split parent failed {}: {err}", parent.display()),
+            )
+        })?;
+    }
+
+    let temp_single = destination_base.with_extension("tmp.single.7z");
+    if temp_single.exists() {
+        let _ = fs::remove_file(&temp_single);
+    }
+    let summary = write_entries_to_7z(entries, &temp_single, options)?;
+    let split_result = split_file_to_volumes(&temp_single, destination_base, split_size);
+    let _ = fs::remove_file(&temp_single);
+    split_result?;
+    Ok(summary)
+}
+
+fn write_entries_with_writer<W: Write + Seek>(
+    entries: &[&SourceEntry],
+    mut writer: ArchiveWriter<W>,
+    options: &SevenZWriteOptions,
+) -> Result<ArchiveWriter<W>, CliError> {
+    writer.set_content_methods(vec![method_config(options.method, options.level)]);
+
+    for directory in collect_directory_entries(entries, options.sidecar.is_some()) {
+        writer
+            .push_archive_entry::<&[u8]>(ArchiveEntry::new_directory(&directory), None)
+            .map_err(|err| CliError::new(1, format!("Write 7z directory failed {directory}: {err}")))?;
+    }
+
+    if options.solid {
+        let archive_entries: Vec<ArchiveEntry> = entries.iter().map(|entry| build_archive_entry(entry)).collect();
+        let readers: Result<Vec<SourceReader<_>>, CliError> = entries
+            .iter()
+            .map(|entry| open_entry_reader(entry).map(SourceReader::from))
+            .collect();
+        writer
+            .push_archive_entries(archive_entries, readers?)
+            .map_err(|err| CliError::new(1, format!("Write solid 7z failed: {err}")))?;
+    } else {
+        for entry in entries {
+            writer
+                .push_archive_entry(build_archive_entry(entry), Some(open_entry_reader(entry)?))
+                .map_err(|err| CliError::new(1, format!("Write 7z entry failed {}: {err}", entry.path)))?;
+        }
+    }
+
+    if let Some(sidecar) = &options.sidecar {
+        writer
+            .push_archive_entry(
+                ArchiveEntry::new_file(crate::backup_export::sidecar::SIDECAR_PATH),
+                Some(Cursor::new(sidecar.clone())),
+            )
+            .map_err(|err| CliError::new(1, format!("Write 7z sidecar failed: {err}")))?;
+    }
+    Ok(writer)
+}
+
+pub(crate) fn list_7z_entries(path: &Path) -> Result<Vec<SourceEntry>, CliError> {
+    if resolve_multivolume_base(path).is_some() {
+        let temp = materialize_split_archive(path)?;
+        let reader = ArchiveReader::open(&temp, Password::empty())
+            .map_err(|err| CliError::new(1, format!("Read split 7z failed {}: {err}", path.display())))?;
+        let result = collect_entries_from_archive(reader.archive(), path);
+        let _ = fs::remove_file(&temp);
+        return result;
+    }
+
+    let reader = ArchiveReader::open(path, Password::empty())
+        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
+    collect_entries_from_archive(reader.archive(), path)
+}
+
+pub(crate) fn read_7z_file(src: &Path, name: &str) -> Result<Vec<u8>, CliError> {
+    if resolve_multivolume_base(src).is_some() {
+        let temp = materialize_split_archive(src)?;
+        let mut reader = ArchiveReader::open(&temp, Password::empty())
+            .map_err(|err| CliError::new(1, format!("Read split 7z failed {}: {err}", src.display())))?;
+        let result = reader
+            .read_file(name)
+            .map_err(|err| CliError::new(1, format!("Read 7z file failed {name}: {err}")));
+        let _ = fs::remove_file(&temp);
+        return result;
+    }
+    let mut reader = ArchiveReader::open(src, Password::empty())
+        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", src.display())))?;
+    reader
+        .read_file(name)
+        .map_err(|err| CliError::new(1, format!("Read 7z file failed {name}: {err}")))
+}
+
+fn collect_entries_from_archive(
+    archive: &Archive,
+    path: &Path,
+) -> Result<Vec<SourceEntry>, CliError> {
+    let mut entries = Vec::new();
+    for entry in &archive.files {
+        if entry.is_directory() || !entry.has_stream() {
+            continue;
+        }
+        let modified = entry.has_last_modified_date.then(|| {
+            crate::backup_export::source::system_time_to_unix_ns(entry.last_modified_date().into())
+        });
+        let created = entry.has_creation_date.then(|| {
+            crate::backup_export::source::system_time_to_unix_ns(entry.creation_date().into())
+        });
+        let entry_path = entry.name().replace('\\', "/");
+        if crate::commands::restore_core::is_backup_internal_name(&entry_path) {
+            continue;
+        }
+        entries.push(SourceEntry {
+            path: entry_path,
+            source_path: Some(path.to_path_buf()),
+            size: entry.size(),
+            mtime_ns: modified,
+            created_time_ns: created,
+            win_attributes: if entry.has_windows_attributes {
+                entry.windows_attributes()
+            } else {
+                0
+            },
+            content_hash: None,
+            kind: crate::backup_export::source::SourceKind::SevenZArtifact,
+        });
+    }
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(entries)
+}
+
+fn materialize_split_archive(path: &Path) -> Result<std::path::PathBuf, CliError> {
+    let base = resolve_multivolume_base(path).ok_or_else(|| {
+        CliError::new(1, format!("Split 7z base path not found: {}", path.display()))
+    })?;
+    let temp = std::env::temp_dir().join(format!("xun-split-7z-{}", uuid::Uuid::new_v4()));
+    let mut output = fs::File::create(&temp).map_err(|err| {
+        CliError::new(
+            1,
+            format!("Create temporary split 7z file failed {}: {err}", temp.display()),
+        )
+    })?;
+    for volume in list_numbered_outputs(&base).map_err(|err| {
+        CliError::new(1, format!("List split 7z volumes failed {}: {err}", base.display()))
+    })? {
+        let mut input = fs::File::open(&volume).map_err(|err| {
+            CliError::new(1, format!("Open split 7z volume failed {}: {err}", volume.display()))
+        })?;
+        std::io::copy(&mut input, &mut output).map_err(|err| {
+            CliError::new(
+                1,
+                format!("Concatenate split 7z volume failed {}: {err}", volume.display()),
+            )
+        })?;
+    }
+    Ok(temp)
+}
+
+fn method_config(method: SevenZMethod, level: u32) -> EncoderConfiguration {
+    match method {
+        SevenZMethod::Copy => EncoderConfiguration::new(EncoderMethod::COPY),
+        SevenZMethod::Lzma2 => Lzma2Options::from_level(level).into(),
+    }
+}
+
+fn collect_directory_entries(entries: &[&SourceEntry], include_sidecar_root: bool) -> Vec<String> {
+    let mut directories = std::collections::BTreeSet::new();
+    for entry in entries {
+        let normalized = entry.path.replace('\\', "/");
+        let mut current = String::new();
+        for segment in normalized.split('/').filter(|segment| !segment.is_empty()) {
+            if !current.is_empty() {
+                current.push('/');
+            }
+            current.push_str(segment);
+            directories.insert(format!("{current}/"));
+        }
+        directories.remove(&format!("{normalized}/"));
+    }
+    if include_sidecar_root {
+        directories.insert("__xunyu__/".to_string());
+    }
+    directories.into_iter().collect()
+}
+
+fn build_archive_entry(entry: &SourceEntry) -> ArchiveEntry {
+    let mut archive_entry = ArchiveEntry::new_file(&entry.path.replace('\\', "/"));
+    if let Some(created_time_ns) = entry.created_time_ns.and_then(system_time_from_unix_ns)
+        && let Ok(value) = created_time_ns.try_into()
+    {
+        archive_entry.creation_date = value;
+        archive_entry.has_creation_date = true;
+    }
+    if let Some(mtime_ns) = entry.mtime_ns.and_then(system_time_from_unix_ns)
+        && let Ok(value) = mtime_ns.try_into()
+    {
+        archive_entry.last_modified_date = value;
+        archive_entry.has_last_modified_date = true;
+    }
+    if entry.win_attributes != 0 {
+        archive_entry.has_windows_attributes = true;
+        archive_entry.windows_attributes = entry.win_attributes;
+    }
+    archive_entry
+}
+
+fn system_time_from_unix_ns(value: u64) -> Option<SystemTime> {
+    UNIX_EPOCH.checked_add(Duration::from_nanos(value))
+}
+
+fn split_file_to_volumes(source: &Path, base_path: &Path, split_size: u64) -> Result<(), CliError> {
+    let mut input = fs::File::open(source).map_err(|err| {
+        CliError::new(1, format!("Open temporary 7z failed {}: {err}", source.display()))
+    })?;
+    let mut index = 1u32;
+    let mut buffer = vec![0u8; split_size as usize];
+
+    loop {
+        let read = input.read(&mut buffer).map_err(|err| {
+            CliError::new(1, format!("Read temporary 7z failed {}: {err}", source.display()))
+        })?;
+        if read == 0 {
+            break;
+        }
+        let volume = format!("{}.{index:03}", base_path.display());
+        fs::write(&volume, &buffer[..read]).map_err(|err| {
+            CliError::new(1, format!("Write split 7z volume failed {volume}: {err}"))
+        })?;
+        index += 1;
+    }
+    Ok(())
+}

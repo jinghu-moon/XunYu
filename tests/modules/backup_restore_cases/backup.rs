@@ -1,6 +1,9 @@
 use crate::common::*;
+use chrono::TimeZone;
 use serde_json::Value;
 use std::fs;
+use std::io::Write;
+use std::os::windows::fs::MetadataExt;
 use std::os::windows::io::AsRawHandle;
 use std::thread;
 use std::time::Duration;
@@ -35,6 +38,37 @@ fn same_file_index(path_a: &std::path::Path, path_b: &std::path::Path) -> bool {
     info_a == info_b
 }
 
+fn set_last_write_time_utc(path: &std::path::Path, year: u16, month: u16, day: u16) {
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::Storage::FileSystem::SetFileTime;
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+    let ns = chrono::Utc
+        .with_ymd_and_hms(year as i32, month as u32, day as u32, 1, 2, 4)
+        .single()
+        .unwrap()
+        .timestamp_nanos_opt()
+        .unwrap() as i128;
+    let filetime = (ns / 100 + 116_444_736_000_000_000) as u64;
+    let modified = FILETIME {
+        dwLowDateTime: filetime as u32,
+        dwHighDateTime: (filetime >> 32) as u32,
+    };
+    let ok = unsafe {
+        SetFileTime(
+            file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE,
+            std::ptr::null(),
+            std::ptr::null(),
+            &modified,
+        )
+    };
+    assert_ne!(ok, 0, "SetFileTime failed for {}", path.display());
+}
+
 #[test]
 fn backup_creates_backup_folder() {
     let env = TestEnv::new();
@@ -65,6 +99,2222 @@ fn backup_creates_backup_folder() {
     let first = entry.path();
     assert!(first.is_dir());
     assert!(first.join("a.txt").exists());
+}
+
+#[test]
+fn backup_create_subcommand_without_format_uses_legacy_directory_backup() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "hi").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "create", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let backups = root.join("A_backups");
+    let entry = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .expect("backup v1 not found");
+    assert!(entry.path().join("a.txt").exists());
+}
+
+#[test]
+fn backup_create_zip_writes_standard_zip_to_project_relative_output() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
+
+    let output = root.join("artifact.zip");
+    assert!(output.exists());
+    let file = fs::File::open(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut entry = archive.by_name("src/main.rs").unwrap();
+    let mut content = String::new();
+    std::io::Read::read_to_string(&mut entry, &mut content).unwrap();
+    assert_eq!(content, "fn main() {}");
+    drop(entry);
+    let mut sidecar = archive.by_name("__xunyu__/export_manifest.json").unwrap();
+    let mut sidecar_text = String::new();
+    std::io::Read::read_to_string(&mut sidecar, &mut sidecar_text).unwrap();
+    let value: Value = serde_json::from_str(&sidecar_text).unwrap();
+    assert_eq!(value["format"], "zip");
+    assert!(value["entries"].as_array().unwrap().len() >= 2);
+}
+
+#[test]
+fn backup_create_zip_no_sidecar_omits_export_manifest() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_no_sidecar");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--no-sidecar",
+    ]));
+
+    let file = fs::File::open(root.join("artifact.zip")).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    assert!(archive.by_name("__xunyu__/export_manifest.json").is_err());
+}
+
+#[test]
+fn backup_create_zip_json_reports_extended_summary_fields() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_json");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["status"], "ok");
+    assert_eq!(json["dry_run"], false);
+    assert_eq!(json["selected"], 1);
+    assert_eq!(json["written"], 1);
+    assert_eq!(json["skipped"], 0);
+    assert_eq!(json["overwrite_count"], 0);
+    assert_eq!(json["verify_source"], "off");
+    assert_eq!(json["verify_output"], "off");
+    assert!(json["bytes_out"].as_u64().unwrap() > 0);
+    assert!(json["duration_ms"].as_u64().is_some());
+    assert_eq!(json["outputs"][0], root.join("artifact.zip").to_string_lossy().to_string());
+}
+
+#[test]
+fn backup_create_rejects_invalid_zip_method_with_fix_hint() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_invalid_zip_method");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--method",
+        "lzma2",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid for zip"));
+    assert!(stderr.contains("Fix:"));
+}
+
+#[test]
+fn top_level_export_command_still_exists() {
+    let env = TestEnv::new();
+    let out = run_raw(env.cmd().args(["export", "--help"]));
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Export"));
+}
+
+#[test]
+fn backup_create_zip_dry_run_does_not_create_output() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_dry_run");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--dry-run",
+    ]));
+    assert!(!root.join("artifact.zip").exists());
+}
+
+#[test]
+fn backup_create_zip_write_failure_cleans_temp_output_and_does_not_publish_target() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_fail_cleanup");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_FAIL_AFTER_WRITE", "1")
+            .args([
+                "backup",
+                "create",
+                "-C",
+                root.to_str().unwrap(),
+                "--format",
+                "zip",
+                "-o",
+                "artifact.zip",
+            ]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("resume is not supported yet"));
+    assert!(!root.join("artifact.zip").exists());
+    assert!(!root.join("artifact.tmp.zip").exists());
+}
+
+#[test]
+fn backup_create_progress_always_emits_read_and_write_phases() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_progress");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--progress",
+        "always",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("progress: phase=read"));
+    assert!(stderr.contains("progress: phase=compress"));
+    assert!(stderr.contains("progress: phase=write"));
+}
+
+#[test]
+fn backup_create_does_not_attempt_xunbak_verify_on_source_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_create_no_preflight_verify");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("broken.xunbak"), b"not-a-container").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "broken.xunbak" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
+
+    assert!(root.join("artifact.zip").exists());
+}
+
+#[test]
+fn backup_create_zip_existing_output_fails() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_fail");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "hi").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    fs::write(root.join("artifact.zip"), b"existing").unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output already exists"));
+}
+
+#[test]
+fn backup_create_dir_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_dir");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+    fs::write(root.join("skip.log"), "skip").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": [ "*.log" ]
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        "artifact_dir",
+    ]));
+
+    let output = root.join("artifact_dir");
+    assert_eq!(
+        fs::read_to_string(output.join("src").join("main.rs")).unwrap(),
+        "fn main() {}"
+    );
+    assert_eq!(
+        fs::read_to_string(output.join("README.md")).unwrap(),
+        "readme"
+    );
+    assert!(!output.join("skip.log").exists());
+    let sidecar = output.join("__xunyu__").join("export_manifest.json");
+    let value: Value = serde_json::from_slice(&fs::read(&sidecar).unwrap()).unwrap();
+    assert_eq!(value["format"], "dir");
+    assert!(value["entries"].as_array().unwrap().len() >= 2);
+}
+
+#[test]
+fn backup_create_dir_output_rejects_source_directory_as_target() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_dir_same_target");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "hi").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        ".",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output must differ from source directory"));
+}
+
+#[test]
+fn backup_create_dir_output_preserves_mtime_and_readonly_attribute() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_dir_metadata");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("readonly.txt");
+    fs::write(&source, "hello").unwrap();
+    set_last_write_time_utc(&source, 2024, 1, 2);
+
+    let mut permissions = fs::metadata(&source).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&source, permissions).unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "readonly.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        "artifact_dir",
+    ]));
+
+    let output = root.join("artifact_dir").join("readonly.txt");
+    let source_meta = fs::metadata(&source).unwrap();
+    let output_meta = fs::metadata(&output).unwrap();
+    assert_eq!(source_meta.last_write_time(), output_meta.last_write_time());
+    assert_eq!(
+        source_meta.file_attributes() & 0x0000_0001,
+        output_meta.file_attributes() & 0x0000_0001
+    );
+}
+
+#[test]
+fn backup_create_7z_writes_standard_archive_to_project_relative_output() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    let output = root.join("artifact.7z");
+    assert!(output.exists());
+    let mut archive =
+        sevenz_rust2::ArchiveReader::open(&output, sevenz_rust2::Password::empty()).unwrap();
+    let content = archive.read_file("src/main.rs").unwrap();
+    assert_eq!(String::from_utf8(content).unwrap(), "fn main() {}");
+    let sidecar = archive.read_file("__xunyu__/export_manifest.json").unwrap();
+    let value: Value = serde_json::from_slice(&sidecar).unwrap();
+    assert_eq!(value["format"], "7z");
+    assert!(value["entries"].as_array().unwrap().len() >= 2);
+}
+
+#[test]
+fn backup_convert_directory_artifact_to_7z_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_skeleton");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        env.root.join("out.7z").to_str().unwrap(),
+        "--glob",
+        "src/*.rs",
+    ]));
+
+    let output = env.root.join("out.7z");
+    assert!(output.exists());
+    let mut archive =
+        sevenz_rust2::ArchiveReader::open(&output, sevenz_rust2::Password::empty()).unwrap();
+    assert!(archive.read_file("README.md").is_err());
+    let content = archive.read_file("src/main.rs").unwrap();
+    assert_eq!(String::from_utf8(content).unwrap(), "fn main() {}");
+}
+
+#[test]
+fn backup_convert_7z_artifact_to_directory_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_7z_to_dir");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    let output = env.root.join("out_dir");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.7z").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--file",
+        "README.md",
+    ]));
+
+    assert_eq!(fs::read_to_string(output.join("README.md")).unwrap(), "readme");
+    assert!(!output.join("src").join("main.rs").exists());
+}
+
+#[test]
+fn backup_convert_zip_artifact_to_7z_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    writer.start_file("README.md", options).unwrap();
+    writer.write_all(b"readme").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("from_zip.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--file",
+        "README.md",
+    ]));
+
+    let mut archive =
+        sevenz_rust2::ArchiveReader::open(&output, sevenz_rust2::Password::empty()).unwrap();
+    assert!(archive.read_file("src/main.rs").is_err());
+    let content = archive.read_file("README.md").unwrap();
+    assert_eq!(String::from_utf8(content).unwrap(), "readme");
+}
+
+#[test]
+fn backup_convert_to_7z_no_sidecar_omits_export_manifest() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_to_7z_no_sidecar");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let output = env.root.join("no_sidecar.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--no-sidecar",
+    ]));
+
+    let mut archive =
+        sevenz_rust2::ArchiveReader::open(&output, sevenz_rust2::Password::empty()).unwrap();
+    assert!(archive.read_file("__xunyu__/export_manifest.json").is_err());
+}
+
+#[test]
+fn backup_convert_7z_artifact_to_zip_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_7z_to_zip");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    let output = env.root.join("from_7z.zip");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.7z").to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--file",
+        "b.txt",
+    ]));
+
+    let file = fs::File::open(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    assert!(archive.by_name("a.txt").is_err());
+    let mut entry = archive.by_name("b.txt").unwrap();
+    let mut content = String::new();
+    std::io::Read::read_to_string(&mut entry, &mut content).unwrap();
+    assert_eq!(content, "bbb");
+}
+
+#[test]
+fn backup_convert_7z_output_method_copy_is_applied() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("README.md", options).unwrap();
+    writer.write_all(b"readme").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("copy.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "copy",
+    ]));
+
+    let archive =
+        sevenz_rust2::ArchiveReader::open(&output, sevenz_rust2::Password::empty()).unwrap();
+    let entry = archive
+        .archive()
+        .files
+        .iter()
+        .find(|entry| entry.name() == "README.md")
+        .unwrap();
+    assert_eq!(entry.size(), 6);
+    assert_eq!(entry.compressed_size, 6);
+}
+
+#[test]
+fn backup_create_7z_defaults_to_lzma2_and_non_solid() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_defaults");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa aaa aaa aaa aaa aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb bbb bbb bbb bbb bbb").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    let archive = sevenz_rust2::ArchiveReader::open(
+        root.join("artifact.7z"),
+        sevenz_rust2::Password::empty(),
+    )
+    .unwrap();
+    assert!(!archive.archive().is_solid);
+    let first_block = archive.archive().blocks.first().unwrap();
+    let first_coder = first_block.ordered_coder_iter().next().unwrap().1;
+    let method = sevenz_rust2::EncoderMethod::by_id(first_coder.encoder_method_id()).unwrap();
+    assert_eq!(method, sevenz_rust2::EncoderMethod::LZMA2);
+}
+
+#[test]
+fn backup_create_7z_preserves_mtime_and_readonly_metadata_when_converted_to_dir() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_metadata");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("readonly.txt");
+    fs::write(&source, "hello").unwrap();
+    set_last_write_time_utc(&source, 2024, 1, 2);
+
+    let mut permissions = fs::metadata(&source).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&source, permissions).unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "readonly.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+    ]));
+
+    let output = env.root.join("restored_from_7z_dir");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.7z").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+    ]));
+
+    let source_meta = fs::metadata(&source).unwrap();
+    let restored_meta = fs::metadata(output.join("readonly.txt")).unwrap();
+    assert_eq!(source_meta.last_write_time(), restored_meta.last_write_time());
+    assert_eq!(
+        source_meta.file_attributes() & 0x0000_0001,
+        restored_meta.file_attributes() & 0x0000_0001
+    );
+}
+
+#[test]
+fn backup_create_zip_uses_stored_for_precompressed_extension() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_precompressed");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("asset.zip"), b"pretend zip bytes").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "asset.zip" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
+
+    let file = fs::File::open(root.join("artifact.zip")).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let entry = archive.by_name("asset.zip").unwrap();
+    assert_eq!(entry.compression(), zip::CompressionMethod::Stored);
+}
+
+#[test]
+fn backup_create_7z_no_compress_uses_copy_for_payloads() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_copy");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("asset.zip"), b"pretend zip bytes").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "asset.zip" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--method",
+        "copy",
+    ]));
+
+    let archive =
+        sevenz_rust2::ArchiveReader::open(root.join("artifact.7z"), sevenz_rust2::Password::empty()).unwrap();
+    let entry = archive
+        .archive()
+        .files
+        .iter()
+        .find(|item| item.name() == "asset.zip")
+        .unwrap();
+    assert_eq!(entry.size(), entry.compressed_size);
+}
+
+#[test]
+fn backup_create_7z_split_creates_numbered_volumes_without_temp_artifacts() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_split");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(root.join("b.txt"), "b".repeat(1200)).unwrap();
+    fs::write(root.join("c.txt"), "c".repeat(1200)).unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt", "c.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--no-compress",
+        "--split-size",
+        "1400",
+    ]));
+
+    assert!(root.join("artifact.7z.001").exists());
+    assert!(root.join("artifact.7z.002").exists());
+    let temp_staged = fs::read_dir(&root)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .any(|name| name.contains("tmp.7z"));
+    assert!(!temp_staged, "temporary split 7z files should be cleaned up");
+}
+
+#[test]
+fn backup_convert_zip_artifact_to_split_7z_output_creates_numbered_volumes() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(&vec![b'a'; 1200]).unwrap();
+    writer.start_file("b.txt", options).unwrap();
+    writer.write_all(&vec![b'b'; 1200]).unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("split.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "copy",
+        "--split-size",
+        "1400",
+    ]));
+
+    assert!(env.root.join("split.7z.001").exists());
+    assert!(env.root.join("split.7z.002").exists());
+}
+
+#[test]
+fn backup_convert_split_7z_artifact_to_directory_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_split_7z_to_dir");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(root.join("b.txt"), "b".repeat(1200)).unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--no-compress",
+        "--split-size",
+        "1400",
+    ]));
+
+    let output = env.root.join("from_split_7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.7z").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--file",
+        "b.txt",
+    ]));
+
+    assert!(!output.join("a.txt").exists());
+    assert_eq!(fs::read_to_string(output.join("b.txt")).unwrap(), "b".repeat(1200));
+}
+
+#[test]
+fn backup_convert_split_7z_write_failure_cleans_temp_outputs_and_does_not_publish_target() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(&vec![b'a'; 1200]).unwrap();
+    writer.start_file("b.txt", options).unwrap();
+    writer.write_all(&vec![b'b'; 1200]).unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_FAIL_AFTER_WRITE", "1")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "7z",
+                "-o",
+                env.root.join("fail_split.7z").to_str().unwrap(),
+                "--method",
+                "copy",
+                "--split-size",
+                "1400",
+            ]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("resume is not supported yet"));
+    assert!(!env.root.join("fail_split.7z.001").exists());
+    assert!(!env.root.join("fail_split.tmp.7z.001").exists());
+}
+
+#[test]
+fn backup_convert_first_volume_7z_artifact_to_directory_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_first_volume_7z_to_dir");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(root.join("b.txt"), "b".repeat(1200)).unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--no-compress",
+        "--split-size",
+        "1400",
+    ]));
+
+    let output = env.root.join("from_first_volume_7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.7z.001").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--file",
+        "a.txt",
+    ]));
+
+    assert_eq!(fs::read_to_string(output.join("a.txt")).unwrap(), "a".repeat(1200));
+    assert!(!output.join("b.txt").exists());
+}
+
+#[test]
+fn backup_convert_rejects_invalid_7z_method() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        env.root.join("invalid.7z").to_str().unwrap(),
+        "--method",
+        "ppmd",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid for 7z"));
+}
+
+#[test]
+fn backup_create_7z_accepts_split_size_and_writes_first_volume() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_split_accept");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--split-size",
+        "2G",
+    ]));
+    assert!(root.join("artifact.7z.001").exists());
+}
+
+#[test]
+fn backup_create_list_outputs_selected_files_without_creating_backup() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_create_list");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+    fs::write(root.join("skip.log"), "skip").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": [ "*.log" ]
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "--list",
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["action"], "create");
+    assert_eq!(json["mode"], "list");
+    assert_eq!(json["format"], "zip");
+    assert_eq!(json["selected"], 2);
+    assert_eq!(
+        json["entries"],
+        serde_json::json!(["README.md", "src/main.rs"])
+    );
+    assert!(
+        !root.join("A_backups").exists(),
+        "--list should not create backup output"
+    );
+}
+
+#[test]
+fn backup_convert_list_lists_directory_artifact_without_creating_output() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_list_dir");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let output = env.root.join("preview.zip");
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--list",
+        "--json",
+        "--glob",
+        "src/*.rs",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["action"], "convert");
+    assert_eq!(json["mode"], "list");
+    assert_eq!(json["format"], "zip");
+    assert_eq!(json["selected"], 1);
+    assert_eq!(json["entries"], serde_json::json!(["src/main.rs"]));
+    assert!(!output.exists(), "--list should not create output files");
+}
+
+#[test]
+fn backup_convert_list_merges_file_glob_and_patterns_from() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_patterns");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+    fs::write(root.join("notes.txt"), "notes").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md", "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let patterns = env.root.join("patterns.txt");
+    fs::write(&patterns, "# comment\nsrc/*.rs\nREADME.md\n").unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        env.root.join("preview.zip").to_str().unwrap(),
+        "--list",
+        "--json",
+        "--file",
+        "notes.txt",
+        "--patterns-from",
+        patterns.to_str().unwrap(),
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["selected"], 3);
+    assert_eq!(
+        json["entries"],
+        serde_json::json!(["README.md", "notes.txt", "src/main.rs"])
+    );
+}
+
+#[test]
+fn backup_convert_list_lists_zip_artifact_without_creating_output() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    writer.start_file("README.md", options).unwrap();
+    writer.write_all(b"readme").unwrap();
+    writer.start_file(".bak-meta.json", options).unwrap();
+    writer.write_all(b"{}").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("restored");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--list",
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["selected"], 2);
+    assert_eq!(
+        json["entries"],
+        serde_json::json!(["README.md", "src/main.rs"])
+    );
+    assert!(!output.exists(), "--list should not materialize output");
+}
+
+#[test]
+fn backup_convert_rejects_split_size_for_dir_output_before_preview() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        env.root.join("out").to_str().unwrap(),
+        "--list",
+        "--split-size",
+        "2G",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("backup convert --split-size is invalid for dir output"));
+}
+
+#[test]
+fn backup_convert_parameter_error_exits_with_code_2() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_raw(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        env.root.join("out").to_str().unwrap(),
+        "--split-size",
+        "2G",
+    ]));
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Fix:"));
+}
+
+#[test]
+fn backup_convert_verify_failure_exits_with_code_1() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_raw(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "truncate")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "zip",
+                "-o",
+                env.root.join("verify_fail.zip").to_str().unwrap(),
+            ]),
+    );
+    assert_eq!(out.status.code(), Some(1));
+}
+
+#[test]
+fn backup_create_success_exits_with_code_0() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_exit_code_success");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_raw(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
+    assert_eq!(out.status.code(), Some(0));
+}
+
+#[test]
+fn backup_convert_write_failure_exits_with_code_1() {
+    let env = TestEnv::new();
+    let missing = env.root.join("missing.zip");
+    let output = env.root.join("out.zip");
+
+    let out = run_raw(env.cmd().args([
+        "backup",
+        "convert",
+        missing.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+    ]));
+    assert_eq!(out.status.code(), Some(1));
+}
+
+#[test]
+fn backup_convert_json_reports_write_failed_status() {
+    let env = TestEnv::new();
+    let missing = env.root.join("missing.zip");
+    let output = env.root.join("out.zip");
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        missing.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["status"], "write_failed");
+}
+
+#[test]
+fn backup_convert_rejects_encrypt_header_without_password() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        env.root.join("out.7z").to_str().unwrap(),
+        "--list",
+        "--encrypt-header",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("backup convert --encrypt-header requires --password"));
+}
+
+#[test]
+fn backup_convert_directory_artifact_to_directory_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_dir_to_dir");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let output = env.root.join("converted_dir");
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--glob",
+        "src/*.rs",
+    ]));
+
+    assert_eq!(
+        fs::read_to_string(output.join("src").join("main.rs")).unwrap(),
+        "fn main() {}"
+    );
+    assert!(!output.join("README.md").exists());
+}
+
+#[test]
+fn backup_convert_zip_artifact_to_directory_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    writer.start_file("README.md", options).unwrap();
+    writer.write_all(b"readme").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("zip_to_dir");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--file",
+        "README.md",
+    ]));
+
+    assert_eq!(
+        fs::read_to_string(output.join("README.md")).unwrap(),
+        "readme"
+    );
+    assert!(!output.join("src").join("main.rs").exists());
+}
+
+#[test]
+fn backup_convert_directory_output_rejects_existing_output_when_overwrite_fail() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("exists");
+    fs::create_dir_all(&output).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--overwrite",
+        "fail",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output already exists"));
+}
+
+#[test]
+fn backup_convert_directory_output_replace_removes_old_files_and_writes_new_selection() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("fresh.txt", options).unwrap();
+    writer.write_all(b"fresh").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("replace_out");
+    fs::create_dir_all(&output).unwrap();
+    fs::write(output.join("stale.txt"), "stale").unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--overwrite",
+        "replace",
+    ]));
+
+    assert!(!output.join("stale.txt").exists());
+    assert_eq!(
+        fs::read_to_string(output.join("fresh.txt")).unwrap(),
+        "fresh"
+    );
+}
+
+#[test]
+fn backup_convert_directory_output_json_summary_reports_written_files() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("json_out");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["action"], "convert");
+    assert_eq!(json["status"], "ok");
+    assert_eq!(json["format"], "dir");
+    assert_eq!(json["selected"], 1);
+    assert_eq!(json["written"], 1);
+    assert_eq!(
+        fs::read_to_string(output.join("src").join("main.rs")).unwrap(),
+        "fn main() {}"
+    );
+}
+
+#[test]
+fn backup_convert_directory_artifact_to_zip_output_writes_selected_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_dir_to_zip");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}").unwrap();
+    fs::write(root.join("README.md"), "readme").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "src", "README.md" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let output = env.root.join("converted.zip");
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--glob",
+        "src/*.rs",
+    ]));
+
+    let file = fs::File::open(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut entry = archive.by_name("src/main.rs").unwrap();
+    let mut content = String::new();
+    std::io::Read::read_to_string(&mut entry, &mut content).unwrap();
+    drop(entry);
+    assert_eq!(content, "fn main() {}");
+    assert!(archive.by_name("README.md").is_err());
+}
+
+#[test]
+fn backup_convert_zip_output_replace_overwrites_existing_file() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("fresh.txt", options).unwrap();
+    writer.write_all(b"fresh").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("existing.zip");
+    fs::write(&output, b"stale").unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--overwrite",
+        "replace",
+    ]));
+
+    let file = fs::File::open(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut entry = archive.by_name("fresh.txt").unwrap();
+    let mut content = String::new();
+    std::io::Read::read_to_string(&mut entry, &mut content).unwrap();
+    assert_eq!(content, "fresh");
+}
+
+#[test]
+fn backup_convert_zip_output_json_summary_reports_written_files() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("json.zip");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["action"], "convert");
+    assert_eq!(json["status"], "ok");
+    assert_eq!(json["format"], "zip");
+    assert_eq!(json["selected"], 1);
+    assert_eq!(json["written"], 1);
+    assert_eq!(json["skipped"], 0);
+    assert_eq!(json["overwrite_count"], 0);
+    assert_eq!(json["verify_source"], "quick");
+    assert_eq!(json["verify_output"], "on");
+    assert!(json["duration_ms"].as_u64().is_some());
+    assert!(json["bytes_out"].as_u64().unwrap() > 0);
+    assert_eq!(json["outputs"][0], output.to_string_lossy().to_string());
+    assert!(output.exists());
+}
+
+#[test]
+fn backup_convert_list_json_reports_extended_summary_fields() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("list.zip");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--list",
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["mode"], "list");
+    assert_eq!(json["dry_run"], false);
+    assert_eq!(json["verify_source"], "quick");
+    assert_eq!(json["verify_output"], "on");
+    assert_eq!(json["bytes_out"], 0);
+    assert_eq!(json["outputs"].as_array().unwrap().len(), 0);
+    assert!(json["duration_ms"].as_u64().is_some());
+}
+
+#[test]
+fn backup_convert_dry_run_json_reports_extended_summary_fields_without_output() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("src/main.rs", options).unwrap();
+    writer.write_all(b"fn main() {}").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("dry_run.zip");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--dry-run",
+        "--json",
+    ]));
+    let json: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(json["mode"], "dry_run");
+    assert_eq!(json["dry_run"], true);
+    assert_eq!(json["verify_source"], "quick");
+    assert_eq!(json["verify_output"], "on");
+    assert_eq!(json["bytes_out"], 0);
+    assert_eq!(json["outputs"].as_array().unwrap().len(), 0);
+    assert!(!output.exists());
+}
+
+#[test]
+fn backup_convert_zip_output_method_stored_is_applied() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_method_stored");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "hello hello hello hello").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let output = env.root.join("stored_method.zip");
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "stored",
+    ]));
+
+    let file = fs::File::open(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let zipped = archive.by_name("notes.txt").unwrap();
+    assert_eq!(zipped.compression(), zip::CompressionMethod::Stored);
+}
+
+#[test]
+fn backup_convert_zip_output_defaults_to_deflated_for_text_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_method_default");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "hello hello hello hello").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let output = env.root.join("default_method.zip");
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        artifact.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+    ]));
+
+    let file = fs::File::open(&output).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let zipped = archive.by_name("notes.txt").unwrap();
+    assert_eq!(zipped.compression(), zip::CompressionMethod::Deflated);
+}
+
+#[test]
+fn backup_convert_rejects_invalid_zip_method() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    for method in ["lzma2", "bzip2", "ppmd"] {
+        let out = run_err(env.cmd().args([
+            "backup",
+            "convert",
+            zip_path.to_str().unwrap(),
+            "--format",
+            "zip",
+            "-o",
+            env.root.join(format!("{method}.zip")).to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("invalid for zip"));
+        assert!(stderr.contains("Fix:"));
+    }
+}
+
+#[test]
+fn backup_convert_zip_output_verify_on_detects_corrupted_postwrite_output() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("verify_fail.zip");
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "truncate")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "zip",
+                "-o",
+                output.to_str().unwrap(),
+            ]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output verify failed"));
+}
+
+#[test]
+fn backup_convert_zip_output_verify_off_skips_corrupted_postwrite_output_check() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("verify_off.zip");
+    run_ok(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "truncate")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "zip",
+                "-o",
+                output.to_str().unwrap(),
+                "--verify-output",
+                "off",
+            ]),
+    );
+    assert!(output.exists());
+}
+
+#[test]
+fn backup_convert_progress_always_emits_verify_read_write_and_verify_output_phases() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        env.root.join("progress.7z").to_str().unwrap(),
+        "--progress",
+        "always",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("progress: phase=verify_source"));
+    assert!(stderr.contains("progress: phase=read"));
+    assert!(stderr.contains("progress: phase=compress"));
+    assert!(stderr.contains("progress: phase=write"));
+    assert!(stderr.contains("progress: phase=verify_output"));
+}
+
+#[test]
+fn backup_convert_7z_output_verify_on_detects_corrupted_postwrite_output() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("verify_fail.7z");
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "truncate")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "7z",
+                "-o",
+                output.to_str().unwrap(),
+            ]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output verify failed"));
+}
+
+#[test]
+fn backup_convert_7z_output_verify_off_skips_corrupted_postwrite_output_check() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("verify_off.7z");
+    run_ok(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "truncate")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "7z",
+                "-o",
+                output.to_str().unwrap(),
+                "--verify-output",
+                "off",
+            ]),
+    );
+    assert!(output.exists());
 }
 
 #[test]

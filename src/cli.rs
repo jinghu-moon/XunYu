@@ -56,7 +56,9 @@ pub use alias::{
 mod restore;
 #[cfg(feature = "xunbak")]
 mod verify;
-pub use backup::{BackupCmd, BackupSubCommand};
+pub use backup::{
+    BackupCmd, BackupConvertCmd, BackupCreateCmd, BackupRestoreCmd, BackupSubCommand,
+};
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
 pub use bookmarks::{

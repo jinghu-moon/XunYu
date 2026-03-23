@@ -8,6 +8,7 @@
 - `Bak-Restore-Min-Risk-Refactor-Plan.md`：`bak/restore` 最小风险重构方案（已完成实施，正文保留为方案记录）。
 - `Single-File-Xunbak-Design.md`：单文件 `.xunbak` 容器的完整设计方案，覆盖增量、分卷、压缩算法与 compact。
 - `Xunbak-Tasks.md`：`.xunbak` 容器 TDD 分阶段任务清单（Phase 0-17），对应 `Single-File-Xunbak-Design.md`。
+- `Xunbak-7zip-Compat.md`：`.xunbak` 与 7-Zip 兼容方案对比（插件 DLL / export / fork），含实现草案。
 - `File-Unlock-Protection-Encryption-Plan.md` / `Phase-Tasks.md`：文件能力总体方案与阶段执行。
 - `Dev-Test.md` / `Test-Env.md` / `Tests-List.md` / `Tests-Refactor.md`：开发测试入口、环境与测试策略。
 - `Review.txt`：评审记录。
