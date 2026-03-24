@@ -12,6 +12,26 @@ constexpr uint32_t kSeekOriginStart = 0;
 constexpr uint32_t kSeekOriginCurrent = 1;
 constexpr uint32_t kSeekOriginEnd = 2;
 
+struct PropertyDescriptor {
+  const wchar_t *name;
+  PROPID prop_id;
+  VARTYPE var_type;
+};
+
+constexpr PropertyDescriptor kItemPropertyTable[] = {
+    {L"Path", kpidPath, VT_BSTR},
+    {L"Size", kpidSize, VT_UI8},
+    {L"Packed Size", kpidPackSize, VT_UI8},
+    {L"Modified", kpidMTime, VT_FILETIME},
+    {L"Created", kpidCTime, VT_FILETIME},
+    {L"Attributes", kpidAttrib, VT_UI4},
+};
+
+constexpr PropertyDescriptor kArchivePropertyTable[] = {
+    {L"Read Only", kpidReadOnly, VT_BOOL},
+    {L"Volumes", kpidNumVolumes, VT_UI4},
+};
+
 HRESULT MapCoreStatus(int32_t status) noexcept {
   switch (status) {
     case XUNBAK_OK:
@@ -58,6 +78,22 @@ HRESULT ReadAll(IInStream *stream, std::vector<uint8_t> *out) noexcept {
     }
     out->insert(out->end(), chunk.begin(), chunk.begin() + processed);
   }
+  return S_OK;
+}
+
+HRESULT CopyPropertyDescriptor(const PropertyDescriptor &descriptor,
+                               BSTR *name,
+                               PROPID *propID,
+                               VARTYPE *varType) noexcept {
+  if (!name || !propID || !varType) {
+    return E_INVALIDARG;
+  }
+  *name = ::SysAllocString(descriptor.name);
+  if (!*name) {
+    return E_OUTOFMEMORY;
+  }
+  *propID = descriptor.prop_id;
+  *varType = descriptor.var_type;
   return S_OK;
 }
 
@@ -442,6 +478,8 @@ HRESULT XunbakInArchive::GetArchiveProperty(PROPID propID, PROPVARIANT *value) n
   }
   ::PropVariantInit(value);
   switch (propID) {
+    case kpidPhySize:
+      return xunbak_utils::SetVariantUInt64(static_cast<uint64_t>(bridge_ ? bridge_->primary_bytes.size() : 0), value);
     case kpidReadOnly:
       return xunbak_utils::SetVariantBool(false, value);
     case kpidNumVolumes:
@@ -455,7 +493,7 @@ HRESULT XunbakInArchive::GetNumberOfProperties(UInt32 *numProps) noexcept {
   if (!numProps) {
     return E_INVALIDARG;
   }
-  *numProps = 0;
+  *numProps = static_cast<UInt32>(std::size(kItemPropertyTable));
   return S_OK;
 }
 
@@ -463,18 +501,17 @@ HRESULT XunbakInArchive::GetPropertyInfo(UInt32 index,
                                          BSTR *name,
                                          PROPID *propID,
                                          VARTYPE *varType) noexcept {
-  (void)index;
-  (void)name;
-  (void)propID;
-  (void)varType;
-  return E_NOTIMPL;
+  if (index >= std::size(kItemPropertyTable)) {
+    return E_INVALIDARG;
+  }
+  return CopyPropertyDescriptor(kItemPropertyTable[index], name, propID, varType);
 }
 
 HRESULT XunbakInArchive::GetNumberOfArchiveProperties(UInt32 *numProps) noexcept {
   if (!numProps) {
     return E_INVALIDARG;
   }
-  *numProps = 0;
+  *numProps = static_cast<UInt32>(std::size(kArchivePropertyTable));
   return S_OK;
 }
 
@@ -482,9 +519,8 @@ HRESULT XunbakInArchive::GetArchivePropertyInfo(UInt32 index,
                                                 BSTR *name,
                                                 PROPID *propID,
                                                 VARTYPE *varType) noexcept {
-  (void)index;
-  (void)name;
-  (void)propID;
-  (void)varType;
-  return E_NOTIMPL;
+  if (index >= std::size(kArchivePropertyTable)) {
+    return E_INVALIDARG;
+  }
+  return CopyPropertyDescriptor(kArchivePropertyTable[index], name, propID, varType);
 }

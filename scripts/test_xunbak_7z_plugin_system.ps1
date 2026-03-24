@@ -59,6 +59,8 @@ try {
     $splitDiff = Compare-Object ($expected.GetEnumerator() | Sort-Object Name) ($actualSplit.GetEnumerator() | Sort-Object Name) -Property Name, Value
     $singleMatch = @($singleDiff).Count -eq 0
     $splitMatch = @($splitDiff).Count -eq 0
+    $singleDisplayOk = (($singleList | Out-String) -match 'Type = XUNBAK') -and (($singleList | Out-String) -match 'nested/深层\.txt')
+    $splitDisplayOk = (($splitList | Out-String) -match 'Type = XUNBAK') -and (($splitList | Out-String) -match 'Volumes = 2') -and (($splitList | Out-String) -match 'nested/深层\.txt')
 
     Write-Host "WorkRoot: $workRoot"
     Write-Host "Single list exit: $singleListCode"
@@ -67,6 +69,8 @@ try {
     Write-Host "Split extract exit: $splitExtractCode"
     Write-Host "Single match: $singleMatch"
     Write-Host "Split match: $splitMatch"
+    Write-Host "Single display: $singleDisplayOk"
+    Write-Host "Split display: $splitDisplayOk"
     Write-Host "`n--- single list ---"
     $singleList
     Write-Host "`n--- split list ---"
@@ -76,7 +80,7 @@ try {
     Write-Host "`n--- split extract ---"
     $splitExtractOut
 
-    if ($singleListCode -ne 0 -or $splitListCode -ne 0 -or $singleExtractCode -ne 0 -or $splitExtractCode -ne 0 -or -not $singleMatch -or -not $splitMatch) {
+    if ($singleListCode -ne 0 -or $splitListCode -ne 0 -or $singleExtractCode -ne 0 -or $splitExtractCode -ne 0 -or -not $singleMatch -or -not $splitMatch -or -not $singleDisplayOk -or -not $splitDisplayOk) {
         throw 'system 7-Zip plugin smoke failed'
     }
 
