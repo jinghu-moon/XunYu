@@ -26,6 +26,7 @@ pub enum CompressionMode {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StreamCompressResult {
     pub hash: [u8; 32],
+    pub raw_size: u64,
     pub compressed: Vec<u8>,
     pub peak_buffer_bytes: usize,
 }
@@ -111,6 +112,7 @@ pub fn stream_hash_and_compress<R: Read>(
     let mut hasher = blake3::Hasher::new();
     let mut buf = vec![0u8; chunk_size];
     let mut peak_buffer_bytes = 0usize;
+    let mut raw_size = 0u64;
 
     match codec {
         codec if codec == Codec::NONE => {
@@ -122,12 +124,14 @@ pub fn stream_hash_and_compress<R: Read>(
                 if n == 0 {
                     break;
                 }
+                raw_size += n as u64;
                 hasher.update(&buf[..n]);
                 out.extend_from_slice(&buf[..n]);
                 peak_buffer_bytes = peak_buffer_bytes.max(n);
             }
             Ok(StreamCompressResult {
                 hash: *hasher.finalize().as_bytes(),
+                raw_size,
                 compressed: out,
                 peak_buffer_bytes,
             })
@@ -142,6 +146,7 @@ pub fn stream_hash_and_compress<R: Read>(
                 if n == 0 {
                     break;
                 }
+                raw_size += n as u64;
                 hasher.update(&buf[..n]);
                 encoder
                     .write_all(&buf[..n])
@@ -153,6 +158,7 @@ pub fn stream_hash_and_compress<R: Read>(
                 .map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
             Ok(StreamCompressResult {
                 hash: *hasher.finalize().as_bytes(),
+                raw_size,
                 compressed,
                 peak_buffer_bytes,
             })

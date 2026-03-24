@@ -31,6 +31,12 @@ pub(crate) fn copy_entry_to_writer(
     entry: &SourceEntry,
     writer: &mut dyn Write,
 ) -> Result<(), CliError> {
+    match entry.kind {
+        SourceKind::ZipArtifact => return copy_zip_entry_to_writer(entry, writer),
+        SourceKind::SevenZArtifact => return copy_7z_entry_to_writer(entry, writer),
+        SourceKind::XunbakArtifact => return copy_xunbak_entry_to_writer(entry, writer),
+        _ => {}
+    }
     let mut reader = open_entry_reader(entry)?;
     std::io::copy(&mut reader, writer).map_err(|err| {
         CliError::new(1, format!("Copy entry failed {}: {err}", entry.path))
@@ -168,6 +174,29 @@ fn open_zip_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
 }
 
+fn copy_zip_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Result<(), CliError> {
+    let zip_path = entry.source_path.as_ref().ok_or_else(|| {
+        CliError::new(
+            1,
+            format!("Missing zip source path for entry: {}", entry.path),
+        )
+    })?;
+    let file = fs::File::open(zip_path).map_err(|err| {
+        CliError::new(1, format!("Open zip failed {}: {err}", zip_path.display()))
+    })?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|err| {
+        CliError::new(1, format!("Read zip failed {}: {err}", zip_path.display()))
+    })?;
+    let mut zip_entry = open_zip_entry(&mut archive, &entry.path, zip_path)?;
+    std::io::copy(&mut zip_entry, writer).map_err(|err| {
+        CliError::new(
+            1,
+            format!("Copy zip entry failed {}::{}: {err}", zip_path.display(), entry.path),
+        )
+    })?;
+    Ok(())
+}
+
 fn open_7z_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
     let source = entry.source_path.as_ref().ok_or_else(|| {
         CliError::new(
@@ -181,6 +210,40 @@ fn open_7z_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
         CliError::new(1, format!("Write temp 7z entry failed {}::{}: {err}", source.display(), entry.path))
     })?;
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
+}
+
+fn copy_7z_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Result<(), CliError> {
+    let source = entry.source_path.as_ref().ok_or_else(|| {
+        CliError::new(
+            1,
+            format!("Missing 7z source path for entry: {}", entry.path),
+        )
+    })?;
+    let wanted = entry.path.replace('\\', "/");
+    let mut found = false;
+    crate::backup_export::sevenz_io::with_archive_reader(source, |reader, _| {
+        reader
+            .for_each_entries(|archive_entry, data| {
+                if archive_entry.is_directory() || !archive_entry.has_stream() {
+                    return Ok(true);
+                }
+                let name = archive_entry.name().replace('\\', "/");
+                if !name.eq_ignore_ascii_case(&wanted) {
+                    return Ok(true);
+                }
+                std::io::copy(data, writer)?;
+                found = true;
+                Ok(false)
+            })
+            .map_err(|err| CliError::new(1, format!("Read 7z entry failed {}: {err}", wanted)))
+    })?;
+    if !found {
+        return Err(CliError::new(
+            1,
+            format!("7z entry not found {}::{}", source.display(), entry.path),
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -331,6 +394,42 @@ fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
         .copy_and_verify_blob(manifest_entry, &mut temp.file)
         .map_err(|err| CliError::new(2, err.to_string()))?;
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
+}
+
+#[cfg(feature = "xunbak")]
+fn copy_xunbak_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Result<(), CliError> {
+    use crate::xunbak::reader::ContainerReader;
+
+    let path = entry.source_path.as_ref().ok_or_else(|| {
+        CliError::new(
+            1,
+            format!("Missing xunbak source path for entry: {}", entry.path),
+        )
+    })?;
+    let reader = ContainerReader::open(path).map_err(|err| CliError::new(2, err.to_string()))?;
+    let manifest = reader
+        .load_manifest()
+        .map_err(|err| CliError::new(2, err.to_string()))?;
+    let manifest_entry = manifest
+        .entries
+        .iter()
+        .find(|candidate| candidate.path.eq_ignore_ascii_case(&entry.path))
+        .ok_or_else(|| CliError::new(1, format!("xunbak entry not found: {}", entry.path)))?;
+    reader
+        .copy_and_verify_blob(manifest_entry, writer)
+        .map_err(|err| CliError::new(2, err.to_string()))
+}
+
+#[cfg(not(feature = "xunbak"))]
+fn copy_xunbak_entry_to_writer(entry: &SourceEntry, _writer: &mut dyn Write) -> Result<(), CliError> {
+    Err(CliError::with_details(
+        2,
+        format!(
+            "xunbak artifact reading is not enabled in this build: {}",
+            entry.path
+        ),
+        &["Fix: Rebuild with `--features xunbak`."],
+    ))
 }
 
 #[cfg(not(feature = "xunbak"))]

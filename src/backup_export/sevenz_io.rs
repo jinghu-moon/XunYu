@@ -258,7 +258,7 @@ fn collect_entries_from_archive(
     Ok(entries)
 }
 
-fn with_archive_reader<T>(
+pub(crate) fn with_archive_reader<T>(
     path: &Path,
     f: impl FnOnce(&mut ArchiveReader<fs::File>, &Path) -> Result<T, CliError>,
 ) -> Result<T, CliError> {

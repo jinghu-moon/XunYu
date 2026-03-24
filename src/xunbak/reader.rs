@@ -203,7 +203,7 @@ impl ContainerReader {
         Ok(blob.content)
     }
 
-    pub fn copy_and_verify_blob<W: Write>(
+    pub fn copy_and_verify_blob<W: Write + ?Sized>(
         &self,
         entry: &ManifestEntry,
         writer: &mut W,
@@ -511,12 +511,12 @@ impl ContainerReader {
     }
 }
 
-struct ManifestHashingWriter<'a, W> {
+struct ManifestHashingWriter<'a, W: ?Sized> {
     inner: &'a mut W,
     hasher: blake3::Hasher,
 }
 
-impl<'a, W> ManifestHashingWriter<'a, W> {
+impl<'a, W: Write + ?Sized> ManifestHashingWriter<'a, W> {
     fn new(inner: &'a mut W) -> Self {
         Self {
             inner,
@@ -529,7 +529,7 @@ impl<'a, W> ManifestHashingWriter<'a, W> {
     }
 }
 
-impl<W: Write> Write for ManifestHashingWriter<'_, W> {
+impl<W: Write + ?Sized> Write for ManifestHashingWriter<'_, W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.inner.write_all(buf)?;
         self.hasher.update(buf);

@@ -9,11 +9,11 @@ use rayon::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
 
-use crate::xunbak::blob::write_blob_record;
+use crate::xunbak::blob::{BlobWriteResult, write_blob_record_from_precompressed};
 use crate::xunbak::checkpoint::{
     CheckpointError, CheckpointPayload, compute_manifest_hash, write_checkpoint_record,
 };
-use crate::xunbak::codec::should_skip_compress;
+use crate::xunbak::codec::{compression_is_beneficial, should_skip_compress, stream_hash_and_compress};
 use crate::xunbak::constants::FLAG_SPLIT;
 use crate::xunbak::constants::{
     Codec, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, XUNBAK_READER_VERSION,
@@ -256,9 +256,9 @@ impl ContainerWriter {
 
         for item in &scanned {
             total_raw_bytes += item.size;
-            let content =
-                std::fs::read(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
-            let content_hash = *blake3::hash(&content).as_bytes();
+            let requested_codec = effective_codec_for_path(item, options.codec);
+            let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+            let content_hash = prepared.content_hash;
             if let Some(locator) = content_index.get(&content_hash) {
                 entries.push(ManifestEntry {
                     path: item.rel.clone(),
@@ -286,19 +286,18 @@ impl ContainerWriter {
                 });
                 continue;
             }
-            let codec = effective_codec_for_path(item, options.codec);
-            let write = write_blob_record(&mut file, &content, codec, options.zstd_level)
+            file.write_all(&prepared.record_bytes)
                 .map_err(|err| WriterError::Io(err.to_string()))?;
-            let blob_len = RECORD_PREFIX_SIZE as u64 + write.record_len;
+            let blob_len = prepared.record_bytes.len() as u64;
             entries.push(ManifestEntry {
                 path: item.rel.clone(),
-                blob_id: write.header.blob_id,
+                blob_id: prepared.write.header.blob_id,
                 content_hash,
                 size: item.size,
                 mtime_ns: item.mtime_ns,
                 created_time_ns: item.created_time_ns,
                 win_attributes: item.win_attributes,
-                codec: write.header.codec,
+                codec: prepared.write.header.codec,
                 blob_offset: next_offset,
                 blob_len,
                 volume_index: 0,
@@ -308,8 +307,8 @@ impl ContainerWriter {
             content_index.insert(
                 content_hash,
                 BlobLocator {
-                    blob_id: write.header.blob_id,
-                    codec: write.header.codec,
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
                     blob_offset: next_offset,
                     blob_len,
                     volume_index: 0,
@@ -413,6 +412,7 @@ impl ContainerWriter {
             );
         }
         let baseline = reader.load_manifest()?;
+        let baseline_index = build_path_index(&baseline);
         let mut content_index = build_content_hash_index(&baseline);
         let mut scanned = Vec::new();
         collect_files(source_dir, source_dir, &mut scanned, Some(container_path))?;
@@ -443,11 +443,11 @@ impl ContainerWriter {
 
         for item in &scanned {
             total_raw_bytes += item.size;
-            if let Some(old) = baseline.entries.iter().find(|entry| entry.path == item.rel)
+            if let Some(old) = baseline_index.get(item.rel.as_str())
                 && old.size == item.size
                 && old.mtime_ns == item.mtime_ns
             {
-                entries.push(old.clone());
+                entries.push((*old).clone());
                 processed_files += 1;
                 processed_bytes += item.size;
                 progress(ProgressEvent {
@@ -460,9 +460,9 @@ impl ContainerWriter {
                 continue;
             }
 
-            let content =
-                std::fs::read(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
-            let content_hash = *blake3::hash(&content).as_bytes();
+            let requested_codec = effective_codec_for_path(item, options.codec);
+            let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+            let content_hash = prepared.content_hash;
             if let Some(locator) = content_index.get(&content_hash) {
                 entries.push(ManifestEntry {
                     path: item.rel.clone(),
@@ -491,19 +491,18 @@ impl ContainerWriter {
                 continue;
             }
 
-            let codec = effective_codec_for_path(item, options.codec);
-            let write = write_blob_record(&mut file, &content, codec, options.zstd_level)
+            file.write_all(&prepared.record_bytes)
                 .map_err(|err| WriterError::Io(err.to_string()))?;
-            let blob_len = RECORD_PREFIX_SIZE as u64 + write.record_len;
+            let blob_len = prepared.record_bytes.len() as u64;
             entries.push(ManifestEntry {
                 path: item.rel.clone(),
-                blob_id: write.header.blob_id,
+                blob_id: prepared.write.header.blob_id,
                 content_hash,
                 size: item.size,
                 mtime_ns: item.mtime_ns,
                 created_time_ns: item.created_time_ns,
                 win_attributes: item.win_attributes,
-                codec: write.header.codec,
+                codec: prepared.write.header.codec,
                 blob_offset: next_offset,
                 blob_len,
                 volume_index: 0,
@@ -513,8 +512,8 @@ impl ContainerWriter {
             content_index.insert(
                 content_hash,
                 BlobLocator {
-                    blob_id: write.header.blob_id,
-                    codec: write.header.codec,
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
                     blob_offset: next_offset,
                     blob_len,
                     volume_index: 0,
@@ -608,6 +607,13 @@ pub struct ScannedSourceFile {
     pub win_attributes: u32,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PreparedBlobRecord {
+    content_hash: [u8; 32],
+    write: BlobWriteResult,
+    record_bytes: Vec<u8>,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct ScannedManifestEntryView {
     size: u64,
@@ -680,6 +686,14 @@ pub fn build_content_hash_index(manifest: &ManifestBody) -> HashMap<[u8; 32], Bl
                 },
             )
         })
+        .collect()
+}
+
+fn build_path_index<'a>(manifest: &'a ManifestBody) -> HashMap<&'a str, &'a ManifestEntry> {
+    manifest
+        .entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
         .collect()
 }
 
@@ -783,6 +797,46 @@ fn effective_codec_for_path(file: &ScannedSourceFile, requested: Codec) -> Codec
     }
 }
 
+fn prepare_blob_record(
+    file: &ScannedSourceFile,
+    requested: Codec,
+    level: i32,
+) -> Result<PreparedBlobRecord, WriterError> {
+    const STREAM_CHUNK_SIZE: usize = 1024 * 1024;
+
+    let mut input = File::open(&file.path).map_err(|err| WriterError::Io(err.to_string()))?;
+    let mut effective_codec = requested;
+    let mut streamed = stream_hash_and_compress(&mut input, requested, level, STREAM_CHUNK_SIZE)
+        .map_err(|err| WriterError::Io(err.to_string()))?;
+
+    if requested != Codec::NONE
+        && !compression_is_beneficial(streamed.raw_size, streamed.compressed.len() as u64)
+    {
+        effective_codec = Codec::NONE;
+        let mut retry = File::open(&file.path).map_err(|err| WriterError::Io(err.to_string()))?;
+        streamed = stream_hash_and_compress(&mut retry, Codec::NONE, level, STREAM_CHUNK_SIZE)
+            .map_err(|err| WriterError::Io(err.to_string()))?;
+    }
+
+    let mut record_bytes = Vec::with_capacity(
+        RECORD_PREFIX_SIZE + crate::xunbak::constants::BLOB_HEADER_SIZE + streamed.compressed.len(),
+    );
+    let write = write_blob_record_from_precompressed(
+        &mut record_bytes,
+        streamed.hash,
+        streamed.raw_size,
+        effective_codec,
+        &streamed.compressed,
+    )
+    .map_err(|err| WriterError::Io(err.to_string()))?;
+
+    Ok(PreparedBlobRecord {
+        content_hash: streamed.hash,
+        write,
+        record_bytes,
+    })
+}
+
 pub fn parallel_compress_pipeline(
     files: &[ScannedSourceFile],
     codec: Codec,
@@ -794,16 +848,12 @@ pub fn parallel_compress_pipeline(
             .par_iter()
             .map(|file| {
                 let requested = effective_codec_for_path(file, codec);
-                let content =
-                    std::fs::read(&file.path).map_err(|err| WriterError::Io(err.to_string()))?;
-                let mut record_bytes = Vec::new();
-                let write = write_blob_record(&mut record_bytes, &content, requested, level)
-                    .map_err(|err| WriterError::Io(err.to_string()))?;
+                let prepared = prepare_blob_record(file, requested, level)?;
                 Ok(CompressedBlob {
                     path: file.rel.clone(),
-                    header: write.header,
-                    record_len: write.record_len,
-                    record_bytes,
+                    header: prepared.write.header,
+                    record_len: prepared.write.record_len,
+                    record_bytes: prepared.record_bytes,
                 })
             })
             .collect::<Result<Vec<_>, WriterError>>()
@@ -814,16 +864,12 @@ pub fn parallel_compress_pipeline(
             .iter()
             .map(|file| {
                 let requested = effective_codec_for_path(file, codec);
-                let content =
-                    std::fs::read(&file.path).map_err(|err| WriterError::Io(err.to_string()))?;
-                let mut record_bytes = Vec::new();
-                let write = write_blob_record(&mut record_bytes, &content, requested, level)
-                    .map_err(|err| WriterError::Io(err.to_string()))?;
+                let prepared = prepare_blob_record(file, requested, level)?;
                 Ok(CompressedBlob {
                     path: file.rel.clone(),
-                    header: write.header,
-                    record_len: write.record_len,
-                    record_bytes,
+                    header: prepared.write.header,
+                    record_len: prepared.write.record_len,
+                    record_bytes: prepared.record_bytes,
                 })
             })
             .collect()
@@ -1062,8 +1108,9 @@ fn backup_split_with_progress(
 
     for item in &scanned {
         total_raw_bytes += item.size;
-        let content = fs::read(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
-        let content_hash = *blake3::hash(&content).as_bytes();
+        let requested_codec = effective_codec_for_path(item, options.codec);
+        let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+        let content_hash = prepared.content_hash;
         if let Some(locator) = content_index.get(&content_hash) {
             entries.push(ManifestEntry {
                 path: item.rel.clone(),
@@ -1091,21 +1138,17 @@ fn backup_split_with_progress(
             });
             continue;
         }
-        let codec = effective_codec_for_path(item, options.codec);
-        let mut record_bytes = Vec::new();
-        let write = write_blob_record(&mut record_bytes, &content, codec, options.zstd_level)
-            .map_err(|err| WriterError::Io(err.to_string()))?;
-        let blob_len = record_bytes.len() as u64;
-        let (volume_index, blob_offset) = output.write_record(&record_bytes, 0)?;
+        let blob_len = prepared.record_bytes.len() as u64;
+        let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
         entries.push(ManifestEntry {
             path: item.rel.clone(),
-            blob_id: write.header.blob_id,
+            blob_id: prepared.write.header.blob_id,
             content_hash,
             size: item.size,
             mtime_ns: item.mtime_ns,
             created_time_ns: item.created_time_ns,
             win_attributes: item.win_attributes,
-            codec: write.header.codec,
+            codec: prepared.write.header.codec,
             blob_offset,
             blob_len,
             volume_index,
@@ -1115,8 +1158,8 @@ fn backup_split_with_progress(
         content_index.insert(
             content_hash,
             BlobLocator {
-                blob_id: write.header.blob_id,
-                codec: write.header.codec,
+                blob_id: prepared.write.header.blob_id,
+                codec: prepared.write.header.codec,
                 blob_offset,
                 blob_len,
                 volume_index,
@@ -1201,6 +1244,7 @@ fn update_split_with_progress(
     reader: &ContainerReader,
 ) -> Result<UpdateResult, WriterError> {
     let baseline = reader.load_manifest()?;
+    let baseline_index = build_path_index(&baseline);
     let mut content_index = build_content_hash_index(&baseline);
     let mut scanned = Vec::new();
     collect_files(source_dir, source_dir, &mut scanned, Some(container_path))?;
@@ -1240,11 +1284,11 @@ fn update_split_with_progress(
 
     for item in &scanned {
         total_raw_bytes += item.size;
-        if let Some(old) = baseline.entries.iter().find(|entry| entry.path == item.rel)
+        if let Some(old) = baseline_index.get(item.rel.as_str())
             && old.size == item.size
             && old.mtime_ns == item.mtime_ns
         {
-            entries.push(old.clone());
+            entries.push((*old).clone());
             processed_files += 1;
             processed_bytes += item.size;
             progress(ProgressEvent {
@@ -1257,8 +1301,9 @@ fn update_split_with_progress(
             continue;
         }
 
-        let content = fs::read(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
-        let content_hash = *blake3::hash(&content).as_bytes();
+        let requested_codec = effective_codec_for_path(item, options.codec);
+        let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+        let content_hash = prepared.content_hash;
         if let Some(locator) = content_index.get(&content_hash) {
             entries.push(ManifestEntry {
                 path: item.rel.clone(),
@@ -1287,21 +1332,17 @@ fn update_split_with_progress(
             continue;
         }
 
-        let codec = effective_codec_for_path(item, options.codec);
-        let mut record_bytes = Vec::new();
-        let write = write_blob_record(&mut record_bytes, &content, codec, options.zstd_level)
-            .map_err(|err| WriterError::Io(err.to_string()))?;
-        let blob_len = record_bytes.len() as u64;
-        let (volume_index, blob_offset) = output.write_record(&record_bytes, 0)?;
+        let blob_len = prepared.record_bytes.len() as u64;
+        let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
         entries.push(ManifestEntry {
             path: item.rel.clone(),
-            blob_id: write.header.blob_id,
+            blob_id: prepared.write.header.blob_id,
             content_hash,
             size: item.size,
             mtime_ns: item.mtime_ns,
             created_time_ns: item.created_time_ns,
             win_attributes: item.win_attributes,
-            codec: write.header.codec,
+            codec: prepared.write.header.codec,
             blob_offset,
             blob_len,
             volume_index,
@@ -1311,8 +1352,8 @@ fn update_split_with_progress(
         content_index.insert(
             content_hash,
             BlobLocator {
-                blob_id: write.header.blob_id,
-                codec: write.header.codec,
+                blob_id: prepared.write.header.blob_id,
+                codec: prepared.write.header.codec,
                 blob_offset,
                 blob_len,
                 volume_index,

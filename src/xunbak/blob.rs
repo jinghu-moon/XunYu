@@ -131,6 +131,41 @@ pub fn write_blob_record<W: Write>(
     Ok(BlobWriteResult { header, record_len })
 }
 
+pub fn write_blob_record_from_precompressed<W: Write>(
+    writer: &mut W,
+    blob_id: [u8; 32],
+    raw_size: u64,
+    codec: Codec,
+    compressed: &[u8],
+) -> Result<BlobWriteResult, BlobRecordError> {
+    let header = BlobHeader {
+        blob_id,
+        blob_flags: 0,
+        codec,
+        raw_size,
+        stored_size: compressed.len() as u64,
+    };
+    let header_bytes = header.to_bytes();
+    let record_len = (BLOB_HEADER_SIZE + compressed.len()) as u64;
+    let prefix = RecordPrefix {
+        record_type: RecordType::BLOB,
+        record_len,
+        record_crc: compute_record_crc(RecordType::BLOB, record_len.to_le_bytes(), &header_bytes),
+    };
+
+    writer
+        .write_all(&prefix.to_bytes())
+        .map_err(|err| BlobRecordError::Io(err.to_string()))?;
+    writer
+        .write_all(&header_bytes)
+        .map_err(|err| BlobRecordError::Io(err.to_string()))?;
+    writer
+        .write_all(compressed)
+        .map_err(|err| BlobRecordError::Io(err.to_string()))?;
+
+    Ok(BlobWriteResult { header, record_len })
+}
+
 pub fn read_blob_record<R: Read>(reader: &mut R) -> Result<BlobReadResult, BlobRecordError> {
     let mut prefix_bytes = [0u8; crate::xunbak::constants::RECORD_PREFIX_SIZE];
     reader
