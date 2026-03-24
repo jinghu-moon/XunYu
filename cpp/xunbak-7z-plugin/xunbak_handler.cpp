@@ -133,6 +133,7 @@ struct XunbakInArchive::BridgeContext {
   std::string primary_name_utf8;
   std::vector<uint8_t> primary_bytes;
   CMyComPtr<IInStream> primary_stream;
+  uint64_t primary_stream_size = 0;
   CMyComPtr<IArchiveOpenVolumeCallback> open_volume_callback;
 };
 
@@ -159,6 +160,10 @@ static int32_t XunbakOpenVolume(void *ctx,
       return XUNBAK_OK;
     }
     if (bridge->primary_stream) {
+      const HRESULT reset_hr = bridge->primary_stream->Seek(0, STREAM_SEEK_SET, nullptr);
+      if (FAILED(reset_hr)) {
+        return XUNBAK_ERR_IO;
+      }
       handle->kind = XunbakInArchive::StreamHandle::Kind::Com;
       handle->stream = bridge->primary_stream;
       *out_handle = handle.release();
@@ -324,6 +329,17 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
 
   bridge_ = std::make_unique<BridgeContext>();
   bridge_->primary_stream = stream;
+  {
+    ULARGE_INTEGER current_pos{};
+    ULARGE_INTEGER end_pos{};
+    if (FAILED(stream->Seek(0, STREAM_SEEK_CUR, &current_pos.QuadPart)) ||
+        FAILED(stream->Seek(0, STREAM_SEEK_END, &end_pos.QuadPart)) ||
+        FAILED(stream->Seek(static_cast<Int64>(current_pos.QuadPart), STREAM_SEEK_SET, nullptr))) {
+      bridge_.reset();
+      return E_FAIL;
+    }
+    bridge_->primary_stream_size = end_pos.QuadPart;
+  }
 
   if (openCallback) {
     openCallback->QueryInterface(IID_IArchiveOpenVolumeCallback,
@@ -538,7 +554,11 @@ HRESULT XunbakInArchive::GetArchiveProperty(PROPID propID, PROPVARIANT *value) n
   ::PropVariantInit(value);
   switch (propID) {
     case kpidPhySize:
-      return xunbak_utils::SetVariantUInt64(static_cast<uint64_t>(bridge_ ? bridge_->primary_bytes.size() : 0), value);
+      return xunbak_utils::SetVariantUInt64(
+          bridge_ ? (bridge_->primary_bytes.empty() ? bridge_->primary_stream_size
+                                                    : static_cast<uint64_t>(bridge_->primary_bytes.size()))
+                  : 0,
+          value);
     case kpidReadOnly:
       return xunbak_utils::SetVariantBool(false, value);
     case kpidNumSubFiles:

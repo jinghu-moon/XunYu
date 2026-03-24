@@ -223,6 +223,9 @@ impl VolumeSource for CallbackVolumeSource {
         Ok(Box::new(CallbackStream {
             callbacks: self.callbacks,
             handle,
+            buffer: vec![0u8; 64 * 1024],
+            buffer_pos: 0,
+            buffer_len: 0,
         }))
     }
 }
@@ -788,6 +791,9 @@ impl Write for CallbackWriter {
 struct CallbackStream {
     callbacks: XunbakVolumeCallbacks,
     handle: *mut c_void,
+    buffer: Vec<u8>,
+    buffer_pos: usize,
+    buffer_len: usize,
 }
 
 impl Drop for CallbackStream {
@@ -802,17 +808,50 @@ impl Drop for CallbackStream {
 
 impl Read for CallbackStream {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+
+        if self.buffer_pos < self.buffer_len {
+            let available = self.buffer_len - self.buffer_pos;
+            let to_copy = available.min(buf.len());
+            buf[..to_copy]
+                .copy_from_slice(&self.buffer[self.buffer_pos..self.buffer_pos + to_copy]);
+            self.buffer_pos += to_copy;
+            return Ok(to_copy);
+        }
+
         let read = self
             .callbacks
             .read
             .ok_or_else(|| std::io::Error::other("read callback missing"))?;
+
+        if buf.len() >= self.buffer.len() {
+            let mut out_read = 0usize;
+            let rc = unsafe {
+                read(
+                    self.callbacks.ctx,
+                    self.handle,
+                    buf.as_mut_ptr(),
+                    buf.len(),
+                    &mut out_read,
+                )
+            };
+            if rc != XUNBAK_OK {
+                return Err(std::io::Error::other(format!(
+                    "read callback failed: {rc}"
+                )));
+            }
+            return Ok(out_read);
+        }
+
         let mut out_read = 0usize;
         let rc = unsafe {
             read(
                 self.callbacks.ctx,
                 self.handle,
-                buf.as_mut_ptr(),
-                buf.len(),
+                self.buffer.as_mut_ptr(),
+                self.buffer.len(),
                 &mut out_read,
             )
         };
@@ -821,7 +860,12 @@ impl Read for CallbackStream {
                 "read callback failed: {rc}"
             )));
         }
-        Ok(out_read)
+        self.buffer_pos = 0;
+        self.buffer_len = out_read;
+        let to_copy = self.buffer_len.min(buf.len());
+        buf[..to_copy].copy_from_slice(&self.buffer[..to_copy]);
+        self.buffer_pos = to_copy;
+        Ok(to_copy)
     }
 }
 
@@ -852,6 +896,8 @@ impl Seek for CallbackStream {
                 "seek callback failed: {rc}"
             )));
         }
+        self.buffer_pos = 0;
+        self.buffer_len = 0;
         Ok(out_pos)
     }
 }
@@ -1247,12 +1293,13 @@ mod tests {
     use tempfile::tempdir;
     use xun::xunbak::constants::Codec;
     use xun::xunbak::writer::{BackupOptions, ContainerWriter};
+    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
     use super::{
         XUNBAK_OK, XUNBAK_PROP_PATH, XunbakArchive, XunbakVolumeCallbacks, XunbakWriteCallbacks,
-        xunbak_close, xunbak_extract, xunbak_extract_with_writer, xunbak_get_property,
-        xunbak_item_count, xunbak_item_size, xunbak_open, xunbak_open_with_callbacks,
-        xunbak_volume_count,
+        CallbackVolumeSource, VolumeSource, xunbak_close, xunbak_extract, xunbak_extract_with_writer,
+        xunbak_get_property, xunbak_item_count, xunbak_item_size, xunbak_open,
+        xunbak_open_with_callbacks, xunbak_volume_count,
     };
 
     fn split_options() -> BackupOptions {
@@ -1517,6 +1564,49 @@ mod tests {
         XUNBAK_OK
     }
 
+    struct CountingReadContext {
+        bytes: Vec<u8>,
+        read_calls: Arc<AtomicUsize>,
+    }
+
+    unsafe extern "C" fn counting_open_volume(
+        ctx: *mut c_void,
+        _volume_name_ptr: *const u8,
+        _volume_name_len: usize,
+        out_handle: *mut *mut c_void,
+    ) -> i32 {
+        if ctx.is_null() || out_handle.is_null() {
+            return 1;
+        }
+        let ctx = unsafe { &*(ctx as *const CountingReadContext) };
+        let cursor = Box::new(Cursor::new(ctx.bytes.clone()));
+        unsafe { *out_handle = Box::into_raw(cursor) as *mut c_void; }
+        XUNBAK_OK
+    }
+
+    unsafe extern "C" fn counting_read(
+        ctx: *mut c_void,
+        stream_handle: *mut c_void,
+        out_buf: *mut u8,
+        buf_len: usize,
+        out_read: *mut usize,
+    ) -> i32 {
+        if ctx.is_null() || stream_handle.is_null() || out_buf.is_null() || out_read.is_null() {
+            return 1;
+        }
+        let ctx = unsafe { &*(ctx as *const CountingReadContext) };
+        ctx.read_calls.fetch_add(1, Ordering::SeqCst);
+        let cursor = unsafe { &mut *(stream_handle as *mut Cursor<Vec<u8>>) };
+        let buf = unsafe { std::slice::from_raw_parts_mut(out_buf, buf_len) };
+        match cursor.read(buf) {
+            Ok(read) => {
+                unsafe { *out_read = read; }
+                XUNBAK_OK
+            }
+            Err(_) => 5,
+        }
+    }
+
     #[test]
     fn ffi_open_with_callbacks_extracts_from_split_container() {
         let dir = tempdir().unwrap();
@@ -1607,5 +1697,36 @@ mod tests {
         let mut restored = Vec::new();
         archive.extract_item_to_writer("c.txt", &mut restored).unwrap();
         assert_eq!(restored, "c".repeat(80).into_bytes());
+    }
+
+    #[test]
+    fn callback_stream_buffers_small_reads() {
+        let read_calls = Arc::new(AtomicUsize::new(0));
+        let mut ctx = Box::new(CountingReadContext {
+            bytes: vec![7u8; 1024],
+            read_calls: read_calls.clone(),
+        });
+        let callbacks = XunbakVolumeCallbacks {
+            ctx: (&mut *ctx) as *mut CountingReadContext as *mut c_void,
+            open_volume: Some(counting_open_volume),
+            read: Some(counting_read),
+            seek: Some(callback_seek),
+            close_volume: Some(callback_close_volume),
+        };
+
+        let source = CallbackVolumeSource::new(callbacks).unwrap();
+        let mut stream = source.open("buffered.xunbak").unwrap();
+        let mut buf = [0u8; 1];
+        for _ in 0..64 {
+            let read = stream.read(&mut buf).unwrap();
+            assert_eq!(read, 1);
+            assert_eq!(buf[0], 7);
+        }
+
+        assert!(
+            read_calls.load(Ordering::SeqCst) <= 2,
+            "expected buffered callback reads, got {}",
+            read_calls.load(Ordering::SeqCst)
+        );
     }
 }
