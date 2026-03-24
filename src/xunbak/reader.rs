@@ -14,7 +14,7 @@ use crate::xunbak::manifest::{
 };
 use crate::xunbak::record::{RecordPrefix, compute_record_crc};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ContainerReader {
     pub path: PathBuf,
     pub file_size: u64,

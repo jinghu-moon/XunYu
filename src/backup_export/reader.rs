@@ -1,10 +1,14 @@
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
+#[cfg(feature = "xunbak")]
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::backup_export::sevenz_io::read_7z_file;
 use crate::backup_export::source::{SourceEntry, SourceKind};
 use crate::output::CliError;
+#[cfg(feature = "xunbak")]
+use crate::util::normalize_glob_path;
 use uuid::Uuid;
 
 pub(crate) fn copy_entry_to_path(entry: &SourceEntry, dest: &Path) -> Result<(), CliError> {
@@ -371,23 +375,83 @@ fn open_zip_entry<'a>(
 }
 
 #[cfg(feature = "xunbak")]
-fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
-    use crate::xunbak::reader::ContainerReader;
+fn xunbak_reader_cache(
+) -> &'static Mutex<
+    std::collections::HashMap<
+        std::path::PathBuf,
+        (Arc<crate::xunbak::reader::ContainerReader>, Arc<std::collections::HashMap<String, crate::xunbak::manifest::ManifestEntry>>),
+    >,
+> {
+    static CACHE: OnceLock<
+        Mutex<
+            std::collections::HashMap<
+                std::path::PathBuf,
+                (
+                    Arc<crate::xunbak::reader::ContainerReader>,
+                    Arc<std::collections::HashMap<String, crate::xunbak::manifest::ManifestEntry>>,
+                ),
+            >,
+        >,
+    > = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
 
+#[cfg(feature = "xunbak")]
+fn normalize_artifact_entry_key(path: &str) -> String {
+    normalize_glob_path(path)
+}
+
+#[cfg(feature = "xunbak")]
+fn load_cached_xunbak_reader_and_manifest(
+    path: &Path,
+) -> Result<
+    (
+        Arc<crate::xunbak::reader::ContainerReader>,
+        Arc<std::collections::HashMap<String, crate::xunbak::manifest::ManifestEntry>>,
+    ),
+    CliError,
+> {
+    let key = path.to_path_buf();
+    {
+        let cache = xunbak_reader_cache()
+            .lock()
+            .map_err(|_| CliError::new(2, "xunbak reader cache poisoned".to_string()))?;
+        if let Some((reader, manifest)) = cache.get(&key) {
+            return Ok((reader.clone(), manifest.clone()));
+        }
+    }
+
+    use crate::xunbak::reader::ContainerReader;
+    let reader = Arc::new(ContainerReader::open(path).map_err(|err| CliError::new(2, err.to_string()))?);
+    let manifest = reader
+        .load_manifest()
+        .map_err(|err| CliError::new(2, err.to_string()))?;
+    let manifest_index = Arc::new(
+        manifest
+            .entries
+            .into_iter()
+            .map(|entry| (normalize_artifact_entry_key(&entry.path), entry))
+            .collect::<std::collections::HashMap<_, _>>(),
+    );
+
+    let mut cache = xunbak_reader_cache()
+        .lock()
+        .map_err(|_| CliError::new(2, "xunbak reader cache poisoned".to_string()))?;
+    cache.insert(key, (reader.clone(), manifest_index.clone()));
+    Ok((reader, manifest_index))
+}
+
+#[cfg(feature = "xunbak")]
+fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
     let path = entry.source_path.as_ref().ok_or_else(|| {
         CliError::new(
             1,
             format!("Missing xunbak source path for entry: {}", entry.path),
         )
     })?;
-    let reader = ContainerReader::open(path).map_err(|err| CliError::new(2, err.to_string()))?;
-    let manifest = reader
-        .load_manifest()
-        .map_err(|err| CliError::new(2, err.to_string()))?;
+    let (reader, manifest) = load_cached_xunbak_reader_and_manifest(path)?;
     let manifest_entry = manifest
-        .entries
-        .iter()
-        .find(|candidate| candidate.path.eq_ignore_ascii_case(&entry.path))
+        .get(&normalize_artifact_entry_key(&entry.path))
         .ok_or_else(|| CliError::new(1, format!("xunbak entry not found: {}", entry.path)))?;
     let mut temp = TempReadableFile::new("xun-entry-xunbak")?;
     reader
@@ -398,22 +462,15 @@ fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
 
 #[cfg(feature = "xunbak")]
 fn copy_xunbak_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Result<(), CliError> {
-    use crate::xunbak::reader::ContainerReader;
-
     let path = entry.source_path.as_ref().ok_or_else(|| {
         CliError::new(
             1,
             format!("Missing xunbak source path for entry: {}", entry.path),
         )
     })?;
-    let reader = ContainerReader::open(path).map_err(|err| CliError::new(2, err.to_string()))?;
-    let manifest = reader
-        .load_manifest()
-        .map_err(|err| CliError::new(2, err.to_string()))?;
+    let (reader, manifest) = load_cached_xunbak_reader_and_manifest(path)?;
     let manifest_entry = manifest
-        .entries
-        .iter()
-        .find(|candidate| candidate.path.eq_ignore_ascii_case(&entry.path))
+        .get(&normalize_artifact_entry_key(&entry.path))
         .ok_or_else(|| CliError::new(1, format!("xunbak entry not found: {}", entry.path)))?;
     reader
         .copy_and_verify_blob(manifest_entry, writer)
