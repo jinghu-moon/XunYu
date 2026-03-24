@@ -22,6 +22,16 @@ fn split_update_options() -> BackupOptions {
     }
 }
 
+fn large_test_bytes(size: usize) -> Vec<u8> {
+    let mut value = 0x1234_5678u32;
+    let mut out = Vec::with_capacity(size);
+    for _ in 0..size {
+        value = value.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        out.push((value >> 24) as u8);
+    }
+    out
+}
+
 #[test]
 fn split_backup_creates_numbered_volumes() {
     let dir = tempdir().unwrap();
@@ -211,4 +221,42 @@ fn split_phase_one_flush_crash_recovers_previous_checkpoint() {
         "b".repeat(180)
     );
     assert!(!restore_dir.join("f.txt").exists());
+}
+
+#[test]
+fn split_large_file_uses_parts_across_volumes_and_restores() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let large = large_test_bytes((32 * 1024 * 1024) + 1_048_576);
+    fs::write(source.join("large.bin"), &large).unwrap();
+    let base = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(
+        &base,
+        &source,
+        &BackupOptions {
+            codec: Codec::ZSTD,
+            zstd_level: 1,
+            split_size: Some(20 * 1024 * 1024),
+        },
+    )
+    .unwrap();
+
+    let reader = ContainerReader::open(&base).unwrap();
+    assert!(reader.volume_paths.len() >= 2);
+    let manifest = reader.load_manifest().unwrap();
+    let entry = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "large.bin")
+        .unwrap();
+    let parts = entry.parts.as_ref().expect("multipart expected");
+    assert!(parts.len() >= 2);
+    assert!(parts.iter().any(|part| part.volume_index > 0));
+
+    let restore_dir = dir.path().join("restore_large_split");
+    let result = reader.restore_all(&restore_dir).unwrap();
+    assert_eq!(result.restored_files, 1);
+    assert_eq!(fs::read(restore_dir.join("large.bin")).unwrap(), large);
 }

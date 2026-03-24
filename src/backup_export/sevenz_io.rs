@@ -11,7 +11,7 @@ use sevenz_rust2::{
 };
 
 use crate::backup_export::reader::open_entry_reader;
-use crate::backup_export::sevenz_segmented::{list_numbered_outputs, resolve_multivolume_base};
+use crate::backup_export::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
 use crate::backup_export::source::SourceEntry;
 use crate::output::CliError;
 
@@ -258,49 +258,53 @@ fn collect_entries_from_archive(
     Ok(entries)
 }
 
-pub(crate) fn with_archive_reader<T>(
-    path: &Path,
-    f: impl FnOnce(&mut ArchiveReader<fs::File>, &Path) -> Result<T, CliError>,
-) -> Result<T, CliError> {
-    if resolve_multivolume_base(path).is_some() {
-        let temp = materialize_split_archive(path)?;
-        let mut reader = ArchiveReader::open(&temp, Password::empty())
-            .map_err(|err| CliError::new(1, format!("Read split 7z failed {}: {err}", path.display())))?;
-        let result = f(&mut reader, path);
-        let _ = fs::remove_file(&temp);
-        return result;
-    }
-
-    let mut reader = ArchiveReader::open(path, Password::empty())
-        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
-    f(&mut reader, path)
+pub(crate) enum SevenZReaderSource {
+    File(fs::File),
+    Multi(MultiVolumeReader),
 }
 
-fn materialize_split_archive(path: &Path) -> Result<std::path::PathBuf, CliError> {
-    let base = resolve_multivolume_base(path).ok_or_else(|| {
-        CliError::new(1, format!("Split 7z base path not found: {}", path.display()))
-    })?;
-    let temp = std::env::temp_dir().join(format!("xun-split-7z-{}", uuid::Uuid::new_v4()));
-    let mut output = fs::File::create(&temp).map_err(|err| {
-        CliError::new(
-            1,
-            format!("Create temporary split 7z file failed {}: {err}", temp.display()),
-        )
-    })?;
-    for volume in list_numbered_outputs(&base).map_err(|err| {
-        CliError::new(1, format!("List split 7z volumes failed {}: {err}", base.display()))
-    })? {
-        let mut input = fs::File::open(&volume).map_err(|err| {
-            CliError::new(1, format!("Open split 7z volume failed {}: {err}", volume.display()))
-        })?;
-        std::io::copy(&mut input, &mut output).map_err(|err| {
-            CliError::new(
-                1,
-                format!("Concatenate split 7z volume failed {}: {err}", volume.display()),
-            )
-        })?;
+impl Read for SevenZReaderSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::File(file) => file.read(buf),
+            Self::Multi(reader) => reader.read(buf),
+        }
     }
-    Ok(temp)
+}
+
+impl Seek for SevenZReaderSource {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        match self {
+            Self::File(file) => file.seek(pos),
+            Self::Multi(reader) => reader.seek(pos),
+        }
+    }
+}
+
+fn with_open_archive_reader<T>(
+    source: SevenZReaderSource,
+    logical_path: &Path,
+    f: impl FnOnce(&mut ArchiveReader<SevenZReaderSource>, &Path) -> Result<T, CliError>,
+) -> Result<T, CliError> {
+    let mut reader = ArchiveReader::new(source, Password::empty())
+        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", logical_path.display())))?;
+    f(&mut reader, logical_path)
+}
+
+pub(crate) fn with_archive_reader<T>(
+    path: &Path,
+    f: impl FnOnce(&mut ArchiveReader<SevenZReaderSource>, &Path) -> Result<T, CliError>,
+) -> Result<T, CliError> {
+    if resolve_multivolume_base(path).is_some() {
+        let reader = MultiVolumeReader::open(path).map_err(|err| {
+            CliError::new(1, format!("Open split 7z volumes failed {}: {err}", path.display()))
+        })?;
+        return with_open_archive_reader(SevenZReaderSource::Multi(reader), path, f);
+    }
+
+    let file = fs::File::open(path)
+        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
+    with_open_archive_reader(SevenZReaderSource::File(file), path, f)
 }
 
 #[cfg(windows)]

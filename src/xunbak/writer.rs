@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -22,8 +22,8 @@ use crate::xunbak::constants::{
 use crate::xunbak::footer::{Footer, FooterError};
 use crate::xunbak::header::Header;
 use crate::xunbak::manifest::{
-    ManifestBody, ManifestCodec, ManifestEntry, ManifestError, ManifestPrefix, ManifestType,
-    normalize_path, write_manifest_record,
+    ManifestBody, ManifestCodec, ManifestEntry, ManifestError, ManifestPart, ManifestPrefix,
+    ManifestType, normalize_path, write_manifest_record,
 };
 use crate::xunbak::reader::{ContainerReader, ReaderError};
 
@@ -80,13 +80,14 @@ pub struct UpdateResult {
     pub file_count: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlobLocator {
     pub blob_id: [u8; 32],
     pub codec: Codec,
     pub blob_offset: u64,
     pub blob_len: u64,
     pub volume_index: u16,
+    pub parts: Option<Vec<ManifestPart>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,65 +257,138 @@ impl ContainerWriter {
 
         for item in &scanned {
             total_raw_bytes += item.size;
-            let requested_codec = effective_codec_for_path(item, options.codec);
-            let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
-            let content_hash = prepared.content_hash;
-            if let Some(locator) = content_index.get(&content_hash) {
+            if multipart_enabled(item) {
+                let content_hash = compute_file_content_hash(&item.path)?;
+                if let Some(locator) = content_index.get(&content_hash) {
+                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    processed_files += 1;
+                    processed_bytes += item.size;
+                    progress(ProgressEvent {
+                        processed_files,
+                        total_files,
+                        processed_bytes,
+                        total_bytes,
+                        elapsed_ms: started.elapsed().as_millis(),
+                    });
+                    continue;
+                }
+
+                let requested_codec = effective_codec_for_path(item, options.codec);
+                let mut input =
+                    File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
+                let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
+                let mut parts = Vec::new();
+                let mut first_locator: Option<BlobLocator> = None;
+                loop {
+                    let n = input
+                        .read(&mut chunk)
+                        .map_err(|err| WriterError::Io(err.to_string()))?;
+                    if n == 0 {
+                        break;
+                    }
+                    let prepared =
+                        prepare_chunk_blob_record(&chunk[..n], requested_codec, options.zstd_level)?;
+                    file.write_all(&prepared.record_bytes)
+                        .map_err(|err| WriterError::Io(err.to_string()))?;
+                    let blob_len = prepared.record_bytes.len() as u64;
+                    let locator = BlobLocator {
+                        blob_id: prepared.write.header.blob_id,
+                        codec: prepared.write.header.codec,
+                        blob_offset: next_offset,
+                        blob_len,
+                        volume_index: 0,
+                        parts: None,
+                    };
+                    if first_locator.is_none() {
+                        first_locator = Some(locator.clone());
+                    }
+                    parts.push(ManifestPart {
+                        part_index: parts.len() as u32,
+                        blob_id: prepared.write.header.blob_id,
+                        codec: prepared.write.header.codec,
+                        raw_size: prepared.write.header.raw_size,
+                        stored_size: prepared.write.header.stored_size,
+                        blob_offset: next_offset,
+                        blob_len,
+                        volume_index: 0,
+                    });
+                    next_offset += blob_len;
+                }
+                let first = first_locator.expect("multipart file must produce at least one part");
                 entries.push(ManifestEntry {
                     path: item.rel.clone(),
-                    blob_id: locator.blob_id,
+                    blob_id: first.blob_id,
                     content_hash,
                     size: item.size,
                     mtime_ns: item.mtime_ns,
                     created_time_ns: item.created_time_ns,
                     win_attributes: item.win_attributes,
-                    codec: locator.codec,
-                    blob_offset: locator.blob_offset,
-                    blob_len: locator.blob_len,
-                    volume_index: locator.volume_index,
-                    parts: None,
+                    codec: first.codec,
+                    blob_offset: first.blob_offset,
+                    blob_len: first.blob_len,
+                    volume_index: first.volume_index,
+                    parts: Some(parts.clone()),
                     ext: None,
                 });
-                processed_files += 1;
-                processed_bytes += item.size;
-                progress(ProgressEvent {
-                    processed_files,
-                    total_files,
-                    processed_bytes,
-                    total_bytes,
-                    elapsed_ms: started.elapsed().as_millis(),
-                });
-                continue;
-            }
-            file.write_all(&prepared.record_bytes)
-                .map_err(|err| WriterError::Io(err.to_string()))?;
-            let blob_len = prepared.record_bytes.len() as u64;
-            entries.push(ManifestEntry {
-                path: item.rel.clone(),
-                blob_id: prepared.write.header.blob_id,
-                content_hash,
-                size: item.size,
-                mtime_ns: item.mtime_ns,
-                created_time_ns: item.created_time_ns,
-                win_attributes: item.win_attributes,
-                codec: prepared.write.header.codec,
-                blob_offset: next_offset,
-                blob_len,
-                volume_index: 0,
-                parts: None,
-                ext: None,
-            });
-            content_index.insert(
-                content_hash,
-                BlobLocator {
+                content_index.insert(
+                    content_hash,
+                    BlobLocator {
+                        blob_id: first.blob_id,
+                        codec: first.codec,
+                        blob_offset: first.blob_offset,
+                        blob_len: first.blob_len,
+                        volume_index: first.volume_index,
+                        parts: Some(parts),
+                    },
+                );
+            } else {
+                let requested_codec = effective_codec_for_path(item, options.codec);
+                let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+                let content_hash = prepared.content_hash;
+                if let Some(locator) = content_index.get(&content_hash) {
+                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    processed_files += 1;
+                    processed_bytes += item.size;
+                    progress(ProgressEvent {
+                        processed_files,
+                        total_files,
+                        processed_bytes,
+                        total_bytes,
+                        elapsed_ms: started.elapsed().as_millis(),
+                    });
+                    continue;
+                }
+                file.write_all(&prepared.record_bytes)
+                    .map_err(|err| WriterError::Io(err.to_string()))?;
+                let blob_len = prepared.record_bytes.len() as u64;
+                entries.push(ManifestEntry {
+                    path: item.rel.clone(),
                     blob_id: prepared.write.header.blob_id,
+                    content_hash,
+                    size: item.size,
+                    mtime_ns: item.mtime_ns,
+                    created_time_ns: item.created_time_ns,
+                    win_attributes: item.win_attributes,
                     codec: prepared.write.header.codec,
                     blob_offset: next_offset,
                     blob_len,
                     volume_index: 0,
-                },
-            );
-            next_offset += blob_len;
+                    parts: None,
+                    ext: None,
+                });
+                content_index.insert(
+                    content_hash,
+                    BlobLocator {
+                        blob_id: prepared.write.header.blob_id,
+                        codec: prepared.write.header.codec,
+                        blob_offset: next_offset,
+                        blob_len,
+                        volume_index: 0,
+                        parts: None,
+                    },
+                );
+                next_offset += blob_len;
+            }
             processed_files += 1;
             processed_bytes += item.size;
             progress(ProgressEvent {
@@ -460,67 +534,141 @@ impl ContainerWriter {
                 continue;
             }
 
-            let requested_codec = effective_codec_for_path(item, options.codec);
-            let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
-            let content_hash = prepared.content_hash;
-            if let Some(locator) = content_index.get(&content_hash) {
+            if multipart_enabled(item) {
+                let content_hash = compute_file_content_hash(&item.path)?;
+                if let Some(locator) = content_index.get(&content_hash) {
+                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    processed_files += 1;
+                    processed_bytes += item.size;
+                    progress(ProgressEvent {
+                        processed_files,
+                        total_files,
+                        processed_bytes,
+                        total_bytes,
+                        elapsed_ms: started.elapsed().as_millis(),
+                    });
+                    continue;
+                }
+
+                let requested_codec = effective_codec_for_path(item, options.codec);
+                let mut input =
+                    File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
+                let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
+                let mut parts = Vec::new();
+                let mut first_locator: Option<BlobLocator> = None;
+                loop {
+                    let n = input
+                        .read(&mut chunk)
+                        .map_err(|err| WriterError::Io(err.to_string()))?;
+                    if n == 0 {
+                        break;
+                    }
+                    let prepared =
+                        prepare_chunk_blob_record(&chunk[..n], requested_codec, options.zstd_level)?;
+                    file.write_all(&prepared.record_bytes)
+                        .map_err(|err| WriterError::Io(err.to_string()))?;
+                    let blob_len = prepared.record_bytes.len() as u64;
+                    let locator = BlobLocator {
+                        blob_id: prepared.write.header.blob_id,
+                        codec: prepared.write.header.codec,
+                        blob_offset: next_offset,
+                        blob_len,
+                        volume_index: 0,
+                        parts: None,
+                    };
+                    if first_locator.is_none() {
+                        first_locator = Some(locator.clone());
+                    }
+                    parts.push(ManifestPart {
+                        part_index: parts.len() as u32,
+                        blob_id: prepared.write.header.blob_id,
+                        codec: prepared.write.header.codec,
+                        raw_size: prepared.write.header.raw_size,
+                        stored_size: prepared.write.header.stored_size,
+                        blob_offset: next_offset,
+                        blob_len,
+                        volume_index: 0,
+                    });
+                    next_offset += blob_len;
+                    added_blob_count += 1;
+                }
+                let first = first_locator.expect("multipart file must produce at least one part");
                 entries.push(ManifestEntry {
                     path: item.rel.clone(),
-                    blob_id: locator.blob_id,
+                    blob_id: first.blob_id,
                     content_hash,
                     size: item.size,
                     mtime_ns: item.mtime_ns,
                     created_time_ns: item.created_time_ns,
                     win_attributes: item.win_attributes,
-                    codec: locator.codec,
-                    blob_offset: locator.blob_offset,
-                    blob_len: locator.blob_len,
-                    volume_index: locator.volume_index,
-                    parts: None,
+                    codec: first.codec,
+                    blob_offset: first.blob_offset,
+                    blob_len: first.blob_len,
+                    volume_index: first.volume_index,
+                    parts: Some(parts.clone()),
                     ext: None,
                 });
-                processed_files += 1;
-                processed_bytes += item.size;
-                progress(ProgressEvent {
-                    processed_files,
-                    total_files,
-                    processed_bytes,
-                    total_bytes,
-                    elapsed_ms: started.elapsed().as_millis(),
-                });
-                continue;
-            }
+                content_index.insert(
+                    content_hash,
+                    BlobLocator {
+                        blob_id: first.blob_id,
+                        codec: first.codec,
+                        blob_offset: first.blob_offset,
+                        blob_len: first.blob_len,
+                        volume_index: first.volume_index,
+                        parts: Some(parts),
+                    },
+                );
+            } else {
+                let requested_codec = effective_codec_for_path(item, options.codec);
+                let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+                let content_hash = prepared.content_hash;
+                if let Some(locator) = content_index.get(&content_hash) {
+                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    processed_files += 1;
+                    processed_bytes += item.size;
+                    progress(ProgressEvent {
+                        processed_files,
+                        total_files,
+                        processed_bytes,
+                        total_bytes,
+                        elapsed_ms: started.elapsed().as_millis(),
+                    });
+                    continue;
+                }
 
-            file.write_all(&prepared.record_bytes)
-                .map_err(|err| WriterError::Io(err.to_string()))?;
-            let blob_len = prepared.record_bytes.len() as u64;
-            entries.push(ManifestEntry {
-                path: item.rel.clone(),
-                blob_id: prepared.write.header.blob_id,
-                content_hash,
-                size: item.size,
-                mtime_ns: item.mtime_ns,
-                created_time_ns: item.created_time_ns,
-                win_attributes: item.win_attributes,
-                codec: prepared.write.header.codec,
-                blob_offset: next_offset,
-                blob_len,
-                volume_index: 0,
-                parts: None,
-                ext: None,
-            });
-            content_index.insert(
-                content_hash,
-                BlobLocator {
+                file.write_all(&prepared.record_bytes)
+                    .map_err(|err| WriterError::Io(err.to_string()))?;
+                let blob_len = prepared.record_bytes.len() as u64;
+                entries.push(ManifestEntry {
+                    path: item.rel.clone(),
                     blob_id: prepared.write.header.blob_id,
+                    content_hash,
+                    size: item.size,
+                    mtime_ns: item.mtime_ns,
+                    created_time_ns: item.created_time_ns,
+                    win_attributes: item.win_attributes,
                     codec: prepared.write.header.codec,
                     blob_offset: next_offset,
                     blob_len,
                     volume_index: 0,
-                },
-            );
-            next_offset += blob_len;
-            added_blob_count += 1;
+                    parts: None,
+                    ext: None,
+                });
+                content_index.insert(
+                    content_hash,
+                    BlobLocator {
+                        blob_id: prepared.write.header.blob_id,
+                        codec: prepared.write.header.codec,
+                        blob_offset: next_offset,
+                        blob_len,
+                        volume_index: 0,
+                        parts: None,
+                    },
+                );
+                next_offset += blob_len;
+                added_blob_count += 1;
+            }
             processed_files += 1;
             processed_bytes += item.size;
             progress(ProgressEvent {
@@ -614,6 +762,9 @@ struct PreparedBlobRecord {
     record_bytes: Vec<u8>,
 }
 
+const MULTIPART_THRESHOLD_BYTES: u64 = 32 * 1024 * 1024;
+const MULTIPART_CHUNK_BYTES: usize = 16 * 1024 * 1024;
+
 #[derive(Clone, Copy, Debug)]
 struct ScannedManifestEntryView {
     size: u64,
@@ -683,6 +834,7 @@ pub fn build_content_hash_index(manifest: &ManifestBody) -> HashMap<[u8; 32], Bl
                     blob_offset: entry.blob_offset,
                     blob_len: entry.blob_len,
                     volume_index: entry.volume_index,
+                    parts: entry.parts.clone(),
                 },
             )
         })
@@ -747,8 +899,15 @@ pub fn diff_against_manifest(
 fn sum_unique_blob_bytes(entries: &[ManifestEntry]) -> u64 {
     let mut seen = HashMap::new();
     for entry in entries {
-        seen.entry((entry.volume_index, entry.blob_offset, entry.blob_len))
-            .or_insert(entry.blob_len);
+        if let Some(parts) = &entry.parts {
+            for part in parts {
+                seen.entry((part.volume_index, part.blob_offset, part.blob_len))
+                    .or_insert(part.blob_len);
+            }
+        } else {
+            seen.entry((entry.volume_index, entry.blob_offset, entry.blob_len))
+                .or_insert(entry.blob_len);
+        }
     }
     seen.values().copied().sum()
 }
@@ -769,8 +928,15 @@ fn collect_snapshot_context(command_mode: &str, codec: Codec) -> serde_json::Val
 fn unique_blob_count(entries: &[ManifestEntry]) -> usize {
     let mut seen = HashMap::new();
     for entry in entries {
-        seen.entry((entry.volume_index, entry.blob_offset, entry.blob_len))
-            .or_insert(());
+        if let Some(parts) = &entry.parts {
+            for part in parts {
+                seen.entry((part.volume_index, part.blob_offset, part.blob_len))
+                    .or_insert(());
+            }
+        } else {
+            seen.entry((entry.volume_index, entry.blob_offset, entry.blob_len))
+                .or_insert(());
+        }
     }
     seen.len()
 }
@@ -794,6 +960,32 @@ fn effective_codec_for_path(file: &ScannedSourceFile, requested: Codec) -> Codec
         Codec::NONE
     } else {
         requested
+    }
+}
+
+fn multipart_enabled(file: &ScannedSourceFile) -> bool {
+    file.size > MULTIPART_THRESHOLD_BYTES
+}
+
+fn manifest_entry_from_locator(
+    item: &ScannedSourceFile,
+    content_hash: [u8; 32],
+    locator: &BlobLocator,
+) -> ManifestEntry {
+    ManifestEntry {
+        path: item.rel.clone(),
+        blob_id: locator.blob_id,
+        content_hash,
+        size: item.size,
+        mtime_ns: item.mtime_ns,
+        created_time_ns: item.created_time_ns,
+        win_attributes: item.win_attributes,
+        codec: locator.codec,
+        blob_offset: locator.blob_offset,
+        blob_len: locator.blob_len,
+        volume_index: locator.volume_index,
+        parts: locator.parts.clone(),
+        ext: None,
     }
 }
 
@@ -832,6 +1024,56 @@ fn prepare_blob_record(
 
     Ok(PreparedBlobRecord {
         content_hash: streamed.hash,
+        write,
+        record_bytes,
+    })
+}
+
+fn compute_file_content_hash(path: &Path) -> Result<[u8; 32], WriterError> {
+    let mut input = File::open(path).map_err(|err| WriterError::Io(err.to_string()))?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buf = vec![0u8; MULTIPART_CHUNK_BYTES];
+    loop {
+        let n = input
+            .read(&mut buf)
+            .map_err(|err| WriterError::Io(err.to_string()))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(*hasher.finalize().as_bytes())
+}
+
+fn prepare_chunk_blob_record(
+    chunk: &[u8],
+    requested: Codec,
+    level: i32,
+) -> Result<PreparedBlobRecord, WriterError> {
+    let mut effective_codec = requested;
+    let mut compressed =
+        crate::xunbak::codec::compress(requested, chunk, level).map_err(|err| WriterError::Io(err.to_string()))?;
+    if requested != Codec::NONE
+        && !compression_is_beneficial(chunk.len() as u64, compressed.len() as u64)
+    {
+        effective_codec = Codec::NONE;
+        compressed = chunk.to_vec();
+    }
+
+    let mut record_bytes = Vec::with_capacity(
+        RECORD_PREFIX_SIZE + crate::xunbak::constants::BLOB_HEADER_SIZE + compressed.len(),
+    );
+    let write = write_blob_record_from_precompressed(
+        &mut record_bytes,
+        *blake3::hash(chunk).as_bytes(),
+        chunk.len() as u64,
+        effective_codec,
+        &compressed,
+    )
+    .map_err(|err| WriterError::Io(err.to_string()))?;
+
+    Ok(PreparedBlobRecord {
+        content_hash: *blake3::hash(chunk).as_bytes(),
         write,
         record_bytes,
     })
@@ -1108,63 +1350,133 @@ fn backup_split_with_progress(
 
     for item in &scanned {
         total_raw_bytes += item.size;
-        let requested_codec = effective_codec_for_path(item, options.codec);
-        let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
-        let content_hash = prepared.content_hash;
-        if let Some(locator) = content_index.get(&content_hash) {
+        if multipart_enabled(item) {
+            let content_hash = compute_file_content_hash(&item.path)?;
+            if let Some(locator) = content_index.get(&content_hash) {
+                entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                processed_files += 1;
+                processed_bytes += item.size;
+                progress(ProgressEvent {
+                    processed_files,
+                    total_files,
+                    processed_bytes,
+                    total_bytes,
+                    elapsed_ms: started.elapsed().as_millis(),
+                });
+                continue;
+            }
+            let requested_codec = effective_codec_for_path(item, options.codec);
+            let mut input =
+                File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
+            let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
+            let mut parts = Vec::new();
+            let mut first_locator: Option<BlobLocator> = None;
+            loop {
+                let n = input
+                    .read(&mut chunk)
+                    .map_err(|err| WriterError::Io(err.to_string()))?;
+                if n == 0 {
+                    break;
+                }
+                let prepared =
+                    prepare_chunk_blob_record(&chunk[..n], requested_codec, options.zstd_level)?;
+                let blob_len = prepared.record_bytes.len() as u64;
+                let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
+                let locator = BlobLocator {
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                    parts: None,
+                };
+                if first_locator.is_none() {
+                    first_locator = Some(locator.clone());
+                }
+                parts.push(ManifestPart {
+                    part_index: parts.len() as u32,
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    raw_size: prepared.write.header.raw_size,
+                    stored_size: prepared.write.header.stored_size,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                });
+            }
+            let first = first_locator.expect("multipart file must produce at least one part");
             entries.push(ManifestEntry {
                 path: item.rel.clone(),
-                blob_id: locator.blob_id,
+                blob_id: first.blob_id,
                 content_hash,
                 size: item.size,
                 mtime_ns: item.mtime_ns,
                 created_time_ns: item.created_time_ns,
                 win_attributes: item.win_attributes,
-                codec: locator.codec,
-                blob_offset: locator.blob_offset,
-                blob_len: locator.blob_len,
-                volume_index: locator.volume_index,
-                parts: None,
+                codec: first.codec,
+                blob_offset: first.blob_offset,
+                blob_len: first.blob_len,
+                volume_index: first.volume_index,
+                parts: Some(parts.clone()),
                 ext: None,
             });
-            processed_files += 1;
-            processed_bytes += item.size;
-            progress(ProgressEvent {
-                processed_files,
-                total_files,
-                processed_bytes,
-                total_bytes,
-                elapsed_ms: started.elapsed().as_millis(),
-            });
-            continue;
-        }
-        let blob_len = prepared.record_bytes.len() as u64;
-        let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
-        entries.push(ManifestEntry {
-            path: item.rel.clone(),
-            blob_id: prepared.write.header.blob_id,
-            content_hash,
-            size: item.size,
-            mtime_ns: item.mtime_ns,
-            created_time_ns: item.created_time_ns,
-            win_attributes: item.win_attributes,
-            codec: prepared.write.header.codec,
-            blob_offset,
-            blob_len,
-            volume_index,
-            parts: None,
-            ext: None,
-        });
-        content_index.insert(
-            content_hash,
-            BlobLocator {
+            content_index.insert(
+                content_hash,
+                BlobLocator {
+                    blob_id: first.blob_id,
+                    codec: first.codec,
+                    blob_offset: first.blob_offset,
+                    blob_len: first.blob_len,
+                    volume_index: first.volume_index,
+                    parts: Some(parts),
+                },
+            );
+        } else {
+            let requested_codec = effective_codec_for_path(item, options.codec);
+            let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+            let content_hash = prepared.content_hash;
+            if let Some(locator) = content_index.get(&content_hash) {
+                entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                processed_files += 1;
+                processed_bytes += item.size;
+                progress(ProgressEvent {
+                    processed_files,
+                    total_files,
+                    processed_bytes,
+                    total_bytes,
+                    elapsed_ms: started.elapsed().as_millis(),
+                });
+                continue;
+            }
+            let blob_len = prepared.record_bytes.len() as u64;
+            let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
+            entries.push(ManifestEntry {
+                path: item.rel.clone(),
                 blob_id: prepared.write.header.blob_id,
+                content_hash,
+                size: item.size,
+                mtime_ns: item.mtime_ns,
+                created_time_ns: item.created_time_ns,
+                win_attributes: item.win_attributes,
                 codec: prepared.write.header.codec,
                 blob_offset,
                 blob_len,
                 volume_index,
-            },
-        );
+                parts: None,
+                ext: None,
+            });
+            content_index.insert(
+                content_hash,
+                BlobLocator {
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                    parts: None,
+                },
+            );
+        }
         processed_files += 1;
         processed_bytes += item.size;
         progress(ProgressEvent {
@@ -1297,69 +1609,141 @@ fn update_split_with_progress(
                 processed_bytes,
                 total_bytes,
                 elapsed_ms: started.elapsed().as_millis(),
-            });
-            continue;
-        }
+                });
+                continue;
+            }
 
-        let requested_codec = effective_codec_for_path(item, options.codec);
-        let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
-        let content_hash = prepared.content_hash;
-        if let Some(locator) = content_index.get(&content_hash) {
+        if multipart_enabled(item) {
+            let content_hash = compute_file_content_hash(&item.path)?;
+            if let Some(locator) = content_index.get(&content_hash) {
+                entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                processed_files += 1;
+                processed_bytes += item.size;
+                progress(ProgressEvent {
+                    processed_files,
+                    total_files,
+                    processed_bytes,
+                    total_bytes,
+                    elapsed_ms: started.elapsed().as_millis(),
+                });
+                continue;
+            }
+
+            let requested_codec = effective_codec_for_path(item, options.codec);
+            let mut input =
+                File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
+            let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
+            let mut parts = Vec::new();
+            let mut first_locator: Option<BlobLocator> = None;
+            loop {
+                let n = input
+                    .read(&mut chunk)
+                    .map_err(|err| WriterError::Io(err.to_string()))?;
+                if n == 0 {
+                    break;
+                }
+                let prepared =
+                    prepare_chunk_blob_record(&chunk[..n], requested_codec, options.zstd_level)?;
+                let blob_len = prepared.record_bytes.len() as u64;
+                let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
+                let locator = BlobLocator {
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                    parts: None,
+                };
+                if first_locator.is_none() {
+                    first_locator = Some(locator.clone());
+                }
+                parts.push(ManifestPart {
+                    part_index: parts.len() as u32,
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    raw_size: prepared.write.header.raw_size,
+                    stored_size: prepared.write.header.stored_size,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                });
+                added_blob_count += 1;
+            }
+            let first = first_locator.expect("multipart file must produce at least one part");
             entries.push(ManifestEntry {
                 path: item.rel.clone(),
-                blob_id: locator.blob_id,
+                blob_id: first.blob_id,
                 content_hash,
                 size: item.size,
                 mtime_ns: item.mtime_ns,
                 created_time_ns: item.created_time_ns,
                 win_attributes: item.win_attributes,
-                codec: locator.codec,
-                blob_offset: locator.blob_offset,
-                blob_len: locator.blob_len,
-                volume_index: locator.volume_index,
-                parts: None,
+                codec: first.codec,
+                blob_offset: first.blob_offset,
+                blob_len: first.blob_len,
+                volume_index: first.volume_index,
+                parts: Some(parts.clone()),
                 ext: None,
             });
-            processed_files += 1;
-            processed_bytes += item.size;
-            progress(ProgressEvent {
-                processed_files,
-                total_files,
-                processed_bytes,
-                total_bytes,
-                elapsed_ms: started.elapsed().as_millis(),
-            });
-            continue;
-        }
+            content_index.insert(
+                content_hash,
+                BlobLocator {
+                    blob_id: first.blob_id,
+                    codec: first.codec,
+                    blob_offset: first.blob_offset,
+                    blob_len: first.blob_len,
+                    volume_index: first.volume_index,
+                    parts: Some(parts),
+                },
+            );
+        } else {
+            let requested_codec = effective_codec_for_path(item, options.codec);
+            let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
+            let content_hash = prepared.content_hash;
+            if let Some(locator) = content_index.get(&content_hash) {
+                entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                processed_files += 1;
+                processed_bytes += item.size;
+                progress(ProgressEvent {
+                    processed_files,
+                    total_files,
+                    processed_bytes,
+                    total_bytes,
+                    elapsed_ms: started.elapsed().as_millis(),
+                });
+                continue;
+            }
 
-        let blob_len = prepared.record_bytes.len() as u64;
-        let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
-        entries.push(ManifestEntry {
-            path: item.rel.clone(),
-            blob_id: prepared.write.header.blob_id,
-            content_hash,
-            size: item.size,
-            mtime_ns: item.mtime_ns,
-            created_time_ns: item.created_time_ns,
-            win_attributes: item.win_attributes,
-            codec: prepared.write.header.codec,
-            blob_offset,
-            blob_len,
-            volume_index,
-            parts: None,
-            ext: None,
-        });
-        content_index.insert(
-            content_hash,
-            BlobLocator {
+            let blob_len = prepared.record_bytes.len() as u64;
+            let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
+            entries.push(ManifestEntry {
+                path: item.rel.clone(),
                 blob_id: prepared.write.header.blob_id,
+                content_hash,
+                size: item.size,
+                mtime_ns: item.mtime_ns,
+                created_time_ns: item.created_time_ns,
+                win_attributes: item.win_attributes,
                 codec: prepared.write.header.codec,
                 blob_offset,
                 blob_len,
                 volume_index,
-            },
-        );
-        added_blob_count += 1;
+                parts: None,
+                ext: None,
+            });
+            content_index.insert(
+                content_hash,
+                BlobLocator {
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                    parts: None,
+                },
+            );
+            added_blob_count += 1;
+        }
         processed_files += 1;
         processed_bytes += item.size;
         progress(ProgressEvent {

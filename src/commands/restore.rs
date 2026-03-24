@@ -244,6 +244,10 @@ fn resolve_backup_src(backups_root: &Path, name_or_path: &str) -> Result<PathBuf
 
 fn is_xunbak_path(path: &Path) -> bool {
     path.extension().and_then(|ext| ext.to_str()) == Some("xunbak")
+        || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".xunbak.001"))
 }
 
 fn backup_source_path(backups_root: &Path, name: &str) -> Option<PathBuf> {

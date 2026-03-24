@@ -13,6 +13,16 @@ use xun::xunbak::writer::{
     diff_against_manifest,
 };
 
+fn large_test_bytes(size: usize) -> Vec<u8> {
+    let mut value = 0x1234_5678u32;
+    let mut out = Vec::with_capacity(size);
+    for _ in 0..size {
+        value = value.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        out.push((value >> 24) as u8);
+    }
+    out
+}
+
 fn none_options() -> BackupOptions {
     BackupOptions {
         codec: Codec::NONE,
@@ -310,4 +320,30 @@ fn phase_one_flush_crash_recovers_previous_checkpoint() {
     assert_eq!(result.restored_files, 1);
     assert_eq!(fs::read_to_string(restore_dir.join("a.txt")).unwrap(), "v1");
     assert!(!restore_dir.join("b.txt").exists());
+}
+
+#[test]
+fn rename_large_multipart_file_reuses_parts_and_writes_no_new_blob() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let large = large_test_bytes((32 * 1024 * 1024) + 1_048_576);
+    fs::write(source.join("old.bin"), &large).unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+    let manifest_before = read_manifest(&container);
+    let old_entry = manifest_before.entries.first().unwrap().clone();
+    let old_parts = old_entry.parts.clone().expect("multipart expected");
+
+    std::thread::sleep(Duration::from_millis(20));
+    fs::rename(source.join("old.bin"), source.join("new.bin")).unwrap();
+
+    let update = ContainerWriter::update(&container, &source, &BackupOptions::default()).unwrap();
+    assert_eq!(update.added_blob_count, 0);
+
+    let manifest_after = read_manifest(&container);
+    let new_entry = manifest_after.entries.iter().find(|entry| entry.path == "new.bin").unwrap();
+    assert_eq!(new_entry.content_hash, old_entry.content_hash);
+    assert_eq!(new_entry.parts.as_ref().unwrap(), &old_parts);
 }

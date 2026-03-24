@@ -6,9 +6,20 @@ use ulid::Ulid;
 use xun::xunbak::checkpoint::read_checkpoint_record;
 use xun::xunbak::constants::{Codec, FOOTER_SIZE, HEADER_SIZE, RecordType};
 use xun::xunbak::footer::Footer;
+use xun::xunbak::reader::ContainerReader;
 use xun::xunbak::manifest::read_manifest_record;
 use xun::xunbak::record::scan_records;
 use xun::xunbak::writer::{BackupOptions, ContainerWriter};
+
+fn large_test_bytes(size: usize) -> Vec<u8> {
+    let mut value = 0x1234_5678u32;
+    let mut out = Vec::with_capacity(size);
+    for _ in 0..size {
+        value = value.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        out.push((value >> 24) as u8);
+    }
+    out
+}
 
 #[test]
 fn backup_directory_writes_three_blobs_manifest_and_checkpoint() {
@@ -218,4 +229,55 @@ fn backup_manifest_includes_snapshot_context_and_ulid_snapshot_id() {
             .and_then(|value| value.as_str()),
         Some(env!("CARGO_PKG_VERSION"))
     );
+}
+
+#[test]
+fn backup_large_file_uses_parts_and_restores_content() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let large = large_test_bytes((32 * 1024 * 1024) + 1_048_576);
+    fs::write(source.join("large.bin"), &large).unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    let result = ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+    assert!(result.blob_count >= 2);
+
+    let reader = ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let entry = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "large.bin")
+        .unwrap();
+    let parts = entry.parts.as_ref().expect("large file should use multipart");
+    assert!(parts.len() >= 2);
+    assert_eq!(reader.checkpoint.blob_count as usize, parts.len());
+
+    let restored = reader.read_and_verify_blob(entry).unwrap();
+    assert_eq!(restored, large);
+}
+
+#[test]
+fn backup_large_duplicate_reuses_parts_in_same_run() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    let large = large_test_bytes((32 * 1024 * 1024) + 1_048_576);
+    fs::write(source.join("a.bin"), &large).unwrap();
+    fs::write(source.join("b.bin"), &large).unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    let result = ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+    let reader = ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let a = manifest.entries.iter().find(|entry| entry.path == "a.bin").unwrap();
+    let b = manifest.entries.iter().find(|entry| entry.path == "b.bin").unwrap();
+    let a_parts = a.parts.as_ref().expect("multipart expected");
+    let b_parts = b.parts.as_ref().expect("multipart expected");
+
+    assert_eq!(a_parts.len(), b_parts.len());
+    assert_eq!(result.blob_count, a_parts.len());
+    assert_eq!(reader.checkpoint.blob_count as usize, a_parts.len());
+    assert_eq!(a_parts, b_parts);
 }
