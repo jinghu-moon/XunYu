@@ -132,7 +132,12 @@ struct XunbakInArchive::BridgeContext {
   std::wstring primary_name_w;
   std::string primary_name_utf8;
   std::vector<uint8_t> primary_bytes;
+  CMyComPtr<IInStream> primary_stream;
   CMyComPtr<IArchiveOpenVolumeCallback> open_volume_callback;
+};
+
+struct OutputWriteContext {
+  ISequentialOutStream *stream = nullptr;
 };
 
 static int32_t XunbakOpenVolume(void *ctx,
@@ -147,10 +152,18 @@ static int32_t XunbakOpenVolume(void *ctx,
   auto handle = std::make_unique<XunbakInArchive::StreamHandle>();
 
   if (name == bridge->primary_name_utf8) {
-    handle->kind = XunbakInArchive::StreamHandle::Kind::Memory;
-    handle->memory = bridge->primary_bytes;
-    *out_handle = handle.release();
-    return XUNBAK_OK;
+    if (!bridge->primary_bytes.empty()) {
+      handle->kind = XunbakInArchive::StreamHandle::Kind::Memory;
+      handle->memory = bridge->primary_bytes;
+      *out_handle = handle.release();
+      return XUNBAK_OK;
+    }
+    if (bridge->primary_stream) {
+      handle->kind = XunbakInArchive::StreamHandle::Kind::Com;
+      handle->stream = bridge->primary_stream;
+      *out_handle = handle.release();
+      return XUNBAK_OK;
+    }
   }
 
   if (!bridge->open_volume_callback) {
@@ -267,6 +280,29 @@ static void XunbakCloseVolume(void *ctx, void *stream_handle) {
   delete handle;
 }
 
+static int32_t XunbakWriteOut(void *ctx,
+                              const uint8_t *data_ptr,
+                              size_t data_len,
+                              size_t *out_written) {
+  if (!ctx || !data_ptr || !out_written) {
+    return XUNBAK_ERR_INVALID_ARG;
+  }
+  auto *writer = reinterpret_cast<OutputWriteContext *>(ctx);
+  if (!writer->stream) {
+    return XUNBAK_ERR_INVALID_ARG;
+  }
+
+  const UInt32 requested = static_cast<UInt32>((std::min)(
+      data_len, static_cast<size_t>((std::numeric_limits<UInt32>::max)())));
+  UInt32 processed = 0;
+  const HRESULT hr = writer->stream->Write(data_ptr, requested, &processed);
+  if (FAILED(hr)) {
+    return XUNBAK_ERR_IO;
+  }
+  *out_written = processed;
+  return XUNBAK_OK;
+}
+
 XunbakInArchive::XunbakInArchive() = default;
 
 XunbakInArchive::~XunbakInArchive() {
@@ -287,10 +323,7 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
   }
 
   bridge_ = std::make_unique<BridgeContext>();
-  if (FAILED(ReadAll(stream, &bridge_->primary_bytes))) {
-    bridge_.reset();
-    return E_FAIL;
-  }
+  bridge_->primary_stream = stream;
 
   if (openCallback) {
     openCallback->QueryInterface(IID_IArchiveOpenVolumeCallback,
@@ -312,14 +345,6 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
     bridge_->primary_name_utf8 = "memory.xunbak";
   }
 
-  const int32_t direct_status = xunbak_open(
-      bridge_->primary_bytes.data(),
-      bridge_->primary_bytes.size(),
-      &archive_);
-  if (direct_status == XUNBAK_OK) {
-    return S_OK;
-  }
-
   XunbakVolumeCallbacks callbacks{};
   callbacks.ctx = bridge_.get();
   callbacks.open_volume = &XunbakOpenVolume;
@@ -332,7 +357,7 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
     candidates.push_back(bridge_->primary_name_utf8 + ".001");
   }
 
-  int32_t last_status = direct_status;
+  int32_t last_status = XUNBAK_ERR_OPEN;
   for (const auto &candidate : candidates) {
     last_status = xunbak_open_with_callbacks(
         reinterpret_cast<const uint8_t *>(candidate.data()),
@@ -344,7 +369,21 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
     }
   }
 
-  return MapCoreStatus(last_status);
+  bridge_->primary_stream.Release();
+  if (FAILED(ReadAll(stream, &bridge_->primary_bytes))) {
+    bridge_.reset();
+    return E_FAIL;
+  }
+
+  const int32_t direct_status = xunbak_open(
+      bridge_->primary_bytes.data(),
+      bridge_->primary_bytes.size(),
+      &archive_);
+  if (direct_status == XUNBAK_OK) {
+    return S_OK;
+  }
+
+  return MapCoreStatus(direct_status);
 }
 
 HRESULT XunbakInArchive::Close() noexcept {
@@ -473,23 +512,16 @@ HRESULT XunbakInArchive::Extract(const UInt32 *indices,
     }
 
     if (!testMode && outStream) {
-      uint64_t size = 0;
-      const int32_t size_status = xunbak_item_size(archive_, index, &size);
-      if (size_status != XUNBAK_OK) {
-        return MapCoreStatus(size_status);
-      }
-      std::vector<uint8_t> buffer(static_cast<size_t>(size));
+      OutputWriteContext writer_ctx{};
+      writer_ctx.stream = outStream;
+      XunbakWriteCallbacks callbacks{};
+      callbacks.ctx = &writer_ctx;
+      callbacks.write = &XunbakWriteOut;
       size_t written = 0;
       const int32_t status =
-          xunbak_extract(archive_, index, buffer.data(), buffer.size(), &written);
+          xunbak_extract_with_writer(archive_, index, &callbacks, &written);
       if (status != XUNBAK_OK) {
         return MapCoreStatus(status);
-      }
-      UInt32 processed = 0;
-      const HRESULT write_hr =
-          outStream->Write(buffer.data(), static_cast<UInt32>(written), &processed);
-      if (FAILED(write_hr)) {
-        return write_hr;
       }
     }
 

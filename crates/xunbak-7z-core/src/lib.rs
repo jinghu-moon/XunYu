@@ -113,6 +113,20 @@ pub struct XunbakVolumeCallbacks {
     pub close_volume: Option<unsafe extern "C" fn(ctx: *mut c_void, stream_handle: *mut c_void)>,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct XunbakWriteCallbacks {
+    pub ctx: *mut c_void,
+    pub write: Option<
+        unsafe extern "C" fn(
+            ctx: *mut c_void,
+            data_ptr: *const u8,
+            data_len: usize,
+            out_written: *mut usize,
+        ) -> i32,
+    >,
+}
+
 #[derive(Clone, Copy)]
 pub struct CallbackVolumeSource {
     callbacks: XunbakVolumeCallbacks,
@@ -606,6 +620,40 @@ pub extern "C" fn xunbak_extract(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn xunbak_extract_with_writer(
+    archive: *const XunbakArchiveHandle,
+    index: u32,
+    callbacks: *const XunbakWriteCallbacks,
+    out_written: *mut usize,
+) -> i32 {
+    let handle = match archive_ref(archive) {
+        Ok(handle) => handle,
+        Err(code) => return code,
+    };
+    let item = match item_at(archive, index) {
+        Ok(item) => item,
+        Err(code) => return code,
+    };
+    if callbacks.is_null() {
+        return XUNBAK_ERR_INVALID_ARG;
+    }
+    let callbacks = unsafe { *callbacks };
+    let mut writer = match CallbackWriter::new(callbacks) {
+        Ok(writer) => writer,
+        Err(code) => return code,
+    };
+    if let Err(err) = handle.archive.extract_item_to_writer(&item.path, &mut writer) {
+        return map_core_error(&err);
+    }
+    if !out_written.is_null() {
+        unsafe {
+            *out_written = writer.total_written;
+        }
+    }
+    XUNBAK_OK
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn xunbak_item_size(
     archive: *const XunbakArchiveHandle,
     index: u32,
@@ -678,6 +726,62 @@ fn map_core_error(err: &CoreError) -> i32 {
         CoreError::MissingItem(_) | CoreError::VolumeIndexOutOfRange { .. } => XUNBAK_ERR_RANGE,
         CoreError::Io(_) | CoreError::Blob(_) | CoreError::SeekOverflow(_) => XUNBAK_ERR_IO,
         CoreError::PathHasNoFileName(_) => XUNBAK_ERR_INVALID_ARG,
+    }
+}
+
+struct CallbackWriter {
+    callbacks: XunbakWriteCallbacks,
+    total_written: usize,
+}
+
+impl CallbackWriter {
+    fn new(callbacks: XunbakWriteCallbacks) -> Result<Self, i32> {
+        if callbacks.write.is_none() {
+            return Err(XUNBAK_ERR_INVALID_ARG);
+        }
+        Ok(Self {
+            callbacks,
+            total_written: 0,
+        })
+    }
+}
+
+impl Write for CallbackWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let write = self
+            .callbacks
+            .write
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "write callback missing"))?;
+        let mut written_total = 0usize;
+        while written_total < buf.len() {
+            let mut written = 0usize;
+            let rc = unsafe {
+                write(
+                    self.callbacks.ctx,
+                    buf[written_total..].as_ptr(),
+                    buf.len() - written_total,
+                    &mut written,
+                )
+            };
+            if rc != XUNBAK_OK {
+                return Err(std::io::Error::other(format!(
+                    "write callback failed: {rc}"
+                )));
+            }
+            if written == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "write callback returned zero",
+                ));
+            }
+            written_total += written;
+            self.total_written += written;
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -1145,9 +1249,10 @@ mod tests {
     use xun::xunbak::writer::{BackupOptions, ContainerWriter};
 
     use super::{
-        XUNBAK_OK, XUNBAK_PROP_PATH, XunbakArchive, XunbakVolumeCallbacks, xunbak_close,
-        xunbak_extract, xunbak_get_property, xunbak_item_count, xunbak_item_size, xunbak_open,
-        xunbak_open_with_callbacks, xunbak_volume_count,
+        XUNBAK_OK, XUNBAK_PROP_PATH, XunbakArchive, XunbakVolumeCallbacks, XunbakWriteCallbacks,
+        xunbak_close, xunbak_extract, xunbak_extract_with_writer, xunbak_get_property,
+        xunbak_item_count, xunbak_item_size, xunbak_open, xunbak_open_with_callbacks,
+        xunbak_volume_count,
     };
 
     fn split_options() -> BackupOptions {
@@ -1292,6 +1397,19 @@ mod tests {
         assert_eq!(out_written, out.len());
         assert_eq!(out, b"ffi-roundtrip");
 
+        let mut streamed = Vec::new();
+        let callbacks = XunbakWriteCallbacks {
+            ctx: (&mut streamed) as *mut Vec<u8> as *mut c_void,
+            write: Some(collect_write_callback),
+        };
+        let mut streamed_written = 0usize;
+        assert_eq!(
+            xunbak_extract_with_writer(handle, 0, &callbacks, &mut streamed_written),
+            0
+        );
+        assert_eq!(streamed_written, streamed.len());
+        assert_eq!(streamed, b"ffi-roundtrip");
+
         xunbak_close(handle);
     }
 
@@ -1381,6 +1499,24 @@ mod tests {
         }
     }
 
+    unsafe extern "C" fn collect_write_callback(
+        ctx: *mut c_void,
+        data_ptr: *const u8,
+        data_len: usize,
+        out_written: *mut usize,
+    ) -> i32 {
+        if ctx.is_null() || data_ptr.is_null() || out_written.is_null() {
+            return 1;
+        }
+        let out = unsafe { &mut *(ctx as *mut Vec<u8>) };
+        let data = unsafe { std::slice::from_raw_parts(data_ptr, data_len) };
+        out.extend_from_slice(data);
+        unsafe {
+            *out_written = data_len;
+        }
+        XUNBAK_OK
+    }
+
     #[test]
     fn ffi_open_with_callbacks_extracts_from_split_container() {
         let dir = tempdir().unwrap();
@@ -1429,6 +1565,19 @@ mod tests {
         );
         assert_eq!(out_written, out.len());
         assert_eq!(out, "c".repeat(80).into_bytes());
+
+        let mut streamed = Vec::new();
+        let callbacks = XunbakWriteCallbacks {
+            ctx: (&mut streamed) as *mut Vec<u8> as *mut c_void,
+            write: Some(collect_write_callback),
+        };
+        let mut streamed_written = 0usize;
+        assert_eq!(
+            xunbak_extract_with_writer(handle, 2, &callbacks, &mut streamed_written),
+            0
+        );
+        assert_eq!(streamed_written, streamed.len());
+        assert_eq!(streamed, "c".repeat(80).into_bytes());
 
         xunbak_close(handle);
         drop(ctx);

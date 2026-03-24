@@ -51,6 +51,11 @@ typedef struct XunbakVolumeCallbacks {
   void (*close_volume)(void *ctx, void *stream_handle);
 } XunbakVolumeCallbacks;
 
+typedef struct XunbakWriteCallbacks {
+  void *ctx;
+  int32_t (*write)(void *ctx, const uint8_t *data_ptr, size_t data_len, size_t *out_written);
+} XunbakWriteCallbacks;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -80,6 +85,11 @@ int32_t xunbak_extract(const struct XunbakArchiveHandle *archive,
                        uint8_t *out_buf,
                        size_t buf_len,
                        size_t *out_written);
+
+int32_t xunbak_extract_with_writer(const struct XunbakArchiveHandle *archive,
+                                   uint32_t index,
+                                   const struct XunbakWriteCallbacks *callbacks,
+                                   size_t *out_written);
 
 int32_t xunbak_item_size(const struct XunbakArchiveHandle *archive,
                          uint32_t index,

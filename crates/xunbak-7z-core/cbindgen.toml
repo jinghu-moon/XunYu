@@ -13,6 +13,7 @@ parse_deps = false
 include = [
   "XunbakArchiveHandle",
   "XunbakVolumeCallbacks",
+  "XunbakWriteCallbacks",
   "XUNBAK_OK",
   "XUNBAK_ERR_INVALID_ARG",
   "XUNBAK_ERR_OPEN",
@@ -33,5 +34,6 @@ include = [
   "xunbak_volume_count",
   "xunbak_get_property",
   "xunbak_extract",
+  "xunbak_extract_with_writer",
   "xunbak_item_size",
 ]
