@@ -3514,8 +3514,7 @@ fn backup_mixed_changes_write_expected_manifest_and_stats() {
 
     let v2_name = v2.file_name().unwrap().to_string_lossy().to_string();
     let restore_root = env.root.join("mixed_changes_restore");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         &v2_name,
         "-C",
         root.to_str().unwrap(),
@@ -3561,8 +3560,7 @@ fn backup_restore_recomputed_hash_matches_manifest() {
         .to_string_lossy()
         .into_owned();
     let restore_root = env.root.join("restore_hash_out");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         &v1_name,
         "-C",
         root.to_str().unwrap(),
@@ -4422,3 +4420,4 @@ fn bak_nested_directory_scan() {
         "top-level src file should be backed up"
     );
 }
+

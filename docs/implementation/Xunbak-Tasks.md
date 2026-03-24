@@ -448,9 +448,9 @@
 
 ### 15.2 restore
 
-- [x] **测试**：`xun restore project.xunbak` → 全量恢复
-- [x] **测试**：`xun restore project.xunbak --file path/to/file` → 单文件恢复
-- [x] **测试**：`xun restore project.xunbak --glob "*.rs"` → glob 恢复
+- [x] **测试**：`xun backup restore project.xunbak` → 全量恢复
+- [x] **测试**：`xun backup restore project.xunbak --file path/to/file` → 单文件恢复
+- [x] **测试**：`xun backup restore project.xunbak --glob "*.rs"` → glob 恢复
 - [x] 实现 CLI 入口，调用 reader
 
 ### 15.3 verify
@@ -549,3 +549,4 @@ cargo bench --bench xunbak_bench_divan --features xunbak
 # 快速编译验证
 cargo build --lib --features xunbak
 ```
+

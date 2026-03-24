@@ -108,8 +108,7 @@ fn cli_backup_create_subcommand_format_xunbak_json_respects_config_selection() {
     assert_eq!(value["written"], 2);
 
     let out_dir = root.join("restore_json_selection");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("artifact.xunbak").to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -327,8 +326,7 @@ fn cli_backup_container_split_second_run_updates_incrementally() {
     );
 
     let out_dir = root.join("restore_after_split_update");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak").to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -761,8 +759,7 @@ fn cli_backup_container_split_update_failure_restores_original_volumes() {
     );
 
     let out_dir = root.join("restore_after_failed_update");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak").to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -793,8 +790,7 @@ fn cli_restore_container_restores_to_target_dir() {
     ]));
 
     let out_dir = root.join("restore");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak").to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -868,8 +864,7 @@ fn cli_restore_container_restores_single_file() {
     ]));
 
     let out_dir = root.join("restore");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak").to_str().unwrap(),
         "--file",
         "nested/b.txt",
@@ -909,8 +904,7 @@ fn cli_restore_container_restores_glob_selection() {
     ]));
 
     let out_dir = root.join("restore");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak").to_str().unwrap(),
         "--glob",
         "nested/**/*.rs",
@@ -1073,8 +1067,7 @@ fn cli_backup_convert_dir_to_xunbak_output_writes_selected_file() {
     ]));
 
     let out_dir = root.join("converted_from_dir_restore");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         output.to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -1122,8 +1115,7 @@ fn cli_backup_convert_zip_to_xunbak_output_writes_selected_file() {
     ]));
 
     let out_dir = root.join("restored");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         container.to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -1180,8 +1172,7 @@ fn cli_backup_convert_7z_to_xunbak_output_writes_selected_file() {
     ]));
 
     let out_dir = root.join("restored_from_7z");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         container.to_str().unwrap(),
         "--to",
         out_dir.to_str().unwrap(),
@@ -1378,8 +1369,7 @@ fn cli_backup_restore_verify_split_container() {
     assert!(root.join("backup.xunbak.002").exists());
 
     let restore_dir = root.join("restore");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak").to_str().unwrap(),
         "--to",
         restore_dir.to_str().unwrap(),
@@ -1427,8 +1417,7 @@ fn cli_backup_restore_accepts_split_first_volume_path() {
     ]));
 
     let restore_dir = root.join("restore_first");
-    run_ok(env.cmd().args([
-        "restore",
+    run_ok(env.cmd().args(["backup", "restore",
         root.join("backup.xunbak.001").to_str().unwrap(),
         "--to",
         restore_dir.to_str().unwrap(),
@@ -1442,3 +1431,4 @@ fn cli_backup_restore_accepts_split_first_volume_path() {
         "c".repeat(80)
     );
 }
+

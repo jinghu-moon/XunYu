@@ -7,7 +7,7 @@ use std::time::Instant;
 use crate::backup::artifact::reader::open_entry_reader;
 use crate::backup::artifact::sevenz::{restore_7z_entries, restore_7z_single};
 use crate::backup::artifact::source::read_artifact_entries;
-use crate::cli::RestoreCmd;
+use crate::cli::BackupRestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
 use serde::Serialize;
@@ -52,7 +52,7 @@ struct RestoreExecutionSummary {
     failed: usize,
 }
 
-pub(crate) fn cmd_restore(args: RestoreCmd) -> CliResult {
+pub(crate) fn cmd_restore(args: BackupRestoreCmd) -> CliResult {
     let t_total = Instant::now();
     let timing = restore_timing_enabled();
 

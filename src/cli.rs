@@ -53,7 +53,6 @@ pub use alias::{
     AliasImportCmd, AliasLsCmd, AliasRmCmd, AliasSetupCmd, AliasSubCommand, AliasSyncCmd,
     AliasWhichCmd,
 };
-mod restore;
 #[cfg(feature = "xunbak")]
 mod verify;
 pub use backup::{
@@ -116,7 +115,6 @@ pub use proxy::{
 };
 #[cfg(feature = "redirect")]
 pub use redirect::RedirectCmd;
-pub use restore::RestoreCmd;
 pub use shell::{CompleteCmd, CompletionCmd, InitCmd};
 pub use tree::TreeCmd;
 #[cfg(feature = "crypt")]
@@ -231,7 +229,6 @@ pub enum SubCommand {
     #[cfg(feature = "img")]
     Img(ImgCmd),
     Video(VideoCmd),
-    Restore(RestoreCmd),
     #[cfg(feature = "xunbak")]
     Verify(VerifyCmd),
 }

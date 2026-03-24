@@ -89,7 +89,6 @@ fn normalize_top_level_aliases(raw_args: &mut [String]) {
         }
         match arg.as_str() {
             "bak" => *arg = "backup".to_string(),
-            "rst" => *arg = "restore".to_string(),
             _ => {}
         }
         return;
@@ -106,7 +105,6 @@ fn command_timing_enabled(cmd: &cli::SubCommand) -> bool {
     }
     match cmd {
         cli::SubCommand::Backup(_) => env_flag_present(&["XUN_BACKUP_TIMING", "XUN_BAK_TIMING"]),
-        cli::SubCommand::Restore(_) => env_flag_present(&["XUN_RESTORE_TIMING"]),
         _ => false,
     }
 }
@@ -193,13 +191,10 @@ mod tests {
     use super::normalize_top_level_aliases;
 
     #[test]
-    fn normalize_top_level_aliases_maps_bak_and_rst() {
+    fn normalize_top_level_aliases_maps_bak_only() {
         let mut args = vec!["xun".to_string(), "bak".to_string()];
         normalize_top_level_aliases(&mut args);
         assert_eq!(args[1], "backup");
-
-        let mut args = vec!["xun".to_string(), "--quiet".to_string(), "rst".to_string()];
-        normalize_top_level_aliases(&mut args);
-        assert_eq!(args[2], "restore");
     }
 }
+

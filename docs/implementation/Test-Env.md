@@ -133,7 +133,7 @@ xun pst
 ```
 xun backup -C D:\100_Projects\110_Daily\Xun\target\xun-cli-env\bak-src -m "demo"
 xun backup list
-xun restore <name>
+xun backup restore <name>
 ```
 
 ### 4.9 Lock / FS
@@ -174,3 +174,4 @@ xun serve --port 9527
 ```
 tools\test-env.ps1 -Reset
 ```
+

@@ -28,7 +28,6 @@ use super::super::protect;
 use super::super::proxy;
 #[cfg(feature = "redirect")]
 use super::super::redirect;
-use super::super::restore;
 #[cfg(feature = "crypt")]
 use super::super::vault;
 
@@ -100,7 +99,6 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         #[cfg(feature = "batch_rename")]
         SubCommand::Brn(a) => batch_rename::cmd_brn(a),
         SubCommand::Video(a) => video::cmd_video(a),
-        SubCommand::Restore(a) => restore::cmd_restore(a),
         #[cfg(feature = "xunbak")]
         SubCommand::Verify(a) => crate::backup::app::xunbak::cmd_verify(a),
         SubCommand::Init(_) | SubCommand::Ctx(_) | SubCommand::Env(_) => unreachable!(),

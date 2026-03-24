@@ -152,13 +152,13 @@
 - [x] **测试**：`backup create --format xunbak` 成功生成 `.xunbak`
 - [x] **测试**：底层直接复用现有 `cmd_backup_container` / writer 路径
 - [x] **测试**：新命令路径复用 backup 配置与选择规则
-- [x] **测试**：旧命令 `xun backup --container ...` 与新命令结果一致
+- [x] **测试**：兼容入口 `xun backup --container ...` 与新命令结果一致
 - [x] 将现有 `.xunbak` create 路径接入新 backup 域
 
 ### 4.2 `backup restore xunbak`
 
 - [x] **测试**：`backup restore archive.xunbak --to out` 成功
-- [x] **测试**：旧命令 `xun restore archive.xunbak --to out` 仍成功
+- [x] **测试**：`xun backup restore archive.xunbak --to out` 成功
 - [x] 接入现有 `.xunbak` restore 路径
 
 ### 4.3 `backup convert xunbak -> ...`
@@ -215,7 +215,11 @@
 - [x] **测试**：默认 `--method deflated`
 - [x] **测试**：已压缩/不可压缩扩展名使用 `stored`
 - [x] **测试**：显式 `--method stored` 生效
-- [x] **测试**：ZIP 模式拒绝 `lzma2/bzip2/ppmd`
+- [x] **测试**：ZIP 模式拒绝 `lzma2`（方案 C）
+- [ ] **测试**：显式 `--method bzip2` 生效
+- [ ] **测试**：显式 `--method zstd` 生效
+- [ ] **测试**：显式 `--method ppmd` 生效
+- [ ] **测试**：ZIP 模式拒绝不在目标方法集中的算法
 - [x] 复用现有 `should_skip_compress()` 规则
 
 ### 6.4 `backup restore zip`
@@ -283,11 +287,14 @@
 
 ### 8.2 最小方法集
 
-- [x] **测试**：首版仅支持 `copy|lzma2`
+- [ ] **测试**：`7z` 支持 `copy|lzma2|zstd|ppmd|bzip2|deflate`
 - [x] **测试**：默认 `lzma2 + non-solid`
 - [x] **测试**：显式 `--method copy` 生效
-- [x] **测试**：`bzip2/ppmd` 在首版作为参数错误或 future flag
-- [x] 实现 7z 方法选择与参数校验
+- [ ] **测试**：显式 `--method zstd` 生效
+- [ ] **测试**：显式 `--method ppmd` 生效
+- [ ] **测试**：显式 `--method bzip2` 生效
+- [ ] **测试**：显式 `--method deflate` 生效
+- [ ] 实现 7z 方法选择与参数校验
 
 ### 8.3 7z 元数据与 sidecar
 
@@ -363,8 +370,8 @@
 
 ### 11.3 兼容别名
 
-- [x] **测试**：旧命令 `xun backup ...`（无子命令）仍视作 `backup create`
-- [x] **测试**：旧命令 `xun restore ...` 仍视作 `backup restore`
+- [x] **测试**：兼容入口 `xun backup ...`（无子命令）仍视作 `backup create`
+- [x] **测试**：兼容入口 `xun backup restore ...` 仍视作 `backup restore`
 - [x] **测试**：顶层 `export` 仍保留给现有书签导出
 - [x] 实现兼容别名和迁移提示
 
@@ -372,18 +379,25 @@
 
 ## Phase 12：方案 A — 7-Zip 插件 PoC（后置）
 
+> 当前状态补充：
+> 1. Rust core + C++ 薄壳 PoC 已实现
+> 2. 已有 `build / install / uninstall / smoke / portable / system / accept` 脚本
+> 3. 本阶段未完成项主要转为“版本矩阵、发布化、更多自动化验收”
+
 ### 12.1 PoC 范围
 
-- [ ] **测试**：DLL 可被目标 7-Zip 版本加载
-- [ ] **测试**：单文件 `.xunbak` 可被 7-Zip 列出
-- [ ] **测试**：单文件 `.xunbak` 可被 7-Zip 解压
-- [ ] **限制**：PoC 不支持分卷、不支持写入、不支持富属性
+- [x] **测试**：DLL 可被目标 7-Zip 版本加载
+- [x] **测试**：单文件 `.xunbak` 可被 7-Zip 列出
+- [x] **测试**：单文件 `.xunbak` 可被 7-Zip 解压
+- [x] **测试**：分卷 `.xunbak.001` 可被 7-Zip 列出与解压
+- [x] **限制**：PoC 只读，不支持通过 7-Zip 创建 `.xunbak`
+- [x] **限制**：当前已实现基础属性列，不属于“空属性 PoC”
 
 ### 12.2 正式版壳层迁移
 
-- [ ] **测试**：C++ 薄壳 + Rust staticlib 的 C ABI 往返正确
+- [x] **测试**：C++ 薄壳 + Rust staticlib 的 C ABI 往返正确
 - [ ] **测试**：版本矩阵 24.x / 26.x 通过
-- [ ] **测试**：packed size 显示正确（取 `stored_size` 而非 `blob_len`）
+- [x] **测试**：packed size 显示正确（取 `stored_size` 而非 `blob_len`）
 
 ---
 
@@ -504,3 +518,5 @@ cargo test --test test_xunbak_export --features xunbak
 # 性能基线
 cargo bench
 ```
+
+

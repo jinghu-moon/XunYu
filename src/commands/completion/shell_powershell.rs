@@ -5,7 +5,7 @@ $xun = if ($env:XUN_EXE) { $env:XUN_EXE } else { "xun.exe" }
 $global:XunSubcommands = @(
     "init","completion","config","ctx","list","z","open","ws","save","set","del","delete","check","gc","touch","rename","tag",
     "recent","stats","dedup","export","import","proxy","pon","poff","pst","px","ports","kill","keys","all","fuzzy",
-    "backup","bak","tree","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","restore","rst"
+    "backup","bak","tree","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect"
 )
 $global:XunProxySubcommands = @("set","del","get","detect","test")
 $global:XunCtxSubcommands = @("set","use","off","list","show","del","rename")
@@ -185,3 +185,4 @@ Register-ArgumentCompleter -CommandName 'xyu'    -ScriptBlock $_xunComplete
 Register-ArgumentCompleter -CommandName 'xy'     -ScriptBlock $_xunComplete
 "#
 }
+

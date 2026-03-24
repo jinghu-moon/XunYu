@@ -15,7 +15,6 @@ pub(crate) mod env;
 pub(crate) mod find;
 pub(crate) mod ports;
 pub(crate) mod proxy;
-pub(crate) mod restore;
 pub(crate) mod restore_core;
 pub(crate) mod tree;
 pub(crate) mod video;

@@ -1369,17 +1369,24 @@ waste_ratio = 1 - (referenced_blob_bytes / total_container_bytes)
 建议关系：
 
 1. 当前目录/zip 备份继续保留为兼容模式
-2. `.xunbak` 作为新一代单文件容器模式
-3. 长期由 `.xunbak` 成为主路径
+2. 当前备份产物体系已经扩展为 `dir / zip / 7z / xunbak`
+3. `.xunbak` 负责“单文件主容器路线”
+4. `zip / 7z` 负责“标准互操作导出格式”
+5. 长期由 `.xunbak` 成为主路径
 
 当前命令形态建议：
 
 ```text
 xun backup --container project.xunbak
-xun restore project.xunbak
+xun backup restore project.xunbak
 xun verify project.xunbak
 xun compact project.xunbak
 ```
+
+补充说明：
+
+1. 当前恢复入口统一为 `xun backup restore ...`
+2. 顶层 `xun restore` 已移除，不再作为 `.xunbak` 或传统 backup 的正式用户入口
 
 实现建议：
 
@@ -1729,3 +1736,4 @@ baseline 来源：
 3. 默认 only latest，不做 git
 4. 工程可实现性优先
 5. 先保证速度和稳定，再追求极限压缩率
+

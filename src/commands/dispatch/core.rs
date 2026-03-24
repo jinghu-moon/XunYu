@@ -15,7 +15,7 @@ if (-not (Get-Variable XunHooks -Scope Global -ErrorAction SilentlyContinue)) {
 $global:XunSubcommands = @(
     "acl","alias","init","completion","config","ctx","list","z","open","ws","save","set","delete","del","check","gc","touch","rename","tag",
     "recent","stats","dedup","export","import","proxy","pon","poff","pst","px","ports","kill","ps","pkill","keys","all","fuzzy",
-    "backup","bak","tree","find","env","img","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","restore","rst","desktop",
+    "backup","bak","tree","find","env","img","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","desktop",
     "brn","cstat"
 )
 $global:XunProxySubcommands = @("set","del","get","detect","test")
@@ -134,7 +134,6 @@ function stats { x stats @args }
 function dedup { xun dedup @args }
 function backup { xun backup @args }
 function bak { xun bak @args }
-function rst { xun rst @args }
 function xtree { xun tree @args }
 function xr { xun redirect @args }
 function redir { xun redirect @args }
@@ -416,3 +415,4 @@ pub(super) fn try_dispatch(cmd: SubCommand) -> Result<CliResult, SubCommand> {
         other => Err(other),
     }
 }
+

@@ -7,7 +7,7 @@ use std::time::{Instant, SystemTime};
 
 use console::Style;
 use serde::Serialize;
-use crate::cli::{BackupCmd, BackupRestoreCmd, BackupSubCommand, RestoreCmd};
+use crate::cli::{BackupCmd, BackupSubCommand};
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
 use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
@@ -118,7 +118,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 return crate::backup::app::create::cmd_backup_create(cmd);
             }
             BackupSubCommand::Restore(cmd) => {
-                return crate::backup::app::restore::cmd_restore(cmd.into());
+                return crate::backup::app::restore::cmd_restore(cmd);
             }
             BackupSubCommand::Convert(cmd) => {
                 return crate::backup::app::convert::cmd_backup_convert(cmd);
@@ -1008,22 +1008,6 @@ fn convert_hash_diff_entries(
         }
     }
     out
-}
-
-impl From<BackupRestoreCmd> for RestoreCmd {
-    fn from(value: BackupRestoreCmd) -> Self {
-        Self {
-            name_or_path: value.name_or_path,
-            file: value.file,
-            glob: value.glob,
-            to: value.to,
-            snapshot: value.snapshot,
-            dir: value.dir,
-            dry_run: value.dry_run,
-            yes: value.yes,
-            json: value.json,
-        }
-    }
 }
 
 #[cfg(test)]
