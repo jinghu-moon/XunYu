@@ -20,6 +20,22 @@ fn read_and_verify_blob_returns_original_content() {
 }
 
 #[test]
+fn copy_and_verify_blob_streams_original_content() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+
+    let reader = ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let mut out = Vec::new();
+    reader.copy_and_verify_blob(&manifest.entries[0], &mut out).unwrap();
+    assert_eq!(out, b"aaa");
+}
+
+#[test]
 fn restore_file_restores_only_selected_path() {
     let dir = tempdir().unwrap();
     let source = dir.path().join("src");

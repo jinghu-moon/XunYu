@@ -1,9 +1,11 @@
 /target/
 /target*/
+/build/
 /dashboard-ui/node_modules/
 /dashboard-ui/dist/
 /dashboard-ui/*.tsbuildinfo
 /.ai/
+/.tools/
 /.serena/
 /.spec-workflow/
 /A_backups/

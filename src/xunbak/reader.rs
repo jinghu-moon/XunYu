@@ -1,8 +1,8 @@
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use crate::xunbak::blob::{BlobRecordError, read_blob_record};
+use crate::xunbak::blob::{BlobRecordError, copy_blob_record_content_to_writer, read_blob_record};
 use crate::xunbak::checkpoint::{CheckpointError, CheckpointPayload, read_checkpoint_record};
 use crate::xunbak::constants::{
     BLOB_HEADER_SIZE, FLAG_SPLIT, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, RecordType,
@@ -134,7 +134,7 @@ impl ContainerReader {
             header,
             footer,
             checkpoint,
-            is_split: active_volume_paths.len() > 1,
+            is_split: header.header.flags & FLAG_SPLIT != 0,
             volume_paths: active_volume_paths,
         })
     }
@@ -201,6 +201,42 @@ impl ContainerReader {
             return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
         }
         Ok(blob.content)
+    }
+
+    pub fn copy_and_verify_blob<W: Write>(
+        &self,
+        entry: &ManifestEntry,
+        writer: &mut W,
+    ) -> Result<(), ReaderError> {
+        let mut hashing_writer = ManifestHashingWriter::new(writer);
+        if let Some(parts) = &entry.parts {
+            for part in parts {
+                let volume_path = self.volume_path(part.volume_index)?;
+                let mut file =
+                    File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
+                file.seek(SeekFrom::Start(part.blob_offset))
+                    .map_err(|err| ReaderError::Io(err.to_string()))?;
+                let result = copy_blob_record_content_to_writer(&mut file, &mut hashing_writer)?;
+                if result.header.blob_id != part.blob_id {
+                    return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
+                }
+            }
+            if hashing_writer.finalize() != entry.content_hash {
+                return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
+            }
+            return Ok(());
+        }
+
+        let volume_path = self.volume_path(entry.volume_index)?;
+        let mut file = File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
+        file.seek(SeekFrom::Start(entry.blob_offset))
+            .map_err(|err| ReaderError::Io(err.to_string()))?;
+        let result = copy_blob_record_content_to_writer(&mut file, &mut hashing_writer)?;
+        if result.header.blob_id != entry.blob_id || hashing_writer.finalize() != entry.content_hash
+        {
+            return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
+        }
+        Ok(())
     }
 
     pub fn restore_all(&self, target_dir: &Path) -> Result<RestoreResult, ReaderError> {
@@ -460,18 +496,48 @@ impl ContainerReader {
         let mut restored = 0usize;
         let mut entries = sorted_restore_entries(manifest, |entry| predicate(entry));
         for entry in entries.drain(..) {
-            let content = self.read_and_verify_blob(entry)?;
             let dest = target_dir.join(entry.path.replace('/', "\\"));
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent).map_err(|err| ReaderError::Io(err.to_string()))?;
             }
-            std::fs::write(&dest, &content).map_err(|err| ReaderError::Io(err.to_string()))?;
+            let mut file = File::create(&dest).map_err(|err| ReaderError::Io(err.to_string()))?;
+            self.copy_and_verify_blob(entry, &mut file)?;
             apply_windows_metadata(&dest, entry)?;
             restored += 1;
         }
         Ok(RestoreResult {
             restored_files: restored,
         })
+    }
+}
+
+struct ManifestHashingWriter<'a, W> {
+    inner: &'a mut W,
+    hasher: blake3::Hasher,
+}
+
+impl<'a, W> ManifestHashingWriter<'a, W> {
+    fn new(inner: &'a mut W) -> Self {
+        Self {
+            inner,
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    fn finalize(self) -> [u8; 32] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl<W: Write> Write for ManifestHashingWriter<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.write_all(buf)?;
+        self.hasher.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
     }
 }
 

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use crate::backup_export::sevenz_io::list_7z_entries;
 use crate::backup_formats::{BackupArtifactFormat, VerifyOutputMode, VerifySourceMode};
@@ -99,6 +100,25 @@ pub(crate) fn verify_output(
                     &["Fix: Re-run export and inspect output integrity."],
                 )
             })?;
+            if let Some(cmd) = find_external_7z() {
+                let target = external_7z_target(path);
+                let output = Command::new(&cmd)
+                    .args(["t", target.to_string_lossy().as_ref()])
+                    .output()
+                    .map_err(|err| {
+                        CliError::new(
+                            1,
+                            format!("backup convert output verify failed: launch 7z: {err}"),
+                        )
+                    })?;
+                if !output.status.success() {
+                    return Err(CliError::with_details(
+                        1,
+                        "backup convert output verify failed: external 7z test failed",
+                        &["Fix: Re-run export and inspect split/archive compatibility."],
+                    ));
+                }
+            }
             Ok(())
         }
         BackupArtifactFormat::Dir => Ok(()),
@@ -113,4 +133,22 @@ fn is_xunbak_path(path: &Path) -> bool {
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.ends_with(".xunbak.001"))
+}
+
+fn find_external_7z() -> Option<String> {
+    for candidate in ["7z.exe", "7z", "7za.exe", "7za", "7zr.exe", "7zr"] {
+        if Command::new(candidate).arg("i").output().is_ok() {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
+fn external_7z_target(path: &Path) -> std::path::PathBuf {
+    let first_volume = std::path::PathBuf::from(format!("{}.001", path.display()));
+    if first_volume.exists() {
+        first_volume
+    } else {
+        path.to_path_buf()
+    }
 }

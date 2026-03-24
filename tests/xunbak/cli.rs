@@ -569,6 +569,67 @@ fn cli_backup_convert_unselected_corrupted_blob_succeeds_with_verify_source_off(
 }
 
 #[test]
+fn cli_backup_convert_selected_corrupted_blob_still_fails_with_verify_source_off() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_verify_selected_blob_off");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+
+    let container = root.join("backup.xunbak");
+    run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "--container",
+        "backup.xunbak",
+        "--compression",
+        "none",
+        "-m",
+        "t",
+    ]));
+
+    let reader = xun::xunbak::reader::ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let bad = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "b.txt")
+        .unwrap();
+    let corrupt_offset = bad.blob_offset
+        + xun::xunbak::constants::RECORD_PREFIX_SIZE as u64
+        + xun::xunbak::constants::BLOB_HEADER_SIZE as u64;
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&container)
+        .unwrap();
+    use std::io::{Read, Seek, SeekFrom, Write};
+    file.seek(SeekFrom::Start(corrupt_offset)).unwrap();
+    let mut byte = [0u8; 1];
+    file.read_exact(&mut byte).unwrap();
+    byte[0] ^= 0x5A;
+    file.seek(SeekFrom::Start(corrupt_offset)).unwrap();
+    file.write_all(&byte).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        container.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        root.join("out.zip").to_str().unwrap(),
+        "--file",
+        "b.txt",
+        "--verify-source",
+        "off",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Error:") || stderr.contains("hash"));
+}
+
+#[test]
 fn cli_backup_convert_xunbak_output_verify_on_detects_corrupted_postwrite_output() {
     let env = TestEnv::new();
     let root = env.root.join("proj_verify_output_xunbak_on");

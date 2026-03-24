@@ -53,6 +53,13 @@ pub struct BlobReadResult {
     pub content: Vec<u8>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlobCopyResult {
+    pub header: BlobHeader,
+    pub record_len: u64,
+    pub copied_bytes: u64,
+}
+
 impl BlobHeader {
     pub fn to_bytes(self) -> [u8; BLOB_HEADER_SIZE] {
         let mut bytes = [0u8; BLOB_HEADER_SIZE];
@@ -184,4 +191,112 @@ pub fn read_blob_record<R: Read>(reader: &mut R) -> Result<BlobReadResult, BlobR
         record_len: prefix.record_len,
         content,
     })
+}
+
+pub fn copy_blob_record_content_to_writer<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+) -> Result<BlobCopyResult, BlobRecordError> {
+    let mut prefix_bytes = [0u8; crate::xunbak::constants::RECORD_PREFIX_SIZE];
+    reader
+        .read_exact(&mut prefix_bytes)
+        .map_err(|err| match err.kind() {
+            std::io::ErrorKind::UnexpectedEof => {
+                BlobRecordError::Prefix(RecordScanError::PrefixTooShort { actual: 0 })
+            }
+            _ => BlobRecordError::Io(err.to_string()),
+        })?;
+    let prefix = RecordPrefix::from_bytes(&prefix_bytes).map_err(BlobRecordError::Prefix)?;
+    if prefix.record_type != RecordType::BLOB {
+        return Err(BlobRecordError::UnexpectedRecordType(
+            prefix.record_type.as_u8(),
+        ));
+    }
+
+    let mut header_bytes = [0u8; BLOB_HEADER_SIZE];
+    reader
+        .read_exact(&mut header_bytes)
+        .map_err(|err| match err.kind() {
+            std::io::ErrorKind::UnexpectedEof => BlobRecordError::BlobPayloadTruncated,
+            _ => BlobRecordError::Io(err.to_string()),
+        })?;
+    let header = BlobHeader::from_bytes(&header_bytes).map_err(BlobRecordError::Header)?;
+    let expected_record_len = (BLOB_HEADER_SIZE as u64) + header.stored_size;
+    if prefix.record_len != expected_record_len {
+        return Err(BlobRecordError::BlobLengthMismatch {
+            record_len: prefix.record_len,
+            expected_len: expected_record_len,
+        });
+    }
+    let actual_crc = compute_record_crc(
+        RecordType::BLOB,
+        prefix.record_len.to_le_bytes(),
+        &header_bytes,
+    );
+    if actual_crc != prefix.record_crc {
+        return Err(BlobRecordError::BlobCrcMismatch);
+    }
+
+    let mut hashing_writer = HashingWriter::new(writer);
+    let copied_bytes = match header.codec {
+        codec if codec == Codec::NONE => {
+            let mut limited = reader.take(header.stored_size);
+            std::io::copy(&mut limited, &mut hashing_writer)
+                .map_err(|err| BlobRecordError::Io(err.to_string()))?
+        }
+        codec if codec == Codec::ZSTD => {
+            let limited = reader.take(header.stored_size);
+            let mut decoder =
+                zstd::stream::Decoder::new(limited).map_err(|err| CodecError::ZstdDecode(err.to_string()))?;
+            std::io::copy(&mut decoder, &mut hashing_writer)
+                .map_err(|err| BlobRecordError::Io(err.to_string()))?
+        }
+        codec => return Err(BlobRecordError::Codec(CodecError::UnsupportedCodec(codec.as_u8()))),
+    };
+
+    if copied_bytes != header.raw_size {
+        return Err(BlobRecordError::BlobLengthMismatch {
+            record_len: copied_bytes,
+            expected_len: header.raw_size,
+        });
+    }
+    if hashing_writer.finalize() != header.blob_id {
+        return Err(BlobRecordError::BlobHashMismatch);
+    }
+
+    Ok(BlobCopyResult {
+        header,
+        record_len: prefix.record_len,
+        copied_bytes,
+    })
+}
+
+struct HashingWriter<'a, W> {
+    inner: &'a mut W,
+    hasher: blake3::Hasher,
+}
+
+impl<'a, W> HashingWriter<'a, W> {
+    fn new(inner: &'a mut W) -> Self {
+        Self {
+            inner,
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    fn finalize(self) -> [u8; 32] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl<W: Write> Write for HashingWriter<'_, W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.write_all(buf)?;
+        self.hasher.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
 }

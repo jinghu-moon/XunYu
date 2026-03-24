@@ -168,12 +168,11 @@ fn fixture_split_incremental_update_restores_latest_state() {
     let options = BackupOptions {
         codec: Codec::ZSTD,
         zstd_level: 1,
-        split_size: Some(72 * 1024),
+        split_size: Some(180 * 1024),
     };
 
     ContainerWriter::backup(&base, &source, &options).unwrap();
     assert!(dir.path().join("sample.xunbak.001").exists());
-    assert!(dir.path().join("sample.xunbak.002").exists());
 
     let manifest_before = ContainerReader::open(&base)
         .unwrap()

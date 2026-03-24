@@ -2318,6 +2318,37 @@ fn backup_convert_7z_output_verify_off_skips_corrupted_postwrite_output_check() 
 }
 
 #[test]
+fn backup_convert_7z_output_verify_on_json_reports_verify_failed() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "truncate")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "7z",
+                "-o",
+                env.root.join("verify_fail_json.7z").to_str().unwrap(),
+                "--json",
+            ]),
+    );
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["status"], "verify_failed");
+}
+
+#[test]
 fn backup_skip_if_unchanged_skips_new_version() {
     let env = TestEnv::new();
     let root = env.root.join("proj_skip_unchanged");

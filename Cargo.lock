@@ -4933,6 +4933,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xunbak-7z-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "tempfile",
+ "thiserror 1.0.69",
+ "xun",
+]
+
+[[package]]
 name = "xxhash-rust"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

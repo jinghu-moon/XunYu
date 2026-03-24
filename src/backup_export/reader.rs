@@ -326,13 +326,10 @@ fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
         .iter()
         .find(|candidate| candidate.path.eq_ignore_ascii_case(&entry.path))
         .ok_or_else(|| CliError::new(1, format!("xunbak entry not found: {}", entry.path)))?;
-    let content = reader
-        .read_and_verify_blob(manifest_entry)
-        .map_err(|err| CliError::new(2, err.to_string()))?;
     let mut temp = TempReadableFile::new("xun-entry-xunbak")?;
-    temp.file.write_all(&content).map_err(|err| {
-        CliError::new(1, format!("Write temp xunbak entry failed {}: {err}", entry.path))
-    })?;
+    reader
+        .copy_and_verify_blob(manifest_entry, &mut temp.file)
+        .map_err(|err| CliError::new(2, err.to_string()))?;
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
 }
 

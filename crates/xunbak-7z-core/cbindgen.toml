@@ -1,0 +1,35 @@
+language = "C"
+cpp_compat = true
+pragma_once = true
+usize_is_size_t = true
+documentation = true
+include_guard = "XUNBAK_FFI_GENERATED_H"
+sys_includes = ["stdbool.h", "stddef.h", "stdint.h"]
+
+[parse]
+parse_deps = false
+
+[export]
+include = [
+  "XunbakArchiveHandle",
+  "XunbakVolumeCallbacks",
+  "XUNBAK_OK",
+  "XUNBAK_ERR_INVALID_ARG",
+  "XUNBAK_ERR_OPEN",
+  "XUNBAK_ERR_RANGE",
+  "XUNBAK_ERR_BUFFER_TOO_SMALL",
+  "XUNBAK_ERR_IO",
+  "XUNBAK_PROP_PATH",
+  "XUNBAK_PROP_SIZE",
+  "XUNBAK_PROP_PACKED_SIZE",
+  "XUNBAK_PROP_MTIME_NS",
+  "XUNBAK_PROP_CTIME_NS",
+  "XUNBAK_PROP_WIN_ATTRIBUTES",
+  "xunbak_open",
+  "xunbak_open_with_callbacks",
+  "xunbak_close",
+  "xunbak_item_count",
+  "xunbak_get_property",
+  "xunbak_extract",
+  "xunbak_item_size",
+]

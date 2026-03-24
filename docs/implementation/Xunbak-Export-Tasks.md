@@ -88,15 +88,15 @@
 
 - [x] **测试**：`open_entry()` 返回 `Read` 流，而不是 `Vec<u8>`
 - [ ] **测试**：大文件导出时内存峰值与 chunk size 成正比
-- [ ] **测试**：内容校验失败会中止导出
+- [x] **测试**：内容校验失败会中止导出
 - [-] 实现 `VerifiedEntryReader`
 
 ### 2.2 `.xunbak` 流式读取适配
 
-- [ ] **测试**：从 `.xunbak` 读取单文件可边读边写
+- [x] **测试**：从 `.xunbak` 读取单文件可边读边写
 - [ ] **测试**：multipart entry 可流式拼接输出并保持 hash 校验
-- [ ] **测试**：读取顺序延续现有 `volume_index + blob_offset` 优化
-- [ ] 实现 `copy_verified_entry_to()` 优先复用现有 `.xunbak` 读取/校验逻辑
+- [x] **测试**：读取顺序延续现有 `volume_index + blob_offset` 优化
+- [x] 实现流式 `.xunbak` 读取 / 校验复制路径
 
 ### 2.3 `dir/zip/7z` 流式读取适配
 
@@ -200,7 +200,7 @@
 
 - [x] **测试**：`backup create --format zip` 生成标准 ZIP，可被 `zip` crate reopen
 - [x] **测试**：显式目录项被写入
-- [ ] **测试**：可被 7-Zip 打开（自动化 smoke test + 手工 checklist 分离）
+- [x] **测试**：可被 7-Zip 24.x 打开 / `t` 校验
 - [x] 实现 `zip_writer.rs`
 
 ### 6.2 ZIP 元数据映射
@@ -208,7 +208,7 @@
 - [x] **测试**：UTF-8 路径写入正确
 - [x] **测试**：mtime 正确写入
 - [x] **测试**：Unix 权限位写入；Windows 属性不承诺完整保真
-- [ ] **测试**：超大文件启用 Zip64
+- [x] **测试**：超大文件启用 Zip64
 
 ### 6.3 ZIP 压缩策略
 
@@ -223,7 +223,7 @@
 - [x] **测试**：`backup restore archive.zip --to out`
 - [x] **测试**：内容与 `backup create --format zip` 产物一致
 - [x] **测试**：`restore --file/--glob` 对 ZIP 继续有效
-- [ ] 复用/整理现有 ZIP restore 路径
+- [x] 复用/整理现有 ZIP restore 路径
 
 ### 6.5 `backup convert zip -> ...`
 
@@ -247,7 +247,7 @@
 - [x] **测试**：ZIP 导出后用 `zip` crate reopen 校验 central directory
 - [x] **测试**：7z 导出后用内部 reader/reopen smoke test
 - [x] **测试**：postflight 失败时保留输出但返回 `verify_failed`
-- [ ] **测试**：B3 fallback 下 `7z t` 失败归类为 `verify_failed`
+- [x] **测试**：B3 fallback 下 `7z t` 失败归类为 `verify_failed`
 
 ### 7.3 preview / dry-run / list
 
@@ -276,10 +276,10 @@
 
 ### 8.1 `7z` 核心结构
 
-- [ ] **测试**：最小 `.7z` 归档可被 7-Zip 打开
-- [ ] **测试**：单文件归档可被 7-Zip 解压并内容一致
-- [ ] **测试**：目录 + 多文件归档可被 7-Zip 打开并保持层级
-- [ ] 实现 `sevenz/header.rs / pack_streams.rs / writer.rs`
+- [x] **测试**：最小 `.7z` 归档可被 7-Zip 24.x 打开
+- [x] **测试**：单文件归档可被 7-Zip / 内部 reader 解压并内容一致
+- [x] **测试**：目录 + 多文件归档可被 7-Zip / 内部 reader 打开并保持层级
+- [x] 实现纯 Rust `.7z` 写出模块（`sevenz_io.rs` / `sevenz_segmented.rs`）
 
 ### 8.2 最小方法集
 
@@ -287,7 +287,7 @@
 - [x] **测试**：默认 `lzma2 + non-solid`
 - [x] **测试**：显式 `--method copy` 生效
 - [x] **测试**：`bzip2/ppmd` 在首版作为参数错误或 future flag
-- [ ] 实现 `sevenz/methods.rs`
+- [x] 实现 7z 方法选择与参数校验
 
 ### 8.3 7z 元数据与 sidecar
 
@@ -321,7 +321,7 @@
 ### 9.3 分卷兼容矩阵
 
 - [x] **自动化测试**：本地 reopen / CRC 检查通过
-- [ ] **手工验证清单**：7-Zip 24.x 从 `.001` 打开成功
+- [x] **手工验证清单**：7-Zip 24.x 从 `.001` 打开成功
 - [ ] **手工验证清单**：7-Zip 26.x 从 `.001` 打开成功
 - [ ] **手工验证清单**：NanaZip 从 `.001` 打开成功
 - [ ] **记录**：Windows Explorer 预期不支持
@@ -425,9 +425,9 @@
 
 ## 手工兼容验证清单
 
-- [ ] 7-Zip 24.x 打开 ZIP
-- [ ] 7-Zip 24.x 打开单卷 7z
-- [ ] 7-Zip 24.x 打开分卷 7z `.001`
+- [x] 7-Zip 24.x 打开 ZIP
+- [x] 7-Zip 24.x 打开单卷 7z
+- [x] 7-Zip 24.x 打开分卷 7z `.001`
 - [ ] 7-Zip 26.x 打开 ZIP
 - [ ] 7-Zip 26.x 打开单卷 7z
 - [ ] 7-Zip 26.x 打开分卷 7z `.001`

@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/alias-shim"]
+members = [".", "crates/alias-shim", "crates/xunbak-7z-core"]
 default-members = ["."]
 
 [package]
