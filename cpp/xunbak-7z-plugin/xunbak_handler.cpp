@@ -22,6 +22,7 @@ constexpr PropertyDescriptor kItemPropertyTable[] = {
     {L"Path", kpidPath, VT_BSTR},
     {L"Size", kpidSize, VT_UI8},
     {L"Packed Size", kpidPackSize, VT_UI8},
+    {L"Method", kpidMethod, VT_BSTR},
     {L"Modified", kpidMTime, VT_FILETIME},
     {L"Created", kpidCTime, VT_FILETIME},
     {L"Attributes", kpidAttrib, VT_UI4},
@@ -29,6 +30,7 @@ constexpr PropertyDescriptor kItemPropertyTable[] = {
 
 constexpr PropertyDescriptor kArchivePropertyTable[] = {
     {L"Read Only", kpidReadOnly, VT_BOOL},
+    {L"Files", kpidNumSubFiles, VT_UI4},
     {L"Volumes", kpidNumVolumes, VT_UI4},
 };
 
@@ -55,6 +57,21 @@ bool EndsWithSplitSuffix(const std::string &value) {
          std::isdigit(static_cast<unsigned char>(value[value.size() - 3])) &&
          std::isdigit(static_cast<unsigned char>(value[value.size() - 2])) &&
          std::isdigit(static_cast<unsigned char>(value[value.size() - 1]));
+}
+
+const wchar_t *CodecName(uint32_t codec_id) noexcept {
+  switch (codec_id) {
+    case 0:
+      return L"Copy";
+    case 1:
+      return L"ZSTD";
+    case 2:
+      return L"LZ4";
+    case 3:
+      return L"LZMA";
+    default:
+      return L"Unknown";
+  }
 }
 
 HRESULT ReadAll(IInStream *stream, std::vector<uint8_t> *out) noexcept {
@@ -386,6 +403,16 @@ HRESULT XunbakInArchive::FillProperty(UInt32 index, PROPID propID, PROPVARIANT *
       }
       return xunbak_utils::SetVariantUInt64(packed, value);
     }
+    case kpidMethod: {
+      uint32_t codec_id = 0;
+      size_t written = 0;
+      const int32_t status = xunbak_get_property(
+          archive_, index, XUNBAK_PROP_CODEC_ID, &codec_id, sizeof(codec_id), &written);
+      if (status != XUNBAK_OK) {
+        return MapCoreStatus(status);
+      }
+      return xunbak_utils::SetVariantWideString(CodecName(codec_id), value);
+    }
     case kpidMTime: {
       uint64_t mtime = 0;
       size_t written = 0;
@@ -482,8 +509,10 @@ HRESULT XunbakInArchive::GetArchiveProperty(PROPID propID, PROPVARIANT *value) n
       return xunbak_utils::SetVariantUInt64(static_cast<uint64_t>(bridge_ ? bridge_->primary_bytes.size() : 0), value);
     case kpidReadOnly:
       return xunbak_utils::SetVariantBool(false, value);
+    case kpidNumSubFiles:
+      return xunbak_utils::SetVariantUInt32(archive_ ? xunbak_item_count(archive_) : 0, value);
     case kpidNumVolumes:
-      return xunbak_utils::SetVariantUInt32(1, value);
+      return xunbak_utils::SetVariantUInt32(archive_ ? xunbak_volume_count(archive_) : 0, value);
     default:
       return S_OK;
   }

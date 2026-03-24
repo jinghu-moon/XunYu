@@ -54,6 +54,10 @@ $singleList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l $single 2>&1
 $singleListCode = $LASTEXITCODE
 $splitList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l $splitFirst 2>&1
 $splitListCode = $LASTEXITCODE
+$singleTechList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l -slt $single 2>&1
+$singleTechListCode = $LASTEXITCODE
+$splitTechList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l -slt $splitFirst 2>&1
+$splitTechListCode = $LASTEXITCODE
 
 $singleExtract = Join-Path $workRoot 'extract-single'
 $splitExtract = Join-Path $workRoot 'extract-split'
@@ -75,20 +79,30 @@ $singleMatch = @($singleDiff).Count -eq 0
 $splitMatch = @($splitDiff).Count -eq 0
 $singleDisplayOk = (($singleList | Out-String) -match 'Type = XUNBAK') -and (($singleList | Out-String) -match 'nested/深层\.txt')
 $splitDisplayOk = (($splitList | Out-String) -match 'Type = XUNBAK') -and (($splitList | Out-String) -match 'Volumes = 2') -and (($splitList | Out-String) -match 'nested/深层\.txt')
+$singleTechOk = (($singleTechList | Out-String) -match 'Files = 3') -and (($singleTechList | Out-String) -match 'Method = (Copy|ZSTD)')
+$splitTechOk = (($splitTechList | Out-String) -match 'Files = 3') -and (($splitTechList | Out-String) -match 'Volumes = 2') -and (($splitTechList | Out-String) -match 'Method = (Copy|ZSTD)')
 
 Write-Host "StageRoot: $stageRoot"
 Write-Host "Single list exit: $singleListCode"
 Write-Host "Split list exit: $splitListCode"
 Write-Host "Single extract exit: $singleExtractCode"
 Write-Host "Split extract exit: $splitExtractCode"
+Write-Host "Single tech exit: $singleTechListCode"
+Write-Host "Split tech exit: $splitTechListCode"
 Write-Host "Single match: $singleMatch"
 Write-Host "Split match: $splitMatch"
 Write-Host "Single display: $singleDisplayOk"
 Write-Host "Split display: $splitDisplayOk"
+Write-Host "Single tech: $singleTechOk"
+Write-Host "Split tech: $splitTechOk"
 Write-Host "`n--- single list ---"
 $singleList
 Write-Host "`n--- split list ---"
 $splitList
+Write-Host "`n--- single tech list ---"
+$singleTechList
+Write-Host "`n--- split tech list ---"
+$splitTechList
 Write-Host "`n--- single extract ---"
 $singleExtractOut
 Write-Host "`n--- split extract ---"
@@ -102,7 +116,7 @@ if (-not $splitMatch) {
     $splitDiff | Format-Table -AutoSize
 }
 
-if ($singleListCode -ne 0 -or $splitListCode -ne 0 -or $singleExtractCode -ne 0 -or $splitExtractCode -ne 0 -or -not $singleMatch -or -not $splitMatch -or -not $singleDisplayOk -or -not $splitDisplayOk) {
+if ($singleListCode -ne 0 -or $splitListCode -ne 0 -or $singleTechListCode -ne 0 -or $splitTechListCode -ne 0 -or $singleExtractCode -ne 0 -or $splitExtractCode -ne 0 -or -not $singleMatch -or -not $splitMatch -or -not $singleDisplayOk -or -not $splitDisplayOk -or -not $singleTechOk -or -not $splitTechOk) {
     throw 'portable 7-Zip plugin smoke failed'
 }
 

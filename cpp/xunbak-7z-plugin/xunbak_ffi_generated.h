@@ -36,6 +36,8 @@
 
 #define XUNBAK_PROP_WIN_ATTRIBUTES 5
 
+#define XUNBAK_PROP_CODEC_ID 6
+
 typedef struct XunbakArchiveHandle XunbakArchiveHandle;
 
 typedef struct XunbakVolumeCallbacks {
@@ -63,6 +65,8 @@ int32_t xunbak_open_with_callbacks(const uint8_t *primary_name_ptr,
 void xunbak_close(struct XunbakArchiveHandle *handle);
 
 uint32_t xunbak_item_count(const struct XunbakArchiveHandle *handle);
+
+uint32_t xunbak_volume_count(const struct XunbakArchiveHandle *handle);
 
 int32_t xunbak_get_property(const struct XunbakArchiveHandle *archive,
                             uint32_t index,

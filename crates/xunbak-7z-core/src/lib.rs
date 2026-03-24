@@ -67,6 +67,7 @@ pub struct ArchiveItem {
     pub created_time_ns: u64,
     pub win_attributes: u32,
     pub volume_index: u16,
+    pub codec_id: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -405,6 +406,13 @@ impl ArchiveHandleInner {
             Self::Callback(archive) => archive.extract_item_to_writer(path, writer),
         }
     }
+
+    fn volume_count(&self) -> usize {
+        match self {
+            Self::Memory(archive) => archive.volume_count(),
+            Self::Callback(archive) => archive.volume_count(),
+        }
+    }
 }
 
 pub struct XunbakArchiveHandle {
@@ -424,6 +432,7 @@ pub const XUNBAK_PROP_PACKED_SIZE: u32 = 2;
 pub const XUNBAK_PROP_MTIME_NS: u32 = 3;
 pub const XUNBAK_PROP_CTIME_NS: u32 = 4;
 pub const XUNBAK_PROP_WIN_ATTRIBUTES: u32 = 5;
+pub const XUNBAK_PROP_CODEC_ID: u32 = 6;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn xunbak_open(
@@ -505,6 +514,14 @@ pub extern "C" fn xunbak_item_count(handle: *const XunbakArchiveHandle) -> u32 {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn xunbak_volume_count(handle: *const XunbakArchiveHandle) -> u32 {
+    if handle.is_null() {
+        return 0;
+    }
+    unsafe { (*handle).archive.volume_count() as u32 }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn xunbak_get_property(
     archive: *const XunbakArchiveHandle,
     index: u32,
@@ -550,6 +567,7 @@ pub extern "C" fn xunbak_get_property(
         XUNBAK_PROP_WIN_ATTRIBUTES => {
             write_scalar_property(item.win_attributes, out_buf, buf_len, out_written)
         }
+        XUNBAK_PROP_CODEC_ID => write_scalar_property(item.codec_id, out_buf, buf_len, out_written),
         _ => XUNBAK_ERR_INVALID_ARG,
     }
 }
@@ -927,6 +945,7 @@ fn build_item<S: VolumeSource>(
         created_time_ns: entry.created_time_ns,
         win_attributes: entry.win_attributes,
         volume_index: entry.volume_index,
+        codec_id: entry.codec.as_u8() as u32,
     })
 }
 
@@ -1128,7 +1147,7 @@ mod tests {
     use super::{
         XUNBAK_OK, XUNBAK_PROP_PATH, XunbakArchive, XunbakVolumeCallbacks, xunbak_close,
         xunbak_extract, xunbak_get_property, xunbak_item_count, xunbak_item_size, xunbak_open,
-        xunbak_open_with_callbacks,
+        xunbak_open_with_callbacks, xunbak_volume_count,
     };
 
     fn split_options() -> BackupOptions {
@@ -1241,6 +1260,7 @@ mod tests {
         assert_eq!(xunbak_open(bytes.as_ptr(), bytes.len(), &mut handle), 0);
         assert!(!handle.is_null());
         assert_eq!(xunbak_item_count(handle), 1);
+        assert_eq!(xunbak_volume_count(handle), 1);
 
         let mut size = 0u64;
         assert_eq!(xunbak_item_size(handle, 0, &mut size), 0);
@@ -1397,6 +1417,7 @@ mod tests {
         );
         assert!(!handle.is_null());
         assert_eq!(xunbak_item_count(handle), 3);
+        assert_eq!(xunbak_volume_count(handle), 2);
 
         let mut size = 0u64;
         assert_eq!(xunbak_item_size(handle, 2, &mut size), 0);
