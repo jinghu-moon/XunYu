@@ -83,12 +83,14 @@ impl BenchFixture {
 
 /// 全局大型夹具（50k 路径），避免每个 bench 重复建文件
 static FIXTURE_50K: OnceLock<BenchFixture> = OnceLock::new();
+#[allow(dead_code)]
 static FIXTURE_100K: OnceLock<BenchFixture> = OnceLock::new();
 
 fn fixture_50k() -> &'static BenchFixture {
     FIXTURE_50K.get_or_init(|| BenchFixture::new(25_000, 25_000))
 }
 
+#[allow(dead_code)]
 fn fixture_100k() -> &'static BenchFixture {
     FIXTURE_100K.get_or_init(|| BenchFixture::new(50_000, 50_000))
 }

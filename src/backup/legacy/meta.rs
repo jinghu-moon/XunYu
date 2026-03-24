@@ -14,7 +14,17 @@ pub(crate) const META_FILE: &str = ".bak-meta.json";
 pub(crate) struct BackupStats {
     pub(crate) new: u32,
     pub(crate) modified: u32,
+    #[serde(default)]
+    pub(crate) reused: u32,
     pub(crate) deleted: u32,
+    #[serde(default)]
+    pub(crate) hash_checked_files: u64,
+    #[serde(default)]
+    pub(crate) hash_cache_hits: u64,
+    #[serde(default)]
+    pub(crate) hash_computed_files: u64,
+    #[serde(default)]
+    pub(crate) hardlinked_files: u32,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -12,12 +12,42 @@ pub mod backup {
         CopyFile2,
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct HashDiffBenchStats {
+        pub diff_entries: usize,
+        pub total_files: usize,
+        pub hash_checked_files: u64,
+        pub hash_cache_hits: u64,
+        pub hash_computed_files: u64,
+        pub hash_failed_files: u64,
+    }
+
     pub fn read_baseline_len(prev: &Path) -> usize {
         legacy::bench_read_baseline_len(prev)
     }
 
-    pub fn scan_and_diff_count(current_root: &Path, prev: &Path) -> usize {
-        legacy::bench_scan_and_diff_count(current_root, prev)
+    pub fn scan_and_metadata_diff_count(
+        current_root: &Path,
+        prev: &Path,
+        includes: &[String],
+    ) -> usize {
+        legacy::bench_scan_and_metadata_diff_count(current_root, prev, includes)
+    }
+
+    pub fn scan_and_hash_diff_stats(
+        current_root: &Path,
+        prev: &Path,
+        includes: &[String],
+    ) -> HashDiffBenchStats {
+        let stats = legacy::bench_scan_and_hash_diff(current_root, prev, includes);
+        HashDiffBenchStats {
+            diff_entries: stats.diff_entries,
+            total_files: stats.total_files,
+            hash_checked_files: stats.hash_checked_files,
+            hash_cache_hits: stats.hash_cache_hits,
+            hash_computed_files: stats.hash_computed_files,
+            hash_failed_files: stats.hash_failed_files,
+        }
     }
 
     pub fn copy_tree_with_backend(src_root: &Path, dst_root: &Path, backend: CopyBackend) -> u64 {

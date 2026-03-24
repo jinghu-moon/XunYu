@@ -10,10 +10,12 @@
 //! 运行：cargo bench --bench bak_bench_divan
 
 use std::fs;
+use std::hint::black_box;
 use std::path::PathBuf;
 use std::process::Command;
 
 use divan::{AllocProfiler, Bencher};
+use xun::bench_support;
 
 #[global_allocator]
 static ALLOC: AllocProfiler = AllocProfiler::system();
@@ -140,6 +142,79 @@ fn find_backup(backups: &PathBuf, prefix: &str, suffix: &str) -> String {
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .find(|n| n.starts_with(prefix) && n.ends_with(suffix))
         .unwrap_or_else(|| panic!("backup {prefix}*{suffix} not found in {backups:?}"))
+}
+
+fn prepare_hash_diff_fixture(temp_name: &str) -> (PathBuf, PathBuf) {
+    let tmp = std::env::temp_dir().join(temp_name);
+    let _ = fs::remove_dir_all(&tmp);
+    populate_files(&tmp, 500);
+    fs::write(tmp.join(".xun-bak.json"), BAK_CFG_NO_COMPRESS).unwrap();
+    run_backup(&tmp, &[]);
+    let backups = tmp.join("A_backups");
+    let prev = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    (tmp, prev)
+}
+
+fn bench_includes() -> Vec<String> {
+    vec!["src".to_string(), "public".to_string()]
+}
+
+// ── Hash 增量聚焦基准：metadata vs hash(cold/warm) ───────────────────────────
+
+#[divan::bench]
+fn diff_metadata_500_unchanged(bencher: Bencher) {
+    let (tmp, prev) = prepare_hash_diff_fixture("xun_bak_bench_diff_metadata");
+    let includes = bench_includes();
+
+    bencher.bench(|| {
+        let count = bench_support::backup::scan_and_metadata_diff_count(&tmp, &prev, &includes);
+        black_box(count);
+    });
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+#[divan::bench]
+fn diff_hash_500_unchanged_cold(bencher: Bencher) {
+    let (tmp, prev) = prepare_hash_diff_fixture("xun_bak_bench_diff_hash_cold");
+    let cache_path = tmp.join(".xun-bak-hash-cache.json");
+    let includes = bench_includes();
+
+    bencher.bench(|| {
+        let _ = fs::remove_file(&cache_path);
+        let stats = bench_support::backup::scan_and_hash_diff_stats(&tmp, &prev, &includes);
+        assert_eq!(stats.total_files, 500);
+        assert_eq!(stats.hash_checked_files, 500);
+        assert_eq!(stats.hash_cache_hits, 0);
+        black_box(stats);
+    });
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+
+#[divan::bench]
+fn diff_hash_500_unchanged_warm(bencher: Bencher) {
+    let (tmp, prev) = prepare_hash_diff_fixture("xun_bak_bench_diff_hash_warm");
+    let includes = bench_includes();
+    let warmup = bench_support::backup::scan_and_hash_diff_stats(&tmp, &prev, &includes);
+    assert_eq!(warmup.total_files, 500);
+    assert_eq!(warmup.hash_checked_files, 500);
+
+    bencher.bench(|| {
+        let stats = bench_support::backup::scan_and_hash_diff_stats(&tmp, &prev, &includes);
+        assert_eq!(stats.total_files, 500);
+        assert_eq!(stats.hash_checked_files, 500);
+        assert_eq!(stats.hash_computed_files, 0);
+        assert!(stats.hash_cache_hits > 0);
+        black_box(stats);
+    });
+
+    let _ = fs::remove_dir_all(&tmp);
 }
 
 // ── 基准 1：全量备份 500 文件（目录）────────────────────────────────────────────

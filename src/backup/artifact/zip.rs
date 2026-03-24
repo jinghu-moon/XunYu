@@ -7,17 +7,12 @@ use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::output::CliError;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum ZipCompressionMethod {
+    #[default]
     Auto,
     Stored,
     Deflated,
-}
-
-impl Default for ZipCompressionMethod {
-    fn default() -> Self {
-        ZipCompressionMethod::Auto
-    }
 }
 
 impl From<ZipCompressionMethod> for zip::CompressionMethod {

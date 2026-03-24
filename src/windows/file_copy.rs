@@ -59,10 +59,9 @@ fn copy_file_copyfile2(src: &Path, dst: &Path) -> std::io::Result<u64> {
 
     let hr = unsafe { CopyFile2(src_w.as_ptr(), dst_w.as_ptr(), &params) };
     if hr < 0 {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("CopyFile2 failed: HRESULT=0x{hr:08x}"),
-        ))
+        Err(std::io::Error::other(format!(
+            "CopyFile2 failed: HRESULT=0x{hr:08x}"
+        )))
     } else {
         Ok(metadata.len())
     }

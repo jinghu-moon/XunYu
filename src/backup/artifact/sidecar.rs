@@ -5,6 +5,7 @@ use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::backup::common::hash::encode_hash_hex;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup_formats::BackupArtifactFormat;
@@ -125,11 +126,11 @@ pub(crate) fn write_sidecar_to_dir(
 
 fn resolve_content_hash_hex(entry: &SourceEntry) -> Result<String, CliError> {
     if let Some(hash) = entry.content_hash {
-        return Ok(hex_string(&hash));
+        return Ok(encode_hash_hex(&hash));
     }
     let mut sink = HashSink::default();
     copy_entry_to_writer(entry, &mut sink)?;
-    Ok(hex_string(sink.hasher.finalize().as_bytes()))
+    Ok(encode_hash_hex(sink.hasher.finalize().as_bytes()))
 }
 
 #[derive(Default)]
@@ -146,13 +147,4 @@ impl Write for HashSink {
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
-}
-
-fn hex_string(bytes: &[u8; 32]) -> String {
-    let mut out = String::with_capacity(64);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(&mut out, "{byte:02x}");
-    }
-    out
 }

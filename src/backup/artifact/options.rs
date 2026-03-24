@@ -477,6 +477,7 @@ mod tests {
             exclude: Vec::new(),
             incremental: false,
             skip_if_unchanged: false,
+            diff_mode: None,
             progress: None,
             json: false,
             no_sidecar: false,

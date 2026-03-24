@@ -59,6 +59,14 @@ pub struct BackupCmd {
     /// skip creating a new backup when no changes are detected
     #[argh(switch)]
     pub skip_if_unchanged: bool,
+
+    /// diff mode for traditional backup: auto | hash | meta
+    #[argh(option)]
+    pub diff_mode: Option<String>,
+
+    /// output machine-readable JSON summary
+    #[argh(switch)]
+    pub json: bool,
 }
 
 #[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
@@ -186,6 +194,10 @@ pub struct BackupCreateCmd {
     /// skip creating a new backup when no changes are detected
     #[argh(switch)]
     pub skip_if_unchanged: bool,
+
+    /// diff mode for traditional backup: auto | hash | meta
+    #[argh(option)]
+    pub diff_mode: Option<String>,
 
     /// progress mode: auto | always | off
     #[argh(option)]
@@ -362,5 +374,13 @@ mod tests {
             "out.zip",
         ]);
         assert!(matches!(cmd.cmd, Some(BackupSubCommand::Convert(_))));
+    }
+
+    #[test]
+    fn parse_backup_diff_mode_option() {
+        for mode in ["auto", "hash", "meta"] {
+            let cmd = parse(&["-C", "src", "--diff-mode", mode, "-m", "t"]);
+            assert_eq!(cmd.diff_mode.as_deref(), Some(mode));
+        }
     }
 }

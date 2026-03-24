@@ -57,7 +57,7 @@ fn acl_add_batch_file_writes_audit() {
 #[test]
 fn acl_add_batch_with_missing_path_reports_error() {
     let env = TestEnv::new();
-    let dirs = vec![
+    let dirs = [
         setup_acl_dir(&env, "acl_add_batch_ok_1"),
         setup_acl_dir(&env, "acl_add_batch_ok_2"),
     ];

@@ -96,6 +96,8 @@ pub(crate) fn cmd_backup_create(args: BackupCreateCmd) -> CliResult {
                 exclude: args.exclude,
                 incremental: args.incremental,
                 skip_if_unchanged: args.skip_if_unchanged,
+                diff_mode: args.diff_mode,
+                json: args.json,
             };
             cmd_backup(legacy)
         }
@@ -397,9 +399,7 @@ fn cmd_backup_create_7z(options: &BackupCreateOptions) -> CliResult {
             let _ = plan.cleanup();
             return Err(err);
         }
-        if let Err(err) = plan.finalize() {
-            return Err(err);
-        }
+        plan.finalize()?;
         summary
     } else {
         let plan = SevenZOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;

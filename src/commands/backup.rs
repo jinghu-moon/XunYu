@@ -3,9 +3,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use console::Style;
+use serde::Serialize;
 use crate::cli::{BackupCmd, BackupRestoreCmd, BackupSubCommand, RestoreCmd};
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
@@ -13,9 +14,39 @@ use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
 use crate::windows::file_copy::detect_copy_backend_for_backup;
 
 pub(crate) use crate::backup::legacy::{
-    baseline, checksum, config, diff, find, list, meta, report, retention, scan, time_fmt, util,
-    verify, version, zip,
+    baseline, config, diff, find, hash_diff, hash_manifest, list, meta, report, retention, scan,
+    time_fmt, util, verify, version, zip,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DiffMode {
+    Auto,
+    Hash,
+    Meta,
+}
+
+impl DiffMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Hash => "hash",
+            Self::Meta => "meta",
+        }
+    }
+}
+
+fn parse_diff_mode(value: Option<&str>) -> Result<DiffMode, CliError> {
+    match value.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
+        "auto" => Ok(DiffMode::Auto),
+        "hash" => Ok(DiffMode::Hash),
+        "meta" => Ok(DiffMode::Meta),
+        other => Err(CliError::with_details(
+            2,
+            format!("Invalid --diff-mode: {other}"),
+            &["Fix: Use one of `auto`, `hash`, or `meta`."],
+        )),
+    }
+}
 
 fn backup_timing_enabled() -> bool {
     backup_timing_enabled_with(|name| std::env::var_os(name))
@@ -43,6 +74,41 @@ struct BackupScanRules {
     include_roots: Vec<String>,
     include_patterns: Vec<String>,
     exclude_patterns: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct BackupRunJsonView {
+    action: &'static str,
+    status: &'static str,
+    backup_name: String,
+    result: Option<String>,
+    backup_type: &'static str,
+    diff_mode: &'static str,
+    incremental: bool,
+    dry_run: bool,
+    baseline_mode: &'static str,
+    selected_files: u64,
+    baseline_entries: u64,
+    new: u32,
+    modified: u32,
+    reused: u32,
+    deleted: u32,
+    hash_checked_files: u64,
+    hash_cache_hits: u64,
+    hash_computed_files: u64,
+    hash_failed_files: u64,
+    hardlinked_files: u32,
+    logical_bytes: u64,
+    copied_bytes: u64,
+    cleaned: usize,
+    duration_ms: u64,
+}
+
+fn emit_backup_json(payload: &BackupRunJsonView) {
+    out_println!(
+        "{}",
+        serde_json::to_string_pretty(payload).unwrap_or_default()
+    );
 }
 
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
@@ -200,6 +266,8 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         emit_backup_timing("prepare", t_prepare.elapsed(), Some(folder_name.clone()));
     }
 
+    let resolved_diff_mode = parse_diff_mode(args.diff_mode.as_deref())?;
+
     // 4. Scan + diff + copy
     eprintln!("\n{}", dim.apply_to("Analysis & Backup..."));
     eprintln!("{}", dim.apply_to("--------------------"));
@@ -218,14 +286,155 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         None
     };
 
-    let t_scan = Instant::now();
-    let current = scan::scan_files(
-        &root,
-        &scan_rules.include_roots,
-        &scan_rules.exclude_patterns,
-        &scan_rules.include_patterns,
-    );
-    let elapsed_scan = t_scan.elapsed();
+    // 增量模式只追踪变更文件；全量模式（含目录备份）需追踪所有文件
+    let skip_unchanged = args.incremental;
+    let show_unchanged = runtime::is_verbose() && !skip_unchanged;
+    let (mut current, mut scan_hash_stats, baseline_mode, baseline_entry_count, diff_entries, elapsed_scan, elapsed_baseline) =
+        match resolved_diff_mode {
+        DiffMode::Meta => {
+            let t_scan = Instant::now();
+            let current = scan::scan_files(
+                &root,
+                &scan_rules.include_roots,
+                &scan_rules.exclude_patterns,
+                &scan_rules.include_patterns,
+            );
+            let elapsed_scan = t_scan.elapsed();
+            let t_baseline = Instant::now();
+            let mut baseline = match &ver.prev_path {
+                Some(prev) => baseline::read_metadata_only_baseline(prev),
+                None => HashMap::new(),
+            };
+            let entry_count = baseline.len();
+            let mode = if ver.prev_path.is_some() {
+                "metadata"
+            } else {
+                "fresh_full"
+            };
+            let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
+            (
+                current,
+                scan::ScanHashStats::default(),
+                mode,
+                entry_count,
+                diff_entries,
+                elapsed_scan,
+                t_baseline.elapsed(),
+            )
+        }
+        DiffMode::Auto => {
+            let t_scan = Instant::now();
+            let scan_result = scan::scan_files_with_hash_details(
+                &root,
+                &scan_rules.include_roots,
+                &scan_rules.exclude_patterns,
+                &scan_rules.include_patterns,
+            );
+            let current = scan_result.files;
+            let scan_hash_stats = scan_result.stats;
+            let elapsed_scan = t_scan.elapsed();
+            let t_baseline = Instant::now();
+
+            let previous_hash_manifest = match &ver.prev_path {
+                Some(prev) => hash_manifest::read_backup_snapshot_manifest(prev).ok(),
+                None => None,
+            };
+            if let Some(ref manifest) = previous_hash_manifest {
+                let entry_count = manifest.entries.len();
+                let diff_entries = convert_hash_diff_entries(
+                    &current,
+                    hash_diff::diff_against_hash_manifest(&current, manifest),
+                    skip_unchanged,
+                );
+                (
+                    current,
+                    scan_hash_stats,
+                    "hash_manifest",
+                    entry_count,
+                    diff_entries,
+                    elapsed_scan,
+                    t_baseline.elapsed(),
+                )
+            } else {
+                if ver.prev_path.is_some() {
+                    emit_warning(
+                        "Previous backup is missing .bak-manifest.json; running a fresh full comparison.",
+                        &[
+                            "Legacy size/mtime metadata is no longer used as incremental truth.",
+                            "Fix: Re-create the previous backup if you want hash-based incremental reuse.",
+                        ],
+                    );
+                }
+                let mut baseline = HashMap::new();
+                let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
+                (
+                    current,
+                    scan_hash_stats,
+                    "fresh_full",
+                    0,
+                    diff_entries,
+                    elapsed_scan,
+                    t_baseline.elapsed(),
+                )
+            }
+        }
+        DiffMode::Hash => {
+            let t_scan = Instant::now();
+            let scan_result = scan::scan_files_with_hash_details(
+                &root,
+                &scan_rules.include_roots,
+                &scan_rules.exclude_patterns,
+                &scan_rules.include_patterns,
+            );
+            let current = scan_result.files;
+            let scan_hash_stats = scan_result.stats;
+            let elapsed_scan = t_scan.elapsed();
+            let t_baseline = Instant::now();
+
+            match &ver.prev_path {
+                Some(prev) => {
+                    let manifest = hash_manifest::read_backup_snapshot_manifest(prev).map_err(|_| {
+                        CliError::with_details(
+                            2,
+                            "Hash diff mode requires previous backup .bak-manifest.json",
+                            &[
+                                "Fix: Re-create the previous backup with the new hash manifest.",
+                                "Fix: Or rerun with `--diff-mode auto` / `--diff-mode meta`.",
+                            ],
+                        )
+                    })?;
+                    let entry_count = manifest.entries.len();
+                    let diff_entries = convert_hash_diff_entries(
+                        &current,
+                        hash_diff::diff_against_hash_manifest(&current, &manifest),
+                        skip_unchanged,
+                    );
+                    (
+                        current,
+                        scan_hash_stats,
+                        "hash_manifest",
+                        entry_count,
+                        diff_entries,
+                        elapsed_scan,
+                        t_baseline.elapsed(),
+                    )
+                }
+                None => {
+                    let mut baseline = HashMap::new();
+                    let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
+                    (
+                        current,
+                        scan_hash_stats,
+                        "fresh_full",
+                        0,
+                        diff_entries,
+                        elapsed_scan,
+                        t_baseline.elapsed(),
+                    )
+                }
+            }
+        }
+    };
     if let Some(ref sp) = scan_spinner {
         sp.finish_and_clear();
     }
@@ -233,28 +442,19 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         emit_backup_timing(
             "scan",
             elapsed_scan,
-            Some(format!("files={}", current.len())),
+            Some(format!("files={} diff_mode={}", current.len(), resolved_diff_mode.as_str())),
         );
     }
-
-    let t_baseline = Instant::now();
-    let mut baseline = match &ver.prev_path {
-        Some(p) => baseline::read_baseline(p),
-        None => HashMap::new(),
-    };
     if timing {
         emit_backup_timing(
             "baseline",
-            t_baseline.elapsed(),
-            Some(format!("entries={}", baseline.len())),
+            elapsed_baseline,
+            Some(format!(
+                "entries={baseline_entry_count} mode={baseline_mode}"
+            )),
         );
     }
-
-    // 增量模式只追踪变更文件；全量模式（含目录备份）需追踪所有文件
-    let skip_unchanged = args.incremental;
-    let show_unchanged = runtime::is_verbose() && !skip_unchanged;
     let t_diff = Instant::now();
-    let diff_entries = diff::compute_diff(&current, &mut baseline, skip_unchanged);
     if timing {
         emit_backup_timing(
             "diff",
@@ -284,11 +484,81 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             report::report("Baseline", name, &dim);
         }
         eprintln!();
+        if args.json {
+            emit_backup_json(&BackupRunJsonView {
+                action: "backup",
+                status: "skipped",
+                backup_name: folder_name.clone(),
+                result: None,
+                backup_type: "dir",
+                diff_mode: resolved_diff_mode.as_str(),
+                incremental: args.incremental,
+                dry_run: false,
+                baseline_mode,
+                selected_files: current.len() as u64,
+                baseline_entries: baseline_entry_count as u64,
+                new: 0,
+                modified: 0,
+                reused: 0,
+                deleted: 0,
+                hash_checked_files: scan_hash_stats.hash_checked_files,
+                hash_cache_hits: scan_hash_stats.hash_cache_hits,
+                hash_computed_files: scan_hash_stats.hash_computed_files,
+                hash_failed_files: scan_hash_stats.hash_failed_files,
+                hardlinked_files: 0,
+                logical_bytes: 0,
+                copied_bytes: 0,
+                cleaned: 0,
+                duration_ms: t_total.elapsed().as_millis() as u64,
+            });
+        }
         if timing {
             emit_backup_timing("total", t_total.elapsed(), None);
         }
         return Ok(());
     }
+
+    if matches!(resolved_diff_mode, DiffMode::Meta) {
+        let hash_scan_result = scan::scan_files_with_hash_details(
+            &root,
+            &scan_rules.include_roots,
+            &scan_rules.exclude_patterns,
+            &scan_rules.include_patterns,
+        );
+        current = hash_scan_result.files;
+        scan_hash_stats = hash_scan_result.stats;
+    }
+
+    let removed_paths: Vec<String> = diff_entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, diff::DiffKind::Deleted))
+        .map(|entry| entry.rel.replace('\\', "/"))
+        .collect();
+    let snapshot_entries = current
+        .iter()
+        .filter_map(|(rel, scanned)| {
+            scanned.content_hash.map(|content_hash| {
+                crate::backup::legacy::hash_manifest::BackupSnapshotEntry {
+                    path: rel.replace('\\', "/"),
+                    content_hash,
+                    size: scanned.size,
+                    mtime_ns: scanned.modified_ns,
+                    created_time_ns: scanned.created_time_ns,
+                    win_attributes: scanned.win_attributes,
+                    file_id: scanned.file_id.clone(),
+                }
+            })
+        })
+        .collect();
+    let snapshot_manifest = crate::backup::legacy::hash_manifest::BackupSnapshotManifest::new(
+        root.display().to_string(),
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos() as u64)
+            .unwrap_or(0),
+        snapshot_entries,
+        removed_paths,
+    );
 
     let t_copy = Instant::now();
     let stats = if !args.dry_run {
@@ -300,7 +570,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 .filter(|e| {
                     matches!(
                         e.kind,
-                        diff::DiffKind::New | diff::DiffKind::Modified | diff::DiffKind::Unchanged
+                        diff::DiffKind::New
+                            | diff::DiffKind::Modified
+                            | diff::DiffKind::Reused
+                            | diff::DiffKind::Unchanged
                     )
                 })
                 .count() as u64;
@@ -336,6 +609,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         diff::DiffStats {
             new: 0,
             modified: 0,
+            reused: 0,
             deleted: 0,
             logical_bytes: 0,
             copied_bytes: 0,
@@ -347,9 +621,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             "copy",
             t_copy.elapsed(),
             Some(format!(
-                "+{} ~{} -{} linked={} copied={}B backend={:?}",
+                "+{} ~{} ↺{} -{} linked={} copied={}B backend={:?}",
                 stats.new,
                 stats.modified,
+                stats.reused,
                 stats.deleted,
                 stats.hardlinked_files,
                 stats.copied_bytes,
@@ -366,15 +641,48 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         report::report("Dry run", "no files written", &white);
         report::report(
             "Stats",
-            &format!("+{}  ~{}  -{}", stats.new, stats.modified, stats.deleted),
+            &format!("+{}  ~{}  ↺{}  -{}", stats.new, stats.modified, stats.reused, stats.deleted),
             &white,
         );
         eprintln!();
+        if args.json {
+            emit_backup_json(&BackupRunJsonView {
+                action: "backup",
+                status: "dry_run",
+                backup_name: folder_name.clone(),
+                result: None,
+                backup_type: "dir",
+                diff_mode: resolved_diff_mode.as_str(),
+                incremental: args.incremental,
+                dry_run: true,
+                baseline_mode,
+                selected_files: current.len() as u64,
+                baseline_entries: baseline_entry_count as u64,
+                new: stats.new,
+                modified: stats.modified,
+                reused: stats.reused,
+                deleted: stats.deleted,
+                hash_checked_files: scan_hash_stats.hash_checked_files,
+                hash_cache_hits: scan_hash_stats.hash_cache_hits,
+                hash_computed_files: scan_hash_stats.hash_computed_files,
+                hash_failed_files: scan_hash_stats.hash_failed_files,
+                hardlinked_files: stats.hardlinked_files,
+                logical_bytes: stats.logical_bytes,
+                copied_bytes: stats.copied_bytes,
+                cleaned: 0,
+                duration_ms: t_total.elapsed().as_millis() as u64,
+            });
+        }
         if timing {
             emit_backup_timing("total", t_total.elapsed(), None);
         }
         return Ok(());
     }
+
+    let _ = crate::backup::legacy::hash_manifest::write_backup_snapshot_manifest(
+        &dest_dir,
+        &snapshot_manifest,
+    );
 
     // 5. Optional zip compression
     let mut final_path = dest_dir.clone();
@@ -453,7 +761,12 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         stats: meta::BackupStats {
             new: stats.new,
             modified: stats.modified,
+            reused: stats.reused,
             deleted: stats.deleted,
+            hash_checked_files: scan_hash_stats.hash_checked_files,
+            hash_cache_hits: scan_hash_stats.hash_cache_hits,
+            hash_computed_files: scan_hash_stats.hash_computed_files,
+            hardlinked_files: stats.hardlinked_files,
         },
         incremental: args.incremental,
         size_bytes: if is_zip {
@@ -465,16 +778,6 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     // 目录备份直接写元数据；zip 备份写入已删除的 dest_dir（zip 前）不可用，改写到 backups_root 旁
     if !is_zip {
         meta::write_meta(&final_path, &backup_meta);
-        // 生成 blake3 manifest（目录备份）
-        {
-            let mut file_hashes = std::collections::HashMap::new();
-            for (rel, src) in &current {
-                if let Some(hash) = checksum::file_blake3(&src.path) {
-                    file_hashes.insert(rel.clone(), hash);
-                }
-            }
-            checksum::write_manifest(&final_path, &file_hashes);
-        }
     } else {
         // zip 已完成，元数据写到同名 .meta.json 旁
         let meta_path = backups_root.join(format!("{folder_name}.meta.json"));
@@ -499,34 +802,84 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     let cyan = Style::new().cyan();
     let white = Style::new().white();
 
-    println!("\n{}", green.apply_to("✔ Backup Success"));
-    println!();
-    report::report(
-        "Version",
-        &format!("{}{}", cfg.naming.prefix, ver.next_version),
-        &yellow,
-    );
-    report::report(
-        "Result",
-        &final_path.file_name().unwrap().to_string_lossy(),
-        &cyan,
-    );
-    report::report("Size", &size_display, &cyan);
-    report::report(
-        "Stats",
-        &format!("+{}  ~{}  -{}", stats.new, stats.modified, stats.deleted),
-        &white,
-    );
-    if cleaned > 0 {
-        report::report("Cleaned", &format!("{cleaned} old backups"), &yellow);
+    if !args.json {
+        println!("\n{}", green.apply_to("✔ Backup Success"));
+        println!();
+        report::report(
+            "Version",
+            &format!("{}{}", cfg.naming.prefix, ver.next_version),
+            &yellow,
+        );
+        report::report(
+            "Result",
+            &final_path.file_name().unwrap().to_string_lossy(),
+            &cyan,
+        );
+        report::report("Size", &size_display, &cyan);
+        report::report(
+            "Stats",
+            &format!("+{}  ~{}  ↺{}  -{}", stats.new, stats.modified, stats.reused, stats.deleted),
+            &white,
+        );
+        report::report(
+            "Hash",
+            &format!(
+                "{} checked  {} cache-hit  {} recomputed",
+                scan_hash_stats.hash_checked_files,
+                scan_hash_stats.hash_cache_hits,
+                scan_hash_stats.hash_computed_files
+            ),
+            &white,
+        );
+        report::report(
+            "Reuse",
+            &format!(
+                "{} hardlinks  {} copied",
+                stats.hardlinked_files, stats.copied_bytes
+            ),
+            &white,
+        );
+        if cleaned > 0 {
+            report::report("Cleaned", &format!("{cleaned} old backups"), &yellow);
+        }
     }
     let elapsed_total = t_total.elapsed();
-    report::report(
-        "Time",
-        &format!("{:.2}s", elapsed_total.as_secs_f64()),
-        &dim,
-    );
-    println!();
+    if !args.json {
+        report::report(
+            "Time",
+            &format!("{:.2}s", elapsed_total.as_secs_f64()),
+            &dim,
+        );
+        println!();
+    }
+    if args.json {
+        emit_backup_json(&BackupRunJsonView {
+            action: "backup",
+            status: "ok",
+            backup_name: folder_name.clone(),
+            result: Some(final_path.display().to_string()),
+            backup_type: if is_zip { "zip" } else { "dir" },
+            diff_mode: resolved_diff_mode.as_str(),
+            incremental: args.incremental,
+            dry_run: false,
+            baseline_mode,
+            selected_files: current.len() as u64,
+            baseline_entries: baseline_entry_count as u64,
+            new: stats.new,
+            modified: stats.modified,
+            reused: stats.reused,
+            deleted: stats.deleted,
+            hash_checked_files: scan_hash_stats.hash_checked_files,
+            hash_cache_hits: scan_hash_stats.hash_cache_hits,
+            hash_computed_files: scan_hash_stats.hash_computed_files,
+            hash_failed_files: scan_hash_stats.hash_failed_files,
+            hardlinked_files: stats.hardlinked_files,
+            logical_bytes: stats.logical_bytes,
+            copied_bytes: stats.copied_bytes,
+            cleaned,
+            duration_ms: elapsed_total.as_millis() as u64,
+        });
+    }
     if timing {
         emit_backup_timing("report", t_report.elapsed(), Some(size_display));
         emit_backup_timing("total", t_total.elapsed(), None);
@@ -578,6 +931,83 @@ fn resolve_scan_rules(
         include_patterns,
         exclude_patterns,
     }
+}
+
+fn convert_hash_diff_entries(
+    current: &HashMap<String, scan::ScannedFile>,
+    entries: Vec<hash_diff::HashDiffEntry>,
+    skip_unchanged: bool,
+) -> Vec<diff::DiffEntry> {
+    let mut out = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let rel = entry.path.replace('/', "\\");
+        match entry.kind {
+            hash_diff::HashDiffKind::Unchanged => {
+                if skip_unchanged {
+                    continue;
+                }
+                if let Some(scanned) = current.get(&entry.path).or_else(|| current.get(&rel)) {
+                    out.push(diff::DiffEntry {
+                        rel,
+                        src_path: Some(scanned.path.clone()),
+                        kind: diff::DiffKind::Unchanged,
+                        size_delta: 0,
+                        file_size: scanned.size,
+                        reuse_from_rel: None,
+                    });
+                }
+            }
+            hash_diff::HashDiffKind::Modified => {
+                if let Some(scanned) = current.get(&entry.path).or_else(|| current.get(&rel)) {
+                    out.push(diff::DiffEntry {
+                        rel,
+                        src_path: Some(scanned.path.clone()),
+                        kind: diff::DiffKind::Modified,
+                        size_delta: 0,
+                        file_size: scanned.size,
+                        reuse_from_rel: None,
+                    });
+                }
+            }
+            hash_diff::HashDiffKind::Reused => {
+                if let Some(scanned) = current.get(&entry.path).or_else(|| current.get(&rel)) {
+                    out.push(diff::DiffEntry {
+                        rel,
+                        src_path: Some(scanned.path.clone()),
+                        kind: diff::DiffKind::Reused,
+                        size_delta: 0,
+                        file_size: scanned.size,
+                        reuse_from_rel: entry
+                            .reuse_from_path
+                            .map(|value| value.replace('/', "\\")),
+                    });
+                }
+            }
+            hash_diff::HashDiffKind::New => {
+                if let Some(scanned) = current.get(&entry.path).or_else(|| current.get(&rel)) {
+                    out.push(diff::DiffEntry {
+                        rel,
+                        src_path: Some(scanned.path.clone()),
+                        kind: diff::DiffKind::New,
+                        size_delta: scanned.size as i64,
+                        file_size: scanned.size,
+                        reuse_from_rel: None,
+                    });
+                }
+            }
+            hash_diff::HashDiffKind::Deleted => {
+                out.push(diff::DiffEntry {
+                    rel,
+                    src_path: None,
+                    kind: diff::DiffKind::Deleted,
+                    size_delta: 0,
+                    file_size: 0,
+                    reuse_from_rel: None,
+                });
+            }
+        }
+    }
+    out
 }
 
 impl From<BackupRestoreCmd> for RestoreCmd {

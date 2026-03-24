@@ -448,9 +448,8 @@ fn build_restore_preview_items_from_dir(
             }
 
             let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-            match classify_preview_item(&path, &dst, &rel)? {
-                Some(item) => items.push(item),
-                None => {}
+            if let Some(item) = classify_preview_item(&path, &dst, &rel)? {
+                items.push(item);
             }
         }
     }
@@ -486,9 +485,8 @@ fn build_restore_preview_items_from_zip(
         }
 
         let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-        match classify_preview_item_zip(&mut entry, &dst, &rel)? {
-            Some(item) => items.push(item),
-            None => {}
+        if let Some(item) = classify_preview_item_zip(&mut entry, &dst, &rel)? {
+            items.push(item);
         }
     }
 
@@ -510,9 +508,8 @@ fn build_restore_preview_items_from_artifact(
         }
         let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
         let mut reader = open_entry_reader(&entry)?;
-        match classify_preview_item_zip(&mut reader, &dst, &rel)? {
-            Some(item) => items.push(item),
-            None => {}
+        if let Some(item) = classify_preview_item_zip(&mut reader, &dst, &rel)? {
+            items.push(item);
         }
     }
     items.sort_by(|a, b| a.rel.cmp(&b.rel));
@@ -661,6 +658,8 @@ fn run_snapshot_backup(root: &Path, _cfg: &BackupConfig) -> CliResult {
         exclude: vec![],
         incremental: false,
         skip_if_unchanged: false,
+        diff_mode: None,
+        json: false,
     };
     crate::backup::app::create::cmd_backup(args)
 }

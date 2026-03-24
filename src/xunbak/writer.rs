@@ -9,6 +9,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 use ulid::Ulid;
 
+use crate::backup::common::hash as common_hash;
 use crate::xunbak::blob::{BlobWriteResult, write_blob_record_from_precompressed};
 use crate::xunbak::checkpoint::{
     CheckpointError, CheckpointPayload, compute_manifest_hash, write_checkpoint_record,
@@ -822,12 +823,12 @@ fn collect_files(
 }
 
 pub fn build_content_hash_index(manifest: &ManifestBody) -> HashMap<[u8; 32], BlobLocator> {
-    manifest
-        .entries
-        .iter()
-        .map(|entry| {
+    common_hash::build_content_hash_groups(&manifest.entries, |entry| entry.content_hash)
+        .into_iter()
+        .map(|(content_hash, entries)| {
+            let entry = entries.last().expect("content hash group must not be empty");
             (
-                entry.content_hash,
+                content_hash,
                 BlobLocator {
                     blob_id: entry.blob_id,
                     codec: entry.codec,
@@ -842,11 +843,7 @@ pub fn build_content_hash_index(manifest: &ManifestBody) -> HashMap<[u8; 32], Bl
 }
 
 fn build_path_index<'a>(manifest: &'a ManifestBody) -> HashMap<&'a str, &'a ManifestEntry> {
-    manifest
-        .entries
-        .iter()
-        .map(|entry| (entry.path.as_str(), entry))
-        .collect()
+    common_hash::build_path_index(&manifest.entries, |entry| entry.path.as_str())
 }
 
 pub fn diff_against_manifest(
@@ -1030,19 +1027,7 @@ fn prepare_blob_record(
 }
 
 fn compute_file_content_hash(path: &Path) -> Result<[u8; 32], WriterError> {
-    let mut input = File::open(path).map_err(|err| WriterError::Io(err.to_string()))?;
-    let mut hasher = blake3::Hasher::new();
-    let mut buf = vec![0u8; MULTIPART_CHUNK_BYTES];
-    loop {
-        let n = input
-            .read(&mut buf)
-            .map_err(|err| WriterError::Io(err.to_string()))?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-    Ok(*hasher.finalize().as_bytes())
+    common_hash::compute_file_content_hash(path).map_err(|err| WriterError::Io(err.to_string()))
 }
 
 fn prepare_chunk_blob_record(

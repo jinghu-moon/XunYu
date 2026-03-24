@@ -37,26 +37,11 @@ pub(crate) fn cmd_backup_verify(
         ));
     };
 
-    if backup_path.extension().is_some_and(|e| e == "zip") {
-        if json {
-            let payload = BackupVerifyResultView {
-                action: "verify".to_string(),
-                name: name.to_string(),
-                status: "unsupported".to_string(),
-                backup_type: "zip".to_string(),
-                corrupted_files: Vec::new(),
-            };
-            out_println!(
-                "{}",
-                serde_json::to_string_pretty(&payload).unwrap_or_default()
-            );
-        }
-        return Err(CliError::with_details(
-            2,
-            "Verify is only supported for directory backups.".to_string(),
-            &["Hint: Re-run backup with --no-compress to use verify."],
-        ));
-    }
+    let backup_type = if backup_path.extension().is_some_and(|e| e == "zip") {
+        "zip"
+    } else {
+        "dir"
+    };
 
     match verify_manifest(&backup_path) {
         VerifyResult::Ok => {
@@ -65,7 +50,7 @@ pub(crate) fn cmd_backup_verify(
                     action: "verify".to_string(),
                     name: name.to_string(),
                     status: "ok".to_string(),
-                    backup_type: "dir".to_string(),
+                    backup_type: backup_type.to_string(),
                     corrupted_files: Vec::new(),
                 };
                 out_println!(
@@ -83,7 +68,7 @@ pub(crate) fn cmd_backup_verify(
                     action: "verify".to_string(),
                     name: name.to_string(),
                     status: "corrupted".to_string(),
-                    backup_type: "dir".to_string(),
+                    backup_type: backup_type.to_string(),
                     corrupted_files: files.clone(),
                 };
                 out_println!(
@@ -106,7 +91,7 @@ pub(crate) fn cmd_backup_verify(
                     action: "verify".to_string(),
                     name: name.to_string(),
                     status: "no_manifest".to_string(),
-                    backup_type: "dir".to_string(),
+                    backup_type: backup_type.to_string(),
                     corrupted_files: Vec::new(),
                 };
                 out_println!(
@@ -118,7 +103,7 @@ pub(crate) fn cmd_backup_verify(
                 2,
                 format!("No manifest found in backup: {name}"),
                 &[
-                    "Hint: Manifest is only generated for backups created after this update.",
+                    "Hint: This backup does not contain the new hash manifest.",
                     "Hint: Re-create the backup to generate a manifest.",
                 ],
             ))

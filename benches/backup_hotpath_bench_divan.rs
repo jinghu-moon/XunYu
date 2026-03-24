@@ -156,6 +156,10 @@ fn walk_files_inner(root: &PathBuf, out: &mut Vec<PathBuf>) {
     }
 }
 
+fn bench_includes() -> Vec<String> {
+    vec!["src".to_string(), "public".to_string()]
+}
+
 #[divan::bench]
 fn read_baseline_500_dir(bencher: Bencher) {
     let fx = fixture();
@@ -165,7 +169,8 @@ fn read_baseline_500_dir(bencher: Bencher) {
 #[divan::bench]
 fn scan_and_diff_500_with_50_changed(bencher: Bencher) {
     let fx = fixture();
-    bencher.bench(|| backup::scan_and_diff_count(&fx.current, &fx.baseline));
+    let includes = bench_includes();
+    bencher.bench(|| backup::scan_and_metadata_diff_count(&fx.current, &fx.baseline, &includes));
 }
 
 #[divan::bench]

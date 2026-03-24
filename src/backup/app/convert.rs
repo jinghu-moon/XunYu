@@ -311,9 +311,7 @@ fn execute_backup_convert_to_dir(
         let _ = plan.cleanup();
         return Err(err);
     }
-    if let Err(err) = plan.finalize() {
-        return Err(err);
-    }
+    plan.finalize()?;
     let written = summary.entry_count;
     let bytes_in = summary.bytes_in;
     let bytes_out = compute_output_bytes(BackupArtifactFormat::Dir, &options.output);
@@ -413,9 +411,7 @@ fn execute_backup_convert_to_zip(
         let _ = plan.cleanup();
         return Err(err);
     }
-    if let Err(err) = plan.finalize() {
-        return Err(err);
-    }
+    plan.finalize()?;
     let bytes_out = compute_output_bytes(BackupArtifactFormat::Zip, &options.output);
     if show_progress {
         emit_progress_event(&ExportProgressEvent {
@@ -521,9 +517,7 @@ fn execute_backup_convert_to_7z(
             let _ = plan.cleanup();
             return Err(err);
         }
-        if let Err(err) = plan.finalize() {
-            return Err(err);
-        }
+        plan.finalize()?;
         summary
     } else {
         let plan = SevenZOutputPlan::prepare(&options.output, effective_overwrite)?;
@@ -539,9 +533,7 @@ fn execute_backup_convert_to_7z(
             let _ = plan.cleanup();
             return Err(err);
         }
-        if let Err(err) = plan.finalize() {
-            return Err(err);
-        }
+        plan.finalize()?;
         summary
     };
     let bytes_out = compute_output_bytes(BackupArtifactFormat::SevenZ, &options.output);

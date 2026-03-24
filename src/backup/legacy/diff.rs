@@ -15,6 +15,7 @@ use crate::windows::file_copy::{FileCopyBackend, copy_file};
 pub(crate) struct DiffStats {
     pub(crate) new: u32,
     pub(crate) modified: u32,
+    pub(crate) reused: u32,
     pub(crate) deleted: u32,
     pub(crate) logical_bytes: u64,
     pub(crate) copied_bytes: u64,
@@ -40,12 +41,14 @@ pub(crate) struct DiffEntry {
     pub(crate) kind: DiffKind,
     pub(crate) size_delta: i64,
     pub(crate) file_size: u64,
+    pub(crate) reuse_from_rel: Option<String>,
 }
 
 #[derive(PartialEq, Eq)]
 pub(crate) enum DiffKind {
     New,
     Modified,
+    Reused,
     Unchanged,
     Deleted,
 }
@@ -60,9 +63,36 @@ pub(crate) fn compute_diff(
 
     for (rel, scanned) in current {
         if let Some(old_meta) = old.remove(rel) {
+            if let (Some(current_hash), Some(old_hash)) = (scanned.content_hash, old_meta.content_hash)
+            {
+                if current_hash == old_hash {
+                    if !skip_unchanged {
+                        entries.push(DiffEntry {
+                            rel: rel.clone(),
+                            src_path: Some(scanned.path.clone()),
+                            kind: DiffKind::Unchanged,
+                            size_delta: 0,
+                            file_size: scanned.size,
+                            reuse_from_rel: None,
+                        });
+                    }
+                } else {
+                    let delta = scanned.size as i64 - old_meta.size as i64;
+                    entries.push(DiffEntry {
+                        rel: rel.clone(),
+                        src_path: Some(scanned.path.clone()),
+                        kind: DiffKind::Modified,
+                        size_delta: delta,
+                        file_size: scanned.size,
+                        reuse_from_rel: None,
+                    });
+                }
+                continue;
+            }
+
             let size_changed = scanned.size != old_meta.size;
             // 只要 mtime 不同就视为变更。备份场景宁可多备份，不能漏备份。
-            let time_changed = scanned.modified != old_meta.modified;
+            let time_changed = scanned.modified_ns != old_meta.modified_ns;
             if size_changed || time_changed {
                 let delta = scanned.size as i64 - old_meta.size as i64;
                 entries.push(DiffEntry {
@@ -71,6 +101,7 @@ pub(crate) fn compute_diff(
                     kind: DiffKind::Modified,
                     size_delta: delta,
                     file_size: scanned.size,
+                    reuse_from_rel: None,
                 });
             } else if !skip_unchanged {
                 entries.push(DiffEntry {
@@ -79,6 +110,7 @@ pub(crate) fn compute_diff(
                     kind: DiffKind::Unchanged,
                     size_delta: 0,
                     file_size: scanned.size,
+                    reuse_from_rel: None,
                 });
             }
         } else {
@@ -88,6 +120,7 @@ pub(crate) fn compute_diff(
                 kind: DiffKind::New,
                 size_delta: scanned.size as i64,
                 file_size: scanned.size,
+                reuse_from_rel: None,
             });
         }
     }
@@ -100,6 +133,7 @@ pub(crate) fn compute_diff(
             kind: DiffKind::Deleted,
             size_delta: 0,
             file_size: 0,
+            reuse_from_rel: None,
         });
     }
 
@@ -111,6 +145,7 @@ pub(crate) fn print_diff(entries: &[DiffEntry], show_unchanged: bool) {
     let green = Style::new().green();
     let yellow = Style::new().yellow();
     let blue = Style::new().blue();
+    let cyan = Style::new().cyan();
     let dim = Style::new().dim();
     let red = Style::new().red();
 
@@ -147,6 +182,11 @@ pub(crate) fn print_diff(entries: &[DiffEntry], show_unchanged: bool) {
                 }
                 eprintln!();
             }
+            DiffKind::Reused => {
+                eprint!("{} ", cyan.apply_to("\u{21ba}"));
+                print_colored_path(&e.rel);
+                eprintln!();
+            }
             DiffKind::Unchanged => {
                 eprint!("{} ", dim.apply_to("="));
                 print_colored_path(&e.rel);
@@ -175,6 +215,7 @@ pub(crate) fn apply_diff(
     let mut link_jobs: Vec<CopyJob> = Vec::new();
     let mut cnt_new = 0u32;
     let mut cnt_mod = 0u32;
+    let mut cnt_reused = 0u32;
     let mut cnt_del = 0u32;
     let mut logical_bytes = 0u64;
 
@@ -207,6 +248,36 @@ pub(crate) fn apply_diff(
                         dst,
                         link_wide: None,
                     });
+                    logical_bytes += e.file_size;
+                }
+            }
+            DiffKind::Reused => {
+                cnt_reused += 1;
+                if let Some(src) = &e.src_path {
+                    let dst = dest.join(e.rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+                    if let Some(parent) = dst.parent() {
+                        dir_set.insert(parent.to_path_buf());
+                    }
+                    let link_wide = prev_backup_dir.and_then(|prev_dir| {
+                        e.reuse_from_rel.as_ref().map(|reuse_from_rel| WideLinkPaths {
+                            src: wide_null(
+                                &prev_dir.join(
+                                    reuse_from_rel.replace('\\', std::path::MAIN_SEPARATOR_STR),
+                                ),
+                            ),
+                            dst: wide_null(&dst),
+                        })
+                    });
+                    let job = CopyJob {
+                        src: src.clone(),
+                        dst,
+                        link_wide,
+                    };
+                    if job.link_wide.is_some() {
+                        link_jobs.push(job);
+                    } else {
+                        copy_jobs.push(job);
+                    }
                     logical_bytes += e.file_size;
                 }
             }
@@ -270,6 +341,7 @@ pub(crate) fn apply_diff(
     DiffStats {
         new: cnt_new,
         modified: cnt_mod,
+        reused: cnt_reused,
         deleted: cnt_del,
         logical_bytes,
         copied_bytes,
@@ -327,11 +399,15 @@ fn print_colored_path(rel: &str) {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::time::{Duration, SystemTime};
 
-    use super::{DiffKind, compute_diff};
+    use tempfile::tempdir;
+
+    use super::{DiffEntry, DiffKind, apply_diff, compute_diff};
     use crate::backup::legacy::baseline::FileMeta;
     use crate::backup::legacy::scan::ScannedFile;
+    use crate::windows::file_copy::FileCopyBackend;
 
     #[test]
     fn compute_diff_marks_mtime_difference_as_modified_even_if_not_newer() {
@@ -346,6 +422,14 @@ mod tests {
                 path: path.clone(),
                 size: 10,
                 modified: older,
+                modified_ns: older
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64,
+                created_time_ns: None,
+                win_attributes: 0,
+                file_id: None,
+                content_hash: None,
             },
         );
 
@@ -355,11 +439,101 @@ mod tests {
             FileMeta {
                 size: 10,
                 modified: newer,
+                modified_ns: newer
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64,
+                created_time_ns: None,
+                win_attributes: 0,
+                file_id: None,
+                content_hash: None,
             },
         );
 
         let diff = compute_diff(&current, &mut old, false);
         assert_eq!(diff.len(), 1);
         assert!(matches!(diff[0].kind, DiffKind::Modified));
+    }
+
+    #[test]
+    fn compute_diff_prefers_content_hash_when_available() {
+        let path = std::path::PathBuf::from("C:\\tmp\\a.txt");
+        let time_a = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let time_b = SystemTime::UNIX_EPOCH + Duration::from_secs(200);
+
+        let mut current = HashMap::new();
+        current.insert(
+            "a.txt".to_string(),
+            ScannedFile {
+                path: path.clone(),
+                size: 10,
+                modified: time_b,
+                modified_ns: time_b
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64,
+                created_time_ns: None,
+                win_attributes: 0,
+                file_id: None,
+                content_hash: Some([7; 32]),
+            },
+        );
+
+        let mut old = HashMap::new();
+        old.insert(
+            "a.txt".to_string(),
+            FileMeta {
+                size: 10,
+                modified: time_a,
+                modified_ns: time_a
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64,
+                created_time_ns: None,
+                win_attributes: 0,
+                file_id: None,
+                content_hash: Some([7; 32]),
+            },
+        );
+
+        let diff = compute_diff(&current, &mut old, false);
+        assert_eq!(diff.len(), 1);
+        assert!(matches!(diff[0].kind, DiffKind::Unchanged));
+    }
+
+    #[test]
+    fn apply_diff_reused_falls_back_to_copy_when_hardlink_fails() {
+        let dir = tempdir().unwrap();
+        let src_root = dir.path().join("src");
+        let prev_root = dir.path().join("prev");
+        let dst_root = dir.path().join("dst");
+        std::fs::create_dir_all(&src_root).unwrap();
+        std::fs::create_dir_all(&prev_root).unwrap();
+
+        let src_path = src_root.join("same.txt");
+        std::fs::write(&src_path, "same-content").unwrap();
+
+        let stats = apply_diff(
+            &[DiffEntry {
+                rel: "same.txt".to_string(),
+                src_path: Some(PathBuf::from(&src_path)),
+                kind: DiffKind::Reused,
+                size_delta: 0,
+                file_size: 12,
+                reuse_from_rel: Some("missing.txt".to_string()),
+            }],
+            &dst_root,
+            false,
+            Some(&prev_root),
+            FileCopyBackend::Std,
+        );
+
+        assert_eq!(stats.reused, 1);
+        assert_eq!(stats.hardlinked_files, 0);
+        assert!(stats.copied_bytes > 0);
+        assert_eq!(
+            std::fs::read_to_string(dst_root.join("same.txt")).unwrap(),
+            "same-content"
+        );
     }
 }

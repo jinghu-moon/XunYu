@@ -123,6 +123,7 @@ pub fn csv_rows_contain(rows: &[Vec<String>], needle: &str) -> bool {
         .any(|row| row.iter().any(|cell| cell.contains(needle)))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn has_acl_row(
     rows: &[Vec<String>],
     ace_type: &str,
@@ -134,7 +135,7 @@ pub fn has_acl_row(
     orphan: &str,
 ) -> bool {
     rows.iter().any(|row| {
-        row.get(0).map(|v| v == ace_type).unwrap_or(false)
+        row.first().map(|v| v == ace_type).unwrap_or(false)
             && row.get(1).map(|v| v == source).unwrap_or(false)
             && row.get(2).map(|v| v == principal).unwrap_or(false)
             && row.get(3).map(|v| v == rights).unwrap_or(false)

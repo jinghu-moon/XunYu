@@ -60,6 +60,7 @@ impl SegmentedWriter {
                 .create(true)
                 .read(true)
                 .write(true)
+                .truncate(false)
                 .open(&self.volume_paths[index])?;
             self.current_index = index;
         }

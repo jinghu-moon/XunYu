@@ -50,12 +50,12 @@ fn resolve_bench_exe() -> PathBuf {
         return PathBuf::from(exe);
     }
 
-    if let Ok(current) = std::env::current_exe() {
-        if let Some(dir) = find_profile_dir(&current) {
-            let candidate = dir.join(exe_name("path_guard_bench"));
-            if candidate.is_file() {
-                return candidate;
-            }
+    if let Ok(current) = std::env::current_exe()
+        && let Some(dir) = find_profile_dir(&current)
+    {
+        let candidate = dir.join(exe_name("path_guard_bench"));
+        if candidate.is_file() {
+            return candidate;
         }
     }
 

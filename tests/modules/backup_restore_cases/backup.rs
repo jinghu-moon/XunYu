@@ -2595,6 +2595,15 @@ fn bak_compress_true_creates_zip() {
         })
         .expect("backup zip not found");
     assert!(zip.is_file());
+
+    let file = fs::File::open(&zip).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut manifest = archive.by_name(".bak-manifest.json").unwrap();
+    let mut manifest_text = String::new();
+    std::io::Read::read_to_string(&mut manifest, &mut manifest_text).unwrap();
+    let value: Value = serde_json::from_str(&manifest_text).unwrap();
+    assert_eq!(value["version"], 2);
+    assert_eq!(value["entries"][0]["path"], "a.txt");
 }
 
 #[test]
@@ -2896,6 +2905,145 @@ fn backup_skip_if_unchanged_from_config_skips_new_version() {
 }
 
 #[test]
+fn backup_skip_if_unchanged_uses_hash_when_only_mtime_changes() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_skip_hash_only_mtime");
+    fs::create_dir_all(&root).unwrap();
+    let file = root.join("a.txt");
+    fs::write(&file, "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": [],
+  "skipIfUnchanged": true
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    set_last_write_time_utc(&file, 2025, 1, 2);
+
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2"]),
+    );
+
+    let backups = root.join("A_backups");
+    let versions: Vec<String> = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("v") && n.contains('-') && !n.ends_with(".meta.json"))
+        .collect();
+    assert_eq!(
+        versions.len(),
+        1,
+        "hash-aware skipIfUnchanged should skip mtime-only changes"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("no changes detected"));
+}
+
+#[test]
+fn backup_diff_mode_meta_treats_mtime_only_change_as_modified() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_diff_mode_meta_mtime");
+    fs::create_dir_all(&root).unwrap();
+    let file = root.join("a.txt");
+    fs::write(&file, "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    set_last_write_time_utc(&file, 2025, 1, 2);
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+        "--diff-mode",
+        "meta",
+        "--json",
+    ]));
+
+    let backups = root.join("A_backups");
+    let versions: Vec<String> = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("v") && n.contains('-') && !n.ends_with(".meta.json"))
+        .collect();
+    assert_eq!(versions.len(), 2, "meta diff mode should create a new version");
+
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["status"], "ok");
+    assert_eq!(value["diff_mode"], "meta");
+    assert_eq!(value["modified"], 1);
+}
+
+#[test]
+fn backup_diff_mode_hash_requires_previous_hash_manifest() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_diff_mode_hash_requires_manifest");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let v1 = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    fs::remove_file(v1.join(".bak-manifest.json")).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--diff-mode",
+        "hash",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Hash diff mode requires previous backup .bak-manifest.json"));
+}
+
+#[test]
 fn backup_full_reuses_unchanged_files_via_hardlink() {
     let env = TestEnv::new();
     let root = env.root.join("proj_full_hardlink");
@@ -2945,6 +3093,530 @@ fn backup_full_reuses_unchanged_files_via_hardlink() {
         !same_file_index(&v1.join("b.txt"), &v2.join("b.txt")),
         "changed file should not be hardlinked between v1 and v2"
     );
+}
+
+#[test]
+fn backup_full_reuses_renamed_file_via_hash_hardlink() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_full_reuse_rename");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("old.txt"), "same-content").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "old.txt", "new.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    thread::sleep(Duration::from_millis(50));
+    fs::rename(root.join("old.txt"), root.join("new.txt")).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2"]),
+    );
+
+    let backups = root.join("A_backups");
+    let v1 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let v2 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v2-"))
+        .unwrap()
+        .path();
+
+    assert!(
+        !v2.join("old.txt").exists(),
+        "renamed old path should not exist in v2 backup"
+    );
+    assert!(
+        v2.join("new.txt").exists(),
+        "renamed new path should exist in v2 backup"
+    );
+    assert!(
+        same_file_index(&v1.join("old.txt"), &v2.join("new.txt")),
+        "renamed file should be hardlinked to previous content by hash"
+    );
+}
+
+#[test]
+fn backup_full_reuses_added_duplicate_file_via_hash_hardlink() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_full_reuse_duplicate");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same-content").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    thread::sleep(Duration::from_millis(50));
+    fs::write(root.join("b.txt"), "same-content").unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2"]),
+    );
+
+    let backups = root.join("A_backups");
+    let v1 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    let v2 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v2-"))
+        .unwrap()
+        .path();
+
+    assert!(
+        same_file_index(&v1.join("a.txt"), &v2.join("b.txt")),
+        "new duplicate file should hardlink to previous snapshot content"
+    );
+}
+
+#[test]
+fn backup_writes_hash_cache_and_does_not_backup_it() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_hash_cache_file");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", ".xun-bak-hash-cache.json" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    assert!(root.join(".xun-bak-hash-cache.json").exists());
+
+    let backups = root.join("A_backups");
+    let v1 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    assert!(!v1.join(".xun-bak-hash-cache.json").exists());
+}
+
+#[test]
+fn backup_ignores_corrupted_hash_cache_and_recovers() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_hash_cache_corrupt");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    fs::write(root.join(".xun-bak-hash-cache.json"), "{not-json").unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let backups = root.join("A_backups");
+    let v1 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    assert!(v1.join("a.txt").exists());
+}
+
+#[test]
+fn backup_json_reports_hash_cache_stats_when_skip_if_unchanged_hits_cache() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_json_hash_stats");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).expect("backup json should be valid");
+    assert_eq!(value["action"], "backup");
+    assert_eq!(value["status"], "skipped");
+    assert_eq!(value["hash_checked_files"], 1);
+    assert_eq!(value["hash_cache_hits"], 1);
+    assert_eq!(value["hash_computed_files"], 0);
+    assert_eq!(value["hash_failed_files"], 0);
+    assert_eq!(value["new"], 0);
+    assert_eq!(value["modified"], 0);
+    assert_eq!(value["reused"], 0);
+    assert_eq!(value["deleted"], 0);
+}
+
+#[test]
+fn backup_without_hash_manifest_reinitializes_instead_of_using_legacy_metadata_baseline() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_missing_hash_manifest");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let backups = root.join("A_backups");
+    let v1 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+    fs::remove_file(v1.join(".bak-manifest.json")).unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).expect("backup json should be valid");
+    assert_eq!(value["status"], "ok");
+    assert_eq!(value["new"], 1);
+    assert_eq!(value["baseline_mode"], "fresh_full");
+
+    let has_v2 = fs::read_dir(&backups)
+        .unwrap()
+        .flatten()
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("v2-"));
+    assert!(has_v2, "second backup should be created as a fresh full snapshot");
+}
+
+#[test]
+fn backup_skip_if_unchanged_treats_case_only_path_change_as_same_path() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_case_only_path_change");
+    fs::create_dir_all(root.join("docs")).unwrap();
+    fs::write(root.join("docs").join("ReadMe.TXT"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "docs" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    fs::rename(
+        root.join("docs").join("ReadMe.TXT"),
+        root.join("docs").join("readme.txt"),
+    )
+    .unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).expect("backup json should be valid");
+    assert_eq!(value["status"], "skipped");
+
+    let version_count = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.starts_with('v') && !name.ends_with(".meta.json")
+        })
+        .count();
+    assert_eq!(version_count, 1);
+}
+
+#[test]
+fn backup_records_removed_paths_in_snapshot_manifest() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_removed_manifest");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "one").unwrap();
+    fs::write(root.join("b.txt"), "two").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+    fs::remove_file(root.join("b.txt")).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2"]),
+    );
+
+    let v2 = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v2-"))
+        .unwrap()
+        .path();
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(v2.join(".bak-manifest.json")).unwrap()).unwrap();
+    assert_eq!(manifest["removed"], serde_json::json!(["b.txt"]));
+    assert_eq!(manifest["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(manifest["entries"][0]["path"], "a.txt");
+}
+
+#[test]
+fn backup_mixed_changes_write_expected_manifest_and_stats() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_mixed_changes_manifest");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("b.txt"), "bbb").unwrap();
+    fs::write(root.join("c.txt"), "ccc").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt", "b.txt", "c.txt", "d.txt", "e.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    thread::sleep(Duration::from_millis(50));
+    fs::write(root.join("a.txt"), "aaa-modified").unwrap();
+    fs::remove_file(root.join("b.txt")).unwrap();
+    fs::write(root.join("d.txt"), "ccc").unwrap();
+    fs::write(root.join("e.txt"), "eee-new").unwrap();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["new"], 1);
+    assert_eq!(value["modified"], 1);
+    assert_eq!(value["reused"], 1);
+    assert_eq!(value["deleted"], 1);
+
+    let v2 = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v2-"))
+        .unwrap()
+        .path();
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(v2.join(".bak-manifest.json")).unwrap()).unwrap();
+    assert_eq!(manifest["removed"], serde_json::json!(["b.txt"]));
+    let mut paths: Vec<String> = manifest["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["path"].as_str().unwrap().to_string())
+        .collect();
+    paths.sort();
+    assert_eq!(paths, vec!["a.txt", "c.txt", "d.txt", "e.txt"]);
+
+    let v2_name = v2.file_name().unwrap().to_string_lossy().to_string();
+    let restore_root = env.root.join("mixed_changes_restore");
+    run_ok(env.cmd().args([
+        "restore",
+        &v2_name,
+        "-C",
+        root.to_str().unwrap(),
+        "--to",
+        restore_root.to_str().unwrap(),
+        "-y",
+    ]));
+    assert_eq!(fs::read_to_string(restore_root.join("a.txt")).unwrap(), "aaa-modified");
+    assert_eq!(fs::read_to_string(restore_root.join("c.txt")).unwrap(), "ccc");
+    assert_eq!(fs::read_to_string(restore_root.join("d.txt")).unwrap(), "ccc");
+    assert_eq!(fs::read_to_string(restore_root.join("e.txt")).unwrap(), "eee-new");
+    assert!(!restore_root.join("b.txt").exists());
+}
+
+#[test]
+fn backup_restore_recomputed_hash_matches_manifest() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_hash_match");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src").join("main.rs"), "fn main() {}\n").unwrap();
+    fs::write(root.join("src").join("lib.rs"), "pub fn value() -> u32 { 7 }\n").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "src" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let v1_name = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+    let restore_root = env.root.join("restore_hash_out");
+    run_ok(env.cmd().args([
+        "restore",
+        &v1_name,
+        "-C",
+        root.to_str().unwrap(),
+        "--to",
+        restore_root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    let backup_dir = root.join("A_backups").join(&v1_name);
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(backup_dir.join(".bak-manifest.json")).unwrap()).unwrap();
+    for entry in manifest["entries"].as_array().unwrap() {
+        let rel = entry["path"].as_str().unwrap();
+        let expected = entry["content_hash"].as_str().unwrap();
+        let restored_path = restore_root.join(rel.replace('/', "\\"));
+        let actual = blake3::hash(&fs::read(&restored_path).unwrap()).to_hex().to_string();
+        assert_eq!(actual, expected, "restored hash mismatch for {}", rel);
+    }
+}
+
+#[test]
+fn backup_uses_zip_manifest_as_hash_baseline_for_skip_if_unchanged() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_zip_hash_baseline");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": true },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+        "--json",
+    ]));
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["status"], "skipped");
+    assert_eq!(value["baseline_mode"], "hash_manifest");
+    assert_eq!(value["hash_checked_files"], 1);
 }
 
 // ─── 新增：list mtime 格式化 ─────────────────────────────────────────────────
@@ -3122,7 +3794,7 @@ fn bak_verify_no_manifest_returns_error() {
 }
 
 #[test]
-fn bak_verify_zip_backup_reports_not_supported() {
+fn bak_verify_zip_backup_reports_ok_with_hash_manifest() {
     let env = TestEnv::new();
     let root = env.root.join("proj_verify_zip");
     fs::create_dir_all(&root).unwrap();
@@ -3151,14 +3823,14 @@ fn bak_verify_zip_backup_reports_not_supported() {
         })
         .expect("zip backup should exist");
 
-    let out = run_err(
+    let out = run_ok(
         env.cmd()
             .args(["bak", "-C", root.to_str().unwrap(), "verify", &zip_name]),
     );
-    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stderr.contains("Verify is only supported for directory backups"),
-        "zip verify should explain unsupported mode, got: {stderr}"
+        stdout.contains("All files OK"),
+        "zip verify should succeed with embedded hash manifest, got: {stdout}"
     );
 }
 

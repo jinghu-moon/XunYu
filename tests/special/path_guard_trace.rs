@@ -4,12 +4,12 @@
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 
 use common::env_usize;
 use xun::path_guard::{PathPolicy, validate_paths};
 
-fn path_string(path: &PathBuf) -> String {
+fn path_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 

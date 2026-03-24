@@ -78,10 +78,8 @@ fn apply_random_acl_rules(
         }
     }
 
-    let mut idx = 0usize;
-    for ((pi, ri), targets) in groups {
+    for (idx, ((pi, ri), targets)) in groups.into_iter().enumerate() {
         let list = env.root.join(format!("acl_stress_batch_{idx}.txt"));
-        idx += 1;
         let content: String = targets
             .iter()
             .map(|p| {
