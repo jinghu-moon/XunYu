@@ -5,8 +5,8 @@ use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::backup_export::reader::copy_entry_to_writer;
-use crate::backup_export::source::SourceEntry;
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup_formats::BackupArtifactFormat;
 use crate::output::CliError;
 

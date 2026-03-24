@@ -4,8 +4,8 @@ use std::path::Path;
 #[cfg(feature = "xunbak")]
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::backup_export::sevenz_io::read_7z_file;
-use crate::backup_export::source::{SourceEntry, SourceKind};
+use crate::backup::artifact::entry::{SourceEntry, SourceKind};
+use crate::backup::artifact::sevenz::read_7z_file;
 use crate::output::CliError;
 #[cfg(feature = "xunbak")]
 use crate::util::normalize_glob_path;
@@ -42,9 +42,8 @@ pub(crate) fn copy_entry_to_writer(
         _ => {}
     }
     let mut reader = open_entry_reader(entry)?;
-    std::io::copy(&mut reader, writer).map_err(|err| {
-        CliError::new(1, format!("Copy entry failed {}: {err}", entry.path))
-    })?;
+    std::io::copy(&mut reader, writer)
+        .map_err(|err| CliError::new(1, format!("Copy entry failed {}: {err}", entry.path)))?;
     Ok(())
 }
 
@@ -105,7 +104,10 @@ impl TempReadableFile {
         let file = fs::File::open(&self.path).map_err(|err| {
             CliError::new(
                 1,
-                format!("Reopen temp entry file failed {}: {err}", self.path.display()),
+                format!(
+                    "Reopen temp entry file failed {}: {err}",
+                    self.path.display()
+                ),
             )
         })?;
         self.file = file;
@@ -173,7 +175,14 @@ fn open_zip_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
     let mut zip_entry = open_zip_entry(&mut archive, &entry.path, zip_path)?;
     let mut temp = TempReadableFile::new("xun-entry-zip")?;
     std::io::copy(&mut zip_entry, &mut temp).map_err(|err| {
-        CliError::new(1, format!("Copy zip entry failed {}::{}: {err}", zip_path.display(), entry.path))
+        CliError::new(
+            1,
+            format!(
+                "Copy zip entry failed {}::{}: {err}",
+                zip_path.display(),
+                entry.path
+            ),
+        )
     })?;
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
 }
@@ -195,7 +204,11 @@ fn copy_zip_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Resu
     std::io::copy(&mut zip_entry, writer).map_err(|err| {
         CliError::new(
             1,
-            format!("Copy zip entry failed {}::{}: {err}", zip_path.display(), entry.path),
+            format!(
+                "Copy zip entry failed {}::{}: {err}",
+                zip_path.display(),
+                entry.path
+            ),
         )
     })?;
     Ok(())
@@ -211,7 +224,14 @@ fn open_7z_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
     let content = read_7z_file(source, &entry.path)?;
     let mut temp = TempReadableFile::new("xun-entry-7z")?;
     temp.file.write_all(&content).map_err(|err| {
-        CliError::new(1, format!("Write temp 7z entry failed {}::{}: {err}", source.display(), entry.path))
+        CliError::new(
+            1,
+            format!(
+                "Write temp 7z entry failed {}::{}: {err}",
+                source.display(),
+                entry.path
+            ),
+        )
     })?;
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
 }
@@ -225,7 +245,7 @@ fn copy_7z_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Resul
     })?;
     let wanted = entry.path.replace('\\', "/");
     let mut found = false;
-    crate::backup_export::sevenz_io::with_archive_reader(source, |reader, _| {
+    crate::backup::artifact::sevenz::with_archive_reader(source, |reader, _| {
         reader
             .for_each_entries(|archive_entry, data| {
                 if archive_entry.is_directory() || !archive_entry.has_stream() {
@@ -375,11 +395,13 @@ fn open_zip_entry<'a>(
 }
 
 #[cfg(feature = "xunbak")]
-fn xunbak_reader_cache(
-) -> &'static Mutex<
+fn xunbak_reader_cache() -> &'static Mutex<
     std::collections::HashMap<
         std::path::PathBuf,
-        (Arc<crate::xunbak::reader::ContainerReader>, Arc<std::collections::HashMap<String, crate::xunbak::manifest::ManifestEntry>>),
+        (
+            Arc<crate::xunbak::reader::ContainerReader>,
+            Arc<std::collections::HashMap<String, crate::xunbak::manifest::ManifestEntry>>,
+        ),
     >,
 > {
     static CACHE: OnceLock<
@@ -422,7 +444,8 @@ fn load_cached_xunbak_reader_and_manifest(
     }
 
     use crate::xunbak::reader::ContainerReader;
-    let reader = Arc::new(ContainerReader::open(path).map_err(|err| CliError::new(2, err.to_string()))?);
+    let reader =
+        Arc::new(ContainerReader::open(path).map_err(|err| CliError::new(2, err.to_string()))?);
     let manifest = reader
         .load_manifest()
         .map_err(|err| CliError::new(2, err.to_string()))?;
@@ -461,7 +484,10 @@ fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
 }
 
 #[cfg(feature = "xunbak")]
-fn copy_xunbak_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Result<(), CliError> {
+fn copy_xunbak_entry_to_writer(
+    entry: &SourceEntry,
+    writer: &mut dyn Write,
+) -> Result<(), CliError> {
     let path = entry.source_path.as_ref().ok_or_else(|| {
         CliError::new(
             1,
@@ -478,7 +504,10 @@ fn copy_xunbak_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> R
 }
 
 #[cfg(not(feature = "xunbak"))]
-fn copy_xunbak_entry_to_writer(entry: &SourceEntry, _writer: &mut dyn Write) -> Result<(), CliError> {
+fn copy_xunbak_entry_to_writer(
+    entry: &SourceEntry,
+    _writer: &mut dyn Write,
+) -> Result<(), CliError> {
     Err(CliError::with_details(
         2,
         format!(
@@ -508,7 +537,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use crate::backup_export::source::{SourceEntry, SourceKind};
+    use crate::backup::artifact::entry::{SourceEntry, SourceKind};
 
     use super::{copy_entry_to_path, open_entry_reader};
 
@@ -633,10 +662,10 @@ mod tests {
             content_hash: None,
             kind: SourceKind::DirArtifact,
         };
-        crate::backup_export::sevenz_io::write_entries_to_7z(
+        crate::backup::artifact::sevenz::write_entries_to_7z(
             &[&entry],
             &archive_path,
-            &crate::backup_export::sevenz_io::SevenZWriteOptions::default(),
+            &crate::backup::artifact::sevenz::SevenZWriteOptions::default(),
         )
         .unwrap();
 
@@ -674,7 +703,7 @@ mod tests {
             content_hash: None,
             kind: SourceKind::DirArtifact,
         };
-        crate::backup_export::xunbak_writer::write_entries_to_xunbak(
+        crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&entry],
             &artifact,
             &crate::xunbak::writer::BackupOptions {

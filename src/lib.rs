@@ -4,6 +4,7 @@ mod macros;
 pub mod acl;
 #[cfg(feature = "alias")]
 pub mod alias;
+pub(crate) mod backup;
 pub(crate) mod backup_export;
 pub(crate) mod backup_formats;
 #[doc(hidden)]

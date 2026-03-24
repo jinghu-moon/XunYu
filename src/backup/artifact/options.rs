@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::backup_export::selection::SelectionSpec;
+use crate::backup::artifact::selection::SelectionSpec;
 use crate::backup_formats::{
     BackupArtifactFormat, OverwriteMode, ProgressMode, VerifyOutputMode, VerifySourceMode,
 };

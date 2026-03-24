@@ -2,8 +2,8 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use crate::backup_export::reader::copy_entry_to_writer;
-use crate::backup_export::source::SourceEntry;
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::output::CliError;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
@@ -99,7 +99,7 @@ pub fn write_entries_to_zip<P: AsRef<Path>>(
             .compression_method(zip::CompressionMethod::Stored)
             .unix_permissions(0o644);
         writer
-            .start_file(crate::backup_export::sidecar::SIDECAR_PATH, file_options)
+            .start_file(crate::backup::artifact::sidecar::SIDECAR_PATH, file_options)
             .map_err(|err| CliError::new(1, format!("Start sidecar entry failed: {err}")))?;
         writer
             .write_all(&sidecar)
@@ -248,7 +248,7 @@ mod tests {
     use std::io::Read;
     use tempfile::tempdir;
 
-    use crate::backup_export::source::{SourceEntry, SourceKind};
+    use crate::backup::artifact::entry::{SourceEntry, SourceKind};
 
     #[test]
     fn zip_writer_creates_archive_for_files() {

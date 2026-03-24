@@ -127,7 +127,8 @@ impl Write for SegmentedWriter {
             let chunk = volume_remaining.min(buf.len() - written);
 
             self.seek_to_volume(volume_index, volume_offset)?;
-            self.current_file.write_all(&buf[written..written + chunk])?;
+            self.current_file
+                .write_all(&buf[written..written + chunk])?;
 
             let new_len = volume_offset + chunk as u64;
             if self.volume_lengths[volume_index] < new_len {
@@ -235,7 +236,9 @@ impl Read for MultiVolumeReader {
             let volume_offset = self.position - self.volume_offsets[index];
             let remaining_in_volume = (self.volume_lengths[index] - volume_offset) as usize;
             let want = remaining_in_volume.min(buf.len() - total_read);
-            let read = self.current_file.read(&mut buf[total_read..total_read + want])?;
+            let read = self
+                .current_file
+                .read(&mut buf[total_read..total_read + want])?;
             if read == 0 {
                 break;
             }
@@ -302,7 +305,9 @@ pub(crate) fn list_numbered_outputs(base_path: &Path) -> io::Result<Vec<PathBuf>
 pub(crate) fn resolve_multivolume_base(path: &Path) -> Option<PathBuf> {
     let name = path.file_name()?.to_str()?;
     if name.ends_with(".7z.001") {
-        return Some(PathBuf::from(path.to_string_lossy().trim_end_matches(".001")));
+        return Some(PathBuf::from(
+            path.to_string_lossy().trim_end_matches(".001"),
+        ));
     }
     if path
         .extension()
@@ -337,7 +342,9 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use super::{MultiVolumeReader, SegmentedWriter, list_numbered_outputs, resolve_multivolume_base};
+    use super::{
+        MultiVolumeReader, SegmentedWriter, list_numbered_outputs, resolve_multivolume_base,
+    };
 
     #[test]
     fn segmented_writer_splits_logical_stream_into_numbered_volumes() {

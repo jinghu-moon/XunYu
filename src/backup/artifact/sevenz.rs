@@ -10,9 +10,9 @@ use sevenz_rust2::{
     SourceReader,
 };
 
-use crate::backup_export::reader::open_entry_reader;
-use crate::backup_export::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
-use crate::backup_export::source::SourceEntry;
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::reader::open_entry_reader;
+use crate::backup::artifact::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
 use crate::output::CliError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,11 +109,16 @@ fn write_entries_with_writer<W: Write + Seek>(
     for directory in collect_directory_entries(entries, options.sidecar.is_some()) {
         writer
             .push_archive_entry::<&[u8]>(ArchiveEntry::new_directory(&directory), None)
-            .map_err(|err| CliError::new(1, format!("Write 7z directory failed {directory}: {err}")))?;
+            .map_err(|err| {
+                CliError::new(1, format!("Write 7z directory failed {directory}: {err}"))
+            })?;
     }
 
     if options.solid {
-        let archive_entries: Vec<ArchiveEntry> = entries.iter().map(|entry| build_archive_entry(entry)).collect();
+        let archive_entries: Vec<ArchiveEntry> = entries
+            .iter()
+            .map(|entry| build_archive_entry(entry))
+            .collect();
         let readers: Result<Vec<SourceReader<_>>, CliError> = entries
             .iter()
             .map(|entry| open_entry_reader(entry).map(SourceReader::from))
@@ -125,14 +130,16 @@ fn write_entries_with_writer<W: Write + Seek>(
         for entry in entries {
             writer
                 .push_archive_entry(build_archive_entry(entry), Some(open_entry_reader(entry)?))
-                .map_err(|err| CliError::new(1, format!("Write 7z entry failed {}: {err}", entry.path)))?;
+                .map_err(|err| {
+                    CliError::new(1, format!("Write 7z entry failed {}: {err}", entry.path))
+                })?;
         }
     }
 
     if let Some(sidecar) = &options.sidecar {
         writer
             .push_archive_entry(
-                ArchiveEntry::new_file(crate::backup_export::sidecar::SIDECAR_PATH),
+                ArchiveEntry::new_file(crate::backup::artifact::sidecar::SIDECAR_PATH),
                 Some(Cursor::new(sidecar.clone())),
             )
             .map_err(|err| CliError::new(1, format!("Write 7z sidecar failed: {err}")))?;
@@ -176,7 +183,10 @@ where
                 }
                 let dest = destination.join(name.replace('/', "\\"));
                 if dry_run {
-                    crate::output::ui_println(format_args!("DRY RUN: would restore {}", dest.strip_prefix(destination).unwrap_or(&dest).display()));
+                    crate::output::ui_println(format_args!(
+                        "DRY RUN: would restore {}",
+                        dest.strip_prefix(destination).unwrap_or(&dest).display()
+                    ));
                     restored += 1;
                     return Ok(true);
                 }
@@ -230,10 +240,10 @@ fn collect_entries_from_archive(
             continue;
         }
         let modified = entry.has_last_modified_date.then(|| {
-            crate::backup_export::source::system_time_to_unix_ns(entry.last_modified_date().into())
+            crate::backup::artifact::entry::system_time_to_unix_ns(entry.last_modified_date().into())
         });
         let created = entry.has_creation_date.then(|| {
-            crate::backup_export::source::system_time_to_unix_ns(entry.creation_date().into())
+            crate::backup::artifact::entry::system_time_to_unix_ns(entry.creation_date().into())
         });
         let entry_path = entry.name().replace('\\', "/");
         if crate::commands::restore_core::is_backup_internal_name(&entry_path) {
@@ -251,7 +261,7 @@ fn collect_entries_from_archive(
                 0
             },
             content_hash: None,
-            kind: crate::backup_export::source::SourceKind::SevenZArtifact,
+            kind: crate::backup::artifact::entry::SourceKind::SevenZArtifact,
         });
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));
@@ -286,8 +296,12 @@ fn with_open_archive_reader<T>(
     logical_path: &Path,
     f: impl FnOnce(&mut ArchiveReader<SevenZReaderSource>, &Path) -> Result<T, CliError>,
 ) -> Result<T, CliError> {
-    let mut reader = ArchiveReader::new(source, Password::empty())
-        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", logical_path.display())))?;
+    let mut reader = ArchiveReader::new(source, Password::empty()).map_err(|err| {
+        CliError::new(
+            1,
+            format!("Open 7z failed {}: {err}", logical_path.display()),
+        )
+    })?;
     f(&mut reader, logical_path)
 }
 
@@ -297,7 +311,10 @@ pub(crate) fn with_archive_reader<T>(
 ) -> Result<T, CliError> {
     if resolve_multivolume_base(path).is_some() {
         let reader = MultiVolumeReader::open(path).map_err(|err| {
-            CliError::new(1, format!("Open split 7z volumes failed {}: {err}", path.display()))
+            CliError::new(
+                1,
+                format!("Open split 7z volumes failed {}: {err}", path.display()),
+            )
         })?;
         return with_open_archive_reader(SevenZReaderSource::Multi(reader), path, f);
     }
@@ -404,14 +421,20 @@ fn system_time_from_unix_ns(value: u64) -> Option<SystemTime> {
 
 fn split_file_to_volumes(source: &Path, base_path: &Path, split_size: u64) -> Result<(), CliError> {
     let mut input = fs::File::open(source).map_err(|err| {
-        CliError::new(1, format!("Open temporary 7z failed {}: {err}", source.display()))
+        CliError::new(
+            1,
+            format!("Open temporary 7z failed {}: {err}", source.display()),
+        )
     })?;
     let mut index = 1u32;
     let mut buffer = vec![0u8; split_size as usize];
 
     loop {
         let read = input.read(&mut buffer).map_err(|err| {
-            CliError::new(1, format!("Read temporary 7z failed {}: {err}", source.display()))
+            CliError::new(
+                1,
+                format!("Read temporary 7z failed {}: {err}", source.display()),
+            )
         })?;
         if read == 0 {
             break;

@@ -4,10 +4,10 @@ use std::path::Path;
 #[cfg(feature = "xunbak")]
 use std::path::PathBuf;
 
-use crate::backup_export::sevenz_io::list_7z_entries;
-use crate::backup_export::source::{
+use crate::backup::artifact::entry::{
     SourceEntry, SourceKind, file_attributes, metadata_created_time_ns, system_time_to_unix_ns,
 };
+use crate::backup::artifact::sevenz::list_7z_entries;
 use crate::commands::restore_core::{is_backup_internal_name, is_backup_internal_rel_path};
 use crate::output::CliError;
 
@@ -272,7 +272,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let source = dir.path().join("a.txt");
         fs::write(&source, "aaa").unwrap();
-        let entry = crate::backup_export::source::SourceEntry {
+        let entry = crate::backup::artifact::entry::SourceEntry {
             path: "a.txt".to_string(),
             source_path: Some(source),
             size: 3,
@@ -280,10 +280,10 @@ mod tests {
             created_time_ns: None,
             win_attributes: 0,
             content_hash: None,
-            kind: crate::backup_export::source::SourceKind::DirArtifact,
+            kind: crate::backup::artifact::entry::SourceKind::DirArtifact,
         };
         let artifact = dir.path().join("artifact.xunbak");
-        crate::backup_export::xunbak_writer::write_entries_to_xunbak(
+        crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&entry],
             &artifact,
             &crate::xunbak::writer::BackupOptions {

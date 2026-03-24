@@ -1,10 +1,10 @@
 use std::fs;
 use std::path::Path;
 
-use crate::backup_export::source::{
+use crate::backup::artifact::entry::{
     SourceEntry, SourceKind, file_attributes, metadata_created_time_ns, system_time_to_unix_ns,
 };
-use crate::commands::backup::scan;
+use crate::backup::legacy::scan;
 
 pub(crate) fn scan_source_entries(
     root: &Path,

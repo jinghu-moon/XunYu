@@ -330,8 +330,8 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     use super::{DiffKind, compute_diff};
-    use crate::commands::backup::baseline::FileMeta;
-    use crate::commands::backup::scan::ScannedFile;
+    use crate::backup::legacy::baseline::FileMeta;
+    use crate::backup::legacy::scan::ScannedFile;
 
     #[test]
     fn compute_diff_marks_mtime_difference_as_modified_even_if_not_newer() {

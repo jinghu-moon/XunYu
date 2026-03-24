@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use crate::backup_export::reader::copy_entry_to_path;
-use crate::backup_export::source::SourceEntry;
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::reader::copy_entry_to_path;
 use crate::output::CliError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,7 +33,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use crate::backup_export::source::{SourceEntry, SourceKind};
+    use crate::backup::artifact::entry::{SourceEntry, SourceKind};
 
     use super::write_entries_to_dir;
 

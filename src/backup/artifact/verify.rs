@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::backup_export::sevenz_io::list_7z_entries;
+use crate::backup::artifact::sevenz::list_7z_entries;
 use crate::backup_formats::{BackupArtifactFormat, VerifyOutputMode, VerifySourceMode};
 use crate::output::{CliError, CliResult};
 
@@ -33,7 +33,9 @@ pub(crate) fn verify_convert_source(path: &Path, mode: VerifySourceMode) -> CliR
         return Err(CliError::with_details(
             1,
             format!("backup convert source verify failed (mode={mode}): {detail}"),
-            &["Fix: Re-run with `--verify-source off` only if you accept skipping integrity checks."],
+            &[
+                "Fix: Re-run with `--verify-source off` only if you accept skipping integrity checks.",
+            ],
         ));
     }
     #[cfg(not(feature = "xunbak"))]
@@ -58,7 +60,10 @@ pub(crate) fn verify_output(
     match format {
         BackupArtifactFormat::Zip => {
             let file = fs::File::open(path).map_err(|err| {
-                CliError::new(1, format!("backup convert output verify failed: open zip: {err}"))
+                CliError::new(
+                    1,
+                    format!("backup convert output verify failed: open zip: {err}"),
+                )
             })?;
             zip::ZipArchive::new(file).map_err(|err| {
                 CliError::with_details(

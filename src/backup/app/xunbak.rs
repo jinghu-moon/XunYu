@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::backup_export::output_plan::{
+use crate::backup::artifact::output_plan::{
     XunbakOutputPlan, XunbakSingleUpdatePlan, XunbakSplitOutputPlan, XunbakSplitUpdatePlan,
 };
 use crate::cli::{BackupCmd, VerifyCmd};

@@ -3,7 +3,7 @@ pub mod backup {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use crate::commands;
+    use crate::backup::legacy;
     use crate::windows::file_copy::{FileCopyBackend, copy_file};
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,11 +13,11 @@ pub mod backup {
     }
 
     pub fn read_baseline_len(prev: &Path) -> usize {
-        commands::backup::bench_read_baseline_len(prev)
+        legacy::bench_read_baseline_len(prev)
     }
 
     pub fn scan_and_diff_count(current_root: &Path, prev: &Path) -> usize {
-        commands::backup::bench_scan_and_diff_count(current_root, prev)
+        legacy::bench_scan_and_diff_count(current_root, prev)
     }
 
     pub fn copy_tree_with_backend(src_root: &Path, dst_root: &Path, backend: CopyBackend) -> u64 {

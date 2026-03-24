@@ -1,16 +1,31 @@
-pub(crate) mod artifact_source;
-pub(crate) mod dir_writer;
-pub(crate) mod fs_source;
-pub(crate) mod options;
-pub(crate) mod output_plan;
-pub(crate) mod progress;
-pub(crate) mod reader;
-pub(crate) mod selection;
-pub(crate) mod sevenz_io;
-pub(crate) mod sevenz_segmented;
-pub(crate) mod sidecar;
-pub(crate) mod source;
-pub(crate) mod verify;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::dir as dir_writer;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::entry as source;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::fs as fs_source;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::options;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::output_plan;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::progress;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::reader;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::selection;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::sevenz as sevenz_io;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::sevenz_segmented;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::sidecar;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::source as artifact_source;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::verify;
 #[cfg(feature = "xunbak")]
-pub(crate) mod xunbak_writer;
-pub(crate) mod zip_writer;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::xunbak as xunbak_writer;
+#[allow(unused_imports)]
+pub(crate) use crate::backup::artifact::zip as zip_writer;

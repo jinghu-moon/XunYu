@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use crate::backup_export::source::SourceEntry;
+use crate::backup::artifact::entry::SourceEntry;
 use crate::util::{glob_match, normalize_glob_path};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -93,7 +93,7 @@ mod tests {
 
     use tempfile::tempdir;
 
-    use crate::backup_export::source::{SourceEntry, SourceKind};
+    use crate::backup::artifact::entry::{SourceEntry, SourceKind};
 
     use super::{SelectionSpec, select_entries};
 

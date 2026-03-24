@@ -160,7 +160,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::apply_retention_policy;
-    use crate::commands::backup::config::RetentionCfg;
+    use crate::backup::legacy::config::RetentionCfg;
 
     fn write_backup_dir(root: &std::path::Path, name: &str, iso_utc: &str) {
         let dir = root.join(name);

@@ -9,32 +9,27 @@ use serde::Serialize;
 #[cfg(feature = "xunbak")]
 use uuid::Uuid;
 
-use crate::backup_export::artifact_source::read_artifact_entries;
-use crate::backup_export::dir_writer::write_entries_to_dir;
-use crate::backup_export::options::BackupConvertOptions;
-use crate::backup_export::output_plan::{
+use crate::backup::artifact::dir::write_entries_to_dir;
+use crate::backup::artifact::options::BackupConvertOptions;
+use crate::backup::artifact::output_plan::{
     DirOutputPlan, SevenZOutputPlan, SevenZSplitOutputPlan, ZipOutputPlan,
 };
-use crate::backup_export::progress::{
+use crate::backup::artifact::progress::{
     ExportProgressEvent, ExportProgressPhase, emit_progress_event, should_emit_progress,
 };
 #[cfg(feature = "xunbak")]
-use crate::backup_export::reader::copy_entry_to_path;
-use crate::backup_export::sevenz_io::{
-    SevenZMethod, SevenZWriteOptions, write_entries_to_7z,
-    write_entries_to_7z_split,
+use crate::backup::artifact::reader::copy_entry_to_path;
+use crate::backup::artifact::selection::select_entries;
+use crate::backup::artifact::sevenz::{
+    SevenZMethod, SevenZWriteOptions, write_entries_to_7z, write_entries_to_7z_split,
 };
-use crate::backup_export::selection::select_entries;
-use crate::backup_export::sidecar::{
+use crate::backup::artifact::sidecar::{
     build_sidecar_bytes, source_info_for_convert, write_sidecar_to_dir,
 };
-use crate::backup_export::verify::{verify_convert_source, verify_output};
-use crate::backup_export::zip_writer::{
-    ZipCompressionMethod, ZipWriteOptions, write_entries_to_zip,
-};
-use crate::backup_formats::{
-    BackupAction, BackupArtifactFormat, ExportStatus, OverwriteMode,
-};
+use crate::backup::artifact::source::read_artifact_entries;
+use crate::backup::artifact::verify::{verify_convert_source, verify_output};
+use crate::backup::artifact::zip::{ZipCompressionMethod, ZipWriteOptions, write_entries_to_zip};
+use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus, OverwriteMode};
 use crate::cli::BackupConvertCmd;
 use crate::output::{CliError, CliResult, can_interact};
 
@@ -509,8 +504,12 @@ fn execute_backup_convert_to_7z(
     let split_size = parse_split_size_bytes(options.split_size.as_deref())?;
     let summary = if let Some(split_size) = split_size {
         let plan = SevenZSplitOutputPlan::prepare(&options.output, effective_overwrite)?;
-        let result =
-            write_entries_to_7z_split(&selected, plan.temp_base_path(), split_size, &sevenz_options);
+        let result = write_entries_to_7z_split(
+            &selected,
+            plan.temp_base_path(),
+            split_size,
+            &sevenz_options,
+        );
         let summary = match result {
             Ok(summary) => summary,
             Err(err) => {
@@ -583,7 +582,7 @@ fn execute_backup_convert_to_xunbak(
 ) -> CliResult<BackupConvertWriteResult> {
     #[cfg(feature = "xunbak")]
     {
-        use crate::backup_export::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
+        use crate::backup::artifact::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
         let options = _options;
         use crate::xunbak::codec::parse_compression_arg;
         use crate::xunbak::writer::ContainerWriter;
@@ -1015,7 +1014,10 @@ fn maybe_corrupt_output_for_tests(options: &BackupConvertOptions) -> CliResult {
     match options.format {
         BackupArtifactFormat::Zip | BackupArtifactFormat::Xunbak | BackupArtifactFormat::SevenZ => {
             let targets = collect_output_paths_for_format(options.format, &options.output);
-            let target = targets.last().cloned().unwrap_or_else(|| options.output.clone());
+            let target = targets
+                .last()
+                .cloned()
+                .unwrap_or_else(|| options.output.clone());
             let metadata = fs::metadata(&target).map_err(|err| {
                 CliError::new(
                     1,

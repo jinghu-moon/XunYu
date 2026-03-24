@@ -6,9 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use uuid::Uuid;
 
-use crate::backup_export::dir_writer::write_entries_to_dir;
-use crate::backup_export::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
-use crate::backup_export::source::SourceEntry;
+use crate::backup::artifact::dir::write_entries_to_dir;
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
 use crate::backup_formats::OverwriteMode;
 use crate::output::{CliError, CliResult};
 use crate::xunbak::writer::{BackupOptions, ContainerWriter};

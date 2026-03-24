@@ -31,8 +31,6 @@ use super::super::redirect;
 use super::super::restore;
 #[cfg(feature = "crypt")]
 use super::super::vault;
-#[cfg(feature = "xunbak")]
-use super::super::xunbak;
 
 use super::super::tree;
 use super::super::video;
@@ -104,7 +102,7 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Video(a) => video::cmd_video(a),
         SubCommand::Restore(a) => restore::cmd_restore(a),
         #[cfg(feature = "xunbak")]
-        SubCommand::Verify(a) => xunbak::cmd_verify(a),
+        SubCommand::Verify(a) => crate::backup::app::xunbak::cmd_verify(a),
         SubCommand::Init(_) | SubCommand::Ctx(_) | SubCommand::Env(_) => unreachable!(),
         #[cfg(feature = "dashboard")]
         SubCommand::Serve(_) => unreachable!(),

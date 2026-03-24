@@ -3,7 +3,6 @@ pub(crate) mod acl_cmd;
 pub(crate) mod alias;
 pub(crate) mod app_config;
 pub(crate) mod backup;
-pub(crate) mod backup_convert;
 pub(crate) mod bookmarks;
 pub(crate) mod completion;
 pub(crate) mod ctx;
@@ -20,8 +19,6 @@ pub(crate) mod restore;
 pub(crate) mod restore_core;
 pub(crate) mod tree;
 pub(crate) mod video;
-#[cfg(feature = "xunbak")]
-pub(crate) mod xunbak;
 
 #[cfg(feature = "redirect")]
 pub(crate) mod redirect;
