@@ -66,6 +66,7 @@ const SUBCOMMANDS: &[&str] = &[
     "all",
     "fuzzy",
     "bak",
+    "xunbak",
     "tree",
     "env",
     "lock",
@@ -139,6 +140,8 @@ const ENV_SCHEMA_SUBCOMMANDS: &[&str] = &[
 ];
 const ENV_ANNOTATE_SUBCOMMANDS: &[&str] = &["set", "list"];
 const ENV_CONFIG_SUBCOMMANDS: &[&str] = &["show", "path", "reset", "get", "set"];
+const XUNBAK_SUBCOMMANDS: &[&str] = &["plugin"];
+const XUNBAK_PLUGIN_SUBCOMMANDS: &[&str] = &["install", "uninstall", "doctor"];
 const ENV_SCOPES: &[&str] = &["user", "system", "all"];
 const ENV_WRITE_SCOPES: &[&str] = &["user", "system"];
 const ENV_EXPORT_FORMATS: &[&str] = &["json", "env", "reg", "csv"];

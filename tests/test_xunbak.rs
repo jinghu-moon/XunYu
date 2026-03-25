@@ -24,6 +24,8 @@ mod lock;
 mod manifest;
 #[path = "xunbak/pipeline.rs"]
 mod pipeline;
+#[path = "xunbak/plugin.rs"]
+mod plugin;
 #[path = "xunbak/reader_open.rs"]
 mod reader_open;
 #[path = "xunbak/record.rs"]

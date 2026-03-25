@@ -115,6 +115,10 @@ pub enum VerifySourceMode {
     Quick,
     #[serde(rename = "full")]
     Full,
+    #[serde(rename = "manifest-only")]
+    ManifestOnly,
+    #[serde(rename = "existence-only")]
+    ExistenceOnly,
     #[serde(rename = "paranoid")]
     Paranoid,
     #[serde(rename = "off")]
@@ -126,6 +130,8 @@ impl VerifySourceMode {
         match self {
             Self::Quick => "quick",
             Self::Full => "full",
+            Self::ManifestOnly => "manifest-only",
+            Self::ExistenceOnly => "existence-only",
             Self::Paranoid => "paranoid",
             Self::Off => "off",
         }
@@ -145,6 +151,8 @@ impl FromStr for VerifySourceMode {
         match value.trim().to_ascii_lowercase().as_str() {
             "quick" => Ok(Self::Quick),
             "full" => Ok(Self::Full),
+            "manifest-only" | "manifest_only" => Ok(Self::ManifestOnly),
+            "existence-only" | "existence_only" => Ok(Self::ExistenceOnly),
             "paranoid" => Ok(Self::Paranoid),
             "off" => Ok(Self::Off),
             other => Err(format!("invalid verify source mode: {other}")),
@@ -319,6 +327,14 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&ProgressMode::Always).unwrap(),
             "\"always\""
+        );
+        assert_eq!(
+            "manifest-only".parse::<VerifySourceMode>(),
+            Ok(VerifySourceMode::ManifestOnly)
+        );
+        assert_eq!(
+            "existence-only".parse::<VerifySourceMode>(),
+            Ok(VerifySourceMode::ExistenceOnly)
         );
     }
 

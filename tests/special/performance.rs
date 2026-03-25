@@ -408,7 +408,9 @@ fn perf_restore_dir_500_files() {
     let name = find_backup_name(&root.join("A_backups"), "v1-", None);
 
     let start = Instant::now();
-    run_ok_status(env.cmd().args(["backup", "restore",
+    run_ok_status(env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         root.to_str().unwrap(),
@@ -444,7 +446,9 @@ fn perf_restore_zip_500_files() {
     let name = zip_name.trim_end_matches(".zip").to_string();
 
     let start = Instant::now();
-    run_ok_status(env.cmd().args(["backup", "restore",
+    run_ok_status(env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         root.to_str().unwrap(),
@@ -519,4 +523,3 @@ fn perf_rm_delete_1k_files_under_5s() {
     );
     assert!(!dir.exists(), "target directory should be deleted");
 }
-

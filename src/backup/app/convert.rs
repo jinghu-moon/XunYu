@@ -24,7 +24,7 @@ use crate::backup::artifact::sevenz::{
     SevenZMethod, SevenZWriteOptions, write_entries_to_7z, write_entries_to_7z_split,
 };
 use crate::backup::artifact::sidecar::{
-    build_sidecar_bytes, source_info_for_convert, write_sidecar_to_dir,
+    SidecarPackingHint, build_sidecar_bytes, source_info_for_convert, write_sidecar_to_dir,
 };
 use crate::backup::artifact::source::read_artifact_entries;
 use crate::backup::artifact::verify::{verify_convert_source, verify_output};
@@ -293,6 +293,7 @@ fn execute_backup_convert_to_dir(
         if !options.no_sidecar {
             let sidecar = build_sidecar_bytes(
                 options.format,
+                SidecarPackingHint::Dir,
                 &source_info_for_convert(&options.artifact),
                 &selected,
             )?;
@@ -393,6 +394,7 @@ fn execute_backup_convert_to_zip(
         } else {
             Some(build_sidecar_bytes(
                 options.format,
+                SidecarPackingHint::Zip(zip_method_from_options(options.method.as_deref())?),
                 &source_info_for_convert(&options.artifact),
                 &selected,
             )?)
@@ -492,6 +494,7 @@ fn execute_backup_convert_to_7z(
         } else {
             Some(build_sidecar_bytes(
                 options.format,
+                SidecarPackingHint::SevenZ(sevenz_method_from_options(options.method.as_deref())?),
                 &source_info_for_convert(&options.artifact),
                 &selected,
             )?)

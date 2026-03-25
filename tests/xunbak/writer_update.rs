@@ -343,7 +343,11 @@ fn rename_large_multipart_file_reuses_parts_and_writes_no_new_blob() {
     assert_eq!(update.added_blob_count, 0);
 
     let manifest_after = read_manifest(&container);
-    let new_entry = manifest_after.entries.iter().find(|entry| entry.path == "new.bin").unwrap();
+    let new_entry = manifest_after
+        .entries
+        .iter()
+        .find(|entry| entry.path == "new.bin")
+        .unwrap();
     assert_eq!(new_entry.content_hash, old_entry.content_hash);
     assert_eq!(new_entry.parts.as_ref().unwrap(), &old_parts);
 }

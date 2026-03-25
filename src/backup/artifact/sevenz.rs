@@ -240,7 +240,9 @@ fn collect_entries_from_archive(
             continue;
         }
         let modified = entry.has_last_modified_date.then(|| {
-            crate::backup::artifact::entry::system_time_to_unix_ns(entry.last_modified_date().into())
+            crate::backup::artifact::entry::system_time_to_unix_ns(
+                entry.last_modified_date().into(),
+            )
         });
         let created = entry.has_creation_date.then(|| {
             crate::backup::artifact::entry::system_time_to_unix_ns(entry.creation_date().into())

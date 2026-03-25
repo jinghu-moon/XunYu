@@ -63,7 +63,8 @@ pub(crate) fn compute_diff(
 
     for (rel, scanned) in current {
         if let Some(old_meta) = old.remove(rel) {
-            if let (Some(current_hash), Some(old_hash)) = (scanned.content_hash, old_meta.content_hash)
+            if let (Some(current_hash), Some(old_hash)) =
+                (scanned.content_hash, old_meta.content_hash)
             {
                 if current_hash == old_hash {
                     if !skip_unchanged {
@@ -259,14 +260,14 @@ pub(crate) fn apply_diff(
                         dir_set.insert(parent.to_path_buf());
                     }
                     let link_wide = prev_backup_dir.and_then(|prev_dir| {
-                        e.reuse_from_rel.as_ref().map(|reuse_from_rel| WideLinkPaths {
-                            src: wide_null(
-                                &prev_dir.join(
+                        e.reuse_from_rel
+                            .as_ref()
+                            .map(|reuse_from_rel| WideLinkPaths {
+                                src: wide_null(&prev_dir.join(
                                     reuse_from_rel.replace('\\', std::path::MAIN_SEPARATOR_STR),
-                                ),
-                            ),
-                            dst: wide_null(&dst),
-                        })
+                                )),
+                                dst: wide_null(&dst),
+                            })
                     });
                     let job = CopyJob {
                         src: src.clone(),

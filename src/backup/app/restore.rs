@@ -4,6 +4,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
+use crate::backup::artifact::entry::{file_attributes, system_time_to_unix_ns};
 use crate::backup::artifact::reader::open_entry_reader;
 use crate::backup::artifact::sevenz::{restore_7z_entries, restore_7z_single};
 use crate::backup::artifact::source::read_artifact_entries;
@@ -403,6 +404,14 @@ struct RestorePreviewItem {
     kind: RestorePreviewKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreviewFastPathDecision {
+    New,
+    Overwrite,
+    Unchanged,
+    NeedContentCheck,
+}
+
 fn build_restore_preview_items(
     backup_src: &Path,
     dest_root: &Path,
@@ -410,7 +419,7 @@ fn build_restore_preview_items(
 ) -> Result<Vec<RestorePreviewItem>, CliError> {
     if backup_src.extension().and_then(|e| e.to_str()) == Some("zip") {
         build_restore_preview_items_from_zip(backup_src, dest_root, mode)
-    } else if is_7z_path(backup_src) {
+    } else if is_7z_path(backup_src) || is_xunbak_path(backup_src) {
         build_restore_preview_items_from_artifact(backup_src, dest_root, mode)
     } else {
         build_restore_preview_items_from_dir(backup_src, dest_root, mode)
@@ -507,6 +516,30 @@ fn build_restore_preview_items_from_artifact(
             continue;
         }
         let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+        match classify_preview_item_fast(
+            entry.size,
+            entry.mtime_ns,
+            entry.win_attributes,
+            &dst,
+            &rel,
+        )? {
+            PreviewFastPathDecision::New => {
+                items.push(RestorePreviewItem {
+                    rel,
+                    kind: RestorePreviewKind::New,
+                });
+                continue;
+            }
+            PreviewFastPathDecision::Overwrite => {
+                items.push(RestorePreviewItem {
+                    rel,
+                    kind: RestorePreviewKind::Overwrite,
+                });
+                continue;
+            }
+            PreviewFastPathDecision::Unchanged => continue,
+            PreviewFastPathDecision::NeedContentCheck => {}
+        }
         let mut reader = open_entry_reader(&entry)?;
         if let Some(item) = classify_preview_item_zip(&mut reader, &dst, &rel)? {
             items.push(item);
@@ -558,6 +591,33 @@ fn classify_preview_item_zip<R: Read>(
     }
 
     Ok(None)
+}
+
+fn classify_preview_item_fast(
+    source_size: u64,
+    source_mtime_ns: Option<u64>,
+    source_win_attributes: u32,
+    dst: &Path,
+    _rel: &str,
+) -> Result<PreviewFastPathDecision, CliError> {
+    if !dst.exists() {
+        return Ok(PreviewFastPathDecision::New);
+    }
+
+    let dst_meta =
+        fs::metadata(dst).map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+    if !dst_meta.is_file() || dst_meta.len() != source_size {
+        return Ok(PreviewFastPathDecision::Overwrite);
+    }
+
+    let dst_mtime_ns = dst_meta.modified().ok().map(system_time_to_unix_ns);
+    let dst_attributes = file_attributes(&dst_meta);
+    let attributes_match = source_win_attributes == 0 || source_win_attributes == dst_attributes;
+    if source_mtime_ns.is_some() && source_mtime_ns == dst_mtime_ns && attributes_match {
+        return Ok(PreviewFastPathDecision::Unchanged);
+    }
+
+    Ok(PreviewFastPathDecision::NeedContentCheck)
 }
 
 fn paths_differ(src: &Path, dst: &Path) -> Result<bool, CliError> {
@@ -728,6 +788,14 @@ mod tests {
     use std::io::Write;
     use tempfile::tempdir;
 
+    #[cfg(feature = "xunbak")]
+    use crate::backup::artifact::reader::{
+        cached_xunbak_reader_count_for_tests, clear_xunbak_reader_cache_for_tests,
+        copy_entry_to_path,
+    };
+    #[cfg(feature = "xunbak")]
+    use crate::backup::artifact::source::read_artifact_entries;
+
     use super::{
         PreviewMode, RestorePreviewItem, RestorePreviewKind, build_restore_preview_items,
         glob_match, restore_timing_enabled_with,
@@ -825,6 +893,49 @@ mod tests {
             items.is_empty(),
             "unchanged matched file should not appear in preview"
         );
+    }
+
+    #[cfg(feature = "xunbak")]
+    #[test]
+    fn restore_preview_items_xunbak_fast_path_skips_opening_content_streams() {
+        clear_xunbak_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("a.txt");
+        std::fs::write(&source, "hello xunbak").unwrap();
+        let input_entry = crate::backup::artifact::entry::SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(source),
+            size: 12,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: crate::backup::artifact::entry::SourceKind::DirArtifact,
+        };
+        let artifact = dir.path().join("artifact.xunbak");
+        crate::backup::artifact::xunbak::write_entries_to_xunbak(
+            &[&input_entry],
+            &artifact,
+            &crate::xunbak::writer::BackupOptions {
+                codec: crate::xunbak::constants::Codec::NONE,
+                zstd_level: 1,
+                split_size: None,
+            },
+            crate::backup_formats::OverwriteMode::Fail,
+        )
+        .unwrap();
+
+        let artifact_entries = read_artifact_entries(&artifact).unwrap();
+        let restore_dest = tempdir().unwrap();
+        let dest_path = restore_dest.path().join("a.txt");
+        copy_entry_to_path(&artifact_entries[0], &dest_path).unwrap();
+
+        clear_xunbak_reader_cache_for_tests();
+        let items =
+            build_restore_preview_items(&artifact, restore_dest.path(), PreviewMode::All).unwrap();
+
+        assert!(items.is_empty());
+        assert_eq!(cached_xunbak_reader_count_for_tests(), 0);
     }
 
     #[test]

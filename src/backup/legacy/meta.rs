@@ -24,6 +24,14 @@ pub(crate) struct BackupStats {
     #[serde(default)]
     pub(crate) hash_computed_files: u64,
     #[serde(default)]
+    pub(crate) rename_only_count: u32,
+    #[serde(default)]
+    pub(crate) reused_bytes: u64,
+    #[serde(default)]
+    pub(crate) cache_hit_ratio: f64,
+    #[serde(default)]
+    pub(crate) baseline_source: String,
+    #[serde(default)]
     pub(crate) hardlinked_files: u32,
 }
 

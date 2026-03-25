@@ -18,7 +18,7 @@ use crate::backup::artifact::sevenz::{
     SevenZMethod, SevenZWriteOptions, write_entries_to_7z, write_entries_to_7z_split,
 };
 use crate::backup::artifact::sidecar::{
-    build_sidecar_bytes, source_info_for_create, write_sidecar_to_dir,
+    SidecarPackingHint, build_sidecar_bytes, source_info_for_create, write_sidecar_to_dir,
 };
 use crate::backup::artifact::zip::{ZipCompressionMethod, ZipWriteOptions, write_entries_to_zip};
 use crate::backup::legacy::{config, util};
@@ -229,6 +229,7 @@ fn cmd_backup_create_dir(options: &BackupCreateOptions) -> CliResult {
         if !options.no_sidecar {
             let sidecar = build_sidecar_bytes(
                 options.format,
+                SidecarPackingHint::Dir,
                 &source_info_for_create(&options.source_dir),
                 &refs,
             )?;
@@ -378,6 +379,11 @@ fn cmd_backup_create_7z(options: &BackupCreateOptions) -> CliResult {
         } else {
             Some(build_sidecar_bytes(
                 options.format,
+                SidecarPackingHint::SevenZ(if options.no_compress {
+                    SevenZMethod::Copy
+                } else {
+                    sevenz_method_for_create(options.method.as_deref())?
+                }),
                 &source_info_for_create(&options.source_dir),
                 &refs,
             )?)
@@ -548,6 +554,11 @@ fn cmd_backup_create_zip(options: &BackupCreateOptions) -> CliResult {
         } else {
             Some(build_sidecar_bytes(
                 options.format,
+                SidecarPackingHint::Zip(if options.no_compress {
+                    ZipCompressionMethod::Stored
+                } else {
+                    zip_method_for_create(options.method.as_deref())?
+                }),
                 &source_info_for_create(&options.source_dir),
                 &refs,
             )?)

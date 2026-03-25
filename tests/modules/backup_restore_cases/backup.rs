@@ -245,7 +245,10 @@ fn backup_create_zip_json_reports_extended_summary_fields() {
     assert_eq!(json["verify_output"], "off");
     assert!(json["bytes_out"].as_u64().unwrap() > 0);
     assert!(json["duration_ms"].as_u64().is_some());
-    assert_eq!(json["outputs"][0], root.join("artifact.zip").to_string_lossy().to_string());
+    assert_eq!(
+        json["outputs"][0],
+        root.join("artifact.zip").to_string_lossy().to_string()
+    );
 }
 
 #[test]
@@ -333,20 +336,16 @@ fn backup_create_zip_write_failure_cleans_temp_output_and_does_not_publish_targe
 }"#;
     fs::write(root.join(".xun-bak.json"), cfg).unwrap();
 
-    let out = run_err(
-        env.cmd()
-            .env("XUN_TEST_FAIL_AFTER_WRITE", "1")
-            .args([
-                "backup",
-                "create",
-                "-C",
-                root.to_str().unwrap(),
-                "--format",
-                "zip",
-                "-o",
-                "artifact.zip",
-            ]),
-    );
+    let out = run_err(env.cmd().env("XUN_TEST_FAIL_AFTER_WRITE", "1").args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+    ]));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("resume is not supported yet"));
     assert!(!root.join("artifact.zip").exists());
@@ -565,6 +564,64 @@ fn backup_create_dir_output_preserves_mtime_and_readonly_attribute() {
 }
 
 #[test]
+fn backup_create_zip_preserves_mtime_and_readonly_metadata_when_converted_to_dir() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_metadata");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("readonly.txt");
+    fs::write(&source, "hello").unwrap();
+    set_last_write_time_utc(&source, 2024, 1, 2);
+
+    let mut permissions = fs::metadata(&source).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&source, permissions).unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "readonly.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--method",
+        "stored",
+    ]));
+
+    let output = env.root.join("restored_from_zip_dir");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.zip").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        output.to_str().unwrap(),
+    ]));
+
+    let source_meta = fs::metadata(&source).unwrap();
+    let restored_meta = fs::metadata(output.join("readonly.txt")).unwrap();
+    assert_eq!(
+        source_meta.last_write_time(),
+        restored_meta.last_write_time()
+    );
+    assert_eq!(
+        source_meta.file_attributes() & 0x0000_0001,
+        restored_meta.file_attributes() & 0x0000_0001
+    );
+}
+
+#[test]
 fn backup_create_7z_writes_standard_archive_to_project_relative_output() {
     let env = TestEnv::new();
     let root = env.root.join("proj_backup_create_7z");
@@ -694,7 +751,10 @@ fn backup_convert_7z_artifact_to_directory_output_writes_selected_files() {
         "README.md",
     ]));
 
-    assert_eq!(fs::read_to_string(output.join("README.md")).unwrap(), "readme");
+    assert_eq!(
+        fs::read_to_string(output.join("README.md")).unwrap(),
+        "readme"
+    );
     assert!(!output.join("src").join("main.rs").exists());
 }
 
@@ -947,11 +1007,240 @@ fn backup_create_7z_preserves_mtime_and_readonly_metadata_when_converted_to_dir(
 
     let source_meta = fs::metadata(&source).unwrap();
     let restored_meta = fs::metadata(output.join("readonly.txt")).unwrap();
-    assert_eq!(source_meta.last_write_time(), restored_meta.last_write_time());
+    assert_eq!(
+        source_meta.last_write_time(),
+        restored_meta.last_write_time()
+    );
     assert_eq!(
         source_meta.file_attributes() & 0x0000_0001,
         restored_meta.file_attributes() & 0x0000_0001
     );
+}
+
+#[cfg(feature = "xunbak")]
+#[test]
+fn backup_convert_xunbak_outputs_preserve_path_and_mtime_metadata() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_xunbak_metadata_alignment");
+    fs::create_dir_all(root.join("nested")).unwrap();
+    let source = root.join("nested").join("readonly.txt");
+    fs::write(&source, "hello").unwrap();
+    set_last_write_time_utc(&source, 2024, 1, 2);
+
+    let mut permissions = fs::metadata(&source).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&source, permissions).unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "nested" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        "artifact.xunbak",
+        "--compression",
+        "none",
+    ]));
+
+    let dir_output = env.root.join("xunbak_to_dir");
+    let zip_output = env.root.join("xunbak_to_zip.zip");
+    let sevenz_output = env.root.join("xunbak_to_7z.7z");
+
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        dir_output.to_str().unwrap(),
+    ]));
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        zip_output.to_str().unwrap(),
+        "--method",
+        "stored",
+    ]));
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        sevenz_output.to_str().unwrap(),
+        "--method",
+        "copy",
+    ]));
+
+    let source_meta = fs::metadata(&source).unwrap();
+    let dir_meta = fs::metadata(dir_output.join("nested").join("readonly.txt")).unwrap();
+    assert_eq!(source_meta.last_write_time(), dir_meta.last_write_time());
+    assert_eq!(
+        source_meta.file_attributes() & 0x0000_0001,
+        dir_meta.file_attributes() & 0x0000_0001
+    );
+
+    let zip_file = fs::File::open(&zip_output).unwrap();
+    let mut zip_archive = zip::ZipArchive::new(zip_file).unwrap();
+    let zip_entry = zip_archive.by_name("nested/readonly.txt").unwrap();
+    let zip_dt = zip_entry.last_modified().unwrap();
+    assert_eq!(zip_dt.year(), 2024);
+    assert_eq!(zip_dt.month(), 1);
+    assert_eq!(zip_dt.day(), 2);
+
+    let sevenz_archive =
+        sevenz_rust2::ArchiveReader::open(&sevenz_output, sevenz_rust2::Password::empty()).unwrap();
+    let sevenz_entry = sevenz_archive
+        .archive()
+        .files
+        .iter()
+        .find(|entry| entry.name() == "nested/readonly.txt")
+        .unwrap();
+    let sevenz_mtime: std::time::SystemTime = sevenz_entry.last_modified_date().into();
+    let expected_secs = chrono::Utc
+        .with_ymd_and_hms(2024, 1, 2, 1, 2, 4)
+        .single()
+        .unwrap()
+        .timestamp() as u64;
+    assert_eq!(
+        sevenz_mtime
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        expected_secs
+    );
+    assert!(sevenz_entry.has_windows_attributes);
+    assert_ne!(sevenz_entry.windows_attributes() & 0x0000_0001, 0);
+}
+
+#[test]
+fn sidecar_records_output_codec_and_packed_size_for_supported_scenarios() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_sidecar_output_metadata");
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("readonly.txt");
+    fs::write(&source, "hello").unwrap();
+    set_last_write_time_utc(&source, 2024, 1, 2);
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "readonly.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        "artifact_dir",
+    ]));
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--method",
+        "stored",
+    ]));
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--method",
+        "copy",
+    ]));
+
+    let dir_sidecar: Value = serde_json::from_slice(
+        &fs::read(
+            root.join("artifact_dir")
+                .join("__xunyu__")
+                .join("export_manifest.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let dir_entry = dir_sidecar["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == "readonly.txt")
+        .unwrap();
+    assert_eq!(dir_sidecar["format"], "dir");
+    assert_eq!(dir_entry["codec"], "copy");
+    assert_eq!(dir_entry["packed_size"], dir_entry["size"]);
+    assert!(dir_entry["mtime_ns"].as_u64().unwrap() > 0);
+
+    let zip_file = fs::File::open(root.join("artifact.zip")).unwrap();
+    let mut zip_archive = zip::ZipArchive::new(zip_file).unwrap();
+    let mut zip_sidecar = zip_archive
+        .by_name("__xunyu__/export_manifest.json")
+        .unwrap();
+    let mut zip_sidecar_text = String::new();
+    std::io::Read::read_to_string(&mut zip_sidecar, &mut zip_sidecar_text).unwrap();
+    let zip_sidecar: Value = serde_json::from_str(&zip_sidecar_text).unwrap();
+    let zip_entry = zip_sidecar["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == "readonly.txt")
+        .unwrap();
+    assert_eq!(zip_sidecar["format"], "zip");
+    assert_eq!(zip_entry["codec"], "stored");
+    assert_eq!(zip_entry["packed_size"], zip_entry["size"]);
+    assert!(zip_entry["mtime_ns"].as_u64().unwrap() > 0);
+
+    let mut sevenz_archive = sevenz_rust2::ArchiveReader::open(
+        root.join("artifact.7z"),
+        sevenz_rust2::Password::empty(),
+    )
+    .unwrap();
+    let sevenz_sidecar = sevenz_archive
+        .read_file("__xunyu__/export_manifest.json")
+        .unwrap();
+    let sevenz_sidecar: Value = serde_json::from_slice(&sevenz_sidecar).unwrap();
+    let sevenz_entry = sevenz_sidecar["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == "readonly.txt")
+        .unwrap();
+    assert_eq!(sevenz_sidecar["format"], "7z");
+    assert_eq!(sevenz_entry["codec"], "copy");
+    assert_eq!(sevenz_entry["packed_size"], sevenz_entry["size"]);
+    assert!(sevenz_entry["mtime_ns"].as_u64().unwrap() > 0);
 }
 
 #[test]
@@ -1014,8 +1303,11 @@ fn backup_create_7z_no_compress_uses_copy_for_payloads() {
         "copy",
     ]));
 
-    let archive =
-        sevenz_rust2::ArchiveReader::open(root.join("artifact.7z"), sevenz_rust2::Password::empty()).unwrap();
+    let archive = sevenz_rust2::ArchiveReader::open(
+        root.join("artifact.7z"),
+        sevenz_rust2::Password::empty(),
+    )
+    .unwrap();
     let entry = archive
         .archive()
         .files
@@ -1063,7 +1355,10 @@ fn backup_create_7z_split_creates_numbered_volumes_without_temp_artifacts() {
         .flatten()
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .any(|name| name.contains("tmp.7z"));
-    assert!(!temp_staged, "temporary split 7z files should be cleaned up");
+    assert!(
+        !temp_staged,
+        "temporary split 7z files should be cleaned up"
+    );
 }
 
 #[test]
@@ -1143,7 +1438,10 @@ fn backup_convert_split_7z_artifact_to_directory_output_writes_selected_files() 
     ]));
 
     assert!(!output.join("a.txt").exists());
-    assert_eq!(fs::read_to_string(output.join("b.txt")).unwrap(), "b".repeat(1200));
+    assert_eq!(
+        fs::read_to_string(output.join("b.txt")).unwrap(),
+        "b".repeat(1200)
+    );
 }
 
 #[test]
@@ -1161,23 +1459,19 @@ fn backup_convert_split_7z_write_failure_cleans_temp_outputs_and_does_not_publis
     let bytes = writer.finish().unwrap().into_inner();
     fs::write(&zip_path, bytes).unwrap();
 
-    let out = run_err(
-        env.cmd()
-            .env("XUN_TEST_FAIL_AFTER_WRITE", "1")
-            .args([
-                "backup",
-                "convert",
-                zip_path.to_str().unwrap(),
-                "--format",
-                "7z",
-                "-o",
-                env.root.join("fail_split.7z").to_str().unwrap(),
-                "--method",
-                "copy",
-                "--split-size",
-                "1400",
-            ]),
-    );
+    let out = run_err(env.cmd().env("XUN_TEST_FAIL_AFTER_WRITE", "1").args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        env.root.join("fail_split.7z").to_str().unwrap(),
+        "--method",
+        "copy",
+        "--split-size",
+        "1400",
+    ]));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("resume is not supported yet"));
     assert!(!env.root.join("fail_split.7z.001").exists());
@@ -1226,7 +1520,10 @@ fn backup_convert_first_volume_7z_artifact_to_directory_output_writes_selected_f
         "a.txt",
     ]));
 
-    assert_eq!(fs::read_to_string(output.join("a.txt")).unwrap(), "a".repeat(1200));
+    assert_eq!(
+        fs::read_to_string(output.join("a.txt")).unwrap(),
+        "a".repeat(1200)
+    );
     assert!(!output.join("b.txt").exists());
 }
 
@@ -2993,7 +3290,11 @@ fn backup_diff_mode_meta_treats_mtime_only_change_as_modified() {
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|n| n.starts_with("v") && n.contains('-') && !n.ends_with(".meta.json"))
         .collect();
-    assert_eq!(versions.len(), 2, "meta diff mode should create a new version");
+    assert_eq!(
+        versions.len(),
+        2,
+        "meta diff mode should create a new version"
+    );
 
     let value: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(value["status"], "ok");
@@ -3150,6 +3451,43 @@ fn backup_full_reuses_renamed_file_via_hash_hardlink() {
         same_file_index(&v1.join("old.txt"), &v2.join("new.txt")),
         "renamed file should be hardlinked to previous content by hash"
     );
+}
+
+#[test]
+fn backup_rename_only_reports_hash_cache_hit_when_file_id_matches() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_rename_only_file_id_cache_hit");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("old.txt"), "same-content").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 10, "deleteCount": 1 },
+  "include": [ "old.txt", "new.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    thread::sleep(Duration::from_millis(50));
+    fs::rename(root.join("old.txt"), root.join("new.txt")).unwrap();
+
+    let out =
+        run_ok(
+            env.cmd()
+                .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2", "--json"]),
+        );
+    let value: Value = serde_json::from_slice(&out.stdout).expect("backup json should be valid");
+    assert_eq!(value["action"], "backup");
+    assert_eq!(value["status"], "ok");
+    assert_eq!(value["hash_checked_files"], 1);
+    assert_eq!(value["hash_cache_hits"], 1);
+    assert_eq!(value["hash_computed_files"], 0);
 }
 
 #[test]
@@ -3310,6 +3648,158 @@ fn backup_json_reports_hash_cache_stats_when_skip_if_unchanged_hits_cache() {
 }
 
 #[test]
+fn backup_human_report_includes_enhanced_stats_fields() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_human_report_enhanced");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Cache Hit:"));
+    assert!(stderr.contains("Reuse Stats:"));
+    assert!(stderr.contains("Baseline Source:"));
+}
+
+#[test]
+fn backup_json_includes_enhanced_stats_fields_for_ok_dry_run_and_skipped() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_json_enhanced_fields");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let assert_fields = |value: &Value| {
+        assert!(value.get("rename_only_count").is_some());
+        assert!(value.get("reused_bytes").is_some());
+        assert!(value.get("cache_hit_ratio").is_some());
+        assert!(value.get("baseline_source").is_some());
+    };
+
+    let dry_run = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "dry",
+        "--dry-run",
+        "--json",
+    ]));
+    let dry_run_value: Value = serde_json::from_slice(&dry_run.stdout).unwrap();
+    assert_eq!(dry_run_value["status"], "dry_run");
+    assert_fields(&dry_run_value);
+
+    let ok = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1", "--json"]),
+    );
+    let ok_value: Value = serde_json::from_slice(&ok.stdout).unwrap();
+    assert_eq!(ok_value["status"], "ok");
+    assert_fields(&ok_value);
+
+    let skipped = run_ok(env.cmd().args([
+        "backup",
+        "-C",
+        root.to_str().unwrap(),
+        "-m",
+        "v2",
+        "--skip-if-unchanged",
+        "--json",
+    ]));
+    let skipped_value: Value = serde_json::from_slice(&skipped.stdout).unwrap();
+    assert_eq!(skipped_value["status"], "skipped");
+    assert_fields(&skipped_value);
+}
+
+#[test]
+fn backup_meta_json_includes_enhanced_stats_fields() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_meta_enhanced");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "same").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "v1"]),
+    );
+
+    let backup_dir = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.path().is_dir())
+        .unwrap()
+        .path();
+    let meta: Value =
+        serde_json::from_slice(&fs::read(backup_dir.join(".bak-meta.json")).unwrap()).unwrap();
+    assert!(meta["stats"]["rename_only_count"].is_number());
+    assert!(meta["stats"]["reused_bytes"].is_number());
+    assert!(meta["stats"]["cache_hit_ratio"].is_number());
+    assert!(meta["stats"]["baseline_source"].is_string());
+}
+
+#[test]
+fn backup_list_can_read_old_meta_without_enhanced_fields() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_old_meta_compat");
+    let backups_root = root.join("A_backups");
+    let backup_dir = backups_root.join("v1-old_2026-03-25_0000");
+    fs::create_dir_all(&backup_dir).unwrap();
+    fs::write(backup_dir.join("a.txt"), "data").unwrap();
+
+    fs::write(
+        backup_dir.join(".bak-meta.json"),
+        serde_json::json!({
+            "version": 1,
+            "ts": 1_700_000_000u64,
+            "desc": "old-meta",
+            "tags": [],
+            "stats": { "new": 1, "modified": 0, "deleted": 0 },
+            "incremental": false,
+            "size_bytes": 4
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let out = run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "list", "--json"]),
+    );
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["count"], 1);
+    assert_eq!(value["items"][0]["name"], "v1-old_2026-03-25_0000");
+}
+
+#[test]
 fn backup_without_hash_manifest_reinitializes_instead_of_using_legacy_metadata_baseline() {
     let env = TestEnv::new();
     let root = env.root.join("proj_backup_missing_hash_manifest");
@@ -3357,7 +3847,10 @@ fn backup_without_hash_manifest_reinitializes_instead_of_using_legacy_metadata_b
         .unwrap()
         .flatten()
         .any(|entry| entry.file_name().to_string_lossy().starts_with("v2-"));
-    assert!(has_v2, "second backup should be created as a fresh full snapshot");
+    assert!(
+        has_v2,
+        "second backup should be created as a fresh full snapshot"
+    );
 }
 
 #[test]
@@ -3480,14 +3973,11 @@ fn backup_mixed_changes_write_expected_manifest_and_stats() {
     fs::write(root.join("d.txt"), "ccc").unwrap();
     fs::write(root.join("e.txt"), "eee-new").unwrap();
 
-    let out = run_ok(env.cmd().args([
-        "backup",
-        "-C",
-        root.to_str().unwrap(),
-        "-m",
-        "v2",
-        "--json",
-    ]));
+    let out =
+        run_ok(
+            env.cmd()
+                .args(["backup", "-C", root.to_str().unwrap(), "-m", "v2", "--json"]),
+        );
     let value: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(value["new"], 1);
     assert_eq!(value["modified"], 1);
@@ -3514,7 +4004,9 @@ fn backup_mixed_changes_write_expected_manifest_and_stats() {
 
     let v2_name = v2.file_name().unwrap().to_string_lossy().to_string();
     let restore_root = env.root.join("mixed_changes_restore");
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         &v2_name,
         "-C",
         root.to_str().unwrap(),
@@ -3522,10 +4014,22 @@ fn backup_mixed_changes_write_expected_manifest_and_stats() {
         restore_root.to_str().unwrap(),
         "-y",
     ]));
-    assert_eq!(fs::read_to_string(restore_root.join("a.txt")).unwrap(), "aaa-modified");
-    assert_eq!(fs::read_to_string(restore_root.join("c.txt")).unwrap(), "ccc");
-    assert_eq!(fs::read_to_string(restore_root.join("d.txt")).unwrap(), "ccc");
-    assert_eq!(fs::read_to_string(restore_root.join("e.txt")).unwrap(), "eee-new");
+    assert_eq!(
+        fs::read_to_string(restore_root.join("a.txt")).unwrap(),
+        "aaa-modified"
+    );
+    assert_eq!(
+        fs::read_to_string(restore_root.join("c.txt")).unwrap(),
+        "ccc"
+    );
+    assert_eq!(
+        fs::read_to_string(restore_root.join("d.txt")).unwrap(),
+        "ccc"
+    );
+    assert_eq!(
+        fs::read_to_string(restore_root.join("e.txt")).unwrap(),
+        "eee-new"
+    );
     assert!(!restore_root.join("b.txt").exists());
 }
 
@@ -3535,7 +4039,11 @@ fn backup_restore_recomputed_hash_matches_manifest() {
     let root = env.root.join("proj_restore_hash_match");
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("src").join("main.rs"), "fn main() {}\n").unwrap();
-    fs::write(root.join("src").join("lib.rs"), "pub fn value() -> u32 { 7 }\n").unwrap();
+    fs::write(
+        root.join("src").join("lib.rs"),
+        "pub fn value() -> u32 { 7 }\n",
+    )
+    .unwrap();
 
     let cfg = r#"{
   "storage": { "backupsDir": "A_backups", "compress": false },
@@ -3560,7 +4068,9 @@ fn backup_restore_recomputed_hash_matches_manifest() {
         .to_string_lossy()
         .into_owned();
     let restore_root = env.root.join("restore_hash_out");
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         &v1_name,
         "-C",
         root.to_str().unwrap(),
@@ -3576,7 +4086,9 @@ fn backup_restore_recomputed_hash_matches_manifest() {
         let rel = entry["path"].as_str().unwrap();
         let expected = entry["content_hash"].as_str().unwrap();
         let restored_path = restore_root.join(rel.replace('/', "\\"));
-        let actual = blake3::hash(&fs::read(&restored_path).unwrap()).to_hex().to_string();
+        let actual = blake3::hash(&fs::read(&restored_path).unwrap())
+            .to_hex()
+            .to_string();
         assert_eq!(actual, expected, "restored hash mismatch for {}", rel);
     }
 }
@@ -4420,4 +4932,3 @@ fn bak_nested_directory_scan() {
         "top-level src file should be backed up"
     );
 }
-

@@ -61,6 +61,18 @@ pub(super) fn positional_candidates(
             NO_FILE_COMP,
         );
     }
+    if subcmd == "xunbak" && subsub.is_none() && index == 0 {
+        return (
+            static_candidates(XUNBAK_SUBCOMMANDS, prefix_lower),
+            NO_FILE_COMP,
+        );
+    }
+    if subcmd == "xunbak" && subsub == Some("plugin") && index == 0 {
+        return (
+            static_candidates(XUNBAK_PLUGIN_SUBCOMMANDS, prefix_lower),
+            NO_FILE_COMP,
+        );
+    }
     if subcmd == "env" && subsub == Some("path") && index == 0 {
         return (
             static_candidates(ENV_PATH_SUBCOMMANDS, prefix_lower),

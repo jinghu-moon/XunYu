@@ -123,7 +123,7 @@ fn read_zip_artifact_entries(zip_path: &Path) -> Result<Vec<SourceEntry>, CliErr
             size: entry.size(),
             mtime_ns: zip_datetime_to_unix_ns(entry.last_modified()),
             created_time_ns: None,
-            win_attributes: 0,
+            win_attributes: zip_entry_win_attributes(&entry),
             content_hash: None,
             kind: SourceKind::ZipArtifact,
         });
@@ -222,6 +222,18 @@ fn zip_datetime_to_unix_ns(datetime: Option<zip::DateTime>) -> Option<u64> {
         )
         .single()?;
     Some(dt.timestamp_nanos_opt()? as u64)
+}
+
+fn zip_entry_win_attributes(entry: &zip::read::ZipFile<'_>) -> u32 {
+    const FILE_ATTRIBUTE_READONLY: u32 = 0x0000_0001;
+    if entry
+        .unix_mode()
+        .is_some_and(|mode| mode & 0o222 == 0 && mode != 0)
+    {
+        FILE_ATTRIBUTE_READONLY
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]

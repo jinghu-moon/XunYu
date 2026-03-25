@@ -317,17 +317,22 @@ impl XunbakSingleUpdatePlan {
 pub struct XunbakSplitUpdatePlan {
     pub target_base: PathBuf,
     pub work_base: PathBuf,
+    pub staged_original_base: PathBuf,
 }
 
 #[cfg(feature = "xunbak")]
 impl XunbakSplitUpdatePlan {
     pub fn prepare(target_base: &Path) -> CliResult<Self> {
         let work_base = build_temp_xunbak_base(target_base, "tmp-update-split");
+        let staged_original_base = build_temp_xunbak_base(target_base, "tmp-update-split-orig");
         cleanup_split_outputs(&work_base)?;
-        move_split_outputs(target_base, &work_base)?;
+        cleanup_split_outputs(&staged_original_base)?;
+        move_split_outputs(target_base, &staged_original_base)?;
+        copy_split_outputs(&staged_original_base, &work_base)?;
         Ok(Self {
             target_base: target_base.to_path_buf(),
             work_base,
+            staged_original_base,
         })
     }
 
@@ -336,11 +341,14 @@ impl XunbakSplitUpdatePlan {
     }
 
     pub fn commit(self) -> CliResult<()> {
-        move_split_outputs(&self.work_base, &self.target_base)
+        cleanup_split_outputs(&self.target_base)?;
+        move_split_outputs(&self.work_base, &self.target_base)?;
+        cleanup_split_outputs(&self.staged_original_base)
     }
 
     pub fn rollback(self) -> CliResult<()> {
-        move_split_outputs(&self.work_base, &self.target_base)
+        cleanup_split_outputs(&self.work_base)?;
+        move_split_outputs(&self.staged_original_base, &self.target_base)
     }
 }
 
@@ -681,6 +689,54 @@ fn move_split_outputs(from_base: &Path, to_base: &Path) -> CliResult<()> {
             ));
         }
         moved.push((from_path, to_path));
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "xunbak")]
+fn copy_split_outputs(from_base: &Path, to_base: &Path) -> CliResult<()> {
+    let from_paths = list_split_outputs(from_base)?;
+    let mut copied: Vec<PathBuf> = Vec::new();
+
+    for from_path in from_paths {
+        let suffix = split_suffix(&from_path).ok_or_else(|| {
+            CliError::new(1, format!("Invalid split path: {}", from_path.display()))
+        })?;
+        let to_path = PathBuf::from(format!("{}.{}", to_base.display(), suffix));
+        if let Some(parent) = to_path.parent() {
+            fs::create_dir_all(parent).map_err(|err| {
+                CliError::new(
+                    1,
+                    format!(
+                        "Create split output directory failed {}: {err}",
+                        parent.display()
+                    ),
+                )
+            })?;
+        }
+        if to_path.exists() {
+            fs::remove_file(&to_path).map_err(|err| {
+                CliError::new(
+                    1,
+                    format!("Remove split output failed {}: {err}", to_path.display()),
+                )
+            })?;
+        }
+        if let Err(err) = fs::copy(&from_path, &to_path) {
+            for copied_path in copied.into_iter().rev() {
+                let _ = fs::remove_file(copied_path);
+            }
+            return Err(CliError::new(
+                1,
+                format!(
+                    "Copy split output failed {} -> {}: {err}",
+                    from_path.display(),
+                    to_path.display()
+                ),
+            ));
+        }
+        copied.push(to_path);
     }
 
     Ok(())

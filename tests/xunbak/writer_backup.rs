@@ -6,8 +6,8 @@ use ulid::Ulid;
 use xun::xunbak::checkpoint::read_checkpoint_record;
 use xun::xunbak::constants::{Codec, FOOTER_SIZE, HEADER_SIZE, RecordType};
 use xun::xunbak::footer::Footer;
-use xun::xunbak::reader::ContainerReader;
 use xun::xunbak::manifest::read_manifest_record;
+use xun::xunbak::reader::ContainerReader;
 use xun::xunbak::record::scan_records;
 use xun::xunbak::writer::{BackupOptions, ContainerWriter};
 
@@ -250,7 +250,10 @@ fn backup_large_file_uses_parts_and_restores_content() {
         .iter()
         .find(|entry| entry.path == "large.bin")
         .unwrap();
-    let parts = entry.parts.as_ref().expect("large file should use multipart");
+    let parts = entry
+        .parts
+        .as_ref()
+        .expect("large file should use multipart");
     assert!(parts.len() >= 2);
     assert_eq!(reader.checkpoint.blob_count as usize, parts.len());
 
@@ -271,8 +274,16 @@ fn backup_large_duplicate_reuses_parts_in_same_run() {
     let result = ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
     let reader = ContainerReader::open(&container).unwrap();
     let manifest = reader.load_manifest().unwrap();
-    let a = manifest.entries.iter().find(|entry| entry.path == "a.bin").unwrap();
-    let b = manifest.entries.iter().find(|entry| entry.path == "b.bin").unwrap();
+    let a = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "a.bin")
+        .unwrap();
+    let b = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "b.bin")
+        .unwrap();
     let a_parts = a.parts.as_ref().expect("multipart expected");
     let b_parts = b.parts.as_ref().expect("multipart expected");
 

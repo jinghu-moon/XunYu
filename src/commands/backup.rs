@@ -5,13 +5,13 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 
-use console::Style;
-use serde::Serialize;
 use crate::cli::{BackupCmd, BackupSubCommand};
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::runtime;
 use crate::util::{normalize_glob_path, read_ignore_file, split_csv};
 use crate::windows::file_copy::detect_copy_backend_for_backup;
+use console::Style;
+use serde::Serialize;
 
 pub(crate) use crate::backup::legacy::{
     baseline, config, diff, find, hash_diff, hash_manifest, list, meta, report, retention, scan,
@@ -76,6 +76,13 @@ struct BackupScanRules {
     exclude_patterns: Vec<String>,
 }
 
+struct BackupDerivedStats {
+    rename_only_count: u32,
+    reused_bytes: u64,
+    cache_hit_ratio: f64,
+    baseline_source: &'static str,
+}
+
 #[derive(Serialize)]
 struct BackupRunJsonView {
     action: &'static str,
@@ -97,6 +104,10 @@ struct BackupRunJsonView {
     hash_cache_hits: u64,
     hash_computed_files: u64,
     hash_failed_files: u64,
+    rename_only_count: u32,
+    reused_bytes: u64,
+    cache_hit_ratio: f64,
+    baseline_source: &'static str,
     hardlinked_files: u32,
     logical_bytes: u64,
     copied_bytes: u64,
@@ -109,6 +120,44 @@ fn emit_backup_json(payload: &BackupRunJsonView) {
         "{}",
         serde_json::to_string_pretty(payload).unwrap_or_default()
     );
+}
+
+fn derive_backup_stats(
+    diff_entries: &[diff::DiffEntry],
+    scan_hash_stats: &scan::ScanHashStats,
+    baseline_mode: &'static str,
+) -> BackupDerivedStats {
+    let deleted_paths: std::collections::HashSet<&str> = diff_entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, diff::DiffKind::Deleted))
+        .map(|entry| entry.rel.as_str())
+        .collect();
+    let rename_only_count = diff_entries
+        .iter()
+        .filter(|entry| {
+            matches!(entry.kind, diff::DiffKind::Reused)
+                && entry
+                    .reuse_from_rel
+                    .as_deref()
+                    .is_some_and(|path| deleted_paths.contains(path))
+        })
+        .count() as u32;
+    let reused_bytes = diff_entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, diff::DiffKind::Reused))
+        .map(|entry| entry.file_size)
+        .sum();
+    let cache_hit_ratio = if scan_hash_stats.hash_checked_files == 0 {
+        0.0
+    } else {
+        scan_hash_stats.hash_cache_hits as f64 / scan_hash_stats.hash_checked_files as f64
+    };
+    BackupDerivedStats {
+        rename_only_count,
+        reused_bytes,
+        cache_hit_ratio,
+        baseline_source: baseline_mode,
+    }
 }
 
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
@@ -289,8 +338,15 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     // 增量模式只追踪变更文件；全量模式（含目录备份）需追踪所有文件
     let skip_unchanged = args.incremental;
     let show_unchanged = runtime::is_verbose() && !skip_unchanged;
-    let (mut current, mut scan_hash_stats, baseline_mode, baseline_entry_count, diff_entries, elapsed_scan, elapsed_baseline) =
-        match resolved_diff_mode {
+    let (
+        mut current,
+        mut scan_hash_stats,
+        baseline_mode,
+        baseline_entry_count,
+        diff_entries,
+        elapsed_scan,
+        elapsed_baseline,
+    ) = match resolved_diff_mode {
         DiffMode::Meta => {
             let t_scan = Instant::now();
             let current = scan::scan_files(
@@ -442,7 +498,11 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         emit_backup_timing(
             "scan",
             elapsed_scan,
-            Some(format!("files={} diff_mode={}", current.len(), resolved_diff_mode.as_str())),
+            Some(format!(
+                "files={} diff_mode={}",
+                current.len(),
+                resolved_diff_mode.as_str()
+            )),
         );
     }
     if timing {
@@ -462,6 +522,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             Some(format!("entries={}", diff_entries.len())),
         );
     }
+    let derived_stats = derive_backup_stats(&diff_entries, &scan_hash_stats, baseline_mode);
     let has_changes = diff_entries
         .iter()
         .any(|entry| !matches!(entry.kind, diff::DiffKind::Unchanged));
@@ -505,6 +566,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 hash_cache_hits: scan_hash_stats.hash_cache_hits,
                 hash_computed_files: scan_hash_stats.hash_computed_files,
                 hash_failed_files: scan_hash_stats.hash_failed_files,
+                rename_only_count: derived_stats.rename_only_count,
+                reused_bytes: derived_stats.reused_bytes,
+                cache_hit_ratio: derived_stats.cache_hit_ratio,
+                baseline_source: derived_stats.baseline_source,
                 hardlinked_files: 0,
                 logical_bytes: 0,
                 copied_bytes: 0,
@@ -641,7 +706,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         report::report("Dry run", "no files written", &white);
         report::report(
             "Stats",
-            &format!("+{}  ~{}  ↺{}  -{}", stats.new, stats.modified, stats.reused, stats.deleted),
+            &format!(
+                "+{}  ~{}  ↺{}  -{}",
+                stats.new, stats.modified, stats.reused, stats.deleted
+            ),
             &white,
         );
         eprintln!();
@@ -666,6 +734,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
                 hash_cache_hits: scan_hash_stats.hash_cache_hits,
                 hash_computed_files: scan_hash_stats.hash_computed_files,
                 hash_failed_files: scan_hash_stats.hash_failed_files,
+                rename_only_count: derived_stats.rename_only_count,
+                reused_bytes: derived_stats.reused_bytes,
+                cache_hit_ratio: derived_stats.cache_hit_ratio,
+                baseline_source: derived_stats.baseline_source,
                 hardlinked_files: stats.hardlinked_files,
                 logical_bytes: stats.logical_bytes,
                 copied_bytes: stats.copied_bytes,
@@ -766,6 +838,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             hash_checked_files: scan_hash_stats.hash_checked_files,
             hash_cache_hits: scan_hash_stats.hash_cache_hits,
             hash_computed_files: scan_hash_stats.hash_computed_files,
+            rename_only_count: derived_stats.rename_only_count,
+            reused_bytes: derived_stats.reused_bytes,
+            cache_hit_ratio: derived_stats.cache_hit_ratio,
+            baseline_source: derived_stats.baseline_source.to_string(),
             hardlinked_files: stats.hardlinked_files,
         },
         incremental: args.incremental,
@@ -818,7 +894,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
         report::report("Size", &size_display, &cyan);
         report::report(
             "Stats",
-            &format!("+{}  ~{}  ↺{}  -{}", stats.new, stats.modified, stats.reused, stats.deleted),
+            &format!(
+                "+{}  ~{}  ↺{}  -{}",
+                stats.new, stats.modified, stats.reused, stats.deleted
+            ),
             &white,
         );
         report::report(
@@ -832,6 +911,11 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             &white,
         );
         report::report(
+            "Cache Hit",
+            &format!("{:.2}%", derived_stats.cache_hit_ratio * 100.0),
+            &white,
+        );
+        report::report(
             "Reuse",
             &format!(
                 "{} hardlinks  {} copied",
@@ -839,6 +923,15 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             ),
             &white,
         );
+        report::report(
+            "Reuse Stats",
+            &format!(
+                "rename-only={}  reused-bytes={}",
+                derived_stats.rename_only_count, derived_stats.reused_bytes
+            ),
+            &white,
+        );
+        report::report("Baseline Source", derived_stats.baseline_source, &dim);
         if cleaned > 0 {
             report::report("Cleaned", &format!("{cleaned} old backups"), &yellow);
         }
@@ -873,6 +966,10 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
             hash_cache_hits: scan_hash_stats.hash_cache_hits,
             hash_computed_files: scan_hash_stats.hash_computed_files,
             hash_failed_files: scan_hash_stats.hash_failed_files,
+            rename_only_count: derived_stats.rename_only_count,
+            reused_bytes: derived_stats.reused_bytes,
+            cache_hit_ratio: derived_stats.cache_hit_ratio,
+            baseline_source: derived_stats.baseline_source,
             hardlinked_files: stats.hardlinked_files,
             logical_bytes: stats.logical_bytes,
             copied_bytes: stats.copied_bytes,
@@ -977,9 +1074,7 @@ fn convert_hash_diff_entries(
                         kind: diff::DiffKind::Reused,
                         size_delta: 0,
                         file_size: scanned.size,
-                        reuse_from_rel: entry
-                            .reuse_from_path
-                            .map(|value| value.replace('/', "\\")),
+                        reuse_from_rel: entry.reuse_from_path.map(|value| value.replace('/', "\\")),
                     });
                 }
             }

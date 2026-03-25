@@ -418,6 +418,21 @@ fn xunbak_reader_cache() -> &'static Mutex<
     CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
 }
 
+#[cfg(all(test, feature = "xunbak"))]
+pub(crate) fn clear_xunbak_reader_cache_for_tests() {
+    if let Ok(mut cache) = xunbak_reader_cache().lock() {
+        cache.clear();
+    }
+}
+
+#[cfg(all(test, feature = "xunbak"))]
+pub(crate) fn cached_xunbak_reader_count_for_tests() -> usize {
+    xunbak_reader_cache()
+        .lock()
+        .map(|cache| cache.len())
+        .unwrap_or(0)
+}
+
 #[cfg(feature = "xunbak")]
 fn normalize_artifact_entry_key(path: &str) -> String {
     normalize_glob_path(path)
@@ -534,11 +549,18 @@ fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
 mod tests {
     use std::fs;
     use std::io::{Read, Write};
+    #[cfg(feature = "xunbak")]
+    use std::sync::Arc;
 
     use tempfile::tempdir;
 
     use crate::backup::artifact::entry::{SourceEntry, SourceKind};
 
+    #[cfg(feature = "xunbak")]
+    use super::{
+        cached_xunbak_reader_count_for_tests, clear_xunbak_reader_cache_for_tests,
+        load_cached_xunbak_reader_and_manifest,
+    };
     use super::{copy_entry_to_path, open_entry_reader};
 
     #[test]
@@ -689,6 +711,7 @@ mod tests {
     #[cfg(feature = "xunbak")]
     #[test]
     fn open_entry_reader_returns_readable_stream_for_xunbak_artifact() {
+        clear_xunbak_reader_cache_for_tests();
         let dir = tempdir().unwrap();
         let source = dir.path().join("a.txt");
         fs::write(&source, "hello xunbak").unwrap();
@@ -730,5 +753,119 @@ mod tests {
         let mut content = String::new();
         reader.read_to_string(&mut content).unwrap();
         assert_eq!(content, "hello xunbak");
+    }
+
+    #[cfg(feature = "xunbak")]
+    #[test]
+    fn load_cached_xunbak_reader_and_manifest_reuses_same_reader_for_same_artifact() {
+        clear_xunbak_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("a.txt");
+        fs::write(&source, "hello xunbak").unwrap();
+        let artifact = dir.path().join("artifact.xunbak");
+        let entry = SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(source),
+            size: 12,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::xunbak::write_entries_to_xunbak(
+            &[&entry],
+            &artifact,
+            &crate::xunbak::writer::BackupOptions {
+                codec: crate::xunbak::constants::Codec::NONE,
+                zstd_level: 1,
+                split_size: None,
+            },
+            crate::backup_formats::OverwriteMode::Fail,
+        )
+        .unwrap();
+
+        let (reader_a, manifest_a) = load_cached_xunbak_reader_and_manifest(&artifact).unwrap();
+        let (reader_b, manifest_b) = load_cached_xunbak_reader_and_manifest(&artifact).unwrap();
+
+        assert!(Arc::ptr_eq(&reader_a, &reader_b));
+        assert!(Arc::ptr_eq(&manifest_a, &manifest_b));
+        assert_eq!(cached_xunbak_reader_count_for_tests(), 1);
+    }
+
+    #[cfg(feature = "xunbak")]
+    #[test]
+    fn open_entry_reader_reuse_does_not_change_multi_file_restore_content() {
+        clear_xunbak_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let source_a = dir.path().join("a.txt");
+        let source_b = dir.path().join("nested").join("b.txt");
+        fs::create_dir_all(source_b.parent().unwrap()).unwrap();
+        fs::write(&source_a, "alpha").unwrap();
+        fs::write(&source_b, "beta").unwrap();
+        let artifact = dir.path().join("artifact.xunbak");
+        let entry_a = SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(source_a),
+            size: 5,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        let entry_b = SourceEntry {
+            path: "nested/b.txt".to_string(),
+            source_path: Some(source_b),
+            size: 4,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::xunbak::write_entries_to_xunbak(
+            &[&entry_a, &entry_b],
+            &artifact,
+            &crate::xunbak::writer::BackupOptions {
+                codec: crate::xunbak::constants::Codec::NONE,
+                zstd_level: 1,
+                split_size: None,
+            },
+            crate::backup_formats::OverwriteMode::Fail,
+        )
+        .unwrap();
+
+        let artifact_entry_a = SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(artifact.clone()),
+            size: 5,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::XunbakArtifact,
+        };
+        let artifact_entry_b = SourceEntry {
+            path: "nested/b.txt".to_string(),
+            source_path: Some(artifact),
+            size: 4,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::XunbakArtifact,
+        };
+
+        let mut reader_a = open_entry_reader(&artifact_entry_a).unwrap();
+        let mut reader_b = open_entry_reader(&artifact_entry_b).unwrap();
+        let mut content_a = String::new();
+        let mut content_b = String::new();
+        reader_a.read_to_string(&mut content_a).unwrap();
+        reader_b.read_to_string(&mut content_b).unwrap();
+
+        assert_eq!(content_a, "alpha");
+        assert_eq!(content_b, "beta");
+        assert_eq!(cached_xunbak_reader_count_for_tests(), 1);
     }
 }

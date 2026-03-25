@@ -208,7 +208,10 @@ mod tests {
     #[test]
     fn build_current_path_index_normalizes_case_and_separators() {
         let mut current = HashMap::new();
-        current.insert("Src\\ReadMe.TXT".to_string(), scanned("Src\\ReadMe.TXT", [1; 32]));
+        current.insert(
+            "Src\\ReadMe.TXT".to_string(),
+            scanned("Src\\ReadMe.TXT", [1; 32]),
+        );
 
         let index = build_current_path_index(&current);
         let (path, _) = index["src/readme.txt"];

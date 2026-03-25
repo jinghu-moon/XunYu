@@ -3,7 +3,10 @@
 #include "xunbak_utils.h"
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <fstream>
 #include <limits>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -11,6 +14,7 @@ namespace {
 constexpr uint32_t kSeekOriginStart = 0;
 constexpr uint32_t kSeekOriginCurrent = 1;
 constexpr uint32_t kSeekOriginEnd = 2;
+constexpr uint64_t kDefaultMemoryFallbackMaxBytes = 64ULL * 1024ULL * 1024ULL;
 
 struct PropertyDescriptor {
   const wchar_t *name;
@@ -72,6 +76,84 @@ const wchar_t *CodecName(uint32_t codec_id) noexcept {
     default:
       return L"Unknown";
   }
+}
+
+bool EnvFlagEnabled(const char *name) {
+  const DWORD size = ::GetEnvironmentVariableA(name, nullptr, 0);
+  if (size == 0) {
+    return false;
+  }
+  std::string value(static_cast<size_t>(size), '\0');
+  const DWORD written = ::GetEnvironmentVariableA(name, value.data(), size);
+  if (written == 0) {
+    return false;
+  }
+  value.resize(static_cast<size_t>(written));
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return value == "1" || value == "true" || value == "yes" || value == "on";
+}
+
+uint64_t ResolveMemoryFallbackMaxBytes() {
+  const DWORD size = ::GetEnvironmentVariableA("XUN_XUNBAK_PLUGIN_FALLBACK_MAX_BYTES", nullptr, 0);
+  if (size == 0) {
+    return kDefaultMemoryFallbackMaxBytes;
+  }
+  std::string value(static_cast<size_t>(size), '\0');
+  const DWORD written =
+      ::GetEnvironmentVariableA("XUN_XUNBAK_PLUGIN_FALLBACK_MAX_BYTES", value.data(), size);
+  if (written == 0) {
+    return kDefaultMemoryFallbackMaxBytes;
+  }
+  value.resize(static_cast<size_t>(written));
+  char *end = nullptr;
+  const unsigned long long parsed = std::strtoull(value.c_str(), &end, 10);
+  if (end == value.c_str() || (end && *end != '\0')) {
+    return kDefaultMemoryFallbackMaxBytes;
+  }
+  return static_cast<uint64_t>(parsed);
+}
+
+void TraceOpenPath(std::string_view line) {
+  const DWORD size = ::GetEnvironmentVariableA("XUN_XUNBAK_PLUGIN_TRACE_FILE", nullptr, 0);
+  if (size == 0) {
+    return;
+  }
+  std::string path(static_cast<size_t>(size), '\0');
+  const DWORD written =
+      ::GetEnvironmentVariableA("XUN_XUNBAK_PLUGIN_TRACE_FILE", path.data(), size);
+  if (written == 0) {
+    return;
+  }
+  path.resize(static_cast<size_t>(written));
+  std::ofstream out(path, std::ios::app);
+  if (!out) {
+    return;
+  }
+  out << line << '\n';
+}
+
+bool IsMemoryFallbackAllowed(const std::string &primary_name,
+                             uint64_t primary_stream_size,
+                             uint64_t threshold_bytes,
+                             std::string *reason) {
+  if (EndsWithSplitSuffix(primary_name)) {
+    if (reason) {
+      *reason = "split_requires_callbacks";
+    }
+    return false;
+  }
+  if (threshold_bytes == 0 || primary_stream_size > threshold_bytes) {
+    if (reason) {
+      *reason = "threshold";
+    }
+    return false;
+  }
+  if (reason) {
+    reason->clear();
+  }
+  return true;
 }
 
 HRESULT ReadAll(IInStream *stream, std::vector<uint8_t> *out) noexcept {
@@ -150,6 +232,10 @@ static int32_t XunbakOpenVolume(void *ctx,
   }
   auto *bridge = reinterpret_cast<XunbakInArchive::BridgeContext *>(ctx);
   const std::string name(reinterpret_cast<const char *>(volume_name_ptr), volume_name_len);
+  if (EnvFlagEnabled("XUN_XUNBAK_PLUGIN_TEST_FAIL_CALLBACK_OPEN")) {
+    TraceOpenPath("volume.callback.forced_failure name=" + name);
+    return XUNBAK_ERR_OPEN;
+  }
   auto handle = std::make_unique<XunbakInArchive::StreamHandle>();
 
   if (name == bridge->primary_name_utf8) {
@@ -361,6 +447,9 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
     bridge_->primary_name_utf8 = "memory.xunbak";
   }
 
+  TraceOpenPath("open.start name=" + bridge_->primary_name_utf8 +
+                " size=" + std::to_string(bridge_->primary_stream_size));
+
   XunbakVolumeCallbacks callbacks{};
   callbacks.ctx = bridge_.get();
   callbacks.open_volume = &XunbakOpenVolume;
@@ -375,27 +464,56 @@ HRESULT XunbakInArchive::OpenCore(IInStream *stream, IArchiveOpenCallback *openC
 
   int32_t last_status = XUNBAK_ERR_OPEN;
   for (const auto &candidate : candidates) {
+    TraceOpenPath("open.callback.try candidate=" + candidate);
     last_status = xunbak_open_with_callbacks(
         reinterpret_cast<const uint8_t *>(candidate.data()),
         candidate.size(),
         &callbacks,
         &archive_);
+    TraceOpenPath("open.callback.result candidate=" + candidate +
+                  " status=" + std::to_string(last_status));
     if (last_status == XUNBAK_OK) {
+      TraceOpenPath("open.callback.success candidate=" + candidate);
       return S_OK;
     }
   }
 
+  const uint64_t fallback_max_bytes = ResolveMemoryFallbackMaxBytes();
+  std::string fallback_reason;
+  if (!IsMemoryFallbackAllowed(
+          bridge_->primary_name_utf8,
+          bridge_->primary_stream_size,
+          fallback_max_bytes,
+          &fallback_reason)) {
+    TraceOpenPath("open.fallback.rejected reason=" + fallback_reason +
+                  " size=" + std::to_string(bridge_->primary_stream_size) +
+                  " threshold=" + std::to_string(fallback_max_bytes) +
+                  " callback_status=" + std::to_string(last_status));
+    if (fallback_reason == "threshold") {
+      return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+  }
+
+  TraceOpenPath("open.fallback.allowed size=" + std::to_string(bridge_->primary_stream_size) +
+                " threshold=" + std::to_string(fallback_max_bytes) +
+                " callback_status=" + std::to_string(last_status));
   bridge_->primary_stream.Release();
+  TraceOpenPath("open.readall.begin");
   if (FAILED(ReadAll(stream, &bridge_->primary_bytes))) {
+    TraceOpenPath("open.readall.failed");
     bridge_.reset();
     return E_FAIL;
   }
+  TraceOpenPath("open.readall.end bytes=" + std::to_string(bridge_->primary_bytes.size()));
 
   const int32_t direct_status = xunbak_open(
       bridge_->primary_bytes.data(),
       bridge_->primary_bytes.size(),
       &archive_);
+  TraceOpenPath("open.direct.result status=" + std::to_string(direct_status));
   if (direct_status == XUNBAK_OK) {
+    TraceOpenPath("open.direct.success");
     return S_OK;
   }
 

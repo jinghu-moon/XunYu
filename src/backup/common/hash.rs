@@ -116,7 +116,10 @@ mod tests {
         let content = b"shared hash module";
         std::fs::write(&path, content).unwrap();
 
-        assert_eq!(compute_file_content_hash(&path).unwrap(), hash_bytes(content));
+        assert_eq!(
+            compute_file_content_hash(&path).unwrap(),
+            hash_bytes(content)
+        );
     }
 
     #[test]
@@ -126,7 +129,10 @@ mod tests {
         let content = vec![0x5au8; 10 * 1024 * 1024];
         std::fs::write(&path, &content).unwrap();
 
-        assert_eq!(compute_file_content_hash(&path).unwrap(), hash_bytes(&content));
+        assert_eq!(
+            compute_file_content_hash(&path).unwrap(),
+            hash_bytes(&content)
+        );
     }
 
     #[test]
@@ -201,7 +207,10 @@ mod tests {
     fn encode_hash_hex_returns_64_lowercase_chars() {
         let hex = encode_hash_hex(&[0xab; 32]);
         assert_eq!(hex.len(), 64);
-        assert!(hex.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()));
+        assert!(
+            hex.chars()
+                .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase())
+        );
     }
 
     #[test]

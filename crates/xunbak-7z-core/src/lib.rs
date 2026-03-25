@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::fs::File;
 use std::ffi::c_void;
+use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -161,9 +161,7 @@ impl MemoryVolumeSource {
     }
 
     fn from_volume_map(volumes: HashMap<String, Arc<[u8]>>) -> Self {
-        Self {
-            volumes,
-        }
+        Self { volumes }
     }
 }
 
@@ -194,10 +192,9 @@ impl CallbackVolumeSource {
 
 impl VolumeSource for CallbackVolumeSource {
     fn open(&self, volume_name: &str) -> Result<Box<dyn ReadSeek>, CoreError> {
-        let open_volume = self
-            .callbacks
-            .open_volume
-            .ok_or_else(|| CoreError::InvalidSplitState("open_volume callback missing".to_string()))?;
+        let open_volume = self.callbacks.open_volume.ok_or_else(|| {
+            CoreError::InvalidSplitState("open_volume callback missing".to_string())
+        })?;
         let mut handle = std::ptr::null_mut();
         let rc = unsafe {
             open_volume(
@@ -293,11 +290,13 @@ impl<S: VolumeSource> XunbakArchive<S> {
             vec![primary_name.clone()]
         };
 
-        let mut last_size = stream_len(&mut *source.open(
-            volume_names
-                .last()
-                .expect("volume_names always has at least one element"),
-        )?)?;
+        let mut last_size = stream_len(
+            &mut *source.open(
+                volume_names
+                    .last()
+                    .expect("volume_names always has at least one element"),
+            )?,
+        )?;
         let footer = read_footer(&source, volume_names.last().expect("checked"), last_size)?;
         let checkpoint = read_checkpoint(&source, volume_names.last().expect("checked"), &footer)?;
 
@@ -310,11 +309,13 @@ impl<S: VolumeSource> XunbakArchive<S> {
                 )));
             }
             volume_names.truncate(expected);
-            last_size = stream_len(&mut *source.open(
-                volume_names
-                    .last()
-                    .expect("volume_names always has at least one element"),
-            )?)?;
+            last_size = stream_len(
+                &mut *source.open(
+                    volume_names
+                        .last()
+                        .expect("volume_names always has at least one element"),
+                )?,
+            )?;
         }
 
         let manifest = load_manifest(
@@ -368,8 +369,7 @@ impl<S: VolumeSource> XunbakArchive<S> {
                 reader
                     .seek(SeekFrom::Start(part.blob_offset))
                     .map_err(|err| CoreError::Io(err.to_string()))?;
-                let result =
-                    copy_blob_record_content_to_writer(&mut reader, &mut hashing_writer)?;
+                let result = copy_blob_record_content_to_writer(&mut reader, &mut hashing_writer)?;
                 if result.header.blob_id != part.blob_id {
                     return Err(CoreError::Blob(BlobRecordError::BlobHashMismatch));
                 }
@@ -417,7 +417,11 @@ impl ArchiveHandleInner {
         }
     }
 
-    fn extract_item_to_writer<W: Write>(&self, path: &str, writer: &mut W) -> Result<(), CoreError> {
+    fn extract_item_to_writer<W: Write>(
+        &self,
+        path: &str,
+        writer: &mut W,
+    ) -> Result<(), CoreError> {
         match self {
             Self::Memory(archive) => archive.extract_item_to_writer(path, writer),
             Self::Callback(archive) => archive.extract_item_to_writer(path, writer),
@@ -607,7 +611,10 @@ pub extern "C" fn xunbak_extract(
     };
 
     let mut content = Vec::new();
-    if let Err(err) = handle.archive.extract_item_to_writer(&item.path, &mut content) {
+    if let Err(err) = handle
+        .archive
+        .extract_item_to_writer(&item.path, &mut content)
+    {
         return map_core_error(&err);
     }
     if !out_written.is_null() {
@@ -645,7 +652,10 @@ pub extern "C" fn xunbak_extract_with_writer(
         Ok(writer) => writer,
         Err(code) => return code,
     };
-    if let Err(err) = handle.archive.extract_item_to_writer(&item.path, &mut writer) {
+    if let Err(err) = handle
+        .archive
+        .extract_item_to_writer(&item.path, &mut writer)
+    {
         return map_core_error(&err);
     }
     if !out_written.is_null() {
@@ -751,10 +761,9 @@ impl CallbackWriter {
 
 impl Write for CallbackWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let write = self
-            .callbacks
-            .write
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "write callback missing"))?;
+        let write = self.callbacks.write.ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "write callback missing")
+        })?;
         let mut written_total = 0usize;
         while written_total < buf.len() {
             let mut written = 0usize;
@@ -838,9 +847,7 @@ impl Read for CallbackStream {
                 )
             };
             if rc != XUNBAK_OK {
-                return Err(std::io::Error::other(format!(
-                    "read callback failed: {rc}"
-                )));
+                return Err(std::io::Error::other(format!("read callback failed: {rc}")));
             }
             return Ok(out_read);
         }
@@ -856,9 +863,7 @@ impl Read for CallbackStream {
             )
         };
         if rc != XUNBAK_OK {
-            return Err(std::io::Error::other(format!(
-                "read callback failed: {rc}"
-            )));
+            return Err(std::io::Error::other(format!("read callback failed: {rc}")));
         }
         self.buffer_pos = 0;
         self.buffer_len = out_read;
@@ -890,11 +895,17 @@ impl Seek for CallbackStream {
             SeekFrom::End(value) => (value, SEEK_FROM_END),
         };
         let mut out_pos = 0u64;
-        let rc = unsafe { seek(self.callbacks.ctx, self.handle, offset, origin, &mut out_pos) };
+        let rc = unsafe {
+            seek(
+                self.callbacks.ctx,
+                self.handle,
+                offset,
+                origin,
+                &mut out_pos,
+            )
+        };
         if rc != XUNBAK_OK {
-            return Err(std::io::Error::other(format!(
-                "seek callback failed: {rc}"
-            )));
+            return Err(std::io::Error::other(format!("seek callback failed: {rc}")));
         }
         self.buffer_pos = 0;
         self.buffer_len = 0;
@@ -1231,14 +1242,14 @@ fn inline_split_volumes_from_concatenated_bytes(
                 return Ok(None);
             }
             let payload = &bytes[payload_start..payload_end];
-            let payload_for_crc: &[u8] =
-                if prefix.record_type == xun::xunbak::constants::RecordType::BLOB
-                    && payload.len() >= BLOB_HEADER_SIZE
-                {
-                    &payload[..BLOB_HEADER_SIZE]
-                } else {
-                    payload
-                };
+            let payload_for_crc: &[u8] = if prefix.record_type
+                == xun::xunbak::constants::RecordType::BLOB
+                && payload.len() >= BLOB_HEADER_SIZE
+            {
+                &payload[..BLOB_HEADER_SIZE]
+            } else {
+                payload
+            };
             let crc = xun::xunbak::record::compute_record_crc(
                 prefix.record_type,
                 prefix.record_len.to_le_bytes(),
@@ -1290,16 +1301,19 @@ mod tests {
     use std::mem::size_of;
     use std::os::raw::c_void;
 
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
     use tempfile::tempdir;
     use xun::xunbak::constants::Codec;
     use xun::xunbak::writer::{BackupOptions, ContainerWriter};
-    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
     use super::{
-        XUNBAK_OK, XUNBAK_PROP_PATH, XunbakArchive, XunbakVolumeCallbacks, XunbakWriteCallbacks,
-        CallbackVolumeSource, VolumeSource, xunbak_close, xunbak_extract, xunbak_extract_with_writer,
-        xunbak_get_property, xunbak_item_count, xunbak_item_size, xunbak_open,
-        xunbak_open_with_callbacks, xunbak_volume_count,
+        CallbackVolumeSource, VolumeSource, XUNBAK_OK, XUNBAK_PROP_PATH, XunbakArchive,
+        XunbakVolumeCallbacks, XunbakWriteCallbacks, xunbak_close, xunbak_extract,
+        xunbak_extract_with_writer, xunbak_get_property, xunbak_item_count, xunbak_item_size,
+        xunbak_open, xunbak_open_with_callbacks, xunbak_volume_count,
     };
 
     fn split_options() -> BackupOptions {
@@ -1325,7 +1339,11 @@ mod tests {
         assert!(!archive.is_split());
         assert_eq!(archive.volume_count(), 1);
 
-        let mut paths: Vec<&str> = archive.items().iter().map(|item| item.path.as_str()).collect();
+        let mut paths: Vec<&str> = archive
+            .items()
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect();
         paths.sort_unstable();
         assert_eq!(paths, vec!["a.txt", "nested/b.txt"]);
 
@@ -1353,7 +1371,9 @@ mod tests {
         assert!(archive.volume_count() >= 2);
 
         let mut restored = Vec::new();
-        archive.extract_item_to_writer("c.txt", &mut restored).unwrap();
+        archive
+            .extract_item_to_writer("c.txt", &mut restored)
+            .unwrap();
         assert_eq!(restored, "c".repeat(80).into_bytes());
     }
 
@@ -1423,7 +1443,7 @@ mod tests {
         assert_eq!(
             xunbak_get_property(
                 handle,
-                    XUNBAK_PROP_PATH,
+                XUNBAK_PROP_PATH,
                 0,
                 path_buf.as_mut_ptr().cast(),
                 path_buf.len() * size_of::<u16>(),
@@ -1580,7 +1600,9 @@ mod tests {
         }
         let ctx = unsafe { &*(ctx as *const CountingReadContext) };
         let cursor = Box::new(Cursor::new(ctx.bytes.clone()));
-        unsafe { *out_handle = Box::into_raw(cursor) as *mut c_void; }
+        unsafe {
+            *out_handle = Box::into_raw(cursor) as *mut c_void;
+        }
         XUNBAK_OK
     }
 
@@ -1600,7 +1622,9 @@ mod tests {
         let buf = unsafe { std::slice::from_raw_parts_mut(out_buf, buf_len) };
         match cursor.read(buf) {
             Ok(read) => {
-                unsafe { *out_read = read; }
+                unsafe {
+                    *out_read = read;
+                }
                 XUNBAK_OK
             }
             Err(_) => 5,
@@ -1638,7 +1662,12 @@ mod tests {
 
         let mut handle = std::ptr::null_mut();
         assert_eq!(
-            xunbak_open_with_callbacks("sample.xunbak.001".as_ptr(), "sample.xunbak.001".len(), &callbacks, &mut handle),
+            xunbak_open_with_callbacks(
+                "sample.xunbak.001".as_ptr(),
+                "sample.xunbak.001".len(),
+                &callbacks,
+                &mut handle
+            ),
             0
         );
         assert!(!handle.is_null());
@@ -1695,7 +1724,9 @@ mod tests {
         assert_eq!(archive.items().len(), 3);
 
         let mut restored = Vec::new();
-        archive.extract_item_to_writer("c.txt", &mut restored).unwrap();
+        archive
+            .extract_item_to_writer("c.txt", &mut restored)
+            .unwrap();
         assert_eq!(restored, "c".repeat(80).into_bytes());
     }
 

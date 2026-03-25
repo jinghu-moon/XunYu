@@ -35,6 +35,8 @@ mod tree;
 #[cfg(feature = "crypt")]
 mod vault;
 mod video;
+#[cfg(feature = "xunbak")]
+mod xunbak;
 
 use argh::FromArgs;
 
@@ -125,6 +127,11 @@ pub use vault::{
 #[cfg(feature = "xunbak")]
 pub use verify::VerifyCmd;
 pub use video::{VideoCmd, VideoCompressCmd, VideoProbeCmd, VideoRemuxCmd, VideoSubCommand};
+#[cfg(feature = "xunbak")]
+pub use xunbak::{
+    XunbakCmd, XunbakPluginCmd, XunbakPluginDoctorCmd, XunbakPluginInstallCmd,
+    XunbakPluginSubCommand, XunbakPluginUninstallCmd, XunbakSubCommand,
+};
 
 #[derive(FromArgs)]
 #[argh(description = "xun - bookmark + proxy CLI")]
@@ -231,4 +238,6 @@ pub enum SubCommand {
     Video(VideoCmd),
     #[cfg(feature = "xunbak")]
     Verify(VerifyCmd),
+    #[cfg(feature = "xunbak")]
+    Xunbak(XunbakCmd),
 }

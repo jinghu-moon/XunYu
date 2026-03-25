@@ -31,7 +31,9 @@ fn copy_and_verify_blob_streams_original_content() {
     let reader = ContainerReader::open(&container).unwrap();
     let manifest = reader.load_manifest().unwrap();
     let mut out = Vec::new();
-    reader.copy_and_verify_blob(&manifest.entries[0], &mut out).unwrap();
+    reader
+        .copy_and_verify_blob(&manifest.entries[0], &mut out)
+        .unwrap();
     assert_eq!(out, b"aaa");
 }
 

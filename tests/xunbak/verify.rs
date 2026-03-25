@@ -8,7 +8,10 @@ use xun::xunbak::constants::{
 };
 use xun::xunbak::reader::ContainerReader;
 use xun::xunbak::record::compute_record_crc;
-use xun::xunbak::verify::{VerifyLevel, verify_full_path, verify_paranoid_path, verify_quick_path};
+use xun::xunbak::verify::{
+    VerifyLevel, verify_existence_only_path, verify_full_path, verify_manifest_only_path,
+    verify_paranoid_path, verify_quick_path,
+};
 use xun::xunbak::writer::{BackupOptions, ContainerWriter};
 
 #[test]
@@ -163,6 +166,71 @@ fn full_verify_passes_when_all_blobs_are_valid() {
     assert!(report.passed);
     assert_eq!(report.level, VerifyLevel::Full);
     assert_eq!(report.stats.manifest_entries, 2);
+}
+
+#[test]
+fn manifest_only_verify_passes_for_valid_container() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+
+    let report = verify_manifest_only_path(&container);
+    assert!(report.passed);
+    assert_eq!(report.level, VerifyLevel::ManifestOnly);
+}
+
+#[test]
+fn existence_only_verify_passes_for_valid_split_container() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(source.join("b.txt"), "b".repeat(1200)).unwrap();
+    let container = dir.path().join("backup.xunbak");
+    let options = BackupOptions {
+        split_size: Some(1900),
+        ..BackupOptions::default()
+    };
+    ContainerWriter::backup(&container, &source, &options).unwrap();
+
+    let report = verify_existence_only_path(&container);
+    assert!(report.passed);
+    assert_eq!(report.level, VerifyLevel::ExistenceOnly);
+}
+
+#[test]
+fn existence_only_verify_reports_missing_split_volume() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "a".repeat(1200)).unwrap();
+    fs::write(source.join("b.txt"), "b".repeat(1200)).unwrap();
+    let container = dir.path().join("backup.xunbak");
+    let options = BackupOptions {
+        split_size: Some(1900),
+        ..BackupOptions::default()
+    };
+    ContainerWriter::backup(&container, &source, &options).unwrap();
+    let last_volume = fs::read_dir(dir.path())
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("backup.xunbak."))
+        })
+        .max()
+        .unwrap();
+    fs::remove_file(last_volume).unwrap();
+
+    let report = verify_existence_only_path(&container);
+    assert!(!report.passed);
+    assert_eq!(report.level, VerifyLevel::ExistenceOnly);
+    assert!(!report.errors.is_empty());
 }
 
 #[test]

@@ -33,6 +33,8 @@ use super::super::vault;
 
 use super::super::tree;
 use super::super::video;
+#[cfg(feature = "xunbak")]
+use super::super::xunbak;
 
 pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
     match cmd {
@@ -101,6 +103,8 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Video(a) => video::cmd_video(a),
         #[cfg(feature = "xunbak")]
         SubCommand::Verify(a) => crate::backup::app::xunbak::cmd_verify(a),
+        #[cfg(feature = "xunbak")]
+        SubCommand::Xunbak(a) => xunbak::cmd_xunbak(a),
         SubCommand::Init(_) | SubCommand::Ctx(_) | SubCommand::Env(_) => unreachable!(),
         #[cfg(feature = "dashboard")]
         SubCommand::Serve(_) => unreachable!(),

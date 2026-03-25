@@ -1,9 +1,19 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use rayon::prelude::*;
+
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+#[cfg(windows)]
+use windows_sys::Win32::Storage::FileSystem::{
+    BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+};
 
 use crate::backup::artifact::entry::{
     file_attributes, metadata_created_time_ns, system_time_to_unix_ns,
@@ -12,7 +22,8 @@ use crate::backup::common::hash::compute_file_content_hash;
 use crate::util::{matches_patterns, normalize_glob_path};
 
 use super::hash_cache::{
-    HASH_CACHE_FILE, HashCacheEntry, cache_hit, load_hash_cache, save_hash_cache, update_cache_entry,
+    HASH_CACHE_FILE, HashCacheEntry, cache_hit, load_hash_cache, save_hash_cache,
+    update_cache_entry,
 };
 use super::util::norm;
 
@@ -245,15 +256,54 @@ fn walk_filtered(
 fn build_scanned_file(path: PathBuf, meta: fs::Metadata) -> ScannedFile {
     let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
     ScannedFile {
+        file_id: collect_file_id(&path),
         path,
         size: meta.len(),
         modified,
         modified_ns: system_time_to_unix_ns(modified),
         created_time_ns: metadata_created_time_ns(&meta),
         win_attributes: file_attributes(&meta),
-        file_id: None,
         content_hash: None,
     }
+}
+
+fn file_id_collection_enabled() -> bool {
+    file_id_collection_enabled_with(|name| std::env::var_os(name))
+}
+
+fn file_id_collection_enabled_with<F>(mut get_env: F) -> bool
+where
+    F: FnMut(&str) -> Option<OsString>,
+{
+    !["XUN_BACKUP_DISABLE_FILE_ID", "XUN_DISABLE_FILE_ID"]
+        .into_iter()
+        .any(|name| get_env(name).is_some())
+}
+
+#[cfg(windows)]
+fn collect_file_id(path: &Path) -> Option<String> {
+    if !file_id_collection_enabled() {
+        return None;
+    }
+    let file = fs::File::open(path).ok()?;
+    let handle = file.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    if handle == INVALID_HANDLE_VALUE {
+        return None;
+    }
+
+    let mut info = unsafe { std::mem::zeroed::<BY_HANDLE_FILE_INFORMATION>() };
+    let ok = unsafe { GetFileInformationByHandle(handle, &mut info) };
+    if ok == 0 {
+        return None;
+    }
+
+    let index = ((info.nFileIndexHigh as u64) << 32) | (info.nFileIndexLow as u64);
+    Some(format!("{:08x}:{:016x}", info.dwVolumeSerialNumber, index))
+}
+
+#[cfg(not(windows))]
+fn collect_file_id(_path: &Path) -> Option<String> {
+    None
 }
 
 fn rel_key(rel: &Path) -> String {
@@ -267,9 +317,14 @@ fn rel_key(rel: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+
     use tempfile::tempdir;
 
-    use super::{scan_files, scan_files_with_hash, scan_files_with_hash_details};
+    use super::{
+        collect_file_id, file_id_collection_enabled_with, scan_files, scan_files_with_hash,
+        scan_files_with_hash_details,
+    };
     use crate::backup::legacy::hash_cache::HASH_CACHE_FILE;
 
     #[test]
@@ -282,8 +337,29 @@ mod tests {
         assert_eq!(file.size, 5);
         assert!(file.modified_ns > 0);
         assert_eq!(file.win_attributes, 32u32);
+        #[cfg(windows)]
+        assert!(file.file_id.is_some());
+        #[cfg(not(windows))]
         assert!(file.file_id.is_none());
         assert!(file.content_hash.is_none());
+    }
+
+    #[test]
+    fn collect_file_id_returns_none_when_file_is_missing() {
+        let dir = tempdir().unwrap();
+        assert!(collect_file_id(&dir.path().join("missing.txt")).is_none());
+    }
+
+    #[test]
+    fn file_id_collection_can_be_disabled_via_env_flag() {
+        assert!(!file_id_collection_enabled_with(|name| {
+            if name == "XUN_BACKUP_DISABLE_FILE_ID" {
+                Some(OsString::from("1"))
+            } else {
+                None
+            }
+        }));
+        assert!(file_id_collection_enabled_with(|_name| None));
     }
 
     #[test]
@@ -335,7 +411,10 @@ mod tests {
         std::fs::write(dir.path().join("nested").join("b.txt"), "alpha").unwrap();
 
         let files = scan_files_with_hash(dir.path(), &[], &[], &[]);
-        assert_eq!(files["a.txt"].content_hash, files["nested\\b.txt"].content_hash);
+        assert_eq!(
+            files["a.txt"].content_hash,
+            files["nested\\b.txt"].content_hash
+        );
     }
 
     #[test]
@@ -355,8 +434,10 @@ mod tests {
         assert!(files.contains_key("中文目录\\说明.txt"));
         assert!(files.contains_key("中文目录\\path with spaces\\deep\\level4\\leaf.txt"));
         assert!(files["中文目录\\说明.txt"].content_hash.is_some());
-        assert!(files["中文目录\\path with spaces\\deep\\level4\\leaf.txt"]
-            .content_hash
-            .is_some());
+        assert!(
+            files["中文目录\\path with spaces\\deep\\level4\\leaf.txt"]
+                .content_hash
+                .is_some()
+        );
     }
 }

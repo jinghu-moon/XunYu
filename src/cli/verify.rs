@@ -8,7 +8,7 @@ pub struct VerifyCmd {
     #[argh(positional)]
     pub path: String,
 
-    /// verify level: quick | full | paranoid
+    /// verify level: quick | full | manifest-only | existence-only | paranoid
     #[argh(option)]
     pub level: Option<String>,
 

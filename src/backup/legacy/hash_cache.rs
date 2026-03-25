@@ -56,16 +56,29 @@ pub(crate) fn cache_hit(
     win_attributes: u32,
     file_id: Option<&str>,
 ) -> Option<[u8; 32]> {
-    let entry = cache.files.get(rel)?;
-    if entry.size != size
-        || entry.mtime_ns != mtime_ns
-        || entry.created_time_ns != created_time_ns
-        || entry.win_attributes != win_attributes
-        || entry.file_id.as_deref() != file_id
-    {
+    let metadata_matches = |entry: &HashCacheEntry| {
+        entry.size == size
+            && entry.mtime_ns == mtime_ns
+            && entry.created_time_ns == created_time_ns
+            && entry.win_attributes == win_attributes
+            && entry.file_id.as_deref() == file_id
+    };
+
+    if let Some(entry) = cache.files.get(rel) {
+        if metadata_matches(entry) {
+            return Some(entry.content_hash);
+        }
         return None;
     }
-    Some(entry.content_hash)
+
+    let file_id = file_id?;
+    cache.files.values().find_map(|entry| {
+        if metadata_matches(entry) && entry.file_id.as_deref() == Some(file_id) {
+            Some(entry.content_hash)
+        } else {
+            None
+        }
+    })
 }
 
 pub(crate) fn update_cache_entry(
@@ -156,6 +169,52 @@ mod tests {
             },
         );
         assert_eq!(cache_hit(&cache, "a.txt", 1, 99, Some(3), 32, None), None);
+    }
+
+    #[test]
+    fn cache_hit_returns_hash_for_renamed_path_when_file_id_matches() {
+        let mut cache = HashCacheDocument {
+            files: std::collections::HashMap::new(),
+        };
+        update_cache_entry(
+            &mut cache,
+            "old.txt".to_string(),
+            HashCacheEntry {
+                size: 1,
+                mtime_ns: 2,
+                created_time_ns: Some(3),
+                win_attributes: 32,
+                file_id: Some("id-1".to_string()),
+                content_hash: [9; 32],
+            },
+        );
+        assert_eq!(
+            cache_hit(&cache, "new.txt", 1, 2, Some(3), 32, Some("id-1")),
+            Some([9; 32])
+        );
+    }
+
+    #[test]
+    fn cache_hit_returns_none_when_file_id_changes_for_same_path() {
+        let mut cache = HashCacheDocument {
+            files: std::collections::HashMap::new(),
+        };
+        update_cache_entry(
+            &mut cache,
+            "a.txt".to_string(),
+            HashCacheEntry {
+                size: 1,
+                mtime_ns: 2,
+                created_time_ns: Some(3),
+                win_attributes: 32,
+                file_id: Some("id-1".to_string()),
+                content_hash: [7; 32],
+            },
+        );
+        assert_eq!(
+            cache_hit(&cache, "a.txt", 1, 2, Some(3), 32, Some("id-2")),
+            None
+        );
     }
 
     #[test]

@@ -5,9 +5,11 @@ use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::backup::common::hash::encode_hash_hex;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::copy_entry_to_writer;
+use crate::backup::artifact::sevenz::SevenZMethod;
+use crate::backup::artifact::zip::{ZipCompressionMethod, resolve_zip_method_for_entry};
+use crate::backup::common::hash::encode_hash_hex;
 use crate::backup_formats::BackupArtifactFormat;
 use crate::output::CliError;
 
@@ -17,6 +19,13 @@ pub(crate) const SIDECAR_PATH: &str = "__xunyu__/export_manifest.json";
 pub(crate) struct SidecarSourceInfo {
     pub snapshot_id: String,
     pub source_root: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SidecarPackingHint {
+    Dir,
+    Zip(ZipCompressionMethod),
+    SevenZ(SevenZMethod),
 }
 
 #[derive(Serialize)]
@@ -32,9 +41,15 @@ struct SidecarManifest {
 #[derive(Serialize)]
 struct SidecarEntry {
     path: String,
+    size: u64,
+    mtime_ns: u64,
     content_hash: String,
     created_time_ns: u64,
     win_attributes: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    packed_size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    codec: Option<String>,
 }
 
 pub(crate) fn source_info_for_create(source_dir: &Path) -> SidecarSourceInfo {
@@ -75,16 +90,22 @@ pub(crate) fn source_info_for_convert(artifact: &Path) -> SidecarSourceInfo {
 
 pub(crate) fn build_sidecar_bytes(
     format: BackupArtifactFormat,
+    packing_hint: SidecarPackingHint,
     source: &SidecarSourceInfo,
     entries: &[&SourceEntry],
 ) -> Result<Vec<u8>, CliError> {
     let mut items = Vec::with_capacity(entries.len());
     for entry in entries {
+        let effective_codec = sidecar_codec_for_entry(entry, packing_hint);
         items.push(SidecarEntry {
             path: entry.path.clone(),
+            size: entry.size,
+            mtime_ns: entry.mtime_ns.unwrap_or(0),
             content_hash: resolve_content_hash_hex(entry)?,
             created_time_ns: entry.created_time_ns.unwrap_or(0),
             win_attributes: entry.win_attributes,
+            packed_size: sidecar_packed_size_for_entry(entry.size, effective_codec.as_deref()),
+            codec: effective_codec.map(str::to_string),
         });
     }
 
@@ -122,6 +143,36 @@ pub(crate) fn write_sidecar_to_dir(
             format!("Write sidecar failed {}: {err}", sidecar_path.display()),
         )
     })
+}
+
+fn sidecar_codec_for_entry(
+    entry: &SourceEntry,
+    packing_hint: SidecarPackingHint,
+) -> Option<&'static str> {
+    match packing_hint {
+        SidecarPackingHint::Dir => Some("copy"),
+        SidecarPackingHint::SevenZ(SevenZMethod::Copy) => Some("copy"),
+        SidecarPackingHint::SevenZ(SevenZMethod::Lzma2) => Some("lzma2"),
+        SidecarPackingHint::Zip(method) => match effective_zip_method_for_entry(entry, method) {
+            ZipCompressionMethod::Auto => Some("deflated"),
+            ZipCompressionMethod::Stored => Some("stored"),
+            ZipCompressionMethod::Deflated => Some("deflated"),
+        },
+    }
+}
+
+fn sidecar_packed_size_for_entry(size: u64, codec: Option<&str>) -> Option<u64> {
+    match codec {
+        Some("copy") | Some("stored") => Some(size),
+        _ => None,
+    }
+}
+
+fn effective_zip_method_for_entry(
+    entry: &SourceEntry,
+    method: ZipCompressionMethod,
+) -> ZipCompressionMethod {
+    resolve_zip_method_for_entry(entry, method)
 }
 
 fn resolve_content_hash_hex(entry: &SourceEntry) -> Result<String, CliError> {

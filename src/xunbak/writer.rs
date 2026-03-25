@@ -14,7 +14,9 @@ use crate::xunbak::blob::{BlobWriteResult, write_blob_record_from_precompressed}
 use crate::xunbak::checkpoint::{
     CheckpointError, CheckpointPayload, compute_manifest_hash, write_checkpoint_record,
 };
-use crate::xunbak::codec::{compression_is_beneficial, should_skip_compress, stream_hash_and_compress};
+use crate::xunbak::codec::{
+    compression_is_beneficial, should_skip_compress, stream_hash_and_compress,
+};
 use crate::xunbak::constants::FLAG_SPLIT;
 use crate::xunbak::constants::{
     Codec, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, XUNBAK_READER_VERSION,
@@ -287,8 +289,11 @@ impl ContainerWriter {
                     if n == 0 {
                         break;
                     }
-                    let prepared =
-                        prepare_chunk_blob_record(&chunk[..n], requested_codec, options.zstd_level)?;
+                    let prepared = prepare_chunk_blob_record(
+                        &chunk[..n],
+                        requested_codec,
+                        options.zstd_level,
+                    )?;
                     file.write_all(&prepared.record_bytes)
                         .map_err(|err| WriterError::Io(err.to_string()))?;
                     let blob_len = prepared.record_bytes.len() as u64;
@@ -564,8 +569,11 @@ impl ContainerWriter {
                     if n == 0 {
                         break;
                     }
-                    let prepared =
-                        prepare_chunk_blob_record(&chunk[..n], requested_codec, options.zstd_level)?;
+                    let prepared = prepare_chunk_blob_record(
+                        &chunk[..n],
+                        requested_codec,
+                        options.zstd_level,
+                    )?;
                     file.write_all(&prepared.record_bytes)
                         .map_err(|err| WriterError::Io(err.to_string()))?;
                     let blob_len = prepared.record_bytes.len() as u64;
@@ -826,7 +834,9 @@ pub fn build_content_hash_index(manifest: &ManifestBody) -> HashMap<[u8; 32], Bl
     common_hash::build_content_hash_groups(&manifest.entries, |entry| entry.content_hash)
         .into_iter()
         .map(|(content_hash, entries)| {
-            let entry = entries.last().expect("content hash group must not be empty");
+            let entry = entries
+                .last()
+                .expect("content hash group must not be empty");
             (
                 content_hash,
                 BlobLocator {
@@ -1036,8 +1046,8 @@ fn prepare_chunk_blob_record(
     level: i32,
 ) -> Result<PreparedBlobRecord, WriterError> {
     let mut effective_codec = requested;
-    let mut compressed =
-        crate::xunbak::codec::compress(requested, chunk, level).map_err(|err| WriterError::Io(err.to_string()))?;
+    let mut compressed = crate::xunbak::codec::compress(requested, chunk, level)
+        .map_err(|err| WriterError::Io(err.to_string()))?;
     if requested != Codec::NONE
         && !compression_is_beneficial(chunk.len() as u64, compressed.len() as u64)
     {
@@ -1221,13 +1231,10 @@ impl VolumeOutput {
         record_len: u64,
         trailing_reserve: u64,
     ) -> Result<(), WriterError> {
-        if HEADER_SIZE as u64 + record_len + trailing_reserve > self.split_size {
-            return Err(WriterError::RecordTooLargeForSplit {
-                record_len,
-                split_size: self.split_size,
-            });
-        }
         if self.current_len + record_len + trailing_reserve <= self.split_size {
+            return Ok(());
+        }
+        if self.current_len == HEADER_SIZE as u64 {
             return Ok(());
         }
         self.rotate()
@@ -1594,9 +1601,9 @@ fn update_split_with_progress(
                 processed_bytes,
                 total_bytes,
                 elapsed_ms: started.elapsed().as_millis(),
-                });
-                continue;
-            }
+            });
+            continue;
+        }
 
         if multipart_enabled(item) {
             let content_hash = compute_file_content_hash(&item.path)?;

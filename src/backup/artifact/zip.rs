@@ -7,7 +7,7 @@ use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::output::CliError;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ZipCompressionMethod {
     #[default]
     Auto,
@@ -116,11 +116,7 @@ fn build_file_options(
     entry: &SourceEntry,
     method: ZipCompressionMethod,
 ) -> Result<zip::write::SimpleFileOptions, CliError> {
-    let effective_method = match method {
-        ZipCompressionMethod::Auto => choose_compression_method(entry),
-        ZipCompressionMethod::Stored => ZipCompressionMethod::Stored,
-        ZipCompressionMethod::Deflated => ZipCompressionMethod::Deflated,
-    };
+    let effective_method = resolve_zip_method_for_entry(entry, method);
     let mut options = zip::write::SimpleFileOptions::default()
         .compression_method(effective_method.into())
         .unix_permissions(unix_permissions_for_entry(entry))
@@ -129,6 +125,17 @@ fn build_file_options(
         options = options.last_modified_time(last_modified_time);
     }
     Ok(options)
+}
+
+pub(crate) fn resolve_zip_method_for_entry(
+    entry: &SourceEntry,
+    method: ZipCompressionMethod,
+) -> ZipCompressionMethod {
+    match method {
+        ZipCompressionMethod::Auto => choose_compression_method(entry),
+        ZipCompressionMethod::Stored => ZipCompressionMethod::Stored,
+        ZipCompressionMethod::Deflated => ZipCompressionMethod::Deflated,
+    }
 }
 
 fn should_enable_zip64(entry_size: u64) -> bool {

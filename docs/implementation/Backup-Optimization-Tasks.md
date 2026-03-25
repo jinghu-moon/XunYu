@@ -44,43 +44,43 @@
 - [x] 已有 `test_xunbak_7z_plugin_portable.ps1`
 - [x] 已有 `test_xunbak_7z_plugin_system.ps1`
 - [x] 已有 `accept_xunbak_7z_plugin.ps1`
-- [ ] 说明：当前缺的是统一 `xun xunbak plugin ...` CLI 封装，而不是底层脚本能力
+- [x] 说明：当前缺的是统一 `xun xunbak plugin ...` CLI 封装，而不是底层脚本能力
 
 ### 1.1 CLI 与脚本边界
 
-- [ ] 新增 `xun xunbak plugin install`
-- [ ] 新增 `xun xunbak plugin uninstall`
-- [ ] 新增 `xun xunbak plugin doctor`
-- [ ] 明确仅支持“已安装 7-Zip”的场景，不负责分发 7-Zip 本体
+- [x] 新增 `xun xunbak plugin install`
+- [x] 新增 `xun xunbak plugin uninstall`
+- [x] 新增 `xun xunbak plugin doctor`
+- [x] 明确仅支持“已安装 7-Zip”的场景，不负责分发 7-Zip 本体
 
 ### 1.2 安装路径探测
 
-- [ ] **测试**：优先探测显式传入的 `--sevenzip-home`
-- [ ] **测试**：可探测 `C:/A_Softwares/7-Zip`
-- [ ] **测试**：可探测 `C:/Program Files/7-Zip`
-- [ ] **测试**：未探测到 7-Zip 时返回明确错误
-- [ ] 实现安装目录探测逻辑
+- [x] **测试**：优先探测显式传入的 `--sevenzip-home`
+- [x] **测试**：可探测 `C:/A_Softwares/7-Zip`
+- [x] **测试**：可探测 `C:/Program Files/7-Zip`
+- [x] **测试**：未探测到 7-Zip 时返回明确错误
+- [x] 实现安装目录探测逻辑
 
 ### 1.3 插件安装
 
-- [ ] **测试**：`install` 会复制 `xunbak.dll` 到 `7-Zip/Formats`
-- [ ] **测试**：目标 DLL 已存在时支持覆盖或明确拒绝
-- [ ] **测试**：缺少本地构建产物时返回明确错误
-- [ ] 实现安装命令
+- [x] **测试**：`install` 会复制 `xunbak.dll` 到 `7-Zip/Formats`
+- [x] **测试**：目标 DLL 已存在时支持覆盖或明确拒绝
+- [x] **测试**：缺少本地构建产物时返回明确错误
+- [x] 实现安装命令
 
 ### 1.4 插件卸载
 
-- [ ] **测试**：`uninstall` 删除 `7-Zip/Formats/xunbak.dll`
-- [ ] **测试**：目标 DLL 不存在时返回幂等结果
-- [ ] 实现卸载命令
+- [x] **测试**：`uninstall` 删除 `7-Zip/Formats/xunbak.dll`
+- [x] **测试**：目标 DLL 不存在时返回幂等结果
+- [x] 实现卸载命令
 
 ### 1.5 doctor
 
-- [ ] **测试**：`doctor` 输出 DLL 是否存在
-- [ ] **测试**：`doctor` 输出 `.xunbak` 文件关联状态
-- [ ] **测试**：`doctor` 输出 7-Zip 主程序路径和版本
-- [ ] **测试**：`doctor` 输出建议修复动作
-- [ ] 实现诊断命令
+- [x] **测试**：`doctor` 输出 DLL 是否存在
+- [x] **测试**：`doctor` 输出 `.xunbak` 文件关联状态
+- [x] **测试**：`doctor` 输出 7-Zip 主程序路径和版本
+- [x] **测试**：`doctor` 输出建议修复动作
+- [x] 实现诊断命令
 
 ---
 
@@ -88,23 +88,23 @@
 
 ### 2.1 关联状态识别
 
-- [ ] **测试**：能识别 `.xunbak` 未关联
-- [ ] **测试**：能识别 `.xunbak` 已关联到 `7zFM.exe`
-- [ ] **测试**：能识别关联到非 7-Zip 的程序
-- [ ] 实现关联状态探测
+- [x] **测试**：能识别 `.xunbak` 未关联
+- [x] **测试**：能识别 `.xunbak` 已关联到 `7zFM.exe`
+- [x] **测试**：能识别关联到非 7-Zip 的程序
+- [x] 实现关联状态探测
 
 ### 2.2 建立关联
 
-- [ ] **测试**：`install --associate` 会建立 `.xunbak -> 7zFM.exe`
-- [ ] **测试**：重复执行不会生成脏状态
-- [ ] **测试**：关联失败时返回明确错误与回滚提示
-- [ ] 实现关联写入逻辑
+- [x] **测试**：`install --associate` 会建立 `.xunbak -> 7zFM.exe`
+- [x] **测试**：重复执行不会生成脏状态
+- [x] **测试**：关联失败时返回明确错误与回滚提示
+- [x] 实现关联写入逻辑
 
 ### 2.3 移除关联
 
-- [ ] **测试**：`uninstall --remove-association` 移除 `.xunbak` 关联
-- [ ] **测试**：若关联不是 7-Zip，不会误删第三方绑定
-- [ ] 实现关联移除逻辑
+- [x] **测试**：`uninstall --remove-association` 移除 `.xunbak` 关联
+- [x] **测试**：若关联不是 7-Zip，不会误删第三方绑定
+- [x] 实现关联移除逻辑
 
 ---
 
@@ -112,24 +112,24 @@
 
 ### 3.1 callback 优先
 
-- [ ] **测试**：单文件 `.xunbak` 优先走 `xunbak_open_with_callbacks`
-- [ ] **测试**：分卷 `.xunbak.001` 优先走 callback volume 打开
-- [ ] **测试**：callback 成功时不落入整文件 `ReadAll`
-- [ ] 改造 `OpenCore()` 打开路径
+- [x] **测试**：单文件 `.xunbak` 优先走 `xunbak_open_with_callbacks`
+- [x] **测试**：分卷 `.xunbak.001` 优先走 callback volume 打开
+- [x] **测试**：callback 成功时不落入整文件 `ReadAll`
+- [x] 改造 `OpenCore()` 打开路径
 
 ### 3.2 fallback 收敛
 
-- [ ] **测试**：小文件 callback 失败时可安全 fallback 到内存打开
-- [ ] **测试**：超阈值大文件 callback 失败时不做 `ReadAll`
-- [ ] **测试**：大文件 fallback 被拒绝时提示明确原因
-- [ ] 增加 fallback 阈值策略
+- [x] **测试**：小文件 callback 失败时可安全 fallback 到内存打开
+- [x] **测试**：超阈值大文件 callback 失败时不做 `ReadAll`
+- [x] **测试**：大文件 fallback 被拒绝时提示明确原因
+- [x] 增加 fallback 阈值策略
 
 ### 3.3 打开性能
 
-- [ ] **bench**：单文件 `.xunbak` 插件打开时间
-- [ ] **bench**：分卷 `.xunbak.001` 插件打开时间
-- [ ] **bench**：大文件 callback 路径与 memory fallback 路径对比
-- [ ] 记录基线
+- [x] **bench**：单文件 `.xunbak` 插件打开时间
+- [x] **bench**：分卷 `.xunbak.001` 插件打开时间
+- [x] **bench**：大文件 callback 路径与 memory fallback 路径对比
+- [x] 记录基线
 
 ---
 
@@ -166,27 +166,27 @@
 
 ### 5.1 扫描阶段采集
 
-- [ ] **测试**：Windows 下可采集文件 `file_id`
-- [ ] **测试**：采集失败时为 `None`，不影响主流程
-- [ ] 在 `scan.rs` 中接入真实 `file_id`
+- [x] **测试**：Windows 下可采集文件 `file_id`
+- [x] **测试**：采集失败时为 `None`，不影响主流程
+- [x] 在 `scan.rs` 中接入真实 `file_id`
 
 ### 5.2 hash cache 接入
 
-- [ ] **测试**：`file_id` 相同且元数据相符时命中缓存
-- [ ] **测试**：`file_id` 变化时正确失效缓存
-- [ ] 在 `hash_cache` 中消费真实 `file_id`
+- [x] **测试**：`file_id` 相同且元数据相符时命中缓存
+- [x] **测试**：`file_id` 变化时正确失效缓存
+- [x] 在 `hash_cache` 中消费真实 `file_id`
 
 ### 5.3 rename-only 场景
 
-- [ ] **测试**：同内容 rename-only 且 `file_id` 相同，不触发重复 hash
-- [ ] **测试**：路径变化但 `file_id` 相同的场景能更快命中
-- [ ] 优化 diff / cache 命中策略
+- [x] **测试**：同内容 rename-only 且 `file_id` 相同，不触发重复 hash
+- [x] **测试**：路径变化但 `file_id` 相同的场景能更快命中
+- [x] 优化 diff / cache 命中策略
 
 ### 5.4 性能基线
 
-- [ ] **bench**：rename-only 场景接入 `file_id` 前后对比
-- [ ] **bench**：冷缓存小改动场景前后对比
-- [ ] 记录基线
+- [x] **bench**：rename-only 场景接入 `file_id` 前后对比
+- [x] **bench**：冷缓存小改动场景前后对比
+- [x] 记录基线
 
 ---
 
@@ -194,9 +194,9 @@
 
 ### 6.1 reader 复用
 
-- [ ] **测试**：多文件恢复时同一 artifact reader 可复用
-- [ ] **测试**：复用 reader 不改变恢复结果
-- [ ] 改造 restore 内部 reader 生命周期
+- [x] **测试**：多文件恢复时同一 artifact reader 可复用
+- [x] **测试**：复用 reader 不改变恢复结果
+- [x] 改造 restore 内部 reader 生命周期
 
 ### 6.2 顺序读取
 
@@ -206,9 +206,9 @@
 
 ### 6.3 preview 快速路径
 
-- [ ] **测试**：preview 不为全部候选文件打开内容流
-- [ ] **测试**：同 size/mtime/属性的预览走快速判定
-- [ ] 优化 preview 数据获取
+- [x] **测试**：preview 不为全部候选文件打开内容流
+- [x] **测试**：同 size/mtime/属性的预览走快速判定
+- [x] 优化 preview 数据获取
 
 ---
 
@@ -216,23 +216,23 @@
 
 ### 7.1 新增统计字段
 
-- [ ] **测试**：输出 `rename_only_count`
-- [ ] **测试**：输出 `reused_bytes`
-- [ ] **测试**：输出 `cache_hit_ratio`
-- [ ] **测试**：输出 `baseline_source`
-- [ ] 扩展命令行文本报告
+- [x] **测试**：输出 `rename_only_count`
+- [x] **测试**：输出 `reused_bytes`
+- [x] **测试**：输出 `cache_hit_ratio`
+- [x] **测试**：输出 `baseline_source`
+- [x] 扩展命令行文本报告
 
 ### 7.2 JSON 输出
 
-- [ ] **测试**：JSON 输出包含以上字段
-- [ ] **测试**：字段在 `skipped / dry_run / ok` 三种状态下稳定存在
-- [ ] 扩展 JSON 视图结构
+- [x] **测试**：JSON 输出包含以上字段
+- [x] **测试**：字段在 `skipped / dry_run / ok` 三种状态下稳定存在
+- [x] 扩展 JSON 视图结构
 
 ### 7.3 `.bak-meta.json`
 
-- [ ] **测试**：新增统计字段进入 `.bak-meta.json`
-- [ ] **测试**：旧 meta 缺字段时仍可读取
-- [ ] 扩展 meta 持久化结构
+- [x] **测试**：新增统计字段进入 `.bak-meta.json`
+- [x] **测试**：旧 meta 缺字段时仍可读取
+- [x] 扩展 meta 持久化结构
 
 ---
 
@@ -240,24 +240,24 @@
 
 ### 8.1 CLI 模式
 
-- [ ] 新增 `quick`
-- [ ] 新增 `full`
-- [ ] 新增 `manifest-only`
-- [ ] 新增 `existence-only`
+- [x] 新增 `quick`
+- [x] 新增 `full`
+- [x] 新增 `manifest-only`
+- [x] 新增 `existence-only`
 
 ### 8.2 语义测试
 
-- [ ] **测试**：`manifest-only` 只校验 manifest 结构与条目映射
-- [ ] **测试**：`existence-only` 只校验文件是否存在
-- [ ] **测试**：`quick` 提供快速完整性检查
-- [ ] **测试**：`full` 执行完整内容校验
+- [x] **测试**：`manifest-only` 只校验 manifest 结构与条目映射
+- [x] **测试**：`existence-only` 只校验文件是否存在
+- [x] **测试**：`quick` 提供快速完整性检查
+- [x] **测试**：`full` 执行完整内容校验
 
 ### 8.3 错误报告
 
-- [ ] **测试**：错误输出包含首个失败路径
-- [ ] **测试**：zip / 7z / xunbak 错误输出包含来源上下文
-- [ ] **测试**：分卷错误输出包含卷号或卷名
-- [ ] 优化错误文案
+- [x] **测试**：错误输出包含首个失败路径
+- [x] **测试**：zip / 7z / xunbak 错误输出包含来源上下文
+- [x] **测试**：分卷错误输出包含卷号或卷名
+- [x] 优化错误文案
 
 ---
 
@@ -265,15 +265,15 @@
 
 ### 9.1 目录与压缩格式一致性
 
-- [ ] **测试**：`dir -> zip` 保留 mtime / readonly
-- [ ] **测试**：`dir -> 7z` 保留 mtime / readonly
-- [ ] **测试**：`xunbak -> dir/zip/7z` 的路径与时间元数据一致
+- [x] **测试**：`dir -> zip` 保留 mtime / readonly
+- [x] **测试**：`dir -> 7z` 保留 mtime / readonly
+- [x] **测试**：`xunbak -> dir/zip/7z` 的路径与时间元数据一致
 
 ### 9.2 sidecar 与 packed 信息
 
-- [ ] **测试**：sidecar 中格式信息与导出结果一致
-- [ ] **测试**：packed size / codec 信息在支持场景下可对齐
-- [ ] 优化 sidecar 与导出元数据
+- [x] **测试**：sidecar 中格式信息与导出结果一致
+- [x] **测试**：packed size / codec 信息在支持场景下可对齐
+- [x] 优化 sidecar 与导出元数据
 
 ---
 

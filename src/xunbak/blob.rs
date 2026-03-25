@@ -281,12 +281,16 @@ pub fn copy_blob_record_content_to_writer<R: Read, W: Write>(
         }
         codec if codec == Codec::ZSTD => {
             let limited = reader.take(header.stored_size);
-            let mut decoder =
-                zstd::stream::Decoder::new(limited).map_err(|err| CodecError::ZstdDecode(err.to_string()))?;
+            let mut decoder = zstd::stream::Decoder::new(limited)
+                .map_err(|err| CodecError::ZstdDecode(err.to_string()))?;
             std::io::copy(&mut decoder, &mut hashing_writer)
                 .map_err(|err| BlobRecordError::Io(err.to_string()))?
         }
-        codec => return Err(BlobRecordError::Codec(CodecError::UnsupportedCodec(codec.as_u8()))),
+        codec => {
+            return Err(BlobRecordError::Codec(CodecError::UnsupportedCodec(
+                codec.as_u8(),
+            )));
+        }
     };
 
     if copied_bytes != header.raw_size {

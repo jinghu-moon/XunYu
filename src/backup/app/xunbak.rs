@@ -7,7 +7,10 @@ use crate::cli::{BackupCmd, VerifyCmd};
 use crate::output::{CliError, CliResult};
 use crate::xunbak::codec::{CompressionMode, parse_compression_arg};
 use crate::xunbak::reader::ContainerReader;
-use crate::xunbak::verify::{verify_full_path, verify_paranoid_path, verify_quick_path};
+use crate::xunbak::verify::{
+    verify_existence_only_path, verify_full_path, verify_manifest_only_path, verify_paranoid_path,
+    verify_quick_path,
+};
 use crate::xunbak::writer::{BackupOptions, ContainerWriter, ProgressEvent};
 
 pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
@@ -126,12 +129,14 @@ pub(crate) fn cmd_verify(args: VerifyCmd) -> CliResult {
     let report = match level.as_str() {
         "quick" => verify_quick_path(&path),
         "full" => verify_full_path(&path),
+        "manifest-only" | "manifest_only" => verify_manifest_only_path(&path),
+        "existence-only" | "existence_only" => verify_existence_only_path(&path),
         "paranoid" => verify_paranoid_path(&path),
         _ => {
             return Err(CliError::with_details(
                 2,
                 format!("Invalid verify level: {}", args.level.unwrap_or_default()),
-                &["Fix: Use quick, full, or paranoid."],
+                &["Fix: Use quick, full, manifest-only, existence-only, or paranoid."],
             ));
         }
     };
@@ -158,8 +163,44 @@ pub(crate) fn cmd_verify(args: VerifyCmd) -> CliResult {
     if report.passed {
         Ok(())
     } else {
-        Err(CliError::new(1, "xunbak verify failed"))
+        let first = report.errors.first();
+        let mut details = Vec::new();
+        if let Some(issue) = first {
+            details.push(format!("First error: {}", issue.message));
+            if let Some(path) = &issue.path {
+                details.push(format!("Path: {path}"));
+            }
+            if let Some(volume_label) = first_issue_volume_label(issue) {
+                details.push(format!("Volume: {volume_label}"));
+            }
+            if let Some(offset) = issue.offset {
+                details.push(format!("Offset: {offset}"));
+            }
+        }
+        if details.is_empty() {
+            Err(CliError::new(1, "xunbak verify failed"))
+        } else {
+            let refs: Vec<&str> = details.iter().map(String::as_str).collect();
+            Err(CliError::with_details(1, "xunbak verify failed", &refs))
+        }
     }
+}
+
+fn first_issue_volume_label(issue: &crate::xunbak::verify::VerifyIssue) -> Option<String> {
+    if let Some(volume_index) = issue.volume_index {
+        return Some(volume_index.to_string());
+    }
+    let path = issue.path.as_deref()?;
+    let file_name = std::path::Path::new(path).file_name()?.to_str()?;
+    if file_name.len() > 4
+        && file_name.as_bytes()[file_name.len() - 4] == b'.'
+        && file_name[file_name.len() - 3..]
+            .chars()
+            .all(|ch| ch.is_ascii_digit())
+    {
+        return Some(file_name[file_name.len() - 3..].to_string());
+    }
+    None
 }
 
 pub(crate) fn restore_container(

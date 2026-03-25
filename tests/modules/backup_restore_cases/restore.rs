@@ -337,7 +337,9 @@ fn restore_cmd_to_dir() {
     let name = proj.backup_name("v1-", None);
     let dest = proj.env.root.join("restored_output");
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -384,7 +386,9 @@ fn restore_cmd_glob_txt_only() {
     fs::remove_file(root.join("a.txt")).unwrap();
     fs::remove_file(root.join("b.rs")).unwrap();
 
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         root.to_str().unwrap(),
@@ -405,7 +409,9 @@ fn restore_cmd_snapshot_creates_pre_restore() {
     let proj = BakProject::new("proj_restore_snapshot", false);
     let name = proj.backup_name("v1-", None);
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -432,12 +438,14 @@ fn restore_cmd_report_counts() {
     fs::remove_file(proj.root.join("a.txt")).unwrap();
     fs::remove_file(proj.root.join("b.txt")).unwrap();
 
-    let out =
-        run_ok(
-            proj.env
-                .cmd()
-                .args(["backup", "restore", &name, "-C", proj.root.to_str().unwrap(), "-y"]),
-        );
+    let out = run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        &name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
@@ -455,11 +463,14 @@ fn restore_cmd_zip_by_name() {
     fs::remove_file(proj.root.join("a.txt")).unwrap();
     fs::remove_file(proj.root.join("b.txt")).unwrap();
 
-    run_ok(
-        proj.env
-            .cmd()
-            .args(["backup", "restore", name, "-C", proj.root.to_str().unwrap(), "-y"]),
-    );
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
 
     assert!(proj.root.join("a.txt").exists());
     assert!(proj.root.join("b.txt").exists());
@@ -490,7 +501,9 @@ fn restore_cmd_7z_by_path() {
     fs::remove_file(root.join("a.txt")).unwrap();
     fs::remove_file(root.join("b.txt")).unwrap();
 
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         root.join("artifact.7z").to_str().unwrap(),
         "-C",
         root.to_str().unwrap(),
@@ -609,8 +622,14 @@ fn backup_create_split_7z_then_restore_by_base_path() {
         "-y",
     ]));
 
-    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "a".repeat(1200));
-    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "b".repeat(1200));
+    assert_eq!(
+        fs::read_to_string(root.join("a.txt")).unwrap(),
+        "a".repeat(1200)
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("b.txt")).unwrap(),
+        "b".repeat(1200)
+    );
 }
 
 #[test]
@@ -649,8 +668,14 @@ fn backup_create_split_7z_then_restore_by_first_volume_path() {
         "-y",
     ]));
 
-    assert_eq!(fs::read_to_string(root.join("a.txt")).unwrap(), "a".repeat(1200));
-    assert_eq!(fs::read_to_string(root.join("b.txt")).unwrap(), "b".repeat(1200));
+    assert_eq!(
+        fs::read_to_string(root.join("a.txt")).unwrap(),
+        "a".repeat(1200)
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("b.txt")).unwrap(),
+        "b".repeat(1200)
+    );
 }
 
 #[test]
@@ -913,7 +938,9 @@ fn restore_cmd_file_from_7z_backup() {
 
     fs::remove_file(root.join("a.txt")).unwrap();
 
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         root.join("artifact.7z").to_str().unwrap(),
         "-C",
         root.to_str().unwrap(),
@@ -950,7 +977,9 @@ fn restore_cmd_glob_from_7z_backup() {
     fs::remove_file(root.join("a.txt")).unwrap();
     fs::remove_file(root.join("b.rs")).unwrap();
 
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         root.join("artifact.7z").to_str().unwrap(),
         "-C",
         root.to_str().unwrap(),
@@ -970,7 +999,9 @@ fn restore_cmd_dry_run() {
 
     fs::remove_file(proj.root.join("a.txt")).unwrap();
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -996,7 +1027,9 @@ fn restore_cmd_nonexistent_backup_fails() {
 
     let out = env
         .cmd()
-        .args(["backup", "restore",
+        .args([
+            "backup",
+            "restore",
             "nonexistent-backup-xyz",
             "-C",
             root.to_str().unwrap(),
@@ -1022,7 +1055,9 @@ fn restore_cmd_file_from_dir_backup() {
     // 修改 a.txt 内容（覆盖场景）
     fs::write(proj.root.join("a.txt"), "modified").unwrap();
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1056,7 +1091,9 @@ fn restore_cmd_file_from_zip_backup() {
     // 只删除 a.txt
     fs::remove_file(proj.root.join("a.txt")).unwrap();
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1081,7 +1118,9 @@ fn restore_cmd_file_missing_in_zip_backup_fails() {
     let zip_name = proj.backup_name("v1-", Some(".zip"));
     let name = zip_name.trim_end_matches(".zip");
 
-    let out = run_err(proj.env.cmd().args(["backup", "restore",
+    let out = run_err(proj.env.cmd().args([
+        "backup",
+        "restore",
         name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1107,7 +1146,9 @@ fn restore_cmd_file_unsafe_path_fails() {
     let out = proj
         .env
         .cmd()
-        .args(["backup", "restore",
+        .args([
+            "backup",
+            "restore",
             &name,
             "-C",
             proj.root.to_str().unwrap(),
@@ -1158,7 +1199,9 @@ fn restore_cmd_glob_double_star() {
     fs::remove_file(src_dir.join("icon.ts")).unwrap();
     fs::remove_file(root.join("src").join("index.rs")).unwrap();
 
-    run_ok(env.cmd().args(["backup", "restore",
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         root.to_str().unwrap(),
@@ -1190,7 +1233,9 @@ fn restore_cmd_glob_no_match_exits_ok() {
     let proj = BakProject::new("proj_glob_no_match", false);
     let name = proj.backup_name("v1-", None);
 
-    let out = run_ok(proj.env.cmd().args(["backup", "restore",
+    let out = run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1217,7 +1262,9 @@ fn restore_cmd_glob_from_zip() {
     fs::remove_file(proj.root.join("a.txt")).unwrap();
     fs::remove_file(proj.root.join("b.txt")).unwrap();
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1250,7 +1297,9 @@ fn restore_cmd_glob_from_zip_rejects_unsafe_entries() {
     let zip_path = env.root.join("unsafe_restore_source.zip");
     write_test_zip(&zip_path, &[("safe.txt", b"ok"), ("../evil.txt", b"bad")]);
 
-    let out = run_err(env.cmd().args(["backup", "restore",
+    let out = run_err(env.cmd().args([
+        "backup",
+        "restore",
         zip_path.to_str().unwrap(),
         "-C",
         root.to_str().unwrap(),
@@ -1304,10 +1353,14 @@ fn restore_cmd_preserves_nested_directory_structure() {
     // 完全删除 src 目录
     fs::remove_dir_all(root.join("src")).unwrap();
 
-    run_ok(
-        env.cmd()
-            .args(["backup", "restore", &name, "-C", root.to_str().unwrap(), "-y"]),
-    );
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        &name,
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
 
     // 嵌套结构应完整重建
     assert!(
@@ -1340,11 +1393,14 @@ fn restore_cmd_directory_backup_skips_internal_meta_files() {
         "project root should not start with backup metadata"
     );
 
-    run_ok(
-        proj.env
-            .cmd()
-            .args(["backup", "restore", &name, "-C", proj.root.to_str().unwrap(), "-y"]),
-    );
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
+        &name,
+        "-C",
+        proj.root.to_str().unwrap(),
+        "-y",
+    ]));
 
     assert!(proj.root.join("a.txt").exists());
     assert!(proj.root.join("b.txt").exists());
@@ -1385,7 +1441,9 @@ fn restore_cmd_snapshot_skipped_on_dry_run() {
     let proj = BakProject::new("proj_snapshot_dry", false);
     let name = proj.backup_name("v1-", None);
 
-    run_ok(proj.env.cmd().args(["backup", "restore",
+    run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1411,7 +1469,9 @@ fn restore_cmd_json_outputs_summary() {
     fs::remove_file(proj.root.join("a.txt")).unwrap();
     fs::remove_file(proj.root.join("b.txt")).unwrap();
 
-    let out = run_ok(proj.env.cmd().args(["backup", "restore",
+    let out = run_ok(proj.env.cmd().args([
+        "backup",
+        "restore",
         &name,
         "-C",
         proj.root.to_str().unwrap(),
@@ -1427,5 +1487,3 @@ fn restore_cmd_json_outputs_summary() {
     assert_eq!(value["failed"], 0);
     assert_eq!(value["dry_run"], false);
 }
-
-

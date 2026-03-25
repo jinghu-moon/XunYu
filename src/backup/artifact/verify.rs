@@ -6,6 +6,27 @@ use crate::backup::artifact::sevenz::list_7z_entries;
 use crate::backup_formats::{BackupArtifactFormat, VerifyOutputMode, VerifySourceMode};
 use crate::output::{CliError, CliResult};
 
+#[cfg(feature = "xunbak")]
+fn xunbak_verify_error_details(
+    path: &Path,
+    report: &crate::xunbak::verify::VerifyReport,
+) -> Vec<String> {
+    let mut details = vec![format!("Source: {}", path.display())];
+    if let Some(issue) = report.errors.first() {
+        details.push(format!("First error: {}", issue.message));
+        if let Some(path) = &issue.path {
+            details.push(format!("Path: {path}"));
+        }
+        if let Some(volume_index) = issue.volume_index {
+            details.push(format!("Volume: {volume_index}"));
+        }
+        if let Some(offset) = issue.offset {
+            details.push(format!("Offset: {offset}"));
+        }
+    }
+    details
+}
+
 pub(crate) fn verify_convert_source(path: &Path, mode: VerifySourceMode) -> CliResult {
     if matches!(mode, VerifySourceMode::Off) {
         return Ok(());
@@ -19,6 +40,12 @@ pub(crate) fn verify_convert_source(path: &Path, mode: VerifySourceMode) -> CliR
         let report = match mode {
             VerifySourceMode::Quick => crate::xunbak::verify::verify_quick_path(path),
             VerifySourceMode::Full => crate::xunbak::verify::verify_full_path(path),
+            VerifySourceMode::ManifestOnly => {
+                crate::xunbak::verify::verify_manifest_only_path(path)
+            }
+            VerifySourceMode::ExistenceOnly => {
+                crate::xunbak::verify::verify_existence_only_path(path)
+            }
             VerifySourceMode::Paranoid => crate::xunbak::verify::verify_paranoid_path(path),
             VerifySourceMode::Off => unreachable!(),
         };
@@ -30,12 +57,16 @@ pub(crate) fn verify_convert_source(path: &Path, mode: VerifySourceMode) -> CliR
             .first()
             .map(|issue| issue.message.as_str())
             .unwrap_or("unknown verify error");
+        let mut detail_lines = xunbak_verify_error_details(path, &report);
+        detail_lines.push(
+            "Fix: Re-run with `--verify-source off` only if you accept skipping integrity checks."
+                .to_string(),
+        );
+        let refs: Vec<&str> = detail_lines.iter().map(String::as_str).collect();
         return Err(CliError::with_details(
             1,
             format!("backup convert source verify failed (mode={mode}): {detail}"),
-            &[
-                "Fix: Re-run with `--verify-source off` only if you accept skipping integrity checks.",
-            ],
+            &refs,
         ));
     }
     #[cfg(not(feature = "xunbak"))]
@@ -86,10 +117,13 @@ pub(crate) fn verify_output(
                     .first()
                     .map(|issue| issue.message.as_str())
                     .unwrap_or("unknown verify error");
+                let mut detail_lines = xunbak_verify_error_details(path, &report);
+                detail_lines.push("Fix: Re-run export and inspect output integrity.".to_string());
+                let refs: Vec<&str> = detail_lines.iter().map(String::as_str).collect();
                 Err(CliError::with_details(
                     1,
                     format!("backup convert output verify failed: {detail}"),
-                    &["Fix: Re-run export and inspect output integrity."],
+                    &refs,
                 ))
             }
             #[cfg(not(feature = "xunbak"))]

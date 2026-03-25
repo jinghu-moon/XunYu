@@ -234,7 +234,8 @@ mod tests {
     fn snapshot_manifest_removed_serializes_as_empty_array() {
         let manifest = sample_manifest();
         let value: serde_json::Value =
-            serde_json::from_slice(&serialize_backup_snapshot_manifest(&manifest).unwrap()).unwrap();
+            serde_json::from_slice(&serialize_backup_snapshot_manifest(&manifest).unwrap())
+                .unwrap();
         assert_eq!(value["removed"], serde_json::json!([]));
     }
 
@@ -242,17 +243,22 @@ mod tests {
     fn snapshot_manifest_content_hash_serializes_as_lowercase_hex() {
         let manifest = sample_manifest();
         let value: serde_json::Value =
-            serde_json::from_slice(&serialize_backup_snapshot_manifest(&manifest).unwrap()).unwrap();
+            serde_json::from_slice(&serialize_backup_snapshot_manifest(&manifest).unwrap())
+                .unwrap();
         let hash = value["entries"][0]["content_hash"].as_str().unwrap();
         assert_eq!(hash.len(), 64);
-        assert!(hash.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()));
+        assert!(
+            hash.chars()
+                .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase())
+        );
     }
 
     #[test]
     fn snapshot_manifest_uses_relative_forward_slash_paths() {
         let manifest = sample_manifest();
         let value: serde_json::Value =
-            serde_json::from_slice(&serialize_backup_snapshot_manifest(&manifest).unwrap()).unwrap();
+            serde_json::from_slice(&serialize_backup_snapshot_manifest(&manifest).unwrap())
+                .unwrap();
         let path = value["entries"][0]["path"].as_str().unwrap();
         assert_eq!(path, "src/main.rs");
         assert!(!path.contains('\\'));
@@ -263,10 +269,7 @@ mod tests {
         let manifest = sample_manifest();
         let json = serialize_backup_snapshot_manifest(&manifest).unwrap();
         let roundtrip: BackupSnapshotManifest = serde_json::from_slice(&json).unwrap();
-        assert_eq!(
-            roundtrip.entries[0].mtime_ns,
-            1_774_319_900_000_000_000
-        );
+        assert_eq!(roundtrip.entries[0].mtime_ns, 1_774_319_900_000_000_000);
     }
 
     #[test]

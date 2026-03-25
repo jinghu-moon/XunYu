@@ -2,7 +2,7 @@ use std::env;
 
 use super::{
     ACL_SUBCOMMANDS, CONFIG_SUBCOMMANDS, CTX_SUBCOMMANDS, ENV_SUBCOMMANDS, PROXY_SUBCOMMANDS,
-    SUBCOMMANDS,
+    SUBCOMMANDS, XUNBAK_SUBCOMMANDS,
 };
 
 pub(super) fn split_flag_value(raw: &str) -> Option<(String, String)> {
@@ -48,6 +48,7 @@ pub(super) fn find_subsub(
         "ctx" => CTX_SUBCOMMANDS,
         "proxy" => PROXY_SUBCOMMANDS,
         "env" => ENV_SUBCOMMANDS,
+        "xunbak" => XUNBAK_SUBCOMMANDS,
         _ => &[][..],
     };
     for (idx, token) in tokens.iter().enumerate().skip(start) {

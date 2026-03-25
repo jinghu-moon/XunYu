@@ -6,7 +6,9 @@ use std::io::Read;
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::backup::artifact::entry::{file_attributes, metadata_created_time_ns, system_time_to_unix_ns};
+use crate::backup::artifact::entry::{
+    file_attributes, metadata_created_time_ns, system_time_to_unix_ns,
+};
 use crate::backup::common::hash::compute_file_content_hash;
 use crate::backup::legacy::hash_manifest::{
     BackupSnapshotEntry, BackupSnapshotManifest, HashManifestError, read_backup_snapshot_manifest,
@@ -93,7 +95,8 @@ pub(crate) fn verify_manifest(backup_path: &Path) -> VerifyResult {
         }
     } else {
         for entry in &manifest.entries {
-            let file_path = backup_path.join(entry.path.replace('/', std::path::MAIN_SEPARATOR_STR));
+            let file_path =
+                backup_path.join(entry.path.replace('/', std::path::MAIN_SEPARATOR_STR));
             match file_blake3(&file_path) {
                 Some(hash) if hash == entry.content_hash => {}
                 _ => corrupted.push(entry.path.clone()),
@@ -131,12 +134,12 @@ fn file_blake3_from_zip_entry<R: Read + std::io::Seek>(
     Some(*hasher.finalize().as_bytes())
 }
 
-fn collect_dir_extra_files(
-    backup_root: &Path,
-    manifest: &BackupSnapshotManifest,
-) -> Vec<String> {
-    let expected: std::collections::HashSet<&str> =
-        manifest.entries.iter().map(|entry| entry.path.as_str()).collect();
+fn collect_dir_extra_files(backup_root: &Path, manifest: &BackupSnapshotManifest) -> Vec<String> {
+    let expected: std::collections::HashSet<&str> = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.path.as_str())
+        .collect();
     let mut extras = Vec::new();
     let mut stack = vec![backup_root.to_path_buf()];
     while let Some(current) = stack.pop() {
@@ -172,8 +175,11 @@ fn collect_zip_extra_files<R: Read + std::io::Seek>(
     archive: &mut zip::ZipArchive<R>,
     manifest: &BackupSnapshotManifest,
 ) -> Vec<String> {
-    let expected: std::collections::HashSet<&str> =
-        manifest.entries.iter().map(|entry| entry.path.as_str()).collect();
+    let expected: std::collections::HashSet<&str> = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.path.as_str())
+        .collect();
     let mut extras = Vec::new();
     for i in 0..archive.len() {
         let Ok(entry) = archive.by_index(i) else {

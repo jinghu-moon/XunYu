@@ -18,6 +18,8 @@ pub(crate) mod proxy;
 pub(crate) mod restore_core;
 pub(crate) mod tree;
 pub(crate) mod video;
+#[cfg(feature = "xunbak")]
+pub(crate) mod xunbak;
 
 #[cfg(feature = "redirect")]
 pub(crate) mod redirect;

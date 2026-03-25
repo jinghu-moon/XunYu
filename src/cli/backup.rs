@@ -251,7 +251,6 @@ pub struct BackupRestoreCmd {
     /// output machine-readable JSON summary
     #[argh(switch)]
     pub json: bool,
-
 }
 
 /// Convert one backup artifact into another artifact format.
@@ -322,7 +321,7 @@ pub struct BackupConvertCmd {
     #[argh(switch)]
     pub list: bool,
 
-    /// verify source mode: quick | full | paranoid | off
+    /// verify source mode: quick | full | manifest-only | existence-only | paranoid | off
     #[argh(option)]
     pub verify_source: Option<String>,
 
