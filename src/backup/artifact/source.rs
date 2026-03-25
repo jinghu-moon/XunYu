@@ -8,6 +8,7 @@ use crate::backup::artifact::entry::{
     SourceEntry, SourceKind, file_attributes, metadata_created_time_ns, system_time_to_unix_ns,
 };
 use crate::backup::artifact::sevenz::list_7z_entries;
+use crate::backup::artifact::zip_ppmd::{list_ppmd_zip_entries, needs_manual_ppmd_fallback};
 use crate::commands::restore_core::{is_backup_internal_name, is_backup_internal_rel_path};
 use crate::output::CliError;
 
@@ -98,6 +99,14 @@ fn collect_dir_entries(
 }
 
 fn read_zip_artifact_entries(zip_path: &Path) -> Result<Vec<SourceEntry>, CliError> {
+    match read_zip_artifact_entries_with_crate(zip_path) {
+        Ok(entries) => Ok(entries),
+        Err(err) if needs_manual_ppmd_fallback(&err.message) => list_ppmd_zip_entries(zip_path),
+        Err(err) => Err(err),
+    }
+}
+
+fn read_zip_artifact_entries_with_crate(zip_path: &Path) -> Result<Vec<SourceEntry>, CliError> {
     let file = fs::File::open(zip_path).map_err(|err| {
         CliError::new(1, format!("Open zip failed {}: {err}", zip_path.display()))
     })?;
@@ -275,6 +284,38 @@ mod tests {
 
         let entries = read_artifact_entries(&zip_path).unwrap();
         let paths: Vec<&str> = entries.iter().map(|entry| entry.path.as_str()).collect();
+        assert_eq!(paths, vec!["a.txt"]);
+    }
+
+    #[test]
+    fn read_artifact_entries_lists_ppmd_zip_files() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("a.txt");
+        fs::write(&source, "aaa").unwrap();
+        let zip_path = dir.path().join("backup-ppmd.zip");
+        let entry = crate::backup::artifact::entry::SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(source),
+            size: 3,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: crate::backup::artifact::entry::SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::zip::write_entries_to_zip(
+            &[&entry],
+            &zip_path,
+            crate::backup::artifact::zip::ZipWriteOptions {
+                method: crate::backup::artifact::zip::ZipCompressionMethod::Ppmd,
+                level: None,
+                sidecar: None,
+            },
+        )
+        .unwrap();
+
+        let entries = read_artifact_entries(&zip_path).unwrap();
+        let paths: Vec<&str> = entries.iter().map(|item| item.path.as_str()).collect();
         assert_eq!(paths, vec!["a.txt"]);
     }
 

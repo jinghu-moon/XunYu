@@ -14,3 +14,4 @@ pub(crate) mod verify;
 #[cfg(feature = "xunbak")]
 pub(crate) mod xunbak;
 pub(crate) mod zip;
+pub(crate) mod zip_ppmd;

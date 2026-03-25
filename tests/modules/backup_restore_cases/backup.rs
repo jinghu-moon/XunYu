@@ -5,6 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::os::windows::fs::MetadataExt;
 use std::os::windows::io::AsRawHandle;
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
@@ -67,6 +68,63 @@ fn set_last_write_time_utc(path: &std::path::Path, year: u16, month: u16, day: u
         )
     };
     assert_ne!(ok, 0, "SetFileTime failed for {}", path.display());
+}
+
+fn zip_entry_compression(path: &std::path::Path, entry_name: &str) -> zip::CompressionMethod {
+    let file = fs::File::open(path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    archive.by_name(entry_name).unwrap().compression()
+}
+
+fn read_zip_sidecar(path: &std::path::Path) -> Value {
+    let file = fs::File::open(path).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut sidecar = archive.by_name("__xunyu__/export_manifest.json").unwrap();
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut sidecar, &mut text).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+fn find_external_7z_command() -> Option<String> {
+    for candidate in ["7z.exe", "7z", "7za.exe", "7za", "7zr.exe", "7zr"] {
+        if Command::new(candidate).arg("i").output().is_ok() {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
+fn external_7z_test_output(cmd: &str, archive: &std::path::Path) -> std::process::Output {
+    Command::new(cmd)
+        .args(["t", archive.to_str().unwrap()])
+        .output()
+        .unwrap()
+}
+
+fn external_7z_reports_7z_zstd_codec(cmd: &str) -> bool {
+    let Ok(output) = Command::new(cmd).arg("i").output() else {
+        return false;
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut in_codecs = false;
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.eq_ignore_ascii_case("Codecs:") {
+            in_codecs = true;
+            continue;
+        }
+        if !in_codecs {
+            continue;
+        }
+        if trimmed.is_empty() {
+            break;
+        }
+        let upper = trimmed.to_ascii_uppercase();
+        if upper.ends_with(" ZSTD") || upper.contains(" ZSTD ") {
+            return true;
+        }
+    }
+    false
 }
 
 #[test]
@@ -1276,6 +1334,179 @@ fn backup_create_zip_uses_stored_for_precompressed_extension() {
 }
 
 #[test]
+fn backup_create_zip_supports_bzip2_and_zstd_methods() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_extended_methods");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "hello hello hello hello").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    for (method, expected_method) in [
+        ("bzip2", zip::CompressionMethod::Bzip2),
+        ("zstd", zip::CompressionMethod::Zstd),
+    ] {
+        let output = root.join(format!("{method}.zip"));
+        run_ok(env.cmd().args([
+            "backup",
+            "create",
+            "-C",
+            root.to_str().unwrap(),
+            "--format",
+            "zip",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+
+        assert_eq!(zip_entry_compression(&output, "notes.txt"), expected_method);
+        let sidecar = read_zip_sidecar(&output);
+        let entry = sidecar["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["path"] == "notes.txt")
+            .unwrap();
+        assert_eq!(entry["codec"], method);
+        assert!(entry["packed_size"].is_null());
+    }
+}
+
+#[test]
+fn backup_create_zip_bzip2_and_zstd_reopen_with_external_7z_when_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_external_7z");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "hello hello hello hello").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    for method in ["bzip2", "zstd"] {
+        let output = root.join(format!("{method}.zip"));
+        run_ok(env.cmd().args([
+            "backup",
+            "create",
+            "-C",
+            root.to_str().unwrap(),
+            "--format",
+            "zip",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+
+        let test = external_7z_test_output(&cmd, &output);
+        assert!(
+            test.status.success(),
+            "external 7z should reopen {method} zip, stdout={}, stderr={}",
+            String::from_utf8_lossy(&test.stdout),
+            String::from_utf8_lossy(&test.stderr)
+        );
+    }
+}
+
+#[test]
+fn backup_create_zip_ppmd_reopen_with_external_7z_when_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_external_ppmd");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "hello hello hello hello").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let output = root.join("ppmd.zip");
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "ppmd",
+    ]));
+
+    let test = external_7z_test_output(&cmd, &output);
+    assert!(
+        test.status.success(),
+        "external 7z should reopen ppmd zip, stdout={}, stderr={}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+}
+
+#[test]
+fn backup_create_zip_supports_ppmd_method_and_can_convert_back_to_dir() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_zip_ppmd");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        "artifact.zip",
+        "--method",
+        "ppmd",
+    ]));
+
+    let restored = env.root.join("restored_ppmd_zip");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        root.join("artifact.zip").to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        restored.to_str().unwrap(),
+    ]));
+    assert_eq!(fs::read_to_string(restored.join("a.txt")).unwrap(), "aaa");
+}
+
+#[test]
 fn backup_create_7z_no_compress_uses_copy_for_payloads() {
     let env = TestEnv::new();
     let root = env.root.join("proj_backup_create_7z_copy");
@@ -1549,10 +1780,308 @@ fn backup_convert_rejects_invalid_7z_method() {
         "-o",
         env.root.join("invalid.7z").to_str().unwrap(),
         "--method",
-        "ppmd",
+        "brotli",
     ]));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("invalid for 7z"));
+}
+
+fn sevenz_first_method_id(path: &std::path::Path) -> sevenz_rust2::EncoderMethod {
+    let archive = sevenz_rust2::ArchiveReader::open(path, sevenz_rust2::Password::empty()).unwrap();
+    let first_block = archive.archive().blocks.first().unwrap();
+    let first_coder = first_block.ordered_coder_iter().next().unwrap().1;
+    sevenz_rust2::EncoderMethod::by_id(first_coder.encoder_method_id()).unwrap()
+}
+
+#[test]
+fn backup_create_7z_supports_extended_methods() {
+    let env = TestEnv::new();
+    let methods = [
+        ("bzip2", sevenz_rust2::EncoderMethod::BZIP2),
+        ("deflate", sevenz_rust2::EncoderMethod::DEFLATE),
+        ("ppmd", sevenz_rust2::EncoderMethod::PPMD),
+        ("zstd", sevenz_rust2::EncoderMethod::ZSTD),
+    ];
+
+    for (method, expected) in methods {
+        let root = env
+            .root
+            .join(format!("proj_backup_create_7z_method_{method}"));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.txt"), "aaa aaa aaa aaa aaa aaa").unwrap();
+        let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+        fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+        let output = root.join(format!("artifact-{method}.7z"));
+        run_ok(env.cmd().args([
+            "backup",
+            "create",
+            "-C",
+            root.to_str().unwrap(),
+            "--format",
+            "7z",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+
+        assert_eq!(sevenz_first_method_id(&output), expected, "method={method}");
+    }
+}
+
+#[test]
+fn backup_create_7z_bzip2_and_deflate_pass_external_7z_test_when_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+
+    let env = TestEnv::new();
+    for method in ["bzip2", "deflate"] {
+        let root = env
+            .root
+            .join(format!("proj_backup_create_7z_external_{method}"));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.txt"), "aaa aaa aaa aaa aaa aaa").unwrap();
+        let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+        fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+        let output = root.join(format!("artifact-{method}.7z"));
+        run_ok(env.cmd().args([
+            "backup",
+            "create",
+            "-C",
+            root.to_str().unwrap(),
+            "--format",
+            "7z",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+
+        let test = external_7z_test_output(&cmd, &output);
+        assert!(
+            test.status.success(),
+            "external 7z should reopen {method} 7z, stdout={}, stderr={}",
+            String::from_utf8_lossy(&test.stdout),
+            String::from_utf8_lossy(&test.stderr)
+        );
+    }
+}
+
+#[test]
+fn backup_create_7z_ppmd_passes_external_7z_test_when_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_external_ppmd");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa aaa aaa aaa aaa aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let output = root.join("artifact-ppmd.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "ppmd",
+    ]));
+
+    let test = external_7z_test_output(&cmd, &output);
+    assert!(
+        test.status.success(),
+        "external 7z should reopen ppmd 7z, stdout={}, stderr={}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+}
+
+#[test]
+fn backup_create_7z_zstd_passes_external_7z_test_when_codec_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+    if !external_7z_reports_7z_zstd_codec(&cmd) {
+        return;
+    }
+
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_7z_external_zstd");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa aaa aaa aaa aaa aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let output = root.join("artifact-zstd.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "zstd",
+    ]));
+
+    let test = external_7z_test_output(&cmd, &output);
+    assert!(
+        test.status.success(),
+        "external 7z with zstd codec should reopen zstd 7z, stdout={}, stderr={}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+}
+
+#[test]
+fn backup_convert_to_7z_supports_extended_methods() {
+    let env = TestEnv::new();
+    let methods = [
+        ("bzip2", sevenz_rust2::EncoderMethod::BZIP2),
+        ("deflate", sevenz_rust2::EncoderMethod::DEFLATE),
+        ("ppmd", sevenz_rust2::EncoderMethod::PPMD),
+        ("zstd", sevenz_rust2::EncoderMethod::ZSTD),
+    ];
+
+    for (method, expected) in methods {
+        let zip_path = env.root.join(format!("artifact-{method}.zip"));
+        let cursor = std::io::Cursor::new(Vec::<u8>::new());
+        let mut writer = zip::ZipWriter::new(cursor);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        writer.start_file("a.txt", options).unwrap();
+        writer.write_all(b"aaa aaa aaa aaa aaa aaa").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        fs::write(&zip_path, bytes).unwrap();
+
+        let output = env.root.join(format!("converted-{method}.7z"));
+        run_ok(env.cmd().args([
+            "backup",
+            "convert",
+            zip_path.to_str().unwrap(),
+            "--format",
+            "7z",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+            "--verify-output",
+            "off",
+        ]));
+
+        assert_eq!(sevenz_first_method_id(&output), expected, "method={method}");
+    }
+}
+
+#[test]
+fn backup_convert_7z_ppmd_passes_external_7z_test_when_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa aaa aaa aaa aaa aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("ppmd-verify.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "ppmd",
+    ]));
+
+    let test = external_7z_test_output(&cmd, &output);
+    assert!(
+        test.status.success(),
+        "external 7z should reopen converted ppmd 7z, stdout={}, stderr={}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+}
+
+#[test]
+fn backup_convert_7z_zstd_verify_reports_external_codec_hint_when_stock_codec_is_missing() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+    if external_7z_reports_7z_zstd_codec(&cmd) {
+        return;
+    }
+
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa aaa aaa aaa aaa aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        env.root.join("zstd-verify.7z").to_str().unwrap(),
+        "--method",
+        "zstd",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Detected 7z methods: zstd"));
+    assert!(stderr.contains("requires extraction-side external codec support"));
 }
 
 #[test]
@@ -2426,6 +2955,102 @@ fn backup_convert_zip_output_defaults_to_deflated_for_text_files() {
 }
 
 #[test]
+fn backup_convert_to_zip_supports_bzip2_and_zstd_methods() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_convert_to_zip_extended_methods");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("notes.txt"), "hello hello hello hello").unwrap();
+
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "notes.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let artifact = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().starts_with("v1-"))
+        .unwrap()
+        .path();
+
+    for (method, expected_method) in [
+        ("bzip2", zip::CompressionMethod::Bzip2),
+        ("zstd", zip::CompressionMethod::Zstd),
+    ] {
+        let output = env.root.join(format!("convert-{method}.zip"));
+        run_ok(env.cmd().args([
+            "backup",
+            "convert",
+            artifact.to_str().unwrap(),
+            "--format",
+            "zip",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+
+        assert_eq!(zip_entry_compression(&output, "notes.txt"), expected_method);
+        let sidecar = read_zip_sidecar(&output);
+        let entry = sidecar["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["path"] == "notes.txt")
+            .unwrap();
+        assert_eq!(entry["codec"], method);
+        assert!(entry["packed_size"].is_null());
+    }
+}
+
+#[test]
+fn backup_convert_to_zip_supports_ppmd_method_and_can_convert_back_to_dir() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("ppmd.zip");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "ppmd",
+    ]));
+
+    let restored = env.root.join("restored_ppmd_convert_zip");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        output.to_str().unwrap(),
+        "--format",
+        "dir",
+        "-o",
+        restored.to_str().unwrap(),
+    ]));
+    assert_eq!(fs::read_to_string(restored.join("a.txt")).unwrap(), "aaa");
+}
+
+#[test]
 fn backup_convert_rejects_invalid_zip_method() {
     let env = TestEnv::new();
     let zip_path = env.root.join("artifact.zip");
@@ -2438,7 +3063,7 @@ fn backup_convert_rejects_invalid_zip_method() {
     let bytes = writer.finish().unwrap().into_inner();
     fs::write(&zip_path, bytes).unwrap();
 
-    for method in ["lzma2", "bzip2", "ppmd"] {
+    for method in ["lzma2", "brotli"] {
         let out = run_err(env.cmd().args([
             "backup",
             "convert",

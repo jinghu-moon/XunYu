@@ -281,34 +281,39 @@
 
 ### 10.1 ZIP backend（方案 C）
 
-- [ ] **说明**：ZIP 目标方法集固定为 `stored / deflated / bzip2 / zstd / ppmd`，不包含 `lzma2`
-- [x] **现状**：当前已实现 `stored / deflated`
-- [ ] **测试**：保留当前 `stored / deflated` 行为不回归
-- [ ] **测试**：手写 ZIP backend 可写出 `bzip2`
-- [ ] **测试**：手写 ZIP backend 可写出 `zstd`
-- [ ] **测试**：手写 ZIP backend 可写出 `ppmd`
-- [ ] **测试**：ZIP local header / central directory / EOCD 结构可被 `zip` / 7-Zip reopen
-- [ ] **测试**：Zip64 在手写 backend 下仍正确
-- [ ] 在 XunYu 内实现 ZIP method routing / writer backend
+- [-] **说明**：ZIP 目标方法集固定为 `stored / deflated / bzip2 / zstd / ppmd`，不包含 `lzma2`；当前已接入全部五种方法，其中 `ppmd` 走 XunYu 自己的纯 Rust 手写 writer + manual parser
+- [x] **现状**：当前已实现 `stored / deflated / bzip2 / zstd / ppmd`
+- [x] **测试**：保留当前 `stored / deflated` 行为不回归
+- [x] **测试**：当前 ZIP backend 可写出 `bzip2`
+- [x] **测试**：当前 ZIP backend 可写出 `zstd`
+- [x] **测试**：手写 ZIP backend 可写出 `ppmd`
+- [-] **测试**：ZIP local header / central directory / EOCD 结构可被 `zip` / 7-Zip reopen
+  当前 `bzip2 / zstd` 可被 `zip` crate 与 7-Zip reopen，`ppmd` 可被 XunYu parser 与 7-Zip reopen；上游 `zip` crate `2.4.2` 本身仍缺 `ppmd` 解压
+- [x] **测试**：Zip64 在手写 backend 下仍正确
+  已完成单条目 `4 GiB + 1 MiB` 的 `ZIP ppmd` 端到端验证：纯 Rust 写出、stock `7-Zip 24.09` `7z t` 通过、XunYu 自己 `convert -> dir` 恢复并通过偏移 marker 对比
+- [-] 在 XunYu 内实现 ZIP method routing / writer backend
 
 ### 10.2 7z method 扩展
 
 - [x] **现状**：当前已实现 `copy / lzma2`
-- [ ] **测试**：`SevenZMethod` 扩展为 `copy / lzma2 / bzip2 / deflate / ppmd / zstd`
-- [ ] **测试**：显式 `--method bzip2` 生效
-- [ ] **测试**：显式 `--method deflate` 生效
-- [ ] **测试**：显式 `--method ppmd` 生效
-- [ ] **测试**：显式 `--method zstd` 生效
-- [ ] **测试**：method id 与 `7z2600-src` / `sevenz-rust2-main` 一致
-- [ ] 在 XunYu 内实现 7z method routing / writer options
+- [x] **测试**：`SevenZMethod` 扩展为 `copy / lzma2 / bzip2 / deflate / ppmd / zstd`
+- [x] **测试**：显式 `--method bzip2` 生效
+- [x] **测试**：显式 `--method deflate` 生效
+- [x] **测试**：显式 `--method ppmd` 生效
+- [x] **测试**：显式 `--method zstd` 生效
+- [x] **测试**：method id 与 `7z2600-src` / `sevenz-rust2-main` 一致
+- [x] 在 XunYu 内实现 7z method routing / writer options
 
 ### 10.3 兼容矩阵与提示
 
-- [ ] **测试**：ZIP `bzip2 / zstd / ppmd` 的 reopen 行为稳定
-- [ ] **测试**：7z `bzip2 / deflate / ppmd` 在 stock 7-Zip 可解
-- [ ] **测试**：7z `zstd` 在支持外部 codec 的解压端可解
-- [ ] **测试**：doctor / 文档能对 `zstd` codec 兼容差异给出提示
-- [ ] 记录方法级兼容矩阵
+- [-] **测试**：ZIP `bzip2 / zstd / ppmd` 的 reopen 行为稳定
+  当前已验证 `bzip2 / zstd` 可被 `zip` crate 与 7-Zip reopen；`ppmd` 可被 XunYu parser 与 7-Zip reopen
+- [x] **测试**：7z `bzip2 / deflate / ppmd` 在 stock 7-Zip 可解
+  当前 `ppmd` 已修复为纯 Rust 写出，可通过 stock `7-Zip 24.09` 的 `7z t`
+- [x] **测试**：7z `zstd` 在支持外部 codec 的解压端可解
+  已在隔离临时 7-Zip 副本中注入 `7-Zip-zstd` `zstd.dll`，并验证 `7z t` 通过
+- [x] **测试**：doctor / 文档能对 `zstd` codec 兼容差异给出提示
+- [x] 记录方法级兼容矩阵
 
 ---
 

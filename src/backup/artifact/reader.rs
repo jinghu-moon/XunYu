@@ -6,6 +6,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::backup::artifact::entry::{SourceEntry, SourceKind};
 use crate::backup::artifact::sevenz::read_7z_file;
+use crate::backup::artifact::zip_ppmd::{
+    copy_ppmd_zip_entry_to_writer, needs_manual_ppmd_fallback,
+};
 use crate::output::CliError;
 #[cfg(feature = "xunbak")]
 use crate::util::normalize_glob_path;
@@ -166,6 +169,21 @@ fn open_zip_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
             format!("Missing zip source path for entry: {}", entry.path),
         )
     })?;
+    match open_zip_reader_with_crate(entry, zip_path) {
+        Ok(reader) => Ok(reader),
+        Err(err) if needs_manual_ppmd_fallback(&err.message) => {
+            let mut temp = TempReadableFile::new("xun-entry-zip-ppmd")?;
+            copy_ppmd_zip_entry_to_writer(zip_path, &entry.path, &mut temp.file)?;
+            Ok(EntryReader::Temp(temp.reopen_for_read()?))
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn open_zip_reader_with_crate(
+    entry: &SourceEntry,
+    zip_path: &Path,
+) -> Result<EntryReader, CliError> {
     let file = fs::File::open(zip_path).map_err(|err| {
         CliError::new(1, format!("Open zip failed {}: {err}", zip_path.display()))
     })?;
@@ -194,6 +212,20 @@ fn copy_zip_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Resu
             format!("Missing zip source path for entry: {}", entry.path),
         )
     })?;
+    match copy_zip_entry_to_writer_with_crate(entry, zip_path, writer) {
+        Ok(()) => Ok(()),
+        Err(err) if needs_manual_ppmd_fallback(&err.message) => {
+            copy_ppmd_zip_entry_to_writer(zip_path, &entry.path, writer)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn copy_zip_entry_to_writer_with_crate(
+    entry: &SourceEntry,
+    zip_path: &Path,
+    writer: &mut dyn Write,
+) -> Result<(), CliError> {
     let file = fs::File::open(zip_path).map_err(|err| {
         CliError::new(1, format!("Open zip failed {}: {err}", zip_path.display()))
     })?;
@@ -666,6 +698,50 @@ mod tests {
         let mut content = String::new();
         reader.read_to_string(&mut content).unwrap();
         assert_eq!(content, "hello zip");
+    }
+
+    #[test]
+    fn open_entry_reader_returns_readable_stream_for_ppmd_zip_artifact() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("data.txt");
+        fs::write(&source, "hello ppmd zip").unwrap();
+        let zip_path = dir.path().join("artifact-ppmd.zip");
+        let entry = SourceEntry {
+            path: "data.txt".to_string(),
+            source_path: Some(source),
+            size: 14,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::zip::write_entries_to_zip(
+            &[&entry],
+            &zip_path,
+            crate::backup::artifact::zip::ZipWriteOptions {
+                method: crate::backup::artifact::zip::ZipCompressionMethod::Ppmd,
+                level: None,
+                sidecar: None,
+            },
+        )
+        .unwrap();
+
+        let artifact_entry = SourceEntry {
+            path: "data.txt".to_string(),
+            source_path: Some(zip_path),
+            size: 14,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::ZipArtifact,
+        };
+
+        let mut reader = open_entry_reader(&artifact_entry).unwrap();
+        let mut content = String::new();
+        reader.read_to_string(&mut content).unwrap();
+        assert_eq!(content, "hello ppmd zip");
     }
 
     #[test]

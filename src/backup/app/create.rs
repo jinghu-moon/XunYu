@@ -20,7 +20,9 @@ use crate::backup::artifact::sevenz::{
 use crate::backup::artifact::sidecar::{
     SidecarPackingHint, build_sidecar_bytes, source_info_for_create, write_sidecar_to_dir,
 };
-use crate::backup::artifact::zip::{ZipCompressionMethod, ZipWriteOptions, write_entries_to_zip};
+use crate::backup::artifact::zip::{
+    ZipCompressionMethod, ZipWriteOptions, parse_zip_method_for_cli, write_entries_to_zip,
+};
 use crate::backup::legacy::{config, util};
 use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus};
 use crate::cli::{BackupCmd, BackupCreateCmd};
@@ -547,8 +549,9 @@ fn cmd_backup_create_zip(options: &BackupCreateOptions) -> CliResult {
         method: if options.no_compress {
             ZipCompressionMethod::Stored
         } else {
-            zip_method_for_create(options.method.as_deref())?
+            parse_zip_method_for_cli("backup create", options.method.as_deref())?
         },
+        level: options.level,
         sidecar: if options.no_sidecar {
             None
         } else {
@@ -557,7 +560,7 @@ fn cmd_backup_create_zip(options: &BackupCreateOptions) -> CliResult {
                 SidecarPackingHint::Zip(if options.no_compress {
                     ZipCompressionMethod::Stored
                 } else {
-                    zip_method_for_create(options.method.as_deref())?
+                    parse_zip_method_for_cli("backup create", options.method.as_deref())?
                 }),
                 &source_info_for_create(&options.source_dir),
                 &refs,
@@ -782,28 +785,19 @@ fn parse_split_size_bytes(raw: Option<&str>) -> Result<Option<u64>, CliError> {
     Ok(Some(size.saturating_mul(multiplier)))
 }
 
-fn zip_method_for_create(method: Option<&str>) -> Result<ZipCompressionMethod, CliError> {
-    match method.map(|value| value.trim().to_ascii_lowercase()) {
-        None => Ok(ZipCompressionMethod::Auto),
-        Some(value) if value == "deflated" => Ok(ZipCompressionMethod::Deflated),
-        Some(value) if value == "stored" => Ok(ZipCompressionMethod::Stored),
-        Some(value) => Err(CliError::with_details(
-            2,
-            format!("backup create --method {value} is invalid for zip"),
-            &["Fix: Use `--method stored` or `--method deflated`."],
-        )),
-    }
-}
-
 fn sevenz_method_for_create(method: Option<&str>) -> Result<SevenZMethod, CliError> {
     match method.map(|value| value.trim().to_ascii_lowercase()) {
         None => Ok(SevenZMethod::Lzma2),
         Some(value) if value == "lzma2" => Ok(SevenZMethod::Lzma2),
         Some(value) if value == "copy" => Ok(SevenZMethod::Copy),
+        Some(value) if value == "bzip2" => Ok(SevenZMethod::Bzip2),
+        Some(value) if value == "deflate" => Ok(SevenZMethod::Deflate),
+        Some(value) if value == "ppmd" => Ok(SevenZMethod::Ppmd),
+        Some(value) if value == "zstd" => Ok(SevenZMethod::Zstd),
         Some(value) => Err(CliError::with_details(
             2,
             format!("backup create --method {value} is invalid for 7z"),
-            &["Fix: Use `--method copy` or `--method lzma2`."],
+            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
         )),
     }
 }

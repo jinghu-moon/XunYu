@@ -190,11 +190,19 @@ enum AssociationStatus {
     Unknown(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SevenZZstdCodecStatus {
+    Supported,
+    NotDetected,
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DoctorReport {
     explicit_home: Option<PathBuf>,
     sevenzip: Option<SevenZipInstallation>,
     sevenzip_version: Option<String>,
+    sevenz_zstd_codec: SevenZZstdCodecStatus,
     plugin_dll_path: Option<PathBuf>,
     plugin_installed: bool,
     association: AssociationStatus,
@@ -605,6 +613,10 @@ fn build_doctor_report(explicit: Option<&str>) -> DoctorReport {
     let sevenzip_version = sevenzip
         .as_ref()
         .and_then(|value| read_file_version(&value.file_manager_path));
+    let sevenz_zstd_codec = sevenzip
+        .as_ref()
+        .map(|value| detect_sevenz_zstd_codec(&value.home))
+        .unwrap_or(SevenZZstdCodecStatus::Unknown);
     let plugin_dll_path = sevenzip
         .as_ref()
         .map(|value| value.formats_dir.join(PLUGIN_DLL_NAME));
@@ -613,12 +625,14 @@ fn build_doctor_report(explicit: Option<&str>) -> DoctorReport {
         .as_ref()
         .map(|value| detect_xunbak_association(Some(&value.file_manager_path)))
         .unwrap_or_else(|| detect_xunbak_association(None));
-    let suggestions = build_doctor_suggestions(&issue, plugin_installed, &association);
+    let suggestions =
+        build_doctor_suggestions(&issue, plugin_installed, &association, sevenz_zstd_codec);
 
     DoctorReport {
         explicit_home,
         sevenzip,
         sevenzip_version,
+        sevenz_zstd_codec,
         plugin_dll_path,
         plugin_installed,
         association,
@@ -631,6 +645,7 @@ fn build_doctor_suggestions(
     issue: &Option<String>,
     plugin_installed: bool,
     association: &AssociationStatus,
+    sevenz_zstd_codec: SevenZZstdCodecStatus,
 ) -> Vec<String> {
     let mut suggestions = Vec::new();
     if issue.is_some() {
@@ -660,6 +675,20 @@ fn build_doctor_suggestions(
                     .to_string(),
             );
         }
+    }
+    match sevenz_zstd_codec {
+        SevenZZstdCodecStatus::Supported => suggestions.push(
+            "This 7-Zip installation reports a ZSTD codec, so 7z `--method zstd` should be readable here."
+                .to_string(),
+        ),
+        SevenZZstdCodecStatus::NotDetected => suggestions.push(
+            "7z `--method zstd` needs extraction-side external codec support; current 7-Zip did not report ZSTD codec support."
+                .to_string(),
+        ),
+        SevenZZstdCodecStatus::Unknown => suggestions.push(
+            "Could not determine whether this 7-Zip installation exposes a ZSTD codec for 7z archives."
+                .to_string(),
+        ),
     }
     if suggestions.is_empty() {
         suggestions.push("Environment looks ready.".to_string());
@@ -706,6 +735,10 @@ fn render_doctor_report(report: &DoctorReport) -> String {
         "Association: {}",
         describe_association_status(&report.association)
     ));
+    lines.push(format!(
+        "7z ZSTD Codec: {}",
+        describe_sevenz_zstd_codec(report.sevenz_zstd_codec)
+    ));
 
     if let Some(issue) = &report.issue {
         lines.push(format!("Issue: {issue}"));
@@ -727,6 +760,62 @@ fn describe_association_status(status: &AssociationStatus) -> String {
             format!("other ({prog_id}: {command})")
         }
         AssociationStatus::Unknown(reason) => format!("unknown ({reason})"),
+    }
+}
+
+fn describe_sevenz_zstd_codec(status: SevenZZstdCodecStatus) -> &'static str {
+    match status {
+        SevenZZstdCodecStatus::Supported => "supported",
+        SevenZZstdCodecStatus::NotDetected => "not-detected",
+        SevenZZstdCodecStatus::Unknown => "unknown",
+    }
+}
+
+fn detect_sevenz_zstd_codec(home: &Path) -> SevenZZstdCodecStatus {
+    if let Ok(output) = env::var("XUN_XUNBAK_PLUGIN_TEST_7ZI_OUTPUT") {
+        return parse_sevenz_zstd_codec_status(&output);
+    }
+
+    let cli = home.join("7z.exe");
+    if !cli.is_file() {
+        return SevenZZstdCodecStatus::Unknown;
+    }
+    let output = match Command::new(cli).arg("i").output() {
+        Ok(output) if output.status.success() => output,
+        _ => return SevenZZstdCodecStatus::Unknown,
+    };
+    parse_sevenz_zstd_codec_status(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_sevenz_zstd_codec_status(output: &str) -> SevenZZstdCodecStatus {
+    let mut in_codecs = false;
+    let mut saw_codecs = false;
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.eq_ignore_ascii_case("Codecs:") {
+            in_codecs = true;
+            saw_codecs = true;
+            continue;
+        }
+        if !in_codecs {
+            continue;
+        }
+        if trimmed.is_empty() {
+            break;
+        }
+        let upper = trimmed.to_ascii_uppercase();
+        if upper.ends_with(" ZSTD")
+            || upper.contains(" ZSTD ")
+            || upper.ends_with(" ZSTANDARD")
+            || upper.contains(" ZSTANDARD ")
+        {
+            return SevenZZstdCodecStatus::Supported;
+        }
+    }
+    if saw_codecs {
+        SevenZZstdCodecStatus::NotDetected
+    } else {
+        SevenZZstdCodecStatus::Unknown
     }
 }
 
@@ -1050,5 +1139,20 @@ mod tests {
         .unwrap();
         assert_eq!(outcome, RemoveAssociationOutcome::SkippedThirdParty);
         assert!(store.user.contains_key(XUNBAK_EXTENSION_SUBKEY));
+    }
+
+    #[test]
+    fn parse_sevenz_zstd_codec_status_detects_supported_codec() {
+        let status =
+            parse_sevenz_zstd_codec_status("Codecs:\n 0 ED     40202 BZip2\n 0 ED  4F71101 ZSTD\n");
+        assert_eq!(status, SevenZZstdCodecStatus::Supported);
+    }
+
+    #[test]
+    fn parse_sevenz_zstd_codec_status_reports_missing_when_codecs_section_lacks_zstd() {
+        let status = parse_sevenz_zstd_codec_status(
+            "Formats:\n 0 ... zstd\n\nCodecs:\n 0 ED     40202 BZip2\n 0 ED         0 Copy\n",
+        );
+        assert_eq!(status, SevenZZstdCodecStatus::NotDetected);
     }
 }

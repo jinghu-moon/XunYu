@@ -4,21 +4,26 @@ use std::io::{Read, Seek, Write};
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sevenz_rust2::encoder_options::Lzma2Options;
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::reader::open_entry_reader;
+use crate::backup::artifact::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
+use crate::output::CliError;
+use sevenz_rust2::encoder_options::{
+    Bzip2Options, DeflateOptions, Lzma2Options, PpmdOptions, ZstandardOptions,
+};
 use sevenz_rust2::{
     ArchiveEntry, ArchiveReader, ArchiveWriter, EncoderConfiguration, EncoderMethod, Password,
     SourceReader,
 };
 
-use crate::backup::artifact::entry::SourceEntry;
-use crate::backup::artifact::reader::open_entry_reader;
-use crate::backup::artifact::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
-use crate::output::CliError;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SevenZMethod {
     Copy,
     Lzma2,
+    Bzip2,
+    Deflate,
+    Ppmd,
+    Zstd,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -153,6 +158,10 @@ pub(crate) fn list_7z_entries(path: &Path) -> Result<Vec<SourceEntry>, CliError>
     })
 }
 
+pub(crate) fn list_7z_method_names(path: &Path) -> Result<Vec<String>, CliError> {
+    with_archive_reader(path, |reader, _| Ok(collect_method_names(reader.archive())))
+}
+
 pub(crate) fn read_7z_file(src: &Path, name: &str) -> Result<Vec<u8>, CliError> {
     with_archive_reader(src, |reader, _| {
         reader
@@ -270,6 +279,31 @@ fn collect_entries_from_archive(
     Ok(entries)
 }
 
+fn collect_method_names(archive: &sevenz_rust2::Archive) -> Vec<String> {
+    let mut methods = std::collections::BTreeSet::new();
+    for block in &archive.blocks {
+        for (_, coder) in block.ordered_coder_iter() {
+            methods.insert(method_name_from_id(coder.encoder_method_id()));
+        }
+    }
+    methods.into_iter().collect()
+}
+
+fn method_name_from_id(id: &[u8]) -> String {
+    EncoderMethod::by_id(id)
+        .map(|method| method.name().to_ascii_lowercase())
+        .unwrap_or_else(|| format!("unknown({})", format_method_id_hex(id)))
+}
+
+fn format_method_id_hex(id: &[u8]) -> String {
+    let mut hex = String::with_capacity(id.len() * 2);
+    for byte in id {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    hex
+}
+
 pub(crate) enum SevenZReaderSource {
     File(fs::File),
     Multi(MultiVolumeReader),
@@ -373,6 +407,10 @@ fn method_config(method: SevenZMethod, level: u32) -> EncoderConfiguration {
     match method {
         SevenZMethod::Copy => EncoderConfiguration::new(EncoderMethod::COPY),
         SevenZMethod::Lzma2 => Lzma2Options::from_level(level).into(),
+        SevenZMethod::Bzip2 => Bzip2Options::from_level(level).into(),
+        SevenZMethod::Deflate => DeflateOptions::from_level(level).into(),
+        SevenZMethod::Ppmd => PpmdOptions::from_level(level).into(),
+        SevenZMethod::Zstd => ZstandardOptions::from_level(level).into(),
     }
 }
 

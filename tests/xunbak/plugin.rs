@@ -386,6 +386,10 @@ fn cli_xunbak_plugin_doctor_reports_plugin_state() {
     let out = run_ok(
         env.cmd()
             .env("XUN_XUNBAK_PLUGIN_TEST_FILE_VERSION", "24.09")
+            .env(
+                "XUN_XUNBAK_PLUGIN_TEST_7ZI_OUTPUT",
+                "Codecs:\n 0 ED     40202 BZip2\n 0 ED         0 Copy\n",
+            )
             .args([
                 "xunbak",
                 "plugin",
@@ -402,5 +406,7 @@ fn cli_xunbak_plugin_doctor_reports_plugin_state() {
     assert!(stdout.contains("version 24.09"));
     assert!(stdout.contains("Plugin DLL:"));
     assert!(stdout.contains("Association:"));
+    assert!(stdout.contains("7z ZSTD Codec: not-detected"));
     assert!(stdout.contains("Suggestions:"));
+    assert!(stdout.contains("did not report ZSTD codec support"));
 }

@@ -4,6 +4,7 @@ use std::path::Path;
 
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::copy_entry_to_writer;
+use crate::backup::artifact::zip_ppmd::write_ppmd_zip;
 use crate::output::CliError;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
 
@@ -13,20 +14,59 @@ pub enum ZipCompressionMethod {
     Auto,
     Stored,
     Deflated,
+    Bzip2,
+    Zstd,
+    Ppmd,
 }
 
 impl From<ZipCompressionMethod> for zip::CompressionMethod {
+    #[allow(deprecated)]
     fn from(method: ZipCompressionMethod) -> Self {
         match method {
             ZipCompressionMethod::Auto => zip::CompressionMethod::Deflated,
             ZipCompressionMethod::Stored => zip::CompressionMethod::Stored,
             ZipCompressionMethod::Deflated => zip::CompressionMethod::Deflated,
+            ZipCompressionMethod::Bzip2 => zip::CompressionMethod::Bzip2,
+            ZipCompressionMethod::Zstd => zip::CompressionMethod::Zstd,
+            ZipCompressionMethod::Ppmd => zip::CompressionMethod::Unsupported(98),
         }
+    }
+}
+
+impl ZipCompressionMethod {
+    pub(crate) fn codec_name(self) -> &'static str {
+        match self {
+            ZipCompressionMethod::Auto | ZipCompressionMethod::Deflated => "deflated",
+            ZipCompressionMethod::Stored => "stored",
+            ZipCompressionMethod::Bzip2 => "bzip2",
+            ZipCompressionMethod::Zstd => "zstd",
+            ZipCompressionMethod::Ppmd => "ppmd",
+        }
+    }
+}
+
+pub(crate) fn parse_zip_method_for_cli(
+    command: &str,
+    method: Option<&str>,
+) -> Result<ZipCompressionMethod, CliError> {
+    match method.map(|value| value.trim().to_ascii_lowercase()) {
+        None => Ok(ZipCompressionMethod::Auto),
+        Some(value) if value == "stored" => Ok(ZipCompressionMethod::Stored),
+        Some(value) if value == "deflated" => Ok(ZipCompressionMethod::Deflated),
+        Some(value) if value == "bzip2" => Ok(ZipCompressionMethod::Bzip2),
+        Some(value) if value == "zstd" => Ok(ZipCompressionMethod::Zstd),
+        Some(value) if value == "ppmd" => Ok(ZipCompressionMethod::Ppmd),
+        Some(value) => Err(CliError::with_details(
+            2,
+            format!("{command} --method {value} is invalid for zip"),
+            &["Fix: Use `--method stored|deflated|bzip2|zstd|ppmd`."],
+        )),
     }
 }
 
 pub struct ZipWriteOptions {
     pub method: ZipCompressionMethod,
+    pub level: Option<u32>,
     pub sidecar: Option<Vec<u8>>,
 }
 
@@ -34,6 +74,7 @@ impl Default for ZipWriteOptions {
     fn default() -> Self {
         Self {
             method: ZipCompressionMethod::Auto,
+            level: None,
             sidecar: None,
         }
     }
@@ -52,6 +93,14 @@ pub fn write_entries_to_zip<P: AsRef<Path>>(
     options: ZipWriteOptions,
 ) -> Result<ZipWriteSummary, CliError> {
     let path = destination.as_ref();
+    if options.method == ZipCompressionMethod::Ppmd {
+        let summary = write_ppmd_zip(entries, path, options.level, options.sidecar)?;
+        return Ok(ZipWriteSummary {
+            entry_count: summary.entry_count,
+            bytes_in: summary.bytes_in,
+            dir_count: summary.dir_count,
+        });
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
             CliError::new(
@@ -135,6 +184,9 @@ pub(crate) fn resolve_zip_method_for_entry(
         ZipCompressionMethod::Auto => choose_compression_method(entry),
         ZipCompressionMethod::Stored => ZipCompressionMethod::Stored,
         ZipCompressionMethod::Deflated => ZipCompressionMethod::Deflated,
+        ZipCompressionMethod::Bzip2 => ZipCompressionMethod::Bzip2,
+        ZipCompressionMethod::Zstd => ZipCompressionMethod::Zstd,
+        ZipCompressionMethod::Ppmd => ZipCompressionMethod::Ppmd,
     }
 }
 
@@ -384,6 +436,7 @@ mod tests {
             &output,
             ZipWriteOptions {
                 method: ZipCompressionMethod::Stored,
+                level: None,
                 sidecar: None,
             },
         )
@@ -393,6 +446,95 @@ mod tests {
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let zipped = archive.by_name("notes.txt").unwrap();
         assert_eq!(zipped.compression(), zip::CompressionMethod::Stored);
+    }
+
+    #[test]
+    fn zip_writer_supports_explicit_bzip2_and_zstd_methods() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("notes.txt");
+        fs::write(&file_path, "hello hello hello hello").unwrap();
+
+        for (method, expected, output_name) in [
+            (
+                ZipCompressionMethod::Bzip2,
+                zip::CompressionMethod::Bzip2,
+                "bzip2.zip",
+            ),
+            (
+                ZipCompressionMethod::Zstd,
+                zip::CompressionMethod::Zstd,
+                "zstd.zip",
+            ),
+        ] {
+            let entry = SourceEntry {
+                path: "notes.txt".to_string(),
+                source_path: Some(file_path.clone()),
+                size: 23,
+                mtime_ns: None,
+                created_time_ns: None,
+                win_attributes: 0,
+                content_hash: None,
+                kind: SourceKind::DirArtifact,
+            };
+            let output = dir.path().join(output_name);
+
+            write_entries_to_zip(
+                &[&entry],
+                &output,
+                ZipWriteOptions {
+                    method,
+                    level: None,
+                    sidecar: None,
+                },
+            )
+            .unwrap();
+
+            let file = fs::File::open(&output).unwrap();
+            let mut archive = zip::ZipArchive::new(file).unwrap();
+            let zipped = archive.by_name("notes.txt").unwrap();
+            assert_eq!(zipped.compression(), expected);
+        }
+    }
+
+    #[test]
+    fn parse_zip_method_for_cli_accepts_ppmd() {
+        assert_eq!(
+            super::parse_zip_method_for_cli("backup create", Some("ppmd")).unwrap(),
+            ZipCompressionMethod::Ppmd
+        );
+    }
+
+    #[test]
+    fn zip_writer_supports_explicit_ppmd_method() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("notes.txt");
+        fs::write(&file_path, "hello hello hello hello").unwrap();
+        let entry = SourceEntry {
+            path: "notes.txt".to_string(),
+            source_path: Some(file_path),
+            size: 23,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        let output = dir.path().join("ppmd.zip");
+
+        write_entries_to_zip(
+            &[&entry],
+            &output,
+            ZipWriteOptions {
+                method: ZipCompressionMethod::Ppmd,
+                level: None,
+                sidecar: None,
+            },
+        )
+        .unwrap();
+
+        let content =
+            crate::backup::artifact::zip_ppmd::read_ppmd_zip_entry(&output, "notes.txt").unwrap();
+        assert_eq!(content, b"hello hello hello hello");
     }
 
     #[test]
@@ -421,6 +563,7 @@ mod tests {
             &output,
             ZipWriteOptions {
                 method: ZipCompressionMethod::Stored,
+                level: None,
                 sidecar: None,
             },
         )

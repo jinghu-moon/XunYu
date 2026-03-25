@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::backup::artifact::selection::SelectionSpec;
+use crate::backup::artifact::zip::parse_zip_method_for_cli;
 use crate::backup_formats::{
     BackupArtifactFormat, OverwriteMode, ProgressMode, VerifyOutputMode, VerifySourceMode,
 };
@@ -162,24 +163,23 @@ impl BackupCreateOptions {
                     "Remove `--solid`; solid blocks are a 7z-only concept.",
                 )?;
                 if let Some(method) = &self.method {
-                    let normalized = method.trim().to_ascii_lowercase();
-                    if normalized != "stored" && normalized != "deflated" {
-                        return Err(CliError::with_details(
-                            2,
-                            format!("backup create --method {method} is invalid for zip"),
-                            &["Fix: Use `--method stored` or `--method deflated`."],
-                        ));
-                    }
+                    parse_zip_method_for_cli("backup create", Some(method.as_str()))?;
                 }
             }
             BackupArtifactFormat::SevenZ => {
                 if let Some(method) = &self.method {
                     let normalized = method.trim().to_ascii_lowercase();
-                    if normalized != "copy" && normalized != "lzma2" {
+                    if normalized != "copy"
+                        && normalized != "lzma2"
+                        && normalized != "bzip2"
+                        && normalized != "deflate"
+                        && normalized != "ppmd"
+                        && normalized != "zstd"
+                    {
                         return Err(CliError::with_details(
                             2,
                             format!("backup create --method {method} is invalid for 7z"),
-                            &["Fix: Use `--method copy` or `--method lzma2`."],
+                            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
                         ));
                     }
                 }
@@ -336,14 +336,7 @@ impl BackupConvertOptions {
                     "Remove `--encrypt-header`; ZIP header encryption is not supported.",
                 )?;
                 if let Some(method) = &self.method {
-                    let normalized = method.trim().to_ascii_lowercase();
-                    if normalized != "stored" && normalized != "deflated" {
-                        return Err(CliError::with_details(
-                            2,
-                            format!("backup convert --method {method} is invalid for zip"),
-                            &["Fix: Use `--method stored` or `--method deflated`."],
-                        ));
-                    }
+                    parse_zip_method_for_cli("backup convert", Some(method.as_str()))?;
                 }
             }
             BackupArtifactFormat::Xunbak => {
@@ -387,11 +380,17 @@ impl BackupConvertOptions {
                 )?;
                 if let Some(method) = &self.method {
                     let normalized = method.trim().to_ascii_lowercase();
-                    if normalized != "copy" && normalized != "lzma2" {
+                    if normalized != "copy"
+                        && normalized != "lzma2"
+                        && normalized != "bzip2"
+                        && normalized != "deflate"
+                        && normalized != "ppmd"
+                        && normalized != "zstd"
+                    {
                         return Err(CliError::with_details(
                             2,
                             format!("backup convert --method {method} is invalid for 7z"),
-                            &["Fix: Use `--method copy` or `--method lzma2`."],
+                            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
                         ));
                     }
                 }

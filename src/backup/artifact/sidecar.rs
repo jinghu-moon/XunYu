@@ -153,11 +153,13 @@ fn sidecar_codec_for_entry(
         SidecarPackingHint::Dir => Some("copy"),
         SidecarPackingHint::SevenZ(SevenZMethod::Copy) => Some("copy"),
         SidecarPackingHint::SevenZ(SevenZMethod::Lzma2) => Some("lzma2"),
-        SidecarPackingHint::Zip(method) => match effective_zip_method_for_entry(entry, method) {
-            ZipCompressionMethod::Auto => Some("deflated"),
-            ZipCompressionMethod::Stored => Some("stored"),
-            ZipCompressionMethod::Deflated => Some("deflated"),
-        },
+        SidecarPackingHint::SevenZ(SevenZMethod::Bzip2) => Some("bzip2"),
+        SidecarPackingHint::SevenZ(SevenZMethod::Deflate) => Some("deflate"),
+        SidecarPackingHint::SevenZ(SevenZMethod::Ppmd) => Some("ppmd"),
+        SidecarPackingHint::SevenZ(SevenZMethod::Zstd) => Some("zstd"),
+        SidecarPackingHint::Zip(method) => {
+            Some(effective_zip_method_for_entry(entry, method).codec_name())
+        }
     }
 }
 

@@ -28,7 +28,9 @@ use crate::backup::artifact::sidecar::{
 };
 use crate::backup::artifact::source::read_artifact_entries;
 use crate::backup::artifact::verify::{verify_convert_source, verify_output};
-use crate::backup::artifact::zip::{ZipCompressionMethod, ZipWriteOptions, write_entries_to_zip};
+use crate::backup::artifact::zip::{
+    ZipWriteOptions, parse_zip_method_for_cli, write_entries_to_zip,
+};
 use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus, OverwriteMode};
 use crate::cli::BackupConvertCmd;
 use crate::output::{CliError, CliResult, can_interact};
@@ -388,13 +390,17 @@ fn execute_backup_convert_to_zip(
         resolve_effective_overwrite(&options.output, options.overwrite, "file")?;
     let plan = ZipOutputPlan::prepare(&options.output, effective_overwrite)?;
     let zip_options = ZipWriteOptions {
-        method: zip_method_from_options(options.method.as_deref())?,
+        method: parse_zip_method_for_cli("backup convert", options.method.as_deref())?,
+        level: options.level,
         sidecar: if options.no_sidecar {
             None
         } else {
             Some(build_sidecar_bytes(
                 options.format,
-                SidecarPackingHint::Zip(zip_method_from_options(options.method.as_deref())?),
+                SidecarPackingHint::Zip(parse_zip_method_for_cli(
+                    "backup convert",
+                    options.method.as_deref(),
+                )?),
                 &source_info_for_convert(&options.artifact),
                 &selected,
             )?)
@@ -795,28 +801,19 @@ fn resolve_effective_overwrite(
     }
 }
 
-fn zip_method_from_options(method: Option<&str>) -> Result<ZipCompressionMethod, CliError> {
-    match method.map(|value| value.trim().to_ascii_lowercase()) {
-        None => Ok(ZipCompressionMethod::Auto),
-        Some(value) if value == "deflated" => Ok(ZipCompressionMethod::Deflated),
-        Some(value) if value == "stored" => Ok(ZipCompressionMethod::Stored),
-        Some(value) => Err(CliError::with_details(
-            2,
-            format!("backup convert --method {value} is invalid for zip"),
-            &["Fix: Use `--method stored` or `--method deflated`."],
-        )),
-    }
-}
-
 fn sevenz_method_from_options(method: Option<&str>) -> Result<SevenZMethod, CliError> {
     match method.map(|value| value.trim().to_ascii_lowercase()) {
         None => Ok(SevenZMethod::Lzma2),
         Some(value) if value == "lzma2" => Ok(SevenZMethod::Lzma2),
         Some(value) if value == "copy" => Ok(SevenZMethod::Copy),
+        Some(value) if value == "bzip2" => Ok(SevenZMethod::Bzip2),
+        Some(value) if value == "deflate" => Ok(SevenZMethod::Deflate),
+        Some(value) if value == "ppmd" => Ok(SevenZMethod::Ppmd),
+        Some(value) if value == "zstd" => Ok(SevenZMethod::Zstd),
         Some(value) => Err(CliError::with_details(
             2,
             format!("backup convert --method {value} is invalid for 7z"),
-            &["Fix: Use `--method copy` or `--method lzma2`."],
+            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
         )),
     }
 }

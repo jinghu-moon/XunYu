@@ -101,7 +101,7 @@ console    = "0.15"
 comfy-table = { version = "7.1", default-features = false, features = ["tty"] }
 winreg     = "0.52"
 indicatif  = { version = "0.17", default-features = false }
-zip        = { version = "2", default-features = false, features = ["deflate", "time"] }
+zip        = { version = "2", default-features = false, features = ["bzip2", "deflate", "time", "zstd"] }
 bytemuck   = { version = "1", features = ["derive"] }
 image      = { version = "0.25", optional = true, default-features = false, features = ["jpeg", "png", "webp", "avif"] }
 imagequant = { version = "4", optional = true }
@@ -197,7 +197,9 @@ zstd = { version = "0.13", optional = true }
 ulid = { version = "1" }
 memchr  = { version = "2" }
 indexmap = { version = "2", features = ["std"] }
-sevenz-rust2 = { path = "refer/sevenz-rust2-main" }
+crc32fast_zip = { package = "crc32fast", version = "1.4" }
+ppmd-rust = { path = "refer/ppmd-rust-1.4.0" }
+sevenz-rust2 = { path = "refer/sevenz-rust2-main", features = ["deflate", "zstd"] }
 
 # —— Diff 模块依赖（feature = "diff"）——
 imara-diff             = { version = "0.2",  optional = true }
