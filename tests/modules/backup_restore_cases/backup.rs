@@ -85,6 +85,17 @@ fn read_zip_sidecar(path: &std::path::Path) -> Value {
     serde_json::from_str(&text).unwrap()
 }
 
+fn write_stored_zip_fixture(path: &std::path::Path, entry_name: &str, content: &[u8]) {
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file(entry_name, options).unwrap();
+    writer.write_all(content).unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(path, bytes).unwrap();
+}
+
 fn find_external_7z_command() -> Option<String> {
     for candidate in ["7z.exe", "7z", "7za.exe", "7za", "7zr.exe", "7zr"] {
         if Command::new(candidate).arg("i").output().is_ok() {
@@ -1981,14 +1992,7 @@ fn backup_convert_to_7z_supports_extended_methods() {
 
     for (method, expected) in methods {
         let zip_path = env.root.join(format!("artifact-{method}.zip"));
-        let cursor = std::io::Cursor::new(Vec::<u8>::new());
-        let mut writer = zip::ZipWriter::new(cursor);
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        writer.start_file("a.txt", options).unwrap();
-        writer.write_all(b"aaa aaa aaa aaa aaa aaa").unwrap();
-        let bytes = writer.finish().unwrap().into_inner();
-        fs::write(&zip_path, bytes).unwrap();
+        write_stored_zip_fixture(&zip_path, "a.txt", b"aaa aaa aaa aaa aaa aaa");
 
         let output = env.root.join(format!("converted-{method}.7z"));
         run_ok(env.cmd().args([
@@ -2010,6 +2014,40 @@ fn backup_convert_to_7z_supports_extended_methods() {
 }
 
 #[test]
+fn backup_convert_7z_bzip2_and_deflate_pass_external_7z_test_when_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+
+    let env = TestEnv::new();
+    for method in ["bzip2", "deflate"] {
+        let zip_path = env.root.join(format!("source-{method}.zip"));
+        write_stored_zip_fixture(&zip_path, "a.txt", b"aaa aaa aaa aaa aaa aaa");
+
+        let output = env.root.join(format!("{method}-verify.7z"));
+        run_ok(env.cmd().args([
+            "backup",
+            "convert",
+            zip_path.to_str().unwrap(),
+            "--format",
+            "7z",
+            "-o",
+            output.to_str().unwrap(),
+            "--method",
+            method,
+        ]));
+
+        let test = external_7z_test_output(&cmd, &output);
+        assert!(
+            test.status.success(),
+            "external 7z should reopen converted {method} 7z, stdout={}, stderr={}",
+            String::from_utf8_lossy(&test.stdout),
+            String::from_utf8_lossy(&test.stderr)
+        );
+    }
+}
+
+#[test]
 fn backup_convert_7z_ppmd_passes_external_7z_test_when_available() {
     let Some(cmd) = find_external_7z_command() else {
         return;
@@ -2017,14 +2055,7 @@ fn backup_convert_7z_ppmd_passes_external_7z_test_when_available() {
 
     let env = TestEnv::new();
     let zip_path = env.root.join("artifact.zip");
-    let cursor = std::io::Cursor::new(Vec::<u8>::new());
-    let mut writer = zip::ZipWriter::new(cursor);
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    writer.start_file("a.txt", options).unwrap();
-    writer.write_all(b"aaa aaa aaa aaa aaa aaa").unwrap();
-    let bytes = writer.finish().unwrap().into_inner();
-    fs::write(&zip_path, bytes).unwrap();
+    write_stored_zip_fixture(&zip_path, "a.txt", b"aaa aaa aaa aaa aaa aaa");
 
     let output = env.root.join("ppmd-verify.7z");
     run_ok(env.cmd().args([
@@ -2049,6 +2080,41 @@ fn backup_convert_7z_ppmd_passes_external_7z_test_when_available() {
 }
 
 #[test]
+fn backup_convert_7z_zstd_passes_external_7z_test_when_codec_available() {
+    let Some(cmd) = find_external_7z_command() else {
+        return;
+    };
+    if !external_7z_reports_7z_zstd_codec(&cmd) {
+        return;
+    }
+
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact-zstd.zip");
+    write_stored_zip_fixture(&zip_path, "a.txt", b"aaa aaa aaa aaa aaa aaa");
+
+    let output = env.root.join("zstd-verify.7z");
+    run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        output.to_str().unwrap(),
+        "--method",
+        "zstd",
+    ]));
+
+    let test = external_7z_test_output(&cmd, &output);
+    assert!(
+        test.status.success(),
+        "external 7z with zstd codec should reopen converted zstd 7z, stdout={}, stderr={}",
+        String::from_utf8_lossy(&test.stdout),
+        String::from_utf8_lossy(&test.stderr)
+    );
+}
+
+#[test]
 fn backup_convert_7z_zstd_verify_reports_external_codec_hint_when_stock_codec_is_missing() {
     let Some(cmd) = find_external_7z_command() else {
         return;
@@ -2059,14 +2125,7 @@ fn backup_convert_7z_zstd_verify_reports_external_codec_hint_when_stock_codec_is
 
     let env = TestEnv::new();
     let zip_path = env.root.join("artifact.zip");
-    let cursor = std::io::Cursor::new(Vec::<u8>::new());
-    let mut writer = zip::ZipWriter::new(cursor);
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    writer.start_file("a.txt", options).unwrap();
-    writer.write_all(b"aaa aaa aaa aaa aaa aaa").unwrap();
-    let bytes = writer.finish().unwrap().into_inner();
-    fs::write(&zip_path, bytes).unwrap();
+    write_stored_zip_fixture(&zip_path, "a.txt", b"aaa aaa aaa aaa aaa aaa");
 
     let out = run_err(env.cmd().args([
         "backup",

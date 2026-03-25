@@ -198,8 +198,8 @@ ulid = { version = "1" }
 memchr  = { version = "2" }
 indexmap = { version = "2", features = ["std"] }
 crc32fast_zip = { package = "crc32fast", version = "1.4" }
-ppmd-rust = { path = "refer/ppmd-rust-1.4.0" }
-sevenz-rust2 = { path = "refer/sevenz-rust2-main", features = ["deflate", "zstd"] }
+ppmd-rust = "=1.4.0"
+sevenz-rust2 = { version = "=0.20.2", features = ["deflate", "zstd"] }
 
 # —— Diff 模块依赖（feature = "diff"）——
 imara-diff             = { version = "0.2",  optional = true }
@@ -210,6 +210,10 @@ tree-sitter-typescript = { version = "0.23", optional = true }
 tree-sitter-css        = { version = "0.23", optional = true }
 tree-sitter-rust       = { version = "0.23", optional = true }
 tree-sitter-html       = { version = "0.23", optional = true }
+
+[patch.crates-io]
+ppmd-rust = { path = "refer/ppmd-rust-1.4.0" }
+sevenz-rust2 = { path = "refer/sevenz-rust2-main" }
 
 [profile.release]
 opt-level     = "z"

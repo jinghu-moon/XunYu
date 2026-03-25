@@ -1,0 +1,12 @@
+diff --git a/src/encoder.rs b/src/encoder.rs
+--- a/src/encoder.rs
++++ b/src/encoder.rs
+@@ -169,7 +169,7 @@ impl<W: Write> Write for Encoder<W> {
+             #[cfg(feature = "brotli")]
+             Encoder::Brotli(w) => w.flush(),
+             #[cfg(feature = "ppmd")]
+-            Encoder::Ppmd(w) => w.as_mut().unwrap().flush(),
++            Encoder::Ppmd(w) => w.as_mut().unwrap().get_mut().flush(),
+             #[cfg(feature = "bzip2")]
+             Encoder::Bzip2(w) => w.as_mut().unwrap().flush(),
+             #[cfg(feature = "deflate")]

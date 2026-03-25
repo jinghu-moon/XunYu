@@ -57,8 +57,9 @@
 2. `backup convert` 的 7z 输出校验失败时，针对 `zstd` 给出“需要外部 codec”提示
 3. 已修复 `PPMD` 在 `sevenz-rust2` 中被 `flush()` + `finish()` 双重收尾的问题
 4. 已补 `ZIP ppmd` 的纯 Rust writer、manual parser、reader/source fallback 与 stock 7-Zip reopen 验证
-5. 已完成 `7z zstd` 在“支持外部 codec 的解压端”上的正向实测
-6. 已完成 `ZIP ppmd` 单条目 Zip64 的真实端到端验证
+5. 已补 `backup create -> 7z` 与 `backup convert -> 7z` 的 `bzip2 / deflate / ppmd` 外部 `7z t` 自动化验证
+6. 已补 `backup convert -> 7z zstd` 在“codec 存在”与“codec 缺失”两条路径上的自动化验证
+7. 已完成 `ZIP ppmd` 单条目 Zip64 的真实端到端验证
 
 ## 后续优先级
 

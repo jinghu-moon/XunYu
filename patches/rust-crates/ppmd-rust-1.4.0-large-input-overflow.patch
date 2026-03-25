@@ -1,0 +1,21 @@
+diff --git a/src/internal/ppmd8.rs b/src/internal/ppmd8.rs
+--- a/src/internal/ppmd8.rs
++++ b/src/internal/ppmd8.rs
+@@ -1393,7 +1393,7 @@ impl<RC> PPMd8<RC> {
+             let mut freq = s.as_ref().freq as u32;
+             let summ_freq = mc.as_ref().union2.summ_freq as u32;
+             self.prev_success = (2 * freq >= summ_freq) as u32; // Ppmd8 (>=)
+-            self.run_length += self.prev_success as i32;
++            self.run_length = self.run_length.wrapping_add(self.prev_success as i32);
+             mc.as_mut().union2.summ_freq = (summ_freq + 4) as u16;
+             freq += 4;
+             s.as_mut().freq = freq as u8;
+@@ -1425,7 +1425,7 @@ impl<RC> PPMd8<RC> {
+             let sym = s.as_ref().symbol;
+             self.found_state = s;
+             self.prev_success = 1;
+-            self.run_length += 1;
++            self.run_length = self.run_length.wrapping_add(1);
+             s.as_mut().freq = freq.wrapping_add((freq < 196) as u32) as u8;
+             self.next_context();
+             sym
