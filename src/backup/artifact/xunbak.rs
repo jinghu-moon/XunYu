@@ -1,17 +1,13 @@
 #![cfg(feature = "xunbak")]
 
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use uuid::Uuid;
-
-use crate::backup::artifact::dir::write_entries_to_dir;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
+use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup_formats::OverwriteMode;
 use crate::output::{CliError, CliResult};
-use crate::xunbak::writer::{BackupOptions, ContainerWriter};
+use crate::xunbak::writer::{BackupOptions, ContainerWriter, VirtualBackupEntry, WriterError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct XunbakWriteSummary {
@@ -23,23 +19,25 @@ pub struct XunbakWriteSummary {
 pub(crate) fn write_entries_to_xunbak(
     entries: &[&SourceEntry],
     output: &Path,
+    source_root: &str,
     options: &BackupOptions,
     overwrite: OverwriteMode,
 ) -> CliResult<XunbakWriteSummary> {
-    let staging_dir = create_staging_dir("xunbak-export")?;
-    let stage_result = write_entries_to_dir(entries, &staging_dir);
-    let stage_summary = match stage_result {
-        Ok(summary) => summary,
-        Err(err) => {
-            let _ = fs::remove_dir_all(&staging_dir);
-            return Err(err);
-        }
-    };
+    let byte_count: u64 = entries.iter().map(|entry| entry.size).sum();
+    let adapters: Vec<StreamingSourceEntry<'_>> = entries
+        .iter()
+        .map(|entry| StreamingSourceEntry { entry })
+        .collect();
 
     let write_result = if options.split_size.is_none() {
         let plan = XunbakOutputPlan::prepare(output, overwrite)?;
-        let result = ContainerWriter::backup(plan.temp_path(), &staging_dir, options)
-            .map_err(|err| CliError::new(2, err.to_string()));
+        let result = ContainerWriter::backup_virtual_entries(
+            plan.temp_path(),
+            &source_root,
+            &adapters,
+            options,
+        )
+        .map_err(|err| CliError::new(2, err.to_string()));
         match result {
             Ok(_) => {
                 plan.finalize()?;
@@ -52,8 +50,13 @@ pub(crate) fn write_entries_to_xunbak(
         }
     } else {
         let plan = XunbakSplitOutputPlan::prepare(output, overwrite)?;
-        let result = ContainerWriter::backup(plan.temp_base_path(), &staging_dir, options)
-            .map_err(|err| CliError::new(2, err.to_string()));
+        let result = ContainerWriter::backup_virtual_entries(
+            plan.temp_base_path(),
+            &source_root,
+            &adapters,
+            options,
+        )
+        .map_err(|err| CliError::new(2, err.to_string()));
         match result {
             Ok(_) => {
                 plan.finalize()?;
@@ -65,28 +68,45 @@ pub(crate) fn write_entries_to_xunbak(
             }
         }
     };
-    let _ = fs::remove_dir_all(&staging_dir);
     write_result?;
 
     Ok(XunbakWriteSummary {
-        entry_count: stage_summary.entry_count,
-        bytes_in: stage_summary.bytes_in,
+        entry_count: entries.len(),
+        bytes_in: byte_count,
         destination: output.to_path_buf(),
     })
 }
 
-fn create_staging_dir(prefix: &str) -> CliResult<PathBuf> {
-    let mut path = std::env::temp_dir();
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_millis())
-        .unwrap_or(0);
-    path.push(format!("{prefix}-{}-{millis}", Uuid::new_v4()));
-    fs::create_dir_all(&path).map_err(|err| {
-        CliError::new(
-            1,
-            format!("Create staging directory failed {}: {err}", path.display()),
-        )
-    })?;
-    Ok(path)
+struct StreamingSourceEntry<'a> {
+    entry: &'a SourceEntry,
+}
+
+impl VirtualBackupEntry for StreamingSourceEntry<'_> {
+    fn rel(&self) -> &str {
+        &self.entry.path
+    }
+
+    fn size(&self) -> u64 {
+        self.entry.size
+    }
+
+    fn mtime_ns(&self) -> u64 {
+        self.entry.mtime_ns.unwrap_or(0)
+    }
+
+    fn created_time_ns(&self) -> u64 {
+        self.entry.created_time_ns.unwrap_or(0)
+    }
+
+    fn win_attributes(&self) -> u32 {
+        self.entry.win_attributes
+    }
+
+    fn content_hash_hint(&self) -> Option<[u8; 32]> {
+        self.entry.content_hash
+    }
+
+    fn stream_into(&self, writer: &mut dyn std::io::Write) -> Result<(), WriterError> {
+        copy_entry_to_writer(self.entry, writer).map_err(|err| WriterError::Io(err.message))
+    }
 }

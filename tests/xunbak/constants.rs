@@ -27,7 +27,10 @@ fn codec_u8_values_match_design() {
     assert_eq!(u8::from(Codec::NONE), 0x00);
     assert_eq!(u8::from(Codec::ZSTD), 0x01);
     assert_eq!(u8::from(Codec::LZ4), 0x02);
-    assert_eq!(u8::from(Codec::LZMA), 0x03);
+    assert_eq!(u8::from(Codec::LZMA2), 0x03);
+    assert_eq!(u8::from(Codec::DEFLATE), 0x04);
+    assert_eq!(u8::from(Codec::BZIP2), 0x05);
+    assert_eq!(u8::from(Codec::PPMD), 0x06);
 }
 
 #[test]

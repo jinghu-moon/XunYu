@@ -1,13 +1,61 @@
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
 use xun::xunbak::blob::{
-    BlobReadResult, BlobRecordError, BlobWriteResult, read_blob_record, write_blob_record,
+    BlobReadResult, BlobRecordError, BlobWriteResult, copy_blob_record_content_to_writer,
+    read_blob_record, write_blob_record,
 };
 use xun::xunbak::constants::{BLOB_HEADER_SIZE, Codec, RECORD_PREFIX_SIZE, RecordType};
 use xun::xunbak::record::RecordPrefix;
 
 fn decode_prefix(bytes: &[u8]) -> RecordPrefix {
     RecordPrefix::from_bytes(&bytes[..RECORD_PREFIX_SIZE]).unwrap()
+}
+
+fn incompressible_bytes(len: usize) -> Vec<u8> {
+    let mut state = 0x1234_5678u32;
+    let mut out = Vec::with_capacity(len);
+    for _ in 0..len {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        out.push((state & 0xFF) as u8);
+    }
+    out
+}
+
+struct ChunkLimitedWriter {
+    max_write_len: usize,
+    chunks: usize,
+    data: Vec<u8>,
+}
+
+impl ChunkLimitedWriter {
+    fn new(max_write_len: usize) -> Self {
+        Self {
+            max_write_len,
+            chunks: 0,
+            data: Vec::new(),
+        }
+    }
+}
+
+impl Write for ChunkLimitedWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if buf.len() > self.max_write_len {
+            return Err(std::io::Error::other(format!(
+                "chunk too large: {} > {}",
+                buf.len(),
+                self.max_write_len
+            )));
+        }
+        self.chunks += 1;
+        self.data.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -47,6 +95,176 @@ fn zstd_codec_roundtrip_matches_original_content() {
     .unwrap();
     let read = read_blob_record(&mut Cursor::new(out)).unwrap();
     assert_eq!(read.content, b"hello world hello world hello world");
+}
+
+#[test]
+fn lz4_codec_roundtrip_matches_original_content() {
+    let mut out = Vec::new();
+    write_blob_record(
+        &mut out,
+        b"hello world hello world hello world",
+        Codec::LZ4,
+        1,
+    )
+    .unwrap();
+    let read = read_blob_record(&mut Cursor::new(out)).unwrap();
+    assert_eq!(read.content, b"hello world hello world hello world");
+}
+
+#[test]
+fn deflate_codec_roundtrip_matches_original_content() {
+    let mut out = Vec::new();
+    write_blob_record(
+        &mut out,
+        b"hello world hello world hello world",
+        Codec::DEFLATE,
+        1,
+    )
+    .unwrap();
+    let read = read_blob_record(&mut Cursor::new(out)).unwrap();
+    assert_eq!(read.content, b"hello world hello world hello world");
+}
+
+#[test]
+fn bzip2_codec_roundtrip_matches_original_content() {
+    let mut out = Vec::new();
+    write_blob_record(
+        &mut out,
+        b"hello world hello world hello world",
+        Codec::BZIP2,
+        1,
+    )
+    .unwrap();
+    let read = read_blob_record(&mut Cursor::new(out)).unwrap();
+    assert_eq!(read.content, b"hello world hello world hello world");
+}
+
+#[test]
+fn ppmd_codec_roundtrip_matches_original_content() {
+    let mut out = Vec::new();
+    write_blob_record(
+        &mut out,
+        b"alpha alpha alpha beta beta beta gamma gamma gamma",
+        Codec::PPMD,
+        1,
+    )
+    .unwrap();
+    let read = read_blob_record(&mut Cursor::new(out)).unwrap();
+    assert_eq!(
+        read.content,
+        b"alpha alpha alpha beta beta beta gamma gamma gamma"
+    );
+}
+
+#[test]
+fn lzma2_codec_roundtrip_matches_original_content() {
+    let mut out = Vec::new();
+    write_blob_record(
+        &mut out,
+        b"hello world hello world hello world",
+        Codec::LZMA2,
+        1,
+    )
+    .unwrap();
+    let read = read_blob_record(&mut Cursor::new(out)).unwrap();
+    assert_eq!(read.content, b"hello world hello world hello world");
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_streams_lz4_content() {
+    let mut out = Vec::new();
+    write_blob_record(
+        &mut out,
+        b"hello world hello world hello world",
+        Codec::LZ4,
+        1,
+    )
+    .unwrap();
+    let mut copied = Vec::new();
+    let result = copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied).unwrap();
+    assert_eq!(result.copied_bytes, 35);
+    assert_eq!(copied, b"hello world hello world hello world");
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_streams_deflate_content() {
+    let input = b"hello world hello world hello world";
+    let mut out = Vec::new();
+    write_blob_record(&mut out, input, Codec::DEFLATE, 1).unwrap();
+    let mut copied = Vec::new();
+    let result = copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied).unwrap();
+    assert_eq!(result.copied_bytes, input.len() as u64);
+    assert_eq!(copied, input);
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_streams_bzip2_content() {
+    let input = b"hello world hello world hello world";
+    let mut out = Vec::new();
+    write_blob_record(&mut out, input, Codec::BZIP2, 1).unwrap();
+    let mut copied = Vec::new();
+    let result = copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied).unwrap();
+    assert_eq!(result.copied_bytes, input.len() as u64);
+    assert_eq!(copied, input);
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_streams_ppmd_content() {
+    let input = b"alpha alpha alpha beta beta beta gamma gamma gamma";
+    let mut out = Vec::new();
+    write_blob_record(&mut out, input, Codec::PPMD, 1).unwrap();
+    let mut copied = Vec::new();
+    let result = copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied).unwrap();
+    assert_eq!(result.copied_bytes, input.len() as u64);
+    assert_eq!(copied, input);
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_streams_ppmd_in_multiple_chunks() {
+    let input = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda\n"
+        .repeat(8192)
+        .into_bytes();
+    let mut out = Vec::new();
+    write_blob_record(&mut out, &input, Codec::PPMD, 1).unwrap();
+
+    let mut copied = ChunkLimitedWriter::new(16 * 1024);
+    let result = copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied).unwrap();
+
+    assert_eq!(result.copied_bytes, input.len() as u64);
+    assert_eq!(copied.data, input);
+    assert!(copied.chunks > 1);
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_streams_lzma2_content() {
+    let input = b"hello world hello world hello world";
+    let mut out = Vec::new();
+    write_blob_record(&mut out, input, Codec::LZMA2, 1).unwrap();
+    let mut copied = Vec::new();
+    let result = copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied).unwrap();
+    assert_eq!(result.copied_bytes, input.len() as u64);
+    assert_eq!(copied, input);
+}
+
+#[test]
+fn write_blob_record_falls_back_to_none_when_codec_is_not_beneficial() {
+    let input = incompressible_bytes(4096);
+    for codec in [
+        Codec::LZ4,
+        Codec::DEFLATE,
+        Codec::BZIP2,
+        Codec::PPMD,
+        Codec::LZMA2,
+    ] {
+        let mut out = Vec::new();
+        let result = write_blob_record(&mut out, &input, codec, 1).unwrap();
+        assert_eq!(
+            result.header.codec,
+            Codec::NONE,
+            "codec={:?}",
+            u8::from(codec)
+        );
+    }
 }
 
 #[test]

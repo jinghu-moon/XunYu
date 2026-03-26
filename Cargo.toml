@@ -194,6 +194,10 @@ unicode-normalization = { version = "0.1", optional = true }
 ignore  = { version = "0.4", optional = true }
 blake3  = { version = "1" }
 zstd = { version = "0.13", optional = true }
+bzip2 = "0.6"
+flate2 = { version = "1", features = ["zlib-rs"] }
+lz4_flex = "0.13"
+lzma-rust2 = { version = "0.16", default-features = false, features = ["std", "encoder", "optimization"] }
 ulid = { version = "1" }
 memchr  = { version = "2" }
 indexmap = { version = "2", features = ["std"] }

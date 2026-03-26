@@ -1,3 +1,5 @@
+pub(crate) mod capabilities;
+pub(crate) mod common;
 pub(crate) mod dir;
 pub(crate) mod entry;
 pub(crate) mod fs;

@@ -1,16 +1,17 @@
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
-#[cfg(feature = "xunbak")]
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
 
 use crate::backup::artifact::entry::{SourceEntry, SourceKind};
-use crate::backup::artifact::sevenz::read_7z_file;
+use crate::backup::artifact::sevenz::SevenZReaderSource;
+use crate::backup::artifact::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
 use crate::backup::artifact::zip_ppmd::{
     copy_ppmd_zip_entry_to_writer, needs_manual_ppmd_fallback,
 };
 use crate::output::CliError;
-#[cfg(feature = "xunbak")]
 use crate::util::normalize_glob_path;
 use uuid::Uuid;
 
@@ -62,6 +63,7 @@ pub(crate) fn open_entry_reader(entry: &SourceEntry) -> Result<EntryReader, CliE
 pub(crate) enum EntryReader {
     File(fs::File),
     Temp(TempReadableFile),
+    Stream(StreamingEntryReader),
 }
 
 impl Read for EntryReader {
@@ -69,6 +71,7 @@ impl Read for EntryReader {
         match self {
             Self::File(file) => file.read(buf),
             Self::Temp(file) => file.read(buf),
+            Self::Stream(reader) => reader.read(buf),
         }
     }
 }
@@ -78,6 +81,82 @@ impl Seek for EntryReader {
         match self {
             Self::File(file) => file.seek(pos),
             Self::Temp(file) => file.seek(pos),
+            Self::Stream(reader) => reader.seek(pos),
+        }
+    }
+}
+
+enum StreamMessage {
+    Data(Vec<u8>),
+    Error(String),
+    Eof,
+}
+
+pub(crate) struct StreamingEntryReader {
+    rx: Receiver<StreamMessage>,
+    current: std::io::Cursor<Vec<u8>>,
+    done: bool,
+    join: Option<thread::JoinHandle<()>>,
+}
+
+impl StreamingEntryReader {
+    fn new(rx: Receiver<StreamMessage>, join: thread::JoinHandle<()>) -> Self {
+        Self {
+            rx,
+            current: std::io::Cursor::new(Vec::new()),
+            done: false,
+            join: Some(join),
+        }
+    }
+
+    fn fill_next_chunk(&mut self) -> std::io::Result<bool> {
+        if self.done {
+            return Ok(false);
+        }
+        match self.rx.recv() {
+            Ok(StreamMessage::Data(chunk)) => {
+                self.current = std::io::Cursor::new(chunk);
+                Ok(true)
+            }
+            Ok(StreamMessage::Error(message)) => {
+                self.done = true;
+                Err(std::io::Error::other(message))
+            }
+            Ok(StreamMessage::Eof) | Err(_) => {
+                self.done = true;
+                Ok(false)
+            }
+        }
+    }
+}
+
+impl Read for StreamingEntryReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            let read = self.current.read(buf)?;
+            if read > 0 {
+                return Ok(read);
+            }
+            if !self.fill_next_chunk()? {
+                return Ok(0);
+            }
+        }
+    }
+}
+
+impl Seek for StreamingEntryReader {
+    fn seek(&mut self, _pos: SeekFrom) -> std::io::Result<u64> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "streaming entry reader does not support seek",
+        ))
+    }
+}
+
+impl Drop for StreamingEntryReader {
+    fn drop(&mut self) {
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
         }
     }
 }
@@ -184,24 +263,28 @@ fn open_zip_reader_with_crate(
     entry: &SourceEntry,
     zip_path: &Path,
 ) -> Result<EntryReader, CliError> {
-    let file = fs::File::open(zip_path).map_err(|err| {
-        CliError::new(1, format!("Open zip failed {}: {err}", zip_path.display()))
-    })?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|err| {
-        CliError::new(1, format!("Read zip failed {}: {err}", zip_path.display()))
-    })?;
-    let mut zip_entry = open_zip_entry(&mut archive, &entry.path, zip_path)?;
+    let cache = load_cached_zip_archive(zip_path)?;
+    let index = zip_entry_index(&cache, &entry.path, zip_path)?;
     let mut temp = TempReadableFile::new("xun-entry-zip")?;
-    std::io::copy(&mut zip_entry, &mut temp).map_err(|err| {
-        CliError::new(
-            1,
-            format!(
-                "Copy zip entry failed {}::{}: {err}",
-                zip_path.display(),
-                entry.path
-            ),
-        )
-    })?;
+    {
+        let mut archive = cache
+            .archive
+            .lock()
+            .map_err(|_| CliError::new(2, "zip reader cache poisoned".to_string()))?;
+        let mut zip_entry = archive
+            .by_index(index)
+            .map_err(|err| CliError::new(1, format!("Zip entry error: {err}")))?;
+        std::io::copy(&mut zip_entry, &mut temp).map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "Copy zip entry failed {}::{}: {err}",
+                    zip_path.display(),
+                    entry.path
+                ),
+            )
+        })?;
+    }
     Ok(EntryReader::Temp(temp.reopen_for_read()?))
 }
 
@@ -226,13 +309,15 @@ fn copy_zip_entry_to_writer_with_crate(
     zip_path: &Path,
     writer: &mut dyn Write,
 ) -> Result<(), CliError> {
-    let file = fs::File::open(zip_path).map_err(|err| {
-        CliError::new(1, format!("Open zip failed {}: {err}", zip_path.display()))
-    })?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|err| {
-        CliError::new(1, format!("Read zip failed {}: {err}", zip_path.display()))
-    })?;
-    let mut zip_entry = open_zip_entry(&mut archive, &entry.path, zip_path)?;
+    let cache = load_cached_zip_archive(zip_path)?;
+    let index = zip_entry_index(&cache, &entry.path, zip_path)?;
+    let mut archive = cache
+        .archive
+        .lock()
+        .map_err(|_| CliError::new(2, "zip reader cache poisoned".to_string()))?;
+    let mut zip_entry = archive
+        .by_index(index)
+        .map_err(|err| CliError::new(1, format!("Zip entry error: {err}")))?;
     std::io::copy(&mut zip_entry, writer).map_err(|err| {
         CliError::new(
             1,
@@ -253,19 +338,24 @@ fn open_7z_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
             format!("Missing 7z source path for entry: {}", entry.path),
         )
     })?;
-    let content = read_7z_file(source, &entry.path)?;
-    let mut temp = TempReadableFile::new("xun-entry-7z")?;
-    temp.file.write_all(&content).map_err(|err| {
-        CliError::new(
-            1,
-            format!(
-                "Write temp 7z entry failed {}::{}: {err}",
-                source.display(),
-                entry.path
-            ),
-        )
-    })?;
-    Ok(EntryReader::Temp(temp.reopen_for_read()?))
+    let cache = load_cached_sevenz_reader(source)?;
+    let indexed = cache
+        .index
+        .get(&normalize_artifact_entry_key(&entry.path))
+        .cloned()
+        .ok_or_else(|| {
+            CliError::new(
+                1,
+                format!("7z entry not found {}::{}", source.display(), entry.path),
+            )
+        })?;
+    let (tx, rx) = sync_channel::<StreamMessage>(2);
+    let source_path = source.to_path_buf();
+    let entry_path = entry.path.clone();
+    let join = thread::spawn(move || {
+        stream_cached_7z_entry(cache, indexed.actual, source_path, entry_path, tx);
+    });
+    Ok(EntryReader::Stream(StreamingEntryReader::new(rx, join)))
 }
 
 fn copy_7z_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Result<(), CliError> {
@@ -275,31 +365,7 @@ fn copy_7z_entry_to_writer(entry: &SourceEntry, writer: &mut dyn Write) -> Resul
             format!("Missing 7z source path for entry: {}", entry.path),
         )
     })?;
-    let wanted = entry.path.replace('\\', "/");
-    let mut found = false;
-    crate::backup::artifact::sevenz::with_archive_reader(source, |reader, _| {
-        reader
-            .for_each_entries(|archive_entry, data| {
-                if archive_entry.is_directory() || !archive_entry.has_stream() {
-                    return Ok(true);
-                }
-                let name = archive_entry.name().replace('\\', "/");
-                if !name.eq_ignore_ascii_case(&wanted) {
-                    return Ok(true);
-                }
-                std::io::copy(data, writer)?;
-                found = true;
-                Ok(false)
-            })
-            .map_err(|err| CliError::new(1, format!("Read 7z entry failed {}: {err}", wanted)))
-    })?;
-    if !found {
-        return Err(CliError::new(
-            1,
-            format!("7z entry not found {}::{}", source.display(), entry.path),
-        ));
-    }
-    Ok(())
+    copy_cached_7z_entry_to_writer(source, &entry.path, writer)
 }
 
 #[cfg(windows)]
@@ -394,36 +460,418 @@ fn to_verbatim_path(path: &Path) -> std::path::PathBuf {
     std::path::PathBuf::from(format!(r"\\?\{raw}"))
 }
 
-fn open_zip_entry<'a>(
-    archive: &'a mut zip::ZipArchive<fs::File>,
-    path: &str,
-    zip_path: &Path,
-) -> Result<zip::read::ZipFile<'a>, CliError> {
-    let wanted = path.replace('\\', "/");
-    let mut matched_index = None;
-    for index in 0..archive.len() {
-        let name = {
-            let candidate = archive
-                .by_index(index)
-                .map_err(|err| CliError::new(1, format!("Zip entry error: {err}")))?;
-            candidate.name().replace('\\', "/")
-        };
-        if name == wanted || name.eq_ignore_ascii_case(&wanted) {
-            matched_index = Some(index);
-            break;
+struct ZipArchiveCache {
+    archive: Mutex<zip::ZipArchive<fs::File>>,
+    index: std::collections::HashMap<String, usize>,
+}
+
+struct SevenZArchiveCache {
+    reader: Mutex<sevenz_rust2::ArchiveReader<SevenZReaderSource>>,
+    index: std::collections::HashMap<String, SevenZIndexEntry>,
+}
+
+#[derive(Clone)]
+struct SevenZIndexEntry {
+    actual: String,
+    file_index: usize,
+}
+
+fn zip_reader_cache()
+-> &'static Mutex<std::collections::HashMap<std::path::PathBuf, Arc<ZipArchiveCache>>> {
+    static CACHE: OnceLock<
+        Mutex<std::collections::HashMap<std::path::PathBuf, Arc<ZipArchiveCache>>>,
+    > = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+fn sevenz_reader_cache()
+-> &'static Mutex<std::collections::HashMap<std::path::PathBuf, Arc<SevenZArchiveCache>>> {
+    static CACHE: OnceLock<
+        Mutex<std::collections::HashMap<std::path::PathBuf, Arc<SevenZArchiveCache>>>,
+    > = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+#[cfg(test)]
+pub(crate) fn clear_zip_reader_cache_for_tests() {
+    if let Ok(mut cache) = zip_reader_cache().lock() {
+        cache.clear();
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn clear_sevenz_reader_cache_for_tests() {
+    if let Ok(mut cache) = sevenz_reader_cache().lock() {
+        cache.clear();
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn cached_zip_reader_count_for_tests() -> usize {
+    zip_reader_cache()
+        .lock()
+        .map(|cache| cache.len())
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+pub(crate) fn cached_sevenz_reader_count_for_tests() -> usize {
+    sevenz_reader_cache()
+        .lock()
+        .map(|cache| cache.len())
+        .unwrap_or(0)
+}
+
+fn normalize_artifact_entry_key(path: &str) -> String {
+    normalize_glob_path(path)
+}
+
+fn load_cached_zip_archive(path: &Path) -> Result<Arc<ZipArchiveCache>, CliError> {
+    let key = path.to_path_buf();
+    {
+        let cache = zip_reader_cache()
+            .lock()
+            .map_err(|_| CliError::new(2, "zip reader cache poisoned".to_string()))?;
+        if let Some(entry) = cache.get(&key) {
+            return Ok(entry.clone());
         }
     }
 
-    if let Some(index) = matched_index {
-        return archive
-            .by_index(index)
-            .map_err(|err| CliError::new(1, format!("Zip entry error: {err}")));
+    let file = fs::File::open(path)
+        .map_err(|err| CliError::new(1, format!("Open zip failed {}: {err}", path.display())))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|err| CliError::new(1, format!("Read zip failed {}: {err}", path.display())))?;
+    let mut index = std::collections::HashMap::new();
+    for idx in 0..archive.len() {
+        let name = {
+            let entry = archive
+                .by_index(idx)
+                .map_err(|err| CliError::new(1, format!("Zip entry error: {err}")))?;
+            entry.name().replace('\\', "/")
+        };
+        index
+            .entry(normalize_artifact_entry_key(&name))
+            .or_insert(idx);
+    }
+    let entry = Arc::new(ZipArchiveCache {
+        archive: Mutex::new(archive),
+        index,
+    });
+    let mut cache = zip_reader_cache()
+        .lock()
+        .map_err(|_| CliError::new(2, "zip reader cache poisoned".to_string()))?;
+    cache.insert(key, entry.clone());
+    Ok(entry)
+}
+
+fn zip_entry_index(
+    cache: &ZipArchiveCache,
+    path: &str,
+    zip_path: &Path,
+) -> Result<usize, CliError> {
+    cache
+        .index
+        .get(&normalize_artifact_entry_key(path))
+        .copied()
+        .ok_or_else(|| {
+            CliError::new(
+                1,
+                format!("Zip entry not found {}::{}", zip_path.display(), path),
+            )
+        })
+}
+
+fn load_cached_sevenz_reader(path: &Path) -> Result<Arc<SevenZArchiveCache>, CliError> {
+    let key = path.to_path_buf();
+    {
+        let cache = sevenz_reader_cache()
+            .lock()
+            .map_err(|_| CliError::new(2, "7z reader cache poisoned".to_string()))?;
+        if let Some(entry) = cache.get(&key) {
+            return Ok(entry.clone());
+        }
     }
 
-    Err(CliError::new(
-        1,
-        format!("Zip entry not found {}::{}", zip_path.display(), path),
-    ))
+    let source = if resolve_multivolume_base(path).is_some() {
+        let reader = MultiVolumeReader::open(path).map_err(|err| {
+            CliError::new(
+                1,
+                format!("Open split 7z volumes failed {}: {err}", path.display()),
+            )
+        })?;
+        SevenZReaderSource::Multi(reader)
+    } else {
+        let file = fs::File::open(path)
+            .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
+        SevenZReaderSource::File(file)
+    };
+    let reader = sevenz_rust2::ArchiveReader::new(source, sevenz_rust2::Password::empty())
+        .map_err(|err| CliError::new(1, format!("Open 7z failed {}: {err}", path.display())))?;
+    let mut index = std::collections::HashMap::new();
+    for (file_index, entry) in reader.archive().files.iter().enumerate() {
+        if entry.is_directory || !entry.has_stream {
+            continue;
+        }
+        let actual = entry.name.replace('\\', "/");
+        index
+            .entry(normalize_artifact_entry_key(&actual))
+            .or_insert(SevenZIndexEntry { actual, file_index });
+    }
+    let entry = Arc::new(SevenZArchiveCache {
+        reader: Mutex::new(reader),
+        index,
+    });
+    let mut cache = sevenz_reader_cache()
+        .lock()
+        .map_err(|_| CliError::new(2, "7z reader cache poisoned".to_string()))?;
+    cache.insert(key, entry.clone());
+    Ok(entry)
+}
+
+fn copy_cached_7z_entry_to_writer(
+    path: &Path,
+    entry_path: &str,
+    writer: &mut dyn Write,
+) -> Result<(), CliError> {
+    let cache = load_cached_sevenz_reader(path)?;
+    let indexed = cache
+        .index
+        .get(&normalize_artifact_entry_key(entry_path))
+        .cloned()
+        .ok_or_else(|| {
+            CliError::new(
+                1,
+                format!("7z entry not found {}::{}", path.display(), entry_path),
+            )
+        })?;
+    let mut reader = cache
+        .reader
+        .lock()
+        .map_err(|_| CliError::new(2, "7z reader cache poisoned".to_string()))?;
+    let mut found = false;
+    reader
+        .for_each_entries(
+            &mut |archive_entry: &sevenz_rust2::ArchiveEntry, data: &mut dyn Read| {
+                if archive_entry.is_directory() || !archive_entry.has_stream() {
+                    return Ok(true);
+                }
+                if archive_entry.name().replace('\\', "/") != indexed.actual {
+                    return Ok(true);
+                }
+                std::io::copy(data, writer)?;
+                found = true;
+                Ok(false)
+            },
+        )
+        .map_err(|err| CliError::new(1, format!("Read 7z file failed {entry_path}: {err}")))?;
+    if !found {
+        return Err(CliError::new(
+            1,
+            format!("7z entry not found {}::{}", path.display(), entry_path),
+        ));
+    }
+    Ok(())
+}
+
+fn stream_cached_7z_entry(
+    cache: Arc<SevenZArchiveCache>,
+    actual: String,
+    source_path: std::path::PathBuf,
+    entry_path: String,
+    tx: SyncSender<StreamMessage>,
+) {
+    let send_error = |message: String, tx: &SyncSender<StreamMessage>| {
+        let _ = tx.send(StreamMessage::Error(message));
+    };
+    let mut reader = match cache.reader.lock() {
+        Ok(reader) => reader,
+        Err(_) => {
+            send_error("7z reader cache poisoned".to_string(), &tx);
+            return;
+        }
+    };
+    let mut found = false;
+    let result =
+        reader.for_each_entries(&mut |archive_entry: &sevenz_rust2::ArchiveEntry,
+                                      data: &mut dyn Read| {
+            if archive_entry.is_directory() || !archive_entry.has_stream() {
+                return Ok(true);
+            }
+            if archive_entry.name().replace('\\', "/") != actual {
+                return Ok(true);
+            }
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let read = data.read(&mut buffer)?;
+                if read == 0 {
+                    break;
+                }
+                if tx
+                    .send(StreamMessage::Data(buffer[..read].to_vec()))
+                    .is_err()
+                {
+                    return Ok(false);
+                }
+            }
+            found = true;
+            Ok(false)
+        });
+    match result {
+        Ok(()) if found => {
+            let _ = tx.send(StreamMessage::Eof);
+        }
+        Ok(()) => {
+            send_error(
+                format!(
+                    "7z entry not found {}::{}",
+                    source_path.display(),
+                    entry_path
+                ),
+                &tx,
+            );
+        }
+        Err(err) => {
+            send_error(format!("Read 7z file failed {entry_path}: {err}"), &tx);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct ReadOrderKey {
+    class_rank: u8,
+    primary: u64,
+    secondary: u64,
+}
+
+pub(crate) fn sort_entry_refs_for_read_locality(
+    entries: &mut Vec<&SourceEntry>,
+) -> Result<(), CliError> {
+    let keys = build_read_order_keys(entries.iter().map(|entry| *entry))?;
+    entries.sort_by(|left, right| {
+        let left_key = keys.get(&entry_identity(left));
+        let right_key = keys.get(&entry_identity(right));
+        left_key.cmp(&right_key).then(left.path.cmp(&right.path))
+    });
+    Ok(())
+}
+
+pub(crate) fn sort_entries_for_read_locality(
+    entries: &mut Vec<SourceEntry>,
+) -> Result<(), CliError> {
+    let keys = build_read_order_keys(entries.iter())?;
+    entries.sort_by(|left, right| {
+        let left_key = keys.get(&entry_identity(left));
+        let right_key = keys.get(&entry_identity(right));
+        left_key.cmp(&right_key).then(left.path.cmp(&right.path))
+    });
+    Ok(())
+}
+
+fn build_read_order_keys<'a, I>(
+    entries: I,
+) -> Result<std::collections::HashMap<(String, String), ReadOrderKey>, CliError>
+where
+    I: IntoIterator<Item = &'a SourceEntry>,
+{
+    let mut keys = std::collections::HashMap::new();
+    for entry in entries {
+        let key = match entry.kind {
+            SourceKind::XunbakArtifact => xunbak_entry_read_order(entry)?,
+            SourceKind::ZipArtifact => zip_entry_read_order(entry)?,
+            SourceKind::SevenZArtifact => sevenz_entry_read_order(entry)?,
+            _ => ReadOrderKey {
+                class_rank: 255,
+                primary: 0,
+                secondary: 0,
+            },
+        };
+        keys.insert(entry_identity(entry), key);
+    }
+    Ok(keys)
+}
+
+fn entry_identity(entry: &SourceEntry) -> (String, String) {
+    (
+        entry.path.clone(),
+        entry
+            .source_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    )
+}
+
+fn xunbak_entry_read_order(entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
+    #[cfg(feature = "xunbak")]
+    {
+        if let Some(path) = entry.source_path.as_deref() {
+            let (_reader, manifest) = load_cached_xunbak_reader_and_manifest(path)?;
+            if let Some(manifest_entry) = manifest.get(&normalize_artifact_entry_key(&entry.path)) {
+                return Ok(ReadOrderKey {
+                    class_rank: 0,
+                    primary: manifest_entry.volume_index as u64,
+                    secondary: manifest_entry.blob_offset,
+                });
+            }
+        }
+    }
+    Ok(ReadOrderKey {
+        class_rank: 255,
+        primary: 0,
+        secondary: 0,
+    })
+}
+
+fn zip_entry_read_order(entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
+    if let Some(path) = entry.source_path.as_deref() {
+        let cache = match load_cached_zip_archive(path) {
+            Ok(cache) => cache,
+            Err(err) if needs_manual_ppmd_fallback(&err.message) => {
+                return Ok(ReadOrderKey {
+                    class_rank: 1,
+                    primary: u64::MAX,
+                    secondary: 0,
+                });
+            }
+            Err(err) => return Err(err),
+        };
+        let index = cache
+            .index
+            .get(&normalize_artifact_entry_key(&entry.path))
+            .copied()
+            .unwrap_or(usize::MAX) as u64;
+        return Ok(ReadOrderKey {
+            class_rank: 1,
+            primary: index,
+            secondary: 0,
+        });
+    }
+    Ok(ReadOrderKey {
+        class_rank: 255,
+        primary: 0,
+        secondary: 0,
+    })
+}
+
+fn sevenz_entry_read_order(entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
+    if let Some(path) = entry.source_path.as_deref() {
+        let cache = load_cached_sevenz_reader(path)?;
+        let index = cache
+            .index
+            .get(&normalize_artifact_entry_key(&entry.path))
+            .map(|value| value.file_index)
+            .unwrap_or(usize::MAX) as u64;
+        return Ok(ReadOrderKey {
+            class_rank: 2,
+            primary: index,
+            secondary: 0,
+        });
+    }
+    Ok(ReadOrderKey {
+        class_rank: 255,
+        primary: 0,
+        secondary: 0,
+    })
 }
 
 #[cfg(feature = "xunbak")]
@@ -463,11 +911,6 @@ pub(crate) fn cached_xunbak_reader_count_for_tests() -> usize {
         .lock()
         .map(|cache| cache.len())
         .unwrap_or(0)
-}
-
-#[cfg(feature = "xunbak")]
-fn normalize_artifact_entry_key(path: &str) -> String {
-    normalize_glob_path(path)
 }
 
 #[cfg(feature = "xunbak")]
@@ -581,19 +1024,57 @@ fn open_xunbak_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
 mod tests {
     use std::fs;
     use std::io::{Read, Write};
-    #[cfg(feature = "xunbak")]
     use std::sync::Arc;
 
+    use serial_test::serial;
     use tempfile::tempdir;
 
     use crate::backup::artifact::entry::{SourceEntry, SourceKind};
+    use crate::backup::artifact::source::read_artifact_entries;
 
+    use super::{
+        cached_sevenz_reader_count_for_tests, cached_zip_reader_count_for_tests,
+        clear_sevenz_reader_cache_for_tests, clear_zip_reader_cache_for_tests, copy_entry_to_path,
+        copy_entry_to_writer, load_cached_sevenz_reader, load_cached_zip_archive,
+        open_entry_reader, sort_entries_for_read_locality,
+    };
     #[cfg(feature = "xunbak")]
     use super::{
         cached_xunbak_reader_count_for_tests, clear_xunbak_reader_cache_for_tests,
         load_cached_xunbak_reader_and_manifest,
     };
-    use super::{copy_entry_to_path, open_entry_reader};
+
+    struct ChunkLimitedWriter {
+        max_write_len: usize,
+        total_bytes: usize,
+    }
+
+    impl ChunkLimitedWriter {
+        fn new(max_write_len: usize) -> Self {
+            Self {
+                max_write_len,
+                total_bytes: 0,
+            }
+        }
+    }
+
+    impl Write for ChunkLimitedWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            if buf.len() > self.max_write_len {
+                return Err(std::io::Error::other(format!(
+                    "chunk too large: {} > {}",
+                    buf.len(),
+                    self.max_write_len
+                )));
+            }
+            self.total_bytes += buf.len();
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn copy_entry_to_path_copies_directory_artifact_file() {
@@ -701,6 +1182,27 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn load_cached_zip_archive_reuses_same_archive_for_same_artifact() {
+        clear_zip_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let zip_path = dir.path().join("artifact.zip");
+        let cursor = std::io::Cursor::new(Vec::<u8>::new());
+        let mut writer = zip::ZipWriter::new(cursor);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        writer.start_file("a.txt", options).unwrap();
+        writer.write_all(b"aaa").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        fs::write(&zip_path, bytes).unwrap();
+
+        let cache_a = load_cached_zip_archive(&zip_path).unwrap();
+        let cache_b = load_cached_zip_archive(&zip_path).unwrap();
+        assert!(Arc::ptr_eq(&cache_a, &cache_b));
+        assert_eq!(cached_zip_reader_count_for_tests(), 1);
+    }
+
+    #[test]
     fn open_entry_reader_returns_readable_stream_for_ppmd_zip_artifact() {
         let dir = tempdir().unwrap();
         let source = dir.path().join("data.txt");
@@ -779,13 +1281,173 @@ mod tests {
         };
 
         let mut reader = open_entry_reader(&artifact_entry).unwrap();
+        assert!(matches!(reader, super::EntryReader::Stream(_)));
         let mut content = String::new();
         reader.read_to_string(&mut content).unwrap();
         assert_eq!(content, "hello 7z");
     }
 
+    #[test]
+    #[serial]
+    fn load_cached_sevenz_reader_reuses_same_reader_for_same_artifact() {
+        clear_sevenz_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("a.txt");
+        fs::write(&source, "hello 7z").unwrap();
+        let archive_path = dir.path().join("artifact.7z");
+        let entry = SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(source),
+            size: 8,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::sevenz::write_entries_to_7z(
+            &[&entry],
+            &archive_path,
+            &crate::backup::artifact::sevenz::SevenZWriteOptions::default(),
+        )
+        .unwrap();
+
+        let cache_a = load_cached_sevenz_reader(&archive_path).unwrap();
+        let cache_b = load_cached_sevenz_reader(&archive_path).unwrap();
+        assert!(Arc::ptr_eq(&cache_a, &cache_b));
+        assert_eq!(cached_sevenz_reader_count_for_tests(), 1);
+    }
+
+    #[test]
+    #[serial]
+    fn copy_entry_to_writer_streams_large_7z_artifact_without_vec_buffering() {
+        clear_sevenz_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("large.txt");
+        fs::write(
+            &source,
+            "alpha alpha alpha beta beta beta gamma gamma gamma\n".repeat(300_000),
+        )
+        .unwrap();
+        let archive_path = dir.path().join("artifact.7z");
+        let entry = SourceEntry {
+            path: "large.txt".to_string(),
+            source_path: Some(source.clone()),
+            size: fs::metadata(&source).unwrap().len(),
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::sevenz::write_entries_to_7z(
+            &[&entry],
+            &archive_path,
+            &crate::backup::artifact::sevenz::SevenZWriteOptions {
+                solid: false,
+                method: crate::backup::artifact::sevenz::SevenZMethod::Copy,
+                level: 1,
+                sidecar: None,
+            },
+        )
+        .unwrap();
+
+        let artifact_entry = SourceEntry {
+            path: "large.txt".to_string(),
+            source_path: Some(archive_path),
+            size: entry.size,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::SevenZArtifact,
+        };
+
+        let mut writer = ChunkLimitedWriter::new(128 * 1024);
+        copy_entry_to_writer(&artifact_entry, &mut writer).unwrap();
+        assert_eq!(writer.total_bytes as u64, entry.size);
+    }
+
+    #[test]
+    #[serial]
+    fn sort_entries_for_read_locality_prefers_zip_archive_order() {
+        clear_zip_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let zip_path = dir.path().join("artifact.zip");
+        let cursor = std::io::Cursor::new(Vec::<u8>::new());
+        let mut writer = zip::ZipWriter::new(cursor);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        writer.start_file("z.txt", options).unwrap();
+        writer.write_all(b"zzz").unwrap();
+        writer.start_file("a.txt", options).unwrap();
+        writer.write_all(b"aaa").unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        fs::write(&zip_path, bytes).unwrap();
+
+        let mut entries = read_artifact_entries(&zip_path).unwrap();
+        let before: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
+        assert_eq!(before, vec!["a.txt", "z.txt"]);
+
+        sort_entries_for_read_locality(&mut entries).unwrap();
+        let after: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
+        assert_eq!(after, vec!["z.txt", "a.txt"]);
+    }
+
+    #[test]
+    #[serial]
+    fn sort_entries_for_read_locality_prefers_sevenz_archive_order() {
+        clear_sevenz_reader_cache_for_tests();
+        let dir = tempdir().unwrap();
+        let z_path = dir.path().join("artifact.7z");
+        let src_z = dir.path().join("z.txt");
+        let src_a = dir.path().join("a.txt");
+        fs::write(&src_z, "zzz").unwrap();
+        fs::write(&src_a, "aaa").unwrap();
+        let entry_z = SourceEntry {
+            path: "z.txt".to_string(),
+            source_path: Some(src_z),
+            size: 3,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        let entry_a = SourceEntry {
+            path: "a.txt".to_string(),
+            source_path: Some(src_a),
+            size: 3,
+            mtime_ns: None,
+            created_time_ns: None,
+            win_attributes: 0,
+            content_hash: None,
+            kind: SourceKind::DirArtifact,
+        };
+        crate::backup::artifact::sevenz::write_entries_to_7z(
+            &[&entry_z, &entry_a],
+            &z_path,
+            &crate::backup::artifact::sevenz::SevenZWriteOptions {
+                solid: false,
+                method: crate::backup::artifact::sevenz::SevenZMethod::Copy,
+                level: 1,
+                sidecar: None,
+            },
+        )
+        .unwrap();
+
+        let mut entries = read_artifact_entries(&z_path).unwrap();
+        let before: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
+        assert_eq!(before, vec!["a.txt", "z.txt"]);
+
+        sort_entries_for_read_locality(&mut entries).unwrap();
+        let after: Vec<String> = entries.iter().map(|entry| entry.path.clone()).collect();
+        assert_eq!(after, vec!["z.txt", "a.txt"]);
+    }
+
     #[cfg(feature = "xunbak")]
     #[test]
+    #[serial]
     fn open_entry_reader_returns_readable_stream_for_xunbak_artifact() {
         clear_xunbak_reader_cache_for_tests();
         let dir = tempdir().unwrap();
@@ -805,8 +1467,10 @@ mod tests {
         crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&entry],
             &artifact,
+            &dir.path().display().to_string(),
             &crate::xunbak::writer::BackupOptions {
                 codec: crate::xunbak::constants::Codec::NONE,
+                auto_compression: false,
                 zstd_level: 1,
                 split_size: None,
             },
@@ -833,6 +1497,7 @@ mod tests {
 
     #[cfg(feature = "xunbak")]
     #[test]
+    #[serial]
     fn load_cached_xunbak_reader_and_manifest_reuses_same_reader_for_same_artifact() {
         clear_xunbak_reader_cache_for_tests();
         let dir = tempdir().unwrap();
@@ -852,8 +1517,10 @@ mod tests {
         crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&entry],
             &artifact,
+            &dir.path().display().to_string(),
             &crate::xunbak::writer::BackupOptions {
                 codec: crate::xunbak::constants::Codec::NONE,
+                auto_compression: false,
                 zstd_level: 1,
                 split_size: None,
             },
@@ -871,6 +1538,7 @@ mod tests {
 
     #[cfg(feature = "xunbak")]
     #[test]
+    #[serial]
     fn open_entry_reader_reuse_does_not_change_multi_file_restore_content() {
         clear_xunbak_reader_cache_for_tests();
         let dir = tempdir().unwrap();
@@ -903,8 +1571,10 @@ mod tests {
         crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&entry_a, &entry_b],
             &artifact,
+            &dir.path().display().to_string(),
             &crate::xunbak::writer::BackupOptions {
                 codec: crate::xunbak::constants::Codec::NONE,
+                auto_compression: false,
                 zstd_level: 1,
                 split_size: None,
             },

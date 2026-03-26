@@ -1,15 +1,29 @@
 use std::io::{Cursor, Read, Write};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::xunbak::constants::Codec;
+
+const DEFLATE_LEVEL_DEFAULT: u32 = 6;
+const BZIP2_LEVEL_DEFAULT: u32 = 6;
+const LZMA2_PRESET_DEFAULT: u32 = 6;
+const PPMD_ORDER_DEFAULT: u32 = 8;
+const PPMD_MEM_SIZE_DEFAULT: u32 = 16 << 20;
+pub const XUNBAK_COMPRESSION_PROFILE_FIX_HINT: &str = "Fix: Use one of `none`, `zstd`, `zstd:N`, `lz4`, `lzma2`, `deflate`, `bzip2`, `ppmd`, or `auto`.";
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum CodecError {
     #[error("unsupported codec: {0:#04x}")]
     UnsupportedCodec(u8),
-    #[error("zstd encode failed: {0}")]
-    ZstdEncode(String),
-    #[error("zstd decode failed: {0}")]
-    ZstdDecode(String),
+    #[error("{codec} encode failed: {message}")]
+    EncodeFailed {
+        codec: &'static str,
+        message: String,
+    },
+    #[error("{codec} decode failed: {message}")]
+    DecodeFailed {
+        codec: &'static str,
+        message: String,
+    },
     #[error("invalid compression argument: {0}")]
     InvalidCompressionArg(String),
 }
@@ -19,7 +33,10 @@ pub enum CompressionMode {
     None,
     Zstd { level: i32 },
     Lz4,
-    Lzma,
+    Lzma2,
+    Deflate,
+    Bzip2,
+    Ppmd,
     Auto,
 }
 
@@ -31,22 +48,127 @@ pub struct StreamCompressResult {
     pub peak_buffer_bytes: usize,
 }
 
+pub fn codec_name(codec: Codec) -> &'static str {
+    match codec {
+        codec if codec == Codec::NONE => "none",
+        codec if codec == Codec::ZSTD => "zstd",
+        codec if codec == Codec::LZ4 => "lz4",
+        codec if codec == Codec::LZMA2 => "lzma2",
+        codec if codec == Codec::DEFLATE => "deflate",
+        codec if codec == Codec::BZIP2 => "bzip2",
+        codec if codec == Codec::PPMD => "ppmd",
+        _ => "unknown",
+    }
+}
+
 pub fn compress(codec: Codec, data: &[u8], level: i32) -> Result<Vec<u8>, CodecError> {
     match codec {
         codec if codec == Codec::NONE => Ok(data.to_vec()),
         codec if codec == Codec::ZSTD => zstd::stream::encode_all(Cursor::new(data), level)
-            .map_err(|err| CodecError::ZstdEncode(err.to_string())),
+            .map_err(|err| encode_error(codec, err)),
+        codec if codec == Codec::LZ4 => {
+            let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
+            encoder
+                .write_all(data)
+                .map_err(|err| encode_error(codec, err))?;
+            encoder.finish().map_err(|err| encode_error(codec, err))
+        }
+        codec if codec == Codec::DEFLATE => {
+            let mut encoder = flate2::write::DeflateEncoder::new(
+                Vec::new(),
+                flate2::Compression::new(DEFLATE_LEVEL_DEFAULT),
+            );
+            encoder
+                .write_all(data)
+                .map_err(|err| encode_error(codec, err))?;
+            encoder.finish().map_err(|err| encode_error(codec, err))
+        }
+        codec if codec == Codec::BZIP2 => {
+            let mut encoder = bzip2::write::BzEncoder::new(
+                Vec::new(),
+                bzip2::Compression::new(BZIP2_LEVEL_DEFAULT),
+            );
+            encoder
+                .write_all(data)
+                .map_err(|err| encode_error(codec, err))?;
+            encoder.finish().map_err(|err| encode_error(codec, err))
+        }
+        codec if codec == Codec::PPMD => catch_codec_unwind(codec, "encode", || {
+            let mut encoder = ppmd_rust::Ppmd8Encoder::new(
+                Vec::new(),
+                PPMD_ORDER_DEFAULT,
+                PPMD_MEM_SIZE_DEFAULT,
+                ppmd_rust::RestoreMethod::Restart,
+            )
+            .map_err(|err| encode_error(codec, err))?;
+            encoder
+                .write_all(data)
+                .map_err(|err| encode_error(codec, err))?;
+            encoder.finish(true).map_err(|err| encode_error(codec, err))
+        }),
+        codec if codec == Codec::LZMA2 => {
+            let options = lzma_rust2::Lzma2Options::with_preset(LZMA2_PRESET_DEFAULT);
+            let mut encoder = lzma_rust2::Lzma2Writer::new(Vec::new(), options);
+            encoder
+                .write_all(data)
+                .map_err(|err| encode_error(codec, err))?;
+            encoder.finish().map_err(|err| encode_error(codec, err))
+        }
         codec => Err(CodecError::UnsupportedCodec(codec.as_u8())),
     }
 }
 
-pub fn decompress(codec: Codec, data: &[u8]) -> Result<Vec<u8>, CodecError> {
+pub fn decompressed_reader<'a, R: Read + 'a>(
+    codec: Codec,
+    reader: R,
+) -> Result<Box<dyn Read + 'a>, CodecError> {
     match codec {
-        codec if codec == Codec::NONE => Ok(data.to_vec()),
-        codec if codec == Codec::ZSTD => zstd::stream::decode_all(Cursor::new(data))
-            .map_err(|err| CodecError::ZstdDecode(err.to_string())),
+        codec if codec == Codec::NONE => Ok(Box::new(reader)),
+        codec if codec == Codec::ZSTD => {
+            let decoder =
+                zstd::stream::Decoder::new(reader).map_err(|err| decode_error(codec, err))?;
+            Ok(Box::new(decoder))
+        }
+        codec if codec == Codec::LZ4 => Ok(Box::new(lz4_flex::frame::FrameDecoder::new(reader))),
+        codec if codec == Codec::DEFLATE => Ok(Box::new(flate2::read::DeflateDecoder::new(reader))),
+        codec if codec == Codec::BZIP2 => Ok(Box::new(bzip2::read::BzDecoder::new(reader))),
+        codec if codec == Codec::PPMD => {
+            let decoder = catch_codec_unwind(codec, "decode", || {
+                ppmd_rust::Ppmd8Decoder::new(
+                    reader,
+                    PPMD_ORDER_DEFAULT,
+                    PPMD_MEM_SIZE_DEFAULT,
+                    ppmd_rust::RestoreMethod::Restart,
+                )
+                .map_err(|err| decode_error(codec, err))
+            })?;
+            Ok(Box::new(PanicGuardedRead::new(codec, "decode", decoder)))
+        }
+        codec if codec == Codec::LZMA2 => Ok(Box::new(lzma_rust2::Lzma2Reader::new(
+            reader,
+            lzma2_dict_size(),
+            None,
+        ))),
         codec => Err(CodecError::UnsupportedCodec(codec.as_u8())),
     }
+}
+
+pub fn copy_decompressed_to_writer<R: Read, W: Write>(
+    codec: Codec,
+    reader: R,
+    writer: &mut W,
+) -> Result<u64, CodecError> {
+    let mut decoder = decompressed_reader(codec, reader)?;
+    std::io::copy(&mut decoder, writer).map_err(|err| decode_error(codec, err))
+}
+
+pub fn decompress(codec: Codec, data: &[u8]) -> Result<Vec<u8>, CodecError> {
+    let mut decoder = decompressed_reader(codec, Cursor::new(data))?;
+    let mut out = Vec::new();
+    decoder
+        .read_to_end(&mut out)
+        .map_err(|err| decode_error(codec, err))?;
+    Ok(out)
 }
 
 pub fn should_skip_compress(ext: &str) -> bool {
@@ -78,6 +200,18 @@ pub fn compression_is_beneficial(raw_size: u64, stored_size: u64) -> bool {
     (stored_size as f64) < (raw_size as f64 * 0.95)
 }
 
+pub fn effective_codec_after_compression(
+    requested: Codec,
+    raw_size: u64,
+    stored_size: u64,
+) -> Codec {
+    if requested == Codec::NONE || compression_is_beneficial(raw_size, stored_size) {
+        requested
+    } else {
+        Codec::NONE
+    }
+}
+
 pub fn parse_compression_arg(raw: &str) -> Result<CompressionMode, CodecError> {
     let value = raw.trim().to_ascii_lowercase();
     if value.is_empty() {
@@ -88,7 +222,10 @@ pub fn parse_compression_arg(raw: &str) -> Result<CompressionMode, CodecError> {
         "none" => Ok(CompressionMode::None),
         "zstd" => Ok(CompressionMode::Zstd { level: 1 }),
         "lz4" => Ok(CompressionMode::Lz4),
-        "lzma" => Ok(CompressionMode::Lzma),
+        "lzma2" | "lzma" => Ok(CompressionMode::Lzma2),
+        "deflate" => Ok(CompressionMode::Deflate),
+        "bzip2" => Ok(CompressionMode::Bzip2),
+        "ppmd" => Ok(CompressionMode::Ppmd),
         "auto" => Ok(CompressionMode::Auto),
         _ => {
             if let Some(level) = value.strip_prefix("zstd:") {
@@ -120,7 +257,7 @@ pub fn stream_hash_and_compress<R: Read>(
             loop {
                 let n = reader
                     .read(&mut buf)
-                    .map_err(|err| CodecError::ZstdDecode(err.to_string()))?;
+                    .map_err(|err| decode_error(codec, err))?;
                 if n == 0 {
                     break;
                 }
@@ -138,11 +275,11 @@ pub fn stream_hash_and_compress<R: Read>(
         }
         codec if codec == Codec::ZSTD => {
             let mut encoder = zstd::stream::Encoder::new(Vec::new(), level)
-                .map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
+                .map_err(|err| encode_error(codec, err))?;
             loop {
                 let n = reader
                     .read(&mut buf)
-                    .map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
+                    .map_err(|err| encode_error(codec, err))?;
                 if n == 0 {
                     break;
                 }
@@ -150,12 +287,144 @@ pub fn stream_hash_and_compress<R: Read>(
                 hasher.update(&buf[..n]);
                 encoder
                     .write_all(&buf[..n])
-                    .map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
+                    .map_err(|err| encode_error(codec, err))?;
+                peak_buffer_bytes = peak_buffer_bytes.max(n * 2);
+            }
+            let compressed = encoder.finish().map_err(|err| encode_error(codec, err))?;
+            Ok(StreamCompressResult {
+                hash: *hasher.finalize().as_bytes(),
+                raw_size,
+                compressed,
+                peak_buffer_bytes,
+            })
+        }
+        codec if codec == Codec::LZ4 => {
+            let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
+            loop {
+                let n = reader
+                    .read(&mut buf)
+                    .map_err(|err| encode_error(codec, err))?;
+                if n == 0 {
+                    break;
+                }
+                raw_size += n as u64;
+                hasher.update(&buf[..n]);
+                encoder
+                    .write_all(&buf[..n])
+                    .map_err(|err| encode_error(codec, err))?;
+                peak_buffer_bytes = peak_buffer_bytes.max(n * 2);
+            }
+            let compressed = encoder.finish().map_err(|err| encode_error(codec, err))?;
+            Ok(StreamCompressResult {
+                hash: *hasher.finalize().as_bytes(),
+                raw_size,
+                compressed,
+                peak_buffer_bytes,
+            })
+        }
+        codec if codec == Codec::DEFLATE => {
+            let mut encoder = flate2::write::DeflateEncoder::new(
+                Vec::new(),
+                flate2::Compression::new(DEFLATE_LEVEL_DEFAULT),
+            );
+            loop {
+                let n = reader
+                    .read(&mut buf)
+                    .map_err(|err| encode_error(codec, err))?;
+                if n == 0 {
+                    break;
+                }
+                raw_size += n as u64;
+                hasher.update(&buf[..n]);
+                encoder
+                    .write_all(&buf[..n])
+                    .map_err(|err| encode_error(codec, err))?;
+                peak_buffer_bytes = peak_buffer_bytes.max(n * 2);
+            }
+            let compressed = encoder.finish().map_err(|err| encode_error(codec, err))?;
+            Ok(StreamCompressResult {
+                hash: *hasher.finalize().as_bytes(),
+                raw_size,
+                compressed,
+                peak_buffer_bytes,
+            })
+        }
+        codec if codec == Codec::BZIP2 => {
+            let mut encoder = bzip2::write::BzEncoder::new(
+                Vec::new(),
+                bzip2::Compression::new(BZIP2_LEVEL_DEFAULT),
+            );
+            loop {
+                let n = reader
+                    .read(&mut buf)
+                    .map_err(|err| encode_error(codec, err))?;
+                if n == 0 {
+                    break;
+                }
+                raw_size += n as u64;
+                hasher.update(&buf[..n]);
+                encoder
+                    .write_all(&buf[..n])
+                    .map_err(|err| encode_error(codec, err))?;
+                peak_buffer_bytes = peak_buffer_bytes.max(n * 2);
+            }
+            let compressed = encoder.finish().map_err(|err| encode_error(codec, err))?;
+            Ok(StreamCompressResult {
+                hash: *hasher.finalize().as_bytes(),
+                raw_size,
+                compressed,
+                peak_buffer_bytes,
+            })
+        }
+        codec if codec == Codec::PPMD => catch_codec_unwind(codec, "encode", || {
+            let mut encoder = ppmd_rust::Ppmd8Encoder::new(
+                Vec::new(),
+                PPMD_ORDER_DEFAULT,
+                PPMD_MEM_SIZE_DEFAULT,
+                ppmd_rust::RestoreMethod::Restart,
+            )
+            .map_err(|err| encode_error(codec, err))?;
+            loop {
+                let n = reader
+                    .read(&mut buf)
+                    .map_err(|err| encode_error(codec, err))?;
+                if n == 0 {
+                    break;
+                }
+                raw_size += n as u64;
+                hasher.update(&buf[..n]);
+                encoder
+                    .write_all(&buf[..n])
+                    .map_err(|err| encode_error(codec, err))?;
                 peak_buffer_bytes = peak_buffer_bytes.max(n * 2);
             }
             let compressed = encoder
-                .finish()
-                .map_err(|err| CodecError::ZstdEncode(err.to_string()))?;
+                .finish(true)
+                .map_err(|err| encode_error(codec, err))?;
+            Ok(StreamCompressResult {
+                hash: *hasher.finalize().as_bytes(),
+                raw_size,
+                compressed,
+                peak_buffer_bytes,
+            })
+        }),
+        codec if codec == Codec::LZMA2 => {
+            let mut encoder = lzma_rust2::Lzma2Writer::new(Vec::new(), lzma2_options());
+            loop {
+                let n = reader
+                    .read(&mut buf)
+                    .map_err(|err| encode_error(codec, err))?;
+                if n == 0 {
+                    break;
+                }
+                raw_size += n as u64;
+                hasher.update(&buf[..n]);
+                encoder
+                    .write_all(&buf[..n])
+                    .map_err(|err| encode_error(codec, err))?;
+                peak_buffer_bytes = peak_buffer_bytes.max(n * 2);
+            }
+            let compressed = encoder.finish().map_err(|err| encode_error(codec, err))?;
             Ok(StreamCompressResult {
                 hash: *hasher.finalize().as_bytes(),
                 raw_size,
@@ -164,5 +433,99 @@ pub fn stream_hash_and_compress<R: Read>(
             })
         }
         codec => Err(CodecError::UnsupportedCodec(codec.as_u8())),
+    }
+}
+
+fn lzma2_options() -> lzma_rust2::Lzma2Options {
+    lzma_rust2::Lzma2Options::with_preset(LZMA2_PRESET_DEFAULT)
+}
+
+fn lzma2_dict_size() -> u32 {
+    lzma2_options().lzma_options.dict_size
+}
+
+fn encode_error(codec: Codec, err: impl ToString) -> CodecError {
+    CodecError::EncodeFailed {
+        codec: codec_name(codec),
+        message: err.to_string(),
+    }
+}
+
+fn decode_error(codec: Codec, err: impl ToString) -> CodecError {
+    CodecError::DecodeFailed {
+        codec: codec_name(codec),
+        message: err.to_string(),
+    }
+}
+
+fn catch_codec_unwind<T>(
+    codec: Codec,
+    phase: &'static str,
+    f: impl FnOnce() -> Result<T, CodecError>,
+) -> Result<T, CodecError> {
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(result) => result,
+        Err(payload) => Err(codec_panic_error(codec, phase, payload)),
+    }
+}
+
+fn catch_codec_io_unwind<T>(
+    codec: Codec,
+    phase: &'static str,
+    f: impl FnOnce() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    match catch_unwind(AssertUnwindSafe(f)) {
+        Ok(result) => result,
+        Err(payload) => Err(std::io::Error::other(format!(
+            "{} {} panicked: {}",
+            codec_name(codec),
+            phase,
+            panic_payload_to_string(payload)
+        ))),
+    }
+}
+
+fn codec_panic_error(
+    codec: Codec,
+    phase: &'static str,
+    payload: Box<dyn std::any::Any + Send>,
+) -> CodecError {
+    let message = format!("{phase} panicked: {}", panic_payload_to_string(payload));
+    if phase == "encode" {
+        encode_error(codec, message)
+    } else {
+        decode_error(codec, message)
+    }
+}
+
+fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "non-string panic payload".to_string()
+    }
+}
+
+struct PanicGuardedRead<R> {
+    codec: Codec,
+    phase: &'static str,
+    inner: R,
+}
+
+impl<R> PanicGuardedRead<R> {
+    fn new(codec: Codec, phase: &'static str, inner: R) -> Self {
+        Self {
+            codec,
+            phase,
+            inner,
+        }
+    }
+}
+
+impl<R: Read> Read for PanicGuardedRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        catch_codec_io_unwind(self.codec, self.phase, || self.inner.read(buf))
     }
 }

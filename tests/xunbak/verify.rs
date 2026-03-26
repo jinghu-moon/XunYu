@@ -257,6 +257,77 @@ fn full_verify_reports_corrupted_blob_with_path_and_offset() {
 }
 
 #[test]
+fn full_verify_reports_corrupted_lz4_blob_with_path_and_offset() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("a.txt"),
+        "alpha alpha alpha beta beta beta gamma gamma gamma ".repeat(512),
+    )
+    .unwrap();
+    let container = dir.path().join("backup.xunbak");
+    let options = BackupOptions {
+        codec: xun::xunbak::constants::Codec::LZ4,
+        auto_compression: false,
+        zstd_level: 1,
+        split_size: None,
+    };
+    ContainerWriter::backup(&container, &source, &options).unwrap();
+    let reader = ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let entry = &manifest.entries[0];
+
+    let mut bytes = fs::read(&container).unwrap();
+    let data_start = entry.blob_offset as usize + RECORD_PREFIX_SIZE + BLOB_HEADER_SIZE;
+    bytes[data_start] ^= 0xFF;
+    fs::write(&container, bytes).unwrap();
+
+    let report = verify_full_path(&container);
+    assert!(!report.passed);
+    assert_eq!(report.errors[0].path.as_deref(), Some("a.txt"));
+    assert_eq!(report.errors[0].offset, Some(entry.blob_offset));
+}
+
+#[test]
+fn full_verify_reports_corrupted_extended_codec_blobs_with_path_and_offset() {
+    let content = "alpha alpha alpha beta beta beta gamma gamma gamma ".repeat(512);
+
+    for codec in [
+        xun::xunbak::constants::Codec::DEFLATE,
+        xun::xunbak::constants::Codec::BZIP2,
+        xun::xunbak::constants::Codec::PPMD,
+        xun::xunbak::constants::Codec::LZMA2,
+    ] {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("src");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("a.txt"), &content).unwrap();
+        let container = dir.path().join("backup.xunbak");
+        let options = BackupOptions {
+            codec,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: None,
+        };
+        ContainerWriter::backup(&container, &source, &options).unwrap();
+        let reader = ContainerReader::open(&container).unwrap();
+        let manifest = reader.load_manifest().unwrap();
+        let entry = &manifest.entries[0];
+
+        let mut bytes = fs::read(&container).unwrap();
+        let data_start = entry.blob_offset as usize + RECORD_PREFIX_SIZE + BLOB_HEADER_SIZE;
+        bytes[data_start] ^= 0xFF;
+        fs::write(&container, bytes).unwrap();
+
+        let report = verify_full_path(&container);
+        assert!(!report.passed, "codec={:?}", u8::from(codec));
+        assert_eq!(report.errors[0].path.as_deref(), Some("a.txt"));
+        assert_eq!(report.errors[0].offset, Some(entry.blob_offset));
+    }
+}
+
+#[test]
 fn full_verify_reports_codec_error() {
     let dir = tempdir().unwrap();
     let source = dir.path().join("src");

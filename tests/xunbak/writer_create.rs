@@ -3,12 +3,15 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use tempfile::tempdir;
 use xun::xunbak::checkpoint::read_checkpoint_record;
-use xun::xunbak::constants::{FOOTER_SIZE, HEADER_SIZE};
+use xun::xunbak::constants::{
+    FOOTER_SIZE, HEADER_SIZE, XUNBAK_LEGACY_READER_VERSION, XUNBAK_READER_VERSION,
+    XUNBAK_WRITE_VERSION,
+};
 use xun::xunbak::footer::Footer;
 use xun::xunbak::header::Header;
 use xun::xunbak::manifest::read_manifest_record;
 use xun::xunbak::verify::{VerifyLevel, verify_quick_path};
-use xun::xunbak::writer::ContainerWriter;
+use xun::xunbak::writer::{BackupOptions, ContainerWriter};
 
 #[test]
 fn create_container_writes_minimal_empty_container() {
@@ -28,8 +31,11 @@ fn created_container_has_valid_header() {
 
     let bytes = fs::read(&container).unwrap();
     let decoded = Header::from_bytes(&bytes[..HEADER_SIZE]).unwrap();
-    assert_eq!(decoded.header.write_version, 1);
-    assert_eq!(decoded.header.min_reader_version, 1);
+    assert_eq!(decoded.header.write_version, XUNBAK_WRITE_VERSION);
+    assert_eq!(
+        decoded.header.min_reader_version,
+        XUNBAK_LEGACY_READER_VERSION
+    );
 }
 
 #[test]
@@ -81,4 +87,59 @@ fn empty_container_quick_verify_passes() {
     let report = verify_quick_path(&container);
     assert!(report.passed);
     assert_eq!(report.level, VerifyLevel::Quick);
+}
+
+#[test]
+fn backup_container_with_legacy_codec_keeps_legacy_min_reader_version() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("legacy-codec.xunbak");
+    ContainerWriter::backup(
+        &container,
+        &source,
+        &BackupOptions {
+            codec: xun::xunbak::constants::Codec::ZSTD,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: None,
+        },
+    )
+    .unwrap();
+
+    let bytes = fs::read(&container).unwrap();
+    let decoded = Header::from_bytes(&bytes[..HEADER_SIZE]).unwrap();
+    assert_eq!(
+        decoded.header.min_reader_version,
+        XUNBAK_LEGACY_READER_VERSION
+    );
+}
+
+#[test]
+fn backup_container_with_extended_codec_raises_min_reader_version() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("a.txt"),
+        "alpha alpha alpha beta beta beta gamma gamma gamma ".repeat(512),
+    )
+    .unwrap();
+    let container = dir.path().join("extended-codec.xunbak");
+    ContainerWriter::backup(
+        &container,
+        &source,
+        &BackupOptions {
+            codec: xun::xunbak::constants::Codec::LZ4,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: None,
+        },
+    )
+    .unwrap();
+
+    let bytes = fs::read(&container).unwrap();
+    let decoded = Header::from_bytes(&bytes[..HEADER_SIZE]).unwrap();
+    assert_eq!(decoded.header.min_reader_version, XUNBAK_READER_VERSION);
 }

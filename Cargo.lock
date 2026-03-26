@@ -2200,6 +2200,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4_flex"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db9a0d582c2874f68138a16ce1867e0ffde6c0bb0a0df85e1f36d04146db488a"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "lzma-rust2"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3927,6 +3936,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
+
+[[package]]
 name = "type-map"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4726,6 +4741,7 @@ dependencies = [
  "base64 0.22.1",
  "blake3",
  "bytemuck",
+ "bzip2 0.6.1",
  "chacha20poly1305",
  "chrono",
  "comfy-table",
@@ -4738,6 +4754,7 @@ dependencies = [
  "dialoguer",
  "divan",
  "dunce",
+ "flate2",
  "getrandom 0.3.4",
  "globset",
  "heck",
@@ -4751,6 +4768,8 @@ dependencies = [
  "json5",
  "lazy_static",
  "lodepng",
+ "lz4_flex",
+ "lzma-rust2",
  "memchr",
  "mime_guess",
  "mozjpeg",

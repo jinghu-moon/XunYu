@@ -79,6 +79,7 @@ fn e2e_supports_unicode_spaces_and_long_paths() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -139,6 +140,7 @@ fn e2e_incremental_update_restore_keeps_expected_files() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -154,6 +156,7 @@ fn e2e_incremental_update_restore_keeps_expected_files() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -187,6 +190,7 @@ fn e2e_truncated_container_recovers_previous_checkpoint() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -202,6 +206,7 @@ fn e2e_truncated_container_recovers_previous_checkpoint() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -306,6 +311,7 @@ fn e2e_scales_to_ten_thousand_files() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },

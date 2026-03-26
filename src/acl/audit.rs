@@ -272,15 +272,10 @@ pub fn current_user() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     fn temp_log() -> (AuditLog, PathBuf) {
-        let path = std::env::temp_dir().join(format!(
-            "aclmgr_audit_test_{}.jsonl",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .subsec_nanos()
-        ));
+        let path = std::env::temp_dir().join(format!("aclmgr_audit_test_{}.jsonl", Uuid::new_v4()));
         let log = AuditLog::new(path.clone(), 5);
         (log, path)
     }

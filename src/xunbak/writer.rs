@@ -15,12 +15,12 @@ use crate::xunbak::checkpoint::{
     CheckpointError, CheckpointPayload, compute_manifest_hash, write_checkpoint_record,
 };
 use crate::xunbak::codec::{
-    compression_is_beneficial, should_skip_compress, stream_hash_and_compress,
+    effective_codec_after_compression, should_skip_compress, stream_hash_and_compress,
 };
 use crate::xunbak::constants::FLAG_SPLIT;
 use crate::xunbak::constants::{
-    Codec, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, XUNBAK_READER_VERSION,
-    XUNBAK_WRITE_VERSION,
+    Codec, FOOTER_SIZE, HEADER_SIZE, RECORD_PREFIX_SIZE, XUNBAK_LEGACY_READER_VERSION,
+    XUNBAK_READER_VERSION, XUNBAK_WRITE_VERSION,
 };
 use crate::xunbak::footer::{Footer, FooterError};
 use crate::xunbak::header::Header;
@@ -38,6 +38,7 @@ pub struct ContainerWriter {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackupOptions {
     pub codec: Codec,
+    pub auto_compression: bool,
     pub zstd_level: i32,
     pub split_size: Option<u64>,
 }
@@ -46,6 +47,7 @@ impl Default for BackupOptions {
     fn default() -> Self {
         Self {
             codec: Codec::ZSTD,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         }
@@ -66,6 +68,18 @@ pub struct ProgressEvent {
     pub processed_bytes: u64,
     pub total_bytes: u64,
     pub elapsed_ms: u128,
+}
+
+pub trait VirtualBackupEntry {
+    fn rel(&self) -> &str;
+    fn size(&self) -> u64;
+    fn mtime_ns(&self) -> u64;
+    fn created_time_ns(&self) -> u64;
+    fn win_attributes(&self) -> u32;
+    fn content_hash_hint(&self) -> Option<[u8; 32]> {
+        None
+    }
+    fn stream_into(&self, writer: &mut dyn Write) -> Result<(), WriterError>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -144,7 +158,7 @@ impl ContainerWriter {
 
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
-            min_reader_version: XUNBAK_READER_VERSION,
+            min_reader_version: min_reader_version_for_codec(Codec::NONE),
             flags: 0,
             created_at_unix: now_unix_secs(),
             split: None,
@@ -236,7 +250,7 @@ impl ContainerWriter {
             File::create(container_path).map_err(|err| WriterError::Io(err.to_string()))?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
-            min_reader_version: XUNBAK_READER_VERSION,
+            min_reader_version: min_reader_version_for_options(options),
             flags: 0,
             created_at_unix: now_unix_secs(),
             split: None,
@@ -276,7 +290,7 @@ impl ContainerWriter {
                     continue;
                 }
 
-                let requested_codec = effective_codec_for_path(item, options.codec);
+                let requested_codec = effective_codec_for_path(item, options);
                 let mut input =
                     File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
                 let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
@@ -348,7 +362,7 @@ impl ContainerWriter {
                     },
                 );
             } else {
-                let requested_codec = effective_codec_for_path(item, options.codec);
+                let requested_codec = effective_codec_for_path(item, options);
                 let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
                 let content_hash = prepared.content_hash;
                 if let Some(locator) = content_index.get(&content_hash) {
@@ -466,6 +480,57 @@ impl ContainerWriter {
         })
     }
 
+    pub fn backup_virtual_entries<E: VirtualBackupEntry>(
+        container_path: &Path,
+        source_root: &str,
+        entries: &[E],
+        options: &BackupOptions,
+    ) -> Result<BackupResult, WriterError> {
+        let mut noop = |_event: ProgressEvent| {};
+        Self::backup_virtual_entries_with_progress(
+            container_path,
+            source_root,
+            entries,
+            options,
+            &mut noop,
+        )
+    }
+
+    pub fn backup_virtual_entries_with_progress<E: VirtualBackupEntry>(
+        container_path: &Path,
+        source_root: &str,
+        entries: &[E],
+        options: &BackupOptions,
+        progress: &mut dyn FnMut(ProgressEvent),
+    ) -> Result<BackupResult, WriterError> {
+        if let Some(split_size) = options.split_size {
+            cleanup_existing_split_outputs(container_path)?;
+            let output = VolumeOutput::new(
+                container_path,
+                split_size,
+                min_reader_version_for_options(options),
+            )?;
+            return backup_virtual_entries_with_output(
+                output,
+                source_root,
+                entries,
+                options,
+                "convert",
+                progress,
+            );
+        }
+        let output =
+            SingleVolumeOutput::new(container_path, min_reader_version_for_options(options))?;
+        backup_virtual_entries_with_output(
+            output,
+            source_root,
+            entries,
+            options,
+            "convert",
+            progress,
+        )
+    }
+
     pub fn update(
         container_path: &Path,
         source_dir: &Path,
@@ -556,7 +621,7 @@ impl ContainerWriter {
                     continue;
                 }
 
-                let requested_codec = effective_codec_for_path(item, options.codec);
+                let requested_codec = effective_codec_for_path(item, options);
                 let mut input =
                     File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
                 let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
@@ -629,7 +694,7 @@ impl ContainerWriter {
                     },
                 );
             } else {
-                let requested_codec = effective_codec_for_path(item, options.codec);
+                let requested_codec = effective_codec_for_path(item, options);
                 let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
                 let content_hash = prepared.content_hash;
                 if let Some(locator) = content_index.get(&content_hash) {
@@ -932,6 +997,22 @@ fn collect_snapshot_context(command_mode: &str, codec: Codec) -> serde_json::Val
     .expect("snapshot context must be serializable")
 }
 
+fn min_reader_version_for_codec(codec: Codec) -> u32 {
+    if codec == Codec::NONE || codec == Codec::ZSTD {
+        XUNBAK_LEGACY_READER_VERSION
+    } else {
+        XUNBAK_READER_VERSION
+    }
+}
+
+fn min_reader_version_for_options(options: &BackupOptions) -> u32 {
+    if options.auto_compression {
+        XUNBAK_READER_VERSION
+    } else {
+        min_reader_version_for_codec(options.codec)
+    }
+}
+
 fn unique_blob_count(entries: &[ManifestEntry]) -> usize {
     let mut seen = HashMap::new();
     for entry in entries {
@@ -954,7 +1035,8 @@ fn system_time_to_unix_ns(time: SystemTime) -> Option<u64> {
         .map(|duration| duration.as_nanos() as u64)
 }
 
-fn effective_codec_for_path(file: &ScannedSourceFile, requested: Codec) -> Codec {
+fn effective_codec_for_path(file: &ScannedSourceFile, options: &BackupOptions) -> Codec {
+    let requested = options.codec;
     if requested == Codec::NONE {
         return Codec::NONE;
     }
@@ -964,10 +1046,59 @@ fn effective_codec_for_path(file: &ScannedSourceFile, requested: Codec) -> Codec
         .and_then(|value| value.to_str())
         .unwrap_or_default();
     if should_skip_compress(ext) {
-        Codec::NONE
-    } else {
-        requested
+        return Codec::NONE;
     }
+    if options.auto_compression {
+        return auto_codec_for_extension(ext);
+    }
+    requested
+}
+
+fn auto_codec_for_extension(ext: &str) -> Codec {
+    let ext = ext.trim().trim_start_matches('.').to_ascii_lowercase();
+    if is_text_like_extension(&ext) {
+        Codec::PPMD
+    } else {
+        Codec::ZSTD
+    }
+}
+
+fn is_text_like_extension(ext: &str) -> bool {
+    matches!(
+        ext,
+        "txt"
+            | "md"
+            | "rs"
+            | "toml"
+            | "json"
+            | "json5"
+            | "yaml"
+            | "yml"
+            | "xml"
+            | "csv"
+            | "log"
+            | "ini"
+            | "cfg"
+            | "conf"
+            | "html"
+            | "htm"
+            | "css"
+            | "js"
+            | "ts"
+            | "tsx"
+            | "jsx"
+            | "vue"
+            | "py"
+            | "java"
+            | "kt"
+            | "c"
+            | "h"
+            | "cpp"
+            | "hpp"
+            | "go"
+            | "sh"
+            | "ps1"
+    )
 }
 
 fn multipart_enabled(file: &ScannedSourceFile) -> bool {
@@ -1004,14 +1135,15 @@ fn prepare_blob_record(
     const STREAM_CHUNK_SIZE: usize = 1024 * 1024;
 
     let mut input = File::open(&file.path).map_err(|err| WriterError::Io(err.to_string()))?;
-    let mut effective_codec = requested;
     let mut streamed = stream_hash_and_compress(&mut input, requested, level, STREAM_CHUNK_SIZE)
         .map_err(|err| WriterError::Io(err.to_string()))?;
+    let effective_codec = effective_codec_after_compression(
+        requested,
+        streamed.raw_size,
+        streamed.compressed.len() as u64,
+    );
 
-    if requested != Codec::NONE
-        && !compression_is_beneficial(streamed.raw_size, streamed.compressed.len() as u64)
-    {
-        effective_codec = Codec::NONE;
+    if effective_codec != requested {
         let mut retry = File::open(&file.path).map_err(|err| WriterError::Io(err.to_string()))?;
         streamed = stream_hash_and_compress(&mut retry, Codec::NONE, level, STREAM_CHUNK_SIZE)
             .map_err(|err| WriterError::Io(err.to_string()))?;
@@ -1045,13 +1177,11 @@ fn prepare_chunk_blob_record(
     requested: Codec,
     level: i32,
 ) -> Result<PreparedBlobRecord, WriterError> {
-    let mut effective_codec = requested;
     let mut compressed = crate::xunbak::codec::compress(requested, chunk, level)
         .map_err(|err| WriterError::Io(err.to_string()))?;
-    if requested != Codec::NONE
-        && !compression_is_beneficial(chunk.len() as u64, compressed.len() as u64)
-    {
-        effective_codec = Codec::NONE;
+    let effective_codec =
+        effective_codec_after_compression(requested, chunk.len() as u64, compressed.len() as u64);
+    if effective_codec != requested {
         compressed = chunk.to_vec();
     }
 
@@ -1074,6 +1204,402 @@ fn prepare_chunk_blob_record(
     })
 }
 
+fn backup_virtual_entries_with_output<E: VirtualBackupEntry, O: BackupOutput>(
+    mut output: O,
+    source_root: &str,
+    entries: &[E],
+    options: &BackupOptions,
+    command_mode: &str,
+    progress: &mut dyn FnMut(ProgressEvent),
+) -> Result<BackupResult, WriterError> {
+    let mut order: Vec<usize> = (0..entries.len()).collect();
+    order.sort_by(|left, right| entries[*left].rel().cmp(entries[*right].rel()));
+
+    let total_files = entries.len();
+    let total_bytes: u64 = entries.iter().map(VirtualBackupEntry::size).sum();
+    let started = Instant::now();
+    let mut manifest_entries = Vec::with_capacity(entries.len());
+    let mut content_index: HashMap<[u8; 32], BlobLocator> = HashMap::new();
+    let mut total_raw_bytes = 0u64;
+    let mut processed_files = 0usize;
+    let mut processed_bytes = 0u64;
+
+    for index in order {
+        let entry = &entries[index];
+        let rel = normalize_path(entry.rel())?;
+        total_raw_bytes += entry.size();
+        let content_hash = resolve_virtual_entry_content_hash(entry)?;
+        if let Some(locator) = content_index.get(&content_hash) {
+            manifest_entries.push(manifest_entry_from_virtual_locator(
+                &rel,
+                entry,
+                content_hash,
+                locator,
+            ));
+            processed_files += 1;
+            processed_bytes += entry.size();
+            progress(ProgressEvent {
+                processed_files,
+                total_files,
+                processed_bytes,
+                total_bytes,
+                elapsed_ms: started.elapsed().as_millis(),
+            });
+            continue;
+        }
+
+        if entry.size() > MULTIPART_THRESHOLD_BYTES {
+            let requested_codec = effective_codec_for_virtual_entry(&rel, options);
+            let mut writer =
+                MultipartVirtualEntryWriter::new(&mut output, requested_codec, options.zstd_level);
+            entry.stream_into(&mut writer)?;
+            let written = writer.finish(entry.size())?;
+            if written.content_hash != content_hash {
+                return Err(WriterError::Io(format!(
+                    "virtual entry content hash mismatch: {}",
+                    rel
+                )));
+            }
+            let first = written.first_locator.ok_or_else(|| {
+                WriterError::Io("multipart virtual entry produced no blobs".to_string())
+            })?;
+            manifest_entries.push(ManifestEntry {
+                path: rel.clone(),
+                blob_id: first.blob_id,
+                content_hash,
+                size: entry.size(),
+                mtime_ns: entry.mtime_ns(),
+                created_time_ns: entry.created_time_ns(),
+                win_attributes: entry.win_attributes(),
+                codec: first.codec,
+                blob_offset: first.blob_offset,
+                blob_len: first.blob_len,
+                volume_index: first.volume_index,
+                parts: Some(written.parts.clone()),
+                ext: None,
+            });
+            content_index.insert(
+                content_hash,
+                BlobLocator {
+                    blob_id: first.blob_id,
+                    codec: first.codec,
+                    blob_offset: first.blob_offset,
+                    blob_len: first.blob_len,
+                    volume_index: first.volume_index,
+                    parts: Some(written.parts),
+                },
+            );
+        } else {
+            let requested_codec = effective_codec_for_virtual_entry(&rel, options);
+            let raw = collect_virtual_entry_bytes(entry)?;
+            let prepared = prepare_chunk_blob_record(&raw, requested_codec, options.zstd_level)?;
+            if prepared.content_hash != content_hash {
+                return Err(WriterError::Io(format!(
+                    "virtual entry content hash mismatch: {}",
+                    rel
+                )));
+            }
+            let blob_len = prepared.record_bytes.len() as u64;
+            let (volume_index, blob_offset) = output.write_record(&prepared.record_bytes, 0)?;
+            manifest_entries.push(ManifestEntry {
+                path: rel.clone(),
+                blob_id: prepared.write.header.blob_id,
+                content_hash,
+                size: entry.size(),
+                mtime_ns: entry.mtime_ns(),
+                created_time_ns: entry.created_time_ns(),
+                win_attributes: entry.win_attributes(),
+                codec: prepared.write.header.codec,
+                blob_offset,
+                blob_len,
+                volume_index,
+                parts: None,
+                ext: None,
+            });
+            content_index.insert(
+                content_hash,
+                BlobLocator {
+                    blob_id: prepared.write.header.blob_id,
+                    codec: prepared.write.header.codec,
+                    blob_offset,
+                    blob_len,
+                    volume_index,
+                    parts: None,
+                },
+            );
+        }
+
+        processed_files += 1;
+        processed_bytes += entry.size();
+        progress(ProgressEvent {
+            processed_files,
+            total_files,
+            processed_bytes,
+            total_bytes,
+            elapsed_ms: started.elapsed().as_millis(),
+        });
+    }
+
+    let referenced_blob_bytes = sum_unique_blob_bytes(&manifest_entries);
+    let blob_count = unique_blob_count(&manifest_entries) as u64;
+    let manifest_prefix = ManifestPrefix {
+        manifest_codec: ManifestCodec::JSON,
+        manifest_type: ManifestType::FULL,
+        manifest_version: 1,
+    };
+    let manifest_body = ManifestBody {
+        snapshot_id: Ulid::new().to_string(),
+        base_snapshot_id: None,
+        created_at: now_unix_secs(),
+        source_root: source_root.to_string(),
+        snapshot_context: collect_snapshot_context(command_mode, options.codec),
+        file_count: manifest_entries.len() as u64,
+        total_raw_bytes,
+        entries: manifest_entries,
+        removed: vec![],
+    };
+    let mut manifest_record = Vec::new();
+    write_manifest_record(&mut manifest_record, manifest_prefix, &manifest_body)?;
+    let checkpoint_record_len =
+        RECORD_PREFIX_SIZE as u64 + crate::xunbak::constants::CHECKPOINT_PAYLOAD_SIZE as u64;
+    let manifest_trailing = checkpoint_record_len + FOOTER_SIZE as u64;
+    let (_manifest_volume_index, manifest_offset) =
+        output.write_record(&manifest_record, manifest_trailing)?;
+    output.sync_current()?;
+    let total_volumes = output.total_volumes();
+    let manifest_payload = &manifest_record[RECORD_PREFIX_SIZE..];
+    let manifest_hash = compute_manifest_hash(manifest_payload);
+    let manifest_len = manifest_record.len() as u64;
+    let checkpoint_offset = output.current_len();
+    let total_container_bytes = output.current_len() + checkpoint_record_len + FOOTER_SIZE as u64;
+    let checkpoint_payload = CheckpointPayload {
+        snapshot_id: Ulid::from_string(&manifest_body.snapshot_id)
+            .expect("generated ULID must parse")
+            .to_bytes(),
+        manifest_offset,
+        manifest_len,
+        manifest_hash,
+        container_end: total_container_bytes,
+        blob_count,
+        referenced_blob_bytes,
+        total_container_bytes,
+        prev_checkpoint_offset: 0,
+        total_volumes,
+    };
+    let mut checkpoint_record = Vec::new();
+    write_checkpoint_record(&mut checkpoint_record, &checkpoint_payload)?;
+    output.write_record(&checkpoint_record, FOOTER_SIZE as u64)?;
+    output.write_footer(checkpoint_offset)?;
+    output.sync_current()?;
+
+    Ok(BackupResult {
+        container_path: output.last_volume_path().to_path_buf(),
+        file_count: total_files,
+        blob_count: blob_count as usize,
+    })
+}
+
+fn effective_codec_for_virtual_entry(rel: &str, options: &BackupOptions) -> Codec {
+    let requested = options.codec;
+    if requested == Codec::NONE {
+        return Codec::NONE;
+    }
+    let ext = Path::new(rel)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    if should_skip_compress(ext) {
+        return Codec::NONE;
+    }
+    if options.auto_compression {
+        return auto_codec_for_extension(ext);
+    }
+    requested
+}
+
+fn manifest_entry_from_virtual_locator<E: VirtualBackupEntry>(
+    rel: &str,
+    entry: &E,
+    content_hash: [u8; 32],
+    locator: &BlobLocator,
+) -> ManifestEntry {
+    ManifestEntry {
+        path: rel.to_string(),
+        blob_id: locator.blob_id,
+        content_hash,
+        size: entry.size(),
+        mtime_ns: entry.mtime_ns(),
+        created_time_ns: entry.created_time_ns(),
+        win_attributes: entry.win_attributes(),
+        codec: locator.codec,
+        blob_offset: locator.blob_offset,
+        blob_len: locator.blob_len,
+        volume_index: locator.volume_index,
+        parts: locator.parts.clone(),
+        ext: None,
+    }
+}
+
+fn resolve_virtual_entry_content_hash<E: VirtualBackupEntry>(
+    entry: &E,
+) -> Result<[u8; 32], WriterError> {
+    if let Some(hash) = entry.content_hash_hint() {
+        return Ok(hash);
+    }
+    let mut sink = HashingSink::new();
+    entry.stream_into(&mut sink)?;
+    if sink.bytes_written != entry.size() {
+        return Err(WriterError::Io(format!(
+            "virtual entry size mismatch: expected {}, got {}",
+            entry.size(),
+            sink.bytes_written
+        )));
+    }
+    Ok(sink.finalize())
+}
+
+fn collect_virtual_entry_bytes<E: VirtualBackupEntry>(entry: &E) -> Result<Vec<u8>, WriterError> {
+    let capacity = usize::try_from(entry.size()).unwrap_or(0);
+    let mut sink = Vec::with_capacity(capacity);
+    entry.stream_into(&mut sink)?;
+    if sink.len() as u64 != entry.size() {
+        return Err(WriterError::Io(format!(
+            "virtual entry size mismatch: expected {}, got {}",
+            entry.size(),
+            sink.len()
+        )));
+    }
+    Ok(sink)
+}
+
+struct HashingSink {
+    bytes_written: u64,
+    hasher: blake3::Hasher,
+}
+
+impl HashingSink {
+    fn new() -> Self {
+        Self {
+            bytes_written: 0,
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    fn finalize(self) -> [u8; 32] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl Write for HashingSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.bytes_written += buf.len() as u64;
+        self.hasher.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+struct MultipartVirtualWriteResult {
+    content_hash: [u8; 32],
+    first_locator: Option<BlobLocator>,
+    parts: Vec<ManifestPart>,
+}
+
+struct MultipartVirtualEntryWriter<'a, O> {
+    output: &'a mut O,
+    requested_codec: Codec,
+    level: i32,
+    chunk: Vec<u8>,
+    hasher: blake3::Hasher,
+    bytes_written: u64,
+    first_locator: Option<BlobLocator>,
+    parts: Vec<ManifestPart>,
+}
+
+impl<'a, O: BackupOutput> MultipartVirtualEntryWriter<'a, O> {
+    fn new(output: &'a mut O, requested_codec: Codec, level: i32) -> Self {
+        Self {
+            output,
+            requested_codec,
+            level,
+            chunk: Vec::with_capacity(MULTIPART_CHUNK_BYTES),
+            hasher: blake3::Hasher::new(),
+            bytes_written: 0,
+            first_locator: None,
+            parts: Vec::new(),
+        }
+    }
+
+    fn flush_chunk(&mut self) -> Result<(), WriterError> {
+        if self.chunk.is_empty() {
+            return Ok(());
+        }
+        let prepared = prepare_chunk_blob_record(&self.chunk, self.requested_codec, self.level)?;
+        let blob_len = prepared.record_bytes.len() as u64;
+        let (volume_index, blob_offset) = self.output.write_record(&prepared.record_bytes, 0)?;
+        let locator = BlobLocator {
+            blob_id: prepared.write.header.blob_id,
+            codec: prepared.write.header.codec,
+            blob_offset,
+            blob_len,
+            volume_index,
+            parts: None,
+        };
+        if self.first_locator.is_none() {
+            self.first_locator = Some(locator.clone());
+        }
+        self.parts.push(ManifestPart {
+            part_index: self.parts.len() as u32,
+            blob_id: prepared.write.header.blob_id,
+            codec: prepared.write.header.codec,
+            raw_size: prepared.write.header.raw_size,
+            stored_size: prepared.write.header.stored_size,
+            blob_offset,
+            blob_len,
+            volume_index,
+        });
+        self.chunk.clear();
+        Ok(())
+    }
+
+    fn finish(mut self, expected_size: u64) -> Result<MultipartVirtualWriteResult, WriterError> {
+        self.flush_chunk()?;
+        if self.bytes_written != expected_size {
+            return Err(WriterError::Io(format!(
+                "virtual multipart entry size mismatch: expected {}, got {}",
+                expected_size, self.bytes_written
+            )));
+        }
+        Ok(MultipartVirtualWriteResult {
+            content_hash: *self.hasher.finalize().as_bytes(),
+            first_locator: self.first_locator,
+            parts: self.parts,
+        })
+    }
+}
+
+impl<O: BackupOutput> Write for MultipartVirtualEntryWriter<'_, O> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.bytes_written += buf.len() as u64;
+        self.hasher.update(buf);
+        self.chunk.extend_from_slice(buf);
+        while self.chunk.len() >= MULTIPART_CHUNK_BYTES {
+            let tail = self.chunk.split_off(MULTIPART_CHUNK_BYTES);
+            self.flush_chunk()
+                .map_err(|err| std::io::Error::other(err.to_string()))?;
+            self.chunk = tail;
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 pub fn parallel_compress_pipeline(
     files: &[ScannedSourceFile],
     codec: Codec,
@@ -1084,7 +1610,15 @@ pub fn parallel_compress_pipeline(
         files
             .par_iter()
             .map(|file| {
-                let requested = effective_codec_for_path(file, codec);
+                let requested = effective_codec_for_path(
+                    file,
+                    &BackupOptions {
+                        codec,
+                        auto_compression: false,
+                        zstd_level: level,
+                        split_size: None,
+                    },
+                );
                 let prepared = prepare_blob_record(file, requested, level)?;
                 Ok(CompressedBlob {
                     path: file.rel.clone(),
@@ -1100,7 +1634,15 @@ pub fn parallel_compress_pipeline(
         files
             .iter()
             .map(|file| {
-                let requested = effective_codec_for_path(file, codec);
+                let requested = effective_codec_for_path(
+                    file,
+                    &BackupOptions {
+                        codec,
+                        auto_compression: false,
+                        zstd_level: level,
+                        split_size: None,
+                    },
+                );
                 let prepared = prepare_blob_record(file, requested, level)?;
                 Ok(CompressedBlob {
                     path: file.rel.clone(),
@@ -1151,6 +1693,7 @@ fn is_output_artifact(path: &Path, base: &Path) -> bool {
 struct VolumeOutput {
     base_path: PathBuf,
     split_size: u64,
+    min_reader_version: u32,
     set_id: u64,
     current_index: u16,
     current_len: u64,
@@ -1158,14 +1701,99 @@ struct VolumeOutput {
     paths: Vec<PathBuf>,
 }
 
+trait BackupOutput {
+    fn write_record(
+        &mut self,
+        record: &[u8],
+        trailing_reserve: u64,
+    ) -> Result<(u16, u64), WriterError>;
+    fn write_footer(&mut self, checkpoint_offset: u64) -> Result<(), WriterError>;
+    fn sync_current(&mut self) -> Result<(), WriterError>;
+    fn current_len(&self) -> u64;
+    fn total_volumes(&self) -> u16;
+    fn last_volume_path(&self) -> &Path;
+}
+
+struct SingleVolumeOutput {
+    path: PathBuf,
+    current_len: u64,
+    file: File,
+}
+
+impl SingleVolumeOutput {
+    fn new(path: &Path, min_reader_version: u32) -> Result<Self, WriterError> {
+        let mut file = File::create(path).map_err(|err| WriterError::Io(err.to_string()))?;
+        let header = Header {
+            write_version: XUNBAK_WRITE_VERSION,
+            min_reader_version,
+            flags: 0,
+            created_at_unix: now_unix_secs(),
+            split: None,
+        };
+        file.write_all(&header.to_bytes())
+            .map_err(|err| WriterError::Io(err.to_string()))?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            current_len: HEADER_SIZE as u64,
+            file,
+        })
+    }
+}
+
+impl BackupOutput for SingleVolumeOutput {
+    fn write_record(
+        &mut self,
+        record: &[u8],
+        _trailing_reserve: u64,
+    ) -> Result<(u16, u64), WriterError> {
+        let offset = self.current_len;
+        self.file
+            .write_all(record)
+            .map_err(|err| WriterError::Io(err.to_string()))?;
+        self.current_len += record.len() as u64;
+        Ok((0, offset))
+    }
+
+    fn write_footer(&mut self, checkpoint_offset: u64) -> Result<(), WriterError> {
+        let footer = Footer { checkpoint_offset };
+        self.file
+            .write_all(&footer.to_bytes())
+            .map_err(|err| WriterError::Io(err.to_string()))?;
+        self.current_len += FOOTER_SIZE as u64;
+        Ok(())
+    }
+
+    fn sync_current(&mut self) -> Result<(), WriterError> {
+        self.file
+            .sync_all()
+            .map_err(|err| WriterError::Io(err.to_string()))
+    }
+
+    fn current_len(&self) -> u64 {
+        self.current_len
+    }
+
+    fn total_volumes(&self) -> u16 {
+        1
+    }
+
+    fn last_volume_path(&self) -> &Path {
+        &self.path
+    }
+}
+
 impl VolumeOutput {
-    fn new(base_path: &Path, split_size: u64) -> Result<Self, WriterError> {
+    fn new(
+        base_path: &Path,
+        split_size: u64,
+        min_reader_version: u32,
+    ) -> Result<Self, WriterError> {
         let set_id = generate_set_id(base_path);
         let first_path = split_volume_path(base_path, 0);
         let mut file = File::create(&first_path).map_err(|err| WriterError::Io(err.to_string()))?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
-            min_reader_version: XUNBAK_READER_VERSION,
+            min_reader_version,
             flags: FLAG_SPLIT,
             created_at_unix: now_unix_secs(),
             split: Some(crate::xunbak::header::SplitHeader {
@@ -1179,6 +1807,7 @@ impl VolumeOutput {
         Ok(Self {
             base_path: base_path.to_path_buf(),
             split_size,
+            min_reader_version,
             set_id,
             current_index: 0,
             current_len: HEADER_SIZE as u64,
@@ -1247,7 +1876,7 @@ impl VolumeOutput {
         let mut file = File::create(&path).map_err(|err| WriterError::Io(err.to_string()))?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
-            min_reader_version: XUNBAK_READER_VERSION,
+            min_reader_version: self.min_reader_version,
             flags: FLAG_SPLIT,
             created_at_unix: now_unix_secs(),
             split: Some(crate::xunbak::header::SplitHeader {
@@ -1267,6 +1896,7 @@ impl VolumeOutput {
     fn from_existing_split(
         base_path: &Path,
         split_size: u64,
+        min_reader_version: u32,
         set_id: u64,
         existing_paths: &[PathBuf],
         last_volume_len_without_footer: u64,
@@ -1287,12 +1917,43 @@ impl VolumeOutput {
         Ok(Self {
             base_path: base_path.to_path_buf(),
             split_size,
+            min_reader_version,
             set_id,
             current_index: (existing_paths.len() - 1) as u16,
             current_len: last_volume_len_without_footer,
             file,
             paths: existing_paths.to_vec(),
         })
+    }
+}
+
+impl BackupOutput for VolumeOutput {
+    fn write_record(
+        &mut self,
+        record: &[u8],
+        trailing_reserve: u64,
+    ) -> Result<(u16, u64), WriterError> {
+        Self::write_record(self, record, trailing_reserve)
+    }
+
+    fn write_footer(&mut self, checkpoint_offset: u64) -> Result<(), WriterError> {
+        Self::write_footer(self, checkpoint_offset)
+    }
+
+    fn sync_current(&mut self) -> Result<(), WriterError> {
+        Self::sync_current(self)
+    }
+
+    fn current_len(&self) -> u64 {
+        self.current_len
+    }
+
+    fn total_volumes(&self) -> u16 {
+        Self::total_volumes(self)
+    }
+
+    fn last_volume_path(&self) -> &Path {
+        Self::last_volume_path(self)
     }
 }
 
@@ -1326,7 +1987,11 @@ fn backup_split_with_progress(
 ) -> Result<BackupResult, WriterError> {
     let split_size = options.split_size.expect("checked by caller");
     cleanup_existing_split_outputs(container_path)?;
-    let mut output = VolumeOutput::new(container_path, split_size)?;
+    let mut output = VolumeOutput::new(
+        container_path,
+        split_size,
+        min_reader_version_for_options(options),
+    )?;
     let mut scanned = Vec::new();
     collect_files(source_dir, source_dir, &mut scanned, Some(container_path))?;
     scanned.sort_by(|a, b| a.rel.cmp(&b.rel));
@@ -1357,7 +2022,7 @@ fn backup_split_with_progress(
                 });
                 continue;
             }
-            let requested_codec = effective_codec_for_path(item, options.codec);
+            let requested_codec = effective_codec_for_path(item, options);
             let mut input =
                 File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
             let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
@@ -1424,7 +2089,7 @@ fn backup_split_with_progress(
                 },
             );
         } else {
-            let requested_codec = effective_codec_for_path(item, options.codec);
+            let requested_codec = effective_codec_for_path(item, options);
             let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
             let content_hash = prepared.content_hash;
             if let Some(locator) = content_index.get(&content_hash) {
@@ -1575,6 +2240,7 @@ fn update_split_with_progress(
     let mut output = VolumeOutput::from_existing_split(
         &base_path,
         split.split_size,
+        min_reader_version_for_options(options),
         split.set_id,
         &reader.volume_paths,
         last_volume_len_without_footer,
@@ -1621,7 +2287,7 @@ fn update_split_with_progress(
                 continue;
             }
 
-            let requested_codec = effective_codec_for_path(item, options.codec);
+            let requested_codec = effective_codec_for_path(item, options);
             let mut input =
                 File::open(&item.path).map_err(|err| WriterError::Io(err.to_string()))?;
             let mut chunk = vec![0u8; MULTIPART_CHUNK_BYTES];
@@ -1689,7 +2355,7 @@ fn update_split_with_progress(
                 },
             );
         } else {
-            let requested_codec = effective_codec_for_path(item, options.codec);
+            let requested_codec = effective_codec_for_path(item, options);
             let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
             let content_hash = prepared.content_hash;
             if let Some(locator) = content_index.get(&content_hash) {

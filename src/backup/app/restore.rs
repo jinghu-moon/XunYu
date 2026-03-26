@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
 use crate::backup::artifact::entry::{file_attributes, system_time_to_unix_ns};
-use crate::backup::artifact::reader::open_entry_reader;
+use crate::backup::artifact::reader::{open_entry_reader, sort_entries_for_read_locality};
 use crate::backup::artifact::sevenz::{restore_7z_entries, restore_7z_single};
 use crate::backup::artifact::source::read_artifact_entries;
 use crate::cli::BackupRestoreCmd;
@@ -508,7 +508,15 @@ fn build_restore_preview_items_from_artifact(
     dest_root: &Path,
     mode: PreviewMode<'_>,
 ) -> Result<Vec<RestorePreviewItem>, CliError> {
-    let entries = read_artifact_entries(backup_src)?;
+    let mut entries = read_artifact_entries(backup_src)?;
+    if entries.first().is_some_and(|entry| {
+        !matches!(
+            entry.kind,
+            crate::backup::artifact::entry::SourceKind::XunbakArtifact
+        )
+    }) {
+        sort_entries_for_read_locality(&mut entries)?;
+    }
     let mut items = Vec::new();
     for entry in entries {
         let rel = entry.path.replace('/', "\\");
@@ -916,8 +924,10 @@ mod tests {
         crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&input_entry],
             &artifact,
+            &dir.path().display().to_string(),
             &crate::xunbak::writer::BackupOptions {
                 codec: crate::xunbak::constants::Codec::NONE,
+                auto_compression: false,
                 zstd_level: 1,
                 split_size: None,
             },

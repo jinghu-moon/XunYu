@@ -1,8 +1,11 @@
-use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
+use crate::backup::artifact::entry::SourceEntry;
+use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup::artifact::sevenz::{list_7z_entries, list_7z_method_names};
+use crate::backup::artifact::source::read_artifact_entries;
 use crate::backup::artifact::zip_ppmd::{contains_ppmd_entries, verify_ppmd_zip_entries};
 use crate::backup_formats::{BackupArtifactFormat, VerifyOutputMode, VerifySourceMode};
 use crate::output::{CliError, CliResult};
@@ -91,19 +94,7 @@ pub(crate) fn verify_output(
 
     match format {
         BackupArtifactFormat::Zip => {
-            let file = fs::File::open(path).map_err(|err| {
-                CliError::new(
-                    1,
-                    format!("backup convert output verify failed: open zip: {err}"),
-                )
-            })?;
-            zip::ZipArchive::new(file).map_err(|err| {
-                CliError::with_details(
-                    1,
-                    format!("backup convert output verify failed: invalid zip: {err}"),
-                    &["Fix: Re-run export and inspect disk/full-path issues if this persists."],
-                )
-            })?;
+            verify_entries_content(path)?;
             if contains_ppmd_entries(path).unwrap_or(false) {
                 verify_ppmd_zip_entries(path)?;
             }
@@ -136,13 +127,8 @@ pub(crate) fn verify_output(
             }
         }
         BackupArtifactFormat::SevenZ => {
-            list_7z_entries(path).map_err(|err| {
-                CliError::with_details(
-                    1,
-                    format!("backup convert output verify failed: {}", err.message),
-                    &["Fix: Re-run export and inspect output integrity."],
-                )
-            })?;
+            list_7z_entries(path).map_err(|err| verify_output_error(path, None, err.message))?;
+            verify_entries_content(path)?;
             if let Some(cmd) = find_external_7z() {
                 let target = external_7z_target(path);
                 let output = Command::new(&cmd)
@@ -181,6 +167,9 @@ fn is_xunbak_path(path: &Path) -> bool {
 }
 
 fn find_external_7z() -> Option<String> {
+    if std::env::var_os("XUN_TEST_DISABLE_EXTERNAL_7Z").is_some() {
+        return None;
+    }
     for candidate in ["7z.exe", "7z", "7za.exe", "7za", "7zr.exe", "7zr"] {
         if Command::new(candidate).arg("i").output().is_ok() {
             return Some(candidate.to_string());
@@ -253,6 +242,80 @@ fn first_external_7z_error_line(output: &std::process::Output) -> Option<String>
                     || line.contains("Can not open the file as"))
         })
         .map(str::to_string)
+}
+
+fn verify_entries_content(path: &Path) -> CliResult {
+    let entries = read_artifact_entries(path)
+        .map_err(|err| verify_output_error(path, None, err.message.clone()))?;
+    for entry in &entries {
+        verify_entry_content(entry)
+            .map_err(|err| verify_output_error(path, Some(&entry.path), err.message))?;
+    }
+    Ok(())
+}
+
+fn verify_entry_content(entry: &SourceEntry) -> CliResult {
+    let mut sink = VerifyingSink::new();
+    copy_entry_to_writer(entry, &mut sink).map_err(|err| CliError::new(1, err.message))?;
+    if sink.bytes_written != entry.size {
+        return Err(CliError::new(
+            1,
+            format!(
+                "content size mismatch: expected {}, got {}",
+                entry.size, sink.bytes_written
+            ),
+        ));
+    }
+    if let Some(expected) = entry.content_hash
+        && sink.finalize() != expected
+    {
+        return Err(CliError::new(1, "content hash mismatch"));
+    }
+    Ok(())
+}
+
+fn verify_output_error(path: &Path, entry_path: Option<&str>, message: String) -> CliError {
+    let mut details = vec![format!("Source: {}", path.display())];
+    if let Some(entry_path) = entry_path {
+        details.push(format!("Path: {entry_path}"));
+    }
+    details.push("Fix: Re-run export and inspect output integrity.".to_string());
+    let refs: Vec<&str> = details.iter().map(String::as_str).collect();
+    CliError::with_details(
+        1,
+        format!("backup convert output verify failed: {message}"),
+        &refs,
+    )
+}
+
+struct VerifyingSink {
+    bytes_written: u64,
+    hasher: blake3::Hasher,
+}
+
+impl VerifyingSink {
+    fn new() -> Self {
+        Self {
+            bytes_written: 0,
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    fn finalize(self) -> [u8; 32] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl Write for VerifyingSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.bytes_written += buf.len() as u64;
+        self.hasher.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -18,7 +18,8 @@ pub struct BackupCmd {
     #[argh(option)]
     pub container: Option<String>,
 
-    /// compression profile for xunbak mode: none | zstd | zstd:N | lz4 | lzma | auto
+    /// compression profile for xunbak mode:
+    /// zstd (default) | zstd:N | none | auto | lz4 (fast) | ppmd (text-heavy) | lzma2 (slow archive) | deflate/bzip2 (compatibility)
     #[argh(option)]
     #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
     pub compression: Option<String>,
@@ -143,7 +144,8 @@ pub struct BackupCreateCmd {
     #[argh(option, short = 'o')]
     pub output: Option<String>,
 
-    /// compression profile for xunbak mode: none | zstd | zstd:N | lz4 | lzma | auto
+    /// compression profile for xunbak mode:
+    /// zstd (default) | zstd:N | none | auto | lz4 (fast) | ppmd (text-heavy) | lzma2 (slow archive) | deflate/bzip2 (compatibility)
     #[argh(option)]
     pub compression: Option<String>,
 

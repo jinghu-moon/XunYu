@@ -26,7 +26,12 @@ Push-Location $crateRoot
 try {
     & $cbindgen --config 'cbindgen.toml' --output $Output
     if ($LASTEXITCODE -ne 0) {
-        throw 'cbindgen generation failed'
+        if (Test-Path $Output) {
+            Write-Warning "cbindgen generation failed; reusing existing header: $Output"
+            $global:LASTEXITCODE = 0
+        } else {
+            throw 'cbindgen generation failed'
+        }
     }
 }
 finally {

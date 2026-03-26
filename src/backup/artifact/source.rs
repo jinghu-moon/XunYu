@@ -29,8 +29,8 @@ pub(crate) fn read_artifact_entries(path: &Path) -> Result<Vec<SourceEntry>, Cli
         2,
         format!("Unsupported backup artifact: {}", path.display()),
         &[
-            "Fix: Pass a directory backup, .zip, .xunbak, or .xunbak.001 path.",
-            "Fix: Continue implementing 7z artifact support.",
+            "Fix: Pass a directory backup, .zip, .7z, .xunbak, or .xunbak.001 path.",
+            "Fix: Check the file extension and ensure the artifact exists.",
         ],
     ))
 }
@@ -288,6 +288,19 @@ mod tests {
     }
 
     #[test]
+    fn read_artifact_entries_unsupported_path_uses_current_fix_hints() {
+        let dir = tempdir().unwrap();
+        let err = read_artifact_entries(&dir.path().join("unknown.bin")).unwrap_err();
+        assert!(err.message.contains("Unsupported backup artifact"));
+        assert!(err.details.iter().any(|line| line.contains(".7z")));
+        assert!(
+            !err.details
+                .iter()
+                .any(|line| line.contains("Continue implementing 7z"))
+        );
+    }
+
+    #[test]
     fn read_artifact_entries_lists_ppmd_zip_files() {
         let dir = tempdir().unwrap();
         let source = dir.path().join("a.txt");
@@ -339,8 +352,10 @@ mod tests {
         crate::backup::artifact::xunbak::write_entries_to_xunbak(
             &[&entry],
             &artifact,
+            &dir.path().display().to_string(),
             &crate::xunbak::writer::BackupOptions {
                 codec: crate::xunbak::constants::Codec::NONE,
+                auto_compression: false,
                 zstd_level: 1,
                 split_size: None,
             },

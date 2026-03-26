@@ -7,7 +7,8 @@ pub const RECORD_PREFIX_SIZE: usize = 13;
 pub const BLOB_HEADER_SIZE: usize = 50;
 pub const CHECKPOINT_PAYLOAD_SIZE: usize = 128;
 pub const XUNBAK_WRITE_VERSION: u32 = 1;
-pub const XUNBAK_READER_VERSION: u32 = 1;
+pub const XUNBAK_LEGACY_READER_VERSION: u32 = 1;
+pub const XUNBAK_READER_VERSION: u32 = 2;
 
 pub const FLAG_SPLIT: u64 = 0x01;
 pub const FLAG_ALIGNED: u64 = 0x02;
@@ -57,7 +58,10 @@ impl Codec {
     pub const NONE: Self = Self(0x00);
     pub const ZSTD: Self = Self(0x01);
     pub const LZ4: Self = Self(0x02);
-    pub const LZMA: Self = Self(0x03);
+    pub const LZMA2: Self = Self(0x03);
+    pub const DEFLATE: Self = Self(0x04);
+    pub const BZIP2: Self = Self(0x05);
+    pub const PPMD: Self = Self(0x06);
 
     pub const fn from_u8(value: u8) -> Self {
         Self(value)
@@ -68,7 +72,7 @@ impl Codec {
     }
 
     pub const fn is_known(self) -> bool {
-        matches!(self.0, 0x00..=0x03)
+        matches!(self.0, 0x00..=0x06)
     }
 }
 

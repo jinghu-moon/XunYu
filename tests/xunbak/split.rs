@@ -9,6 +9,7 @@ use xun::xunbak::writer::{BackupOptions, ContainerWriter};
 fn split_options() -> BackupOptions {
     BackupOptions {
         codec: Codec::NONE,
+        auto_compression: false,
         zstd_level: 1,
         split_size: Some(1900),
     }
@@ -17,6 +18,7 @@ fn split_options() -> BackupOptions {
 fn split_update_options() -> BackupOptions {
     BackupOptions {
         codec: Codec::NONE,
+        auto_compression: false,
         zstd_level: 1,
         split_size: Some(2800),
     }
@@ -237,6 +239,7 @@ fn split_large_file_uses_parts_across_volumes_and_restores() {
         &source,
         &BackupOptions {
             codec: Codec::ZSTD,
+            auto_compression: false,
             zstd_level: 1,
             split_size: Some(20 * 1024 * 1024),
         },

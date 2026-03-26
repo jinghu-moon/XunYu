@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use crate::xunbak::codec::{self, CodecError, compression_is_beneficial};
+use crate::xunbak::codec::{self, CodecError};
 use crate::xunbak::constants::{BLOB_HEADER_SIZE, Codec, RecordType};
 use crate::xunbak::record::{RecordPrefix, RecordScanError, compute_record_crc};
 
@@ -95,19 +95,18 @@ pub fn write_blob_record<W: Write>(
     codec: Codec,
     level: i32,
 ) -> Result<BlobWriteResult, BlobRecordError> {
-    let mut effective_codec = codec;
+    let raw_size = content.len() as u64;
     let mut compressed = codec::compress(codec, content, level)?;
-    if codec != Codec::NONE
-        && !compression_is_beneficial(content.len() as u64, compressed.len() as u64)
-    {
-        effective_codec = Codec::NONE;
+    let effective_codec =
+        codec::effective_codec_after_compression(codec, raw_size, compressed.len() as u64);
+    if effective_codec != codec {
         compressed = content.to_vec();
     }
     let header = BlobHeader {
         blob_id: *blake3::hash(content).as_bytes(),
         blob_flags: 0,
         codec: effective_codec,
-        raw_size: content.len() as u64,
+        raw_size,
         stored_size: compressed.len() as u64,
     };
     let header_bytes = header.to_bytes();
@@ -273,25 +272,11 @@ pub fn copy_blob_record_content_to_writer<R: Read, W: Write>(
     }
 
     let mut hashing_writer = HashingWriter::new(writer);
-    let copied_bytes = match header.codec {
-        codec if codec == Codec::NONE => {
-            let mut limited = reader.take(header.stored_size);
-            std::io::copy(&mut limited, &mut hashing_writer)
-                .map_err(|err| BlobRecordError::Io(err.to_string()))?
-        }
-        codec if codec == Codec::ZSTD => {
-            let limited = reader.take(header.stored_size);
-            let mut decoder = zstd::stream::Decoder::new(limited)
-                .map_err(|err| CodecError::ZstdDecode(err.to_string()))?;
-            std::io::copy(&mut decoder, &mut hashing_writer)
-                .map_err(|err| BlobRecordError::Io(err.to_string()))?
-        }
-        codec => {
-            return Err(BlobRecordError::Codec(CodecError::UnsupportedCodec(
-                codec.as_u8(),
-            )));
-        }
-    };
+    let limited = reader.take(header.stored_size);
+    let mut decoder =
+        codec::decompressed_reader(header.codec, limited).map_err(BlobRecordError::Codec)?;
+    let copied_bytes = std::io::copy(&mut decoder, &mut hashing_writer)
+        .map_err(|err| BlobRecordError::Io(err.to_string()))?;
 
     if copied_bytes != header.raw_size {
         return Err(BlobRecordError::BlobLengthMismatch {

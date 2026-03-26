@@ -167,6 +167,7 @@ fn fixture_split_incremental_update_restores_latest_state() {
     let base = dir.path().join("sample.xunbak");
     let options = BackupOptions {
         codec: Codec::ZSTD,
+        auto_compression: false,
         zstd_level: 1,
         split_size: Some(180 * 1024),
     };

@@ -6,7 +6,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::open_entry_reader;
-use crate::backup::artifact::sevenz_segmented::{MultiVolumeReader, resolve_multivolume_base};
+use crate::backup::artifact::sevenz_segmented::{
+    MultiVolumeReader, SegmentedWriter, resolve_multivolume_base,
+};
 use crate::output::CliError;
 use sevenz_rust2::encoder_options::{
     Bzip2Options, DeflateOptions, Lzma2Options, PpmdOptions, ZstandardOptions,
@@ -24,6 +26,26 @@ pub enum SevenZMethod {
     Deflate,
     Ppmd,
     Zstd,
+}
+
+pub(crate) fn parse_sevenz_method_for_cli(
+    command: &str,
+    method: Option<&str>,
+) -> Result<SevenZMethod, CliError> {
+    match method.map(|value| value.trim().to_ascii_lowercase()) {
+        None => Ok(SevenZMethod::Lzma2),
+        Some(value) if value == "lzma2" => Ok(SevenZMethod::Lzma2),
+        Some(value) if value == "copy" => Ok(SevenZMethod::Copy),
+        Some(value) if value == "bzip2" => Ok(SevenZMethod::Bzip2),
+        Some(value) if value == "deflate" => Ok(SevenZMethod::Deflate),
+        Some(value) if value == "ppmd" => Ok(SevenZMethod::Ppmd),
+        Some(value) if value == "zstd" => Ok(SevenZMethod::Zstd),
+        Some(value) => Err(CliError::with_details(
+            2,
+            format!("{command} --method {value} is invalid for 7z"),
+            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
+        )),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,15 +115,34 @@ pub(crate) fn write_entries_to_7z_split(
         })?;
     }
 
-    let temp_single = destination_base.with_extension("tmp.single.7z");
-    if temp_single.exists() {
-        let _ = fs::remove_file(&temp_single);
-    }
-    let summary = write_entries_to_7z(entries, &temp_single, options)?;
-    let split_result = split_file_to_volumes(&temp_single, destination_base, split_size);
-    let _ = fs::remove_file(&temp_single);
-    split_result?;
-    Ok(summary)
+    let writer = SegmentedWriter::create(destination_base, split_size).map_err(|err| {
+        CliError::new(
+            1,
+            format!(
+                "Create 7z split writer failed {}: {err}",
+                destination_base.display()
+            ),
+        )
+    })?;
+    let writer = ArchiveWriter::new(writer)
+        .map_err(|err| CliError::new(1, format!("Create 7z split archive failed: {err}")))?;
+    let writer = write_entries_with_writer(entries, writer, options)?;
+    let writer = writer
+        .finish()
+        .map_err(|err| CliError::new(1, format!("Finalize 7z split archive failed: {err}")))?;
+    writer.finish().map_err(|err| {
+        CliError::new(
+            1,
+            format!(
+                "Flush 7z split volumes failed {}: {err}",
+                destination_base.display()
+            ),
+        )
+    })?;
+    Ok(SevenZWriteSummary {
+        entry_count: entries.len(),
+        bytes_in: entries.iter().map(|entry| entry.size).sum(),
+    })
 }
 
 fn write_entries_with_writer<W: Write + Seek>(
@@ -160,14 +201,6 @@ pub(crate) fn list_7z_entries(path: &Path) -> Result<Vec<SourceEntry>, CliError>
 
 pub(crate) fn list_7z_method_names(path: &Path) -> Result<Vec<String>, CliError> {
     with_archive_reader(path, |reader, _| Ok(collect_method_names(reader.archive())))
-}
-
-pub(crate) fn read_7z_file(src: &Path, name: &str) -> Result<Vec<u8>, CliError> {
-    with_archive_reader(src, |reader, _| {
-        reader
-            .read_file(name)
-            .map_err(|err| CliError::new(1, format!("Read 7z file failed {name}: {err}")))
-    })
 }
 
 pub(crate) fn restore_7z_entries<F>(
@@ -457,33 +490,4 @@ fn build_archive_entry(entry: &SourceEntry) -> ArchiveEntry {
 
 fn system_time_from_unix_ns(value: u64) -> Option<SystemTime> {
     UNIX_EPOCH.checked_add(Duration::from_nanos(value))
-}
-
-fn split_file_to_volumes(source: &Path, base_path: &Path, split_size: u64) -> Result<(), CliError> {
-    let mut input = fs::File::open(source).map_err(|err| {
-        CliError::new(
-            1,
-            format!("Open temporary 7z failed {}: {err}", source.display()),
-        )
-    })?;
-    let mut index = 1u32;
-    let mut buffer = vec![0u8; split_size as usize];
-
-    loop {
-        let read = input.read(&mut buffer).map_err(|err| {
-            CliError::new(
-                1,
-                format!("Read temporary 7z failed {}: {err}", source.display()),
-            )
-        })?;
-        if read == 0 {
-            break;
-        }
-        let volume = format!("{}.{index:03}", base_path.display());
-        fs::write(&volume, &buffer[..read]).map_err(|err| {
-            CliError::new(1, format!("Write split 7z volume failed {volume}: {err}"))
-        })?;
-        index += 1;
-    }
-    Ok(())
 }

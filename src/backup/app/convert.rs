@@ -1,14 +1,14 @@
 use std::fs;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::time::Instant;
-#[cfg(feature = "xunbak")]
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use dialoguer::Confirm;
 use serde::Serialize;
-#[cfg(feature = "xunbak")]
-use uuid::Uuid;
 
+use crate::backup::artifact::common::{
+    collect_file_or_numbered_outputs, parse_split_size_bytes, paths_equal,
+    resolve_effective_overwrite,
+};
 use crate::backup::artifact::dir::write_entries_to_dir;
 use crate::backup::artifact::options::BackupConvertOptions;
 use crate::backup::artifact::output_plan::{
@@ -17,11 +17,11 @@ use crate::backup::artifact::output_plan::{
 use crate::backup::artifact::progress::{
     ExportProgressEvent, ExportProgressPhase, emit_progress_event, should_emit_progress,
 };
-#[cfg(feature = "xunbak")]
-use crate::backup::artifact::reader::copy_entry_to_path;
+use crate::backup::artifact::reader::sort_entry_refs_for_read_locality;
 use crate::backup::artifact::selection::select_entries;
 use crate::backup::artifact::sevenz::{
-    SevenZMethod, SevenZWriteOptions, write_entries_to_7z, write_entries_to_7z_split,
+    SevenZMethod, SevenZWriteOptions, parse_sevenz_method_for_cli, write_entries_to_7z,
+    write_entries_to_7z_split,
 };
 use crate::backup::artifact::sidecar::{
     SidecarPackingHint, build_sidecar_bytes, source_info_for_convert, write_sidecar_to_dir,
@@ -33,7 +33,7 @@ use crate::backup::artifact::zip::{
 };
 use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus, OverwriteMode};
 use crate::cli::BackupConvertCmd;
-use crate::output::{CliError, CliResult, can_interact};
+use crate::output::{CliError, CliResult};
 
 #[derive(Serialize)]
 struct BackupConvertSelectionSummary {
@@ -265,7 +265,8 @@ fn execute_backup_convert_to_dir(
 ) -> CliResult<BackupConvertWriteResult> {
     let phase_started = Instant::now();
     let entries = read_artifact_entries(&options.artifact)?;
-    let selected = select_entries(&entries, &options.selection);
+    let mut selected = select_entries(&entries, &options.selection);
+    sort_entry_refs_for_read_locality(&mut selected)?;
     let show_progress = should_emit_progress(options.progress, options.json);
     let bytes_in_selected: u64 = selected.iter().map(|entry| entry.size).sum();
     if show_progress {
@@ -363,7 +364,8 @@ fn execute_backup_convert_to_zip(
 
     let phase_started = Instant::now();
     let entries = read_artifact_entries(&options.artifact)?;
-    let selected = select_entries(&entries, &options.selection);
+    let mut selected = select_entries(&entries, &options.selection);
+    sort_entry_refs_for_read_locality(&mut selected)?;
     let show_progress = should_emit_progress(options.progress, options.json);
     let bytes_in_selected: u64 = selected.iter().map(|entry| entry.size).sum();
     if show_progress {
@@ -466,7 +468,8 @@ fn execute_backup_convert_to_7z(
 
     let phase_started = Instant::now();
     let entries = read_artifact_entries(&options.artifact)?;
-    let selected = select_entries(&entries, &options.selection);
+    let mut selected = select_entries(&entries, &options.selection);
+    sort_entry_refs_for_read_locality(&mut selected)?;
     let show_progress = should_emit_progress(options.progress, options.json);
     let bytes_in_selected: u64 = selected.iter().map(|entry| entry.size).sum();
     if show_progress {
@@ -585,8 +588,6 @@ fn execute_backup_convert_to_xunbak(
     {
         use crate::backup::artifact::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
         let options = _options;
-        use crate::xunbak::codec::parse_compression_arg;
-        use crate::xunbak::writer::ContainerWriter;
 
         if paths_equal(&options.artifact, &options.output) {
             return Err(CliError::with_details(
@@ -597,7 +598,8 @@ fn execute_backup_convert_to_xunbak(
         }
 
         let entries = read_artifact_entries(&options.artifact)?;
-        let selected = select_entries(&entries, &options.selection);
+        let mut selected = select_entries(&entries, &options.selection);
+        sort_entry_refs_for_read_locality(&mut selected)?;
         let effective_overwrite =
             resolve_effective_overwrite(&options.output, options.overwrite, "file")?;
         if matches!(effective_overwrite, OverwriteMode::Replace) {
@@ -616,45 +618,36 @@ fn execute_backup_convert_to_xunbak(
             ));
         }
 
-        let staging_dir = create_staging_dir("xunbak-convert")?;
-        let copy_result = (|| -> CliResult<(usize, u64)> {
-            let mut written = 0usize;
-            let mut bytes_in = 0u64;
-            for entry in selected {
-                let dest = staging_dir.join(entry.path.replace('/', "\\"));
-                copy_entry_to_path(entry, &dest)?;
-                written += 1;
-                bytes_in += entry.size;
-            }
-            Ok((written, bytes_in))
-        })();
-        let (written, bytes_in) = match copy_result {
-            Ok(result) => result,
-            Err(err) => {
-                let _ = fs::remove_dir_all(&staging_dir);
-                return Err(err);
-            }
-        };
+        let written = selected.len();
+        let bytes_in: u64 = selected.iter().map(|entry| entry.size).sum();
+        let source_root = source_info_for_convert(&options.artifact).source_root;
 
         let backup_options = backup_options_from_convert(options, |raw| {
-            parse_compression_arg(raw).map_err(|err| CliError::new(2, err.to_string()))
+            crate::backup::app::xunbak::build_backup_options_from_mode(
+                crate::backup::app::xunbak::parse_xunbak_compression_arg(raw)?,
+                options.split_size.as_deref(),
+                options.level.map(|value| value as i32),
+            )
         })?;
         let result = if backup_options.split_size.is_none() {
             let plan = XunbakOutputPlan::prepare(&options.output, OverwriteMode::Replace)?;
-            let result = ContainerWriter::backup(plan.temp_path(), &staging_dir, &backup_options)
-                .map_err(|err| CliError::new(2, err.to_string()));
+            let result = crate::backup::artifact::xunbak::write_entries_to_xunbak(
+                &selected,
+                plan.temp_path(),
+                &source_root,
+                &backup_options,
+                OverwriteMode::Replace,
+            );
             match result {
-                Ok(result) => {
+                Ok(_result) => {
                     if let Err(err) = maybe_fail_after_write_for_tests() {
                         let _ = plan.cleanup();
-                        let _ = fs::remove_dir_all(&staging_dir);
                         return Err(err);
                     }
                     if let Err(err) = plan.finalize() {
-                        let _ = fs::remove_dir_all(&staging_dir);
                         return Err(err);
                     }
-                    Ok(result)
+                    Ok(())
                 }
                 Err(err) => {
                     let _ = plan.cleanup();
@@ -663,21 +656,23 @@ fn execute_backup_convert_to_xunbak(
             }
         } else {
             let plan = XunbakSplitOutputPlan::prepare(&options.output, OverwriteMode::Replace)?;
-            let result =
-                ContainerWriter::backup(plan.temp_base_path(), &staging_dir, &backup_options)
-                    .map_err(|err| CliError::new(2, err.to_string()));
+            let result = crate::backup::artifact::xunbak::write_entries_to_xunbak(
+                &selected,
+                plan.temp_base_path(),
+                &source_root,
+                &backup_options,
+                OverwriteMode::Replace,
+            );
             match result {
-                Ok(result) => {
+                Ok(_result) => {
                     if let Err(err) = maybe_fail_after_write_for_tests() {
                         let _ = plan.cleanup();
-                        let _ = fs::remove_dir_all(&staging_dir);
                         return Err(err);
                     }
                     if let Err(err) = plan.finalize() {
-                        let _ = fs::remove_dir_all(&staging_dir);
                         return Err(err);
                     }
-                    Ok(result)
+                    Ok(())
                 }
                 Err(err) => {
                     let _ = plan.cleanup();
@@ -685,9 +680,8 @@ fn execute_backup_convert_to_xunbak(
                 }
             }
         };
-        let _ = fs::remove_dir_all(&staging_dir);
         match result {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(err) => {
                 let _ = remove_xunbak_outputs(&options.output);
                 return Err(err);
@@ -757,89 +751,8 @@ fn remove_existing_path(path: &Path) -> CliResult {
     Ok(())
 }
 
-fn resolve_effective_overwrite(
-    output: &Path,
-    overwrite: OverwriteMode,
-    output_kind: &str,
-) -> CliResult<OverwriteMode> {
-    if !output.exists() {
-        return Ok(overwrite);
-    }
-    match overwrite {
-        OverwriteMode::Fail => Err(CliError::with_details(
-            2,
-            format!("backup convert output already exists: {}", output.display()),
-            &["Fix: Remove the destination, or pass `--overwrite replace`."],
-        )),
-        OverwriteMode::Ask => {
-            if !can_interact() {
-                return Err(CliError::with_details(
-                    2,
-                    format!(
-                        "backup convert output already exists and cannot prompt: {}",
-                        output.display()
-                    ),
-                    &[
-                        "Fix: Pass `--overwrite replace` or `--overwrite fail` in non-interactive mode.",
-                    ],
-                ));
-            }
-            let confirmed = Confirm::new()
-                .with_prompt(format!(
-                    "Replace existing output {output_kind} {}?",
-                    output.display()
-                ))
-                .default(false)
-                .interact()
-                .unwrap_or(false);
-            if !confirmed {
-                return Err(CliError::new(3, "Cancelled."));
-            }
-            Ok(OverwriteMode::Replace)
-        }
-        OverwriteMode::Replace => Ok(OverwriteMode::Replace),
-    }
-}
-
 fn sevenz_method_from_options(method: Option<&str>) -> Result<SevenZMethod, CliError> {
-    match method.map(|value| value.trim().to_ascii_lowercase()) {
-        None => Ok(SevenZMethod::Lzma2),
-        Some(value) if value == "lzma2" => Ok(SevenZMethod::Lzma2),
-        Some(value) if value == "copy" => Ok(SevenZMethod::Copy),
-        Some(value) if value == "bzip2" => Ok(SevenZMethod::Bzip2),
-        Some(value) if value == "deflate" => Ok(SevenZMethod::Deflate),
-        Some(value) if value == "ppmd" => Ok(SevenZMethod::Ppmd),
-        Some(value) if value == "zstd" => Ok(SevenZMethod::Zstd),
-        Some(value) => Err(CliError::with_details(
-            2,
-            format!("backup convert --method {value} is invalid for 7z"),
-            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
-        )),
-    }
-}
-
-fn parse_split_size_bytes(raw: Option<&str>) -> Result<Option<u64>, CliError> {
-    let Some(raw) = raw else {
-        return Ok(None);
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return Ok(None);
-    }
-    let upper = value.to_ascii_uppercase();
-    let (number, multiplier) = if let Some(stripped) = upper.strip_suffix('K') {
-        (stripped, 1024u64)
-    } else if let Some(stripped) = upper.strip_suffix('M') {
-        (stripped, 1024u64 * 1024)
-    } else if let Some(stripped) = upper.strip_suffix('G') {
-        (stripped, 1024u64 * 1024 * 1024)
-    } else {
-        (upper.as_str(), 1u64)
-    };
-    let size = number
-        .parse::<u64>()
-        .map_err(|_| CliError::new(2, format!("Invalid split size: {raw}")))?;
-    Ok(Some(size.saturating_mul(multiplier)))
+    parse_sevenz_method_for_cli("backup convert", method)
 }
 
 fn emit_backup_convert_failure_json(
@@ -970,38 +883,11 @@ fn sevenz_output_bytes(output: &Path) -> u64 {
         .sum()
 }
 
-fn collect_file_or_numbered_outputs(output: &Path) -> Vec<std::path::PathBuf> {
-    if output.exists() {
-        return vec![output.to_path_buf()];
-    }
-    let mut outputs = Vec::new();
-    if let Some(parent) = output.parent()
-        && let Some(prefix) = output.file_name().and_then(|name| name.to_str())
-        && let Ok(read_dir) = fs::read_dir(parent)
-    {
-        for entry in read_dir.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with(&format!("{prefix}."))
-                && name[prefix.len() + 1..]
-                    .chars()
-                    .all(|ch| ch.is_ascii_digit())
-            {
-                outputs.push(entry.path());
-            }
-        }
-    }
-    outputs.sort();
-    outputs
-}
-
 fn maybe_corrupt_output_for_tests(options: &BackupConvertOptions) -> CliResult {
     let Some(mode) = std::env::var_os("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE") else {
         return Ok(());
     };
     let mode = mode.to_string_lossy().to_ascii_lowercase();
-    if mode != "truncate" {
-        return Ok(());
-    }
 
     match options.format {
         BackupArtifactFormat::Zip | BackupArtifactFormat::Xunbak | BackupArtifactFormat::SevenZ => {
@@ -1010,44 +896,54 @@ fn maybe_corrupt_output_for_tests(options: &BackupConvertOptions) -> CliResult {
                 .last()
                 .cloned()
                 .unwrap_or_else(|| options.output.clone());
-            let metadata = fs::metadata(&target).map_err(|err| {
-                CliError::new(
-                    1,
-                    format!(
-                        "test hook failed to read output metadata {}: {err}",
-                        target.display()
-                    ),
-                )
-            })?;
-            let shrink_by = match options.format {
-                BackupArtifactFormat::Zip => 1,
-                BackupArtifactFormat::Xunbak => 32,
-                BackupArtifactFormat::SevenZ => 1,
-                _ => 1,
-            };
-            if metadata.len() > shrink_by {
-                fs::OpenOptions::new()
-                    .write(true)
-                    .open(&target)
-                    .map_err(|err| {
+            match mode.as_str() {
+                "truncate" => {
+                    let metadata = fs::metadata(&target).map_err(|err| {
                         CliError::new(
                             1,
                             format!(
-                                "test hook failed to open output {}: {err}",
-                                target.display()
-                            ),
-                        )
-                    })?
-                    .set_len(metadata.len() - shrink_by)
-                    .map_err(|err| {
-                        CliError::new(
-                            1,
-                            format!(
-                                "test hook failed to truncate output {}: {err}",
+                                "test hook failed to read output metadata {}: {err}",
                                 target.display()
                             ),
                         )
                     })?;
+                    let shrink_by = match options.format {
+                        BackupArtifactFormat::Zip => 1,
+                        BackupArtifactFormat::Xunbak => 32,
+                        BackupArtifactFormat::SevenZ => 1,
+                        _ => 1,
+                    };
+                    if metadata.len() > shrink_by {
+                        fs::OpenOptions::new()
+                            .write(true)
+                            .open(&target)
+                            .map_err(|err| {
+                                CliError::new(
+                                    1,
+                                    format!(
+                                        "test hook failed to open output {}: {err}",
+                                        target.display()
+                                    ),
+                                )
+                            })?
+                            .set_len(metadata.len() - shrink_by)
+                            .map_err(|err| {
+                                CliError::new(
+                                    1,
+                                    format!(
+                                        "test hook failed to truncate output {}: {err}",
+                                        target.display()
+                                    ),
+                                )
+                            })?;
+                    }
+                }
+                "flip-data-byte" => match options.format {
+                    BackupArtifactFormat::Zip => corrupt_zip_payload_byte(&target)?,
+                    BackupArtifactFormat::SevenZ => corrupt_7z_payload_byte(&target)?,
+                    _ => {}
+                },
+                _ => {}
             }
             Ok(())
         }
@@ -1055,56 +951,143 @@ fn maybe_corrupt_output_for_tests(options: &BackupConvertOptions) -> CliResult {
     }
 }
 
+fn corrupt_zip_payload_byte(path: &Path) -> CliResult {
+    let data_offset = {
+        let file = fs::File::open(path).map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "test hook failed to open zip output {}: {err}",
+                    path.display()
+                ),
+            )
+        })?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "test hook failed to parse zip output {}: {err}",
+                    path.display()
+                ),
+            )
+        })?;
+        let entry = archive.by_index(0).map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "test hook failed to open first zip entry {}: {err}",
+                    path.display()
+                ),
+            )
+        })?;
+        entry.data_start()
+    };
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "test hook failed to open zip output {}: {err}",
+                    path.display()
+                ),
+            )
+        })?;
+    flip_byte_at(path, &mut file, data_offset)
+}
+
+fn corrupt_7z_payload_byte(path: &Path) -> CliResult {
+    let archive = sevenz_rust2::Archive::open(path)
+        .map_err(|err| CliError::new(1, format!("test hook failed to inspect 7z: {err}")))?;
+    let Some(pack_size) = archive.pack_sizes().first().copied() else {
+        return Err(CliError::new(
+            1,
+            "test hook expected at least one 7z pack stream",
+        ));
+    };
+    if pack_size == 0 {
+        return Err(CliError::new(
+            1,
+            "test hook expected non-empty 7z pack stream",
+        ));
+    }
+    let offset = sevenz_rust2::SIGNATURE_HEADER_SIZE + archive.pack_pos() + ((pack_size - 1) / 2);
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "test hook failed to open 7z output {}: {err}",
+                    path.display()
+                ),
+            )
+        })?;
+    flip_byte_at(path, &mut file, offset)
+}
+
+fn flip_byte_at(path: &Path, file: &mut fs::File, offset: u64) -> CliResult {
+    file.seek(SeekFrom::Start(offset)).map_err(|err| {
+        CliError::new(
+            1,
+            format!(
+                "test hook failed to seek output {} at {offset}: {err}",
+                path.display()
+            ),
+        )
+    })?;
+    let mut byte = [0u8; 1];
+    file.read_exact(&mut byte).map_err(|err| {
+        CliError::new(
+            1,
+            format!(
+                "test hook failed to read output {} at {offset}: {err}",
+                path.display()
+            ),
+        )
+    })?;
+    byte[0] ^= 0x01;
+    file.seek(SeekFrom::Start(offset)).map_err(|err| {
+        CliError::new(
+            1,
+            format!(
+                "test hook failed to rewind output {} at {offset}: {err}",
+                path.display()
+            ),
+        )
+    })?;
+    file.write_all(&byte).map_err(|err| {
+        CliError::new(
+            1,
+            format!(
+                "test hook failed to corrupt output {} at {offset}: {err}",
+                path.display()
+            ),
+        )
+    })
+}
+
 #[cfg(feature = "xunbak")]
 fn backup_options_from_convert<F>(
     options: &BackupConvertOptions,
-    mut parse_compression: F,
+    mut build_options: F,
 ) -> Result<crate::xunbak::writer::BackupOptions, CliError>
 where
-    F: FnMut(&str) -> Result<crate::xunbak::codec::CompressionMode, CliError>,
+    F: FnMut(&str) -> Result<crate::xunbak::writer::BackupOptions, CliError>,
 {
-    use crate::xunbak::codec::CompressionMode;
-    use crate::xunbak::constants::Codec;
     use crate::xunbak::writer::BackupOptions;
 
-    let compression_mode = match options.method.as_deref() {
-        Some(raw) => parse_compression(raw)?,
-        None => CompressionMode::Zstd {
-            level: options.level.unwrap_or(1) as i32,
-        },
-    };
-
-    let mut backup_options = match compression_mode {
-        CompressionMode::None => BackupOptions {
-            codec: Codec::NONE,
-            zstd_level: 1,
+    match options.method.as_deref() {
+        Some(raw) => build_options(raw),
+        None => Ok(BackupOptions {
             split_size: parse_split_size(options.split_size.as_deref())?,
-        },
-        CompressionMode::Zstd { level } => BackupOptions {
-            codec: Codec::ZSTD,
-            zstd_level: options.level.map(|value| value as i32).unwrap_or(level),
-            split_size: parse_split_size(options.split_size.as_deref())?,
-        },
-        CompressionMode::Lz4 => BackupOptions {
-            codec: Codec::LZ4,
-            zstd_level: 1,
-            split_size: parse_split_size(options.split_size.as_deref())?,
-        },
-        CompressionMode::Lzma => BackupOptions {
-            codec: Codec::LZMA,
-            zstd_level: 1,
-            split_size: parse_split_size(options.split_size.as_deref())?,
-        },
-        CompressionMode::Auto => BackupOptions {
-            codec: Codec::ZSTD,
-            zstd_level: options.level.map(|value| value as i32).unwrap_or(1),
-            split_size: parse_split_size(options.split_size.as_deref())?,
-        },
-    };
-    if matches!(backup_options.codec, Codec::ZSTD) && backup_options.zstd_level <= 0 {
-        backup_options.zstd_level = 1;
+            ..BackupOptions::default()
+        }),
     }
-    Ok(backup_options)
 }
 
 #[cfg(feature = "xunbak")]
@@ -1130,23 +1113,6 @@ fn parse_split_size(raw: Option<&str>) -> Result<Option<u64>, CliError> {
         .parse::<u64>()
         .map_err(|_| CliError::new(2, format!("Invalid split size: {raw}")))?;
     Ok(Some(size.saturating_mul(multiplier)))
-}
-
-#[cfg(feature = "xunbak")]
-fn create_staging_dir(prefix: &str) -> CliResult<std::path::PathBuf> {
-    let mut path = std::env::temp_dir();
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_millis())
-        .unwrap_or(0);
-    path.push(format!("{prefix}-{}-{millis}", Uuid::new_v4()));
-    fs::create_dir_all(&path).map_err(|err| {
-        CliError::new(
-            1,
-            format!("Create staging directory failed {}: {err}", path.display()),
-        )
-    })?;
-    Ok(path)
 }
 
 #[cfg(feature = "xunbak")]
@@ -1195,14 +1161,4 @@ fn remove_xunbak_outputs(path: &Path) -> CliResult {
         }
     }
     Ok(())
-}
-
-fn paths_equal(left: &Path, right: &Path) -> bool {
-    if left == right {
-        return true;
-    }
-    match (left.canonicalize(), right.canonicalize()) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
 }

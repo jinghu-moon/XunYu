@@ -26,6 +26,7 @@ fn large_test_bytes(size: usize) -> Vec<u8> {
 fn none_options() -> BackupOptions {
     BackupOptions {
         codec: Codec::NONE,
+        auto_compression: false,
         zstd_level: 1,
         split_size: None,
     }

@@ -353,6 +353,99 @@ fn backup_create_rejects_invalid_zip_method_with_fix_hint() {
 }
 
 #[test]
+fn backup_create_rejects_invalid_7z_method_with_fix_hint() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_invalid_7z_method");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "7z",
+        "-o",
+        "artifact.7z",
+        "--method",
+        "brotli",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid for 7z"));
+    assert!(stderr.contains("Fix:"));
+}
+
+#[test]
+fn backup_create_rejects_xunbak_method_with_fix_hint() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_backup_create_invalid_xunbak_method");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        "artifact.xunbak",
+        "--method",
+        "zstd",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("backup create --method is invalid for xunbak output"));
+    assert!(stderr.contains("Fix:"));
+}
+
+#[test]
+fn backup_convert_rejects_threads_for_zip_output() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let out = run_err(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "zip",
+        "-o",
+        env.root.join("out.zip").to_str().unwrap(),
+        "--threads",
+        "4",
+    ]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("backup convert --threads is invalid for zip output"));
+    assert!(stderr.contains("Fix:"));
+}
+
+#[test]
 fn top_level_export_command_still_exists() {
     let env = TestEnv::new();
     let out = run_raw(env.cmd().args(["export", "--help"]));
@@ -3172,6 +3265,38 @@ fn backup_convert_zip_output_verify_on_detects_corrupted_postwrite_output() {
 }
 
 #[test]
+fn backup_convert_zip_output_verify_on_detects_content_corruption_with_structure_intact() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("verify_flip.zip");
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "flip-data-byte")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "zip",
+                "-o",
+                output.to_str().unwrap(),
+            ]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output verify failed"));
+    assert!(stderr.contains("Source:"));
+}
+
+#[test]
 fn backup_convert_zip_output_verify_off_skips_corrupted_postwrite_output_check() {
     let env = TestEnv::new();
     let zip_path = env.root.join("artifact.zip");
@@ -3264,6 +3389,39 @@ fn backup_convert_7z_output_verify_on_detects_corrupted_postwrite_output() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("output verify failed"));
+}
+
+#[test]
+fn backup_convert_7z_output_verify_on_detects_content_corruption_without_external_7z() {
+    let env = TestEnv::new();
+    let zip_path = env.root.join("artifact.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(b"aaa").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let output = env.root.join("verify_flip.7z");
+    let out = run_err(
+        env.cmd()
+            .env("XUN_TEST_CORRUPT_OUTPUT_AFTER_WRITE", "flip-data-byte")
+            .env("XUN_TEST_DISABLE_EXTERNAL_7Z", "1")
+            .args([
+                "backup",
+                "convert",
+                zip_path.to_str().unwrap(),
+                "--format",
+                "7z",
+                "-o",
+                output.to_str().unwrap(),
+            ]),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("output verify failed"));
+    assert!(stderr.contains("Path: a.txt"));
 }
 
 #[test]

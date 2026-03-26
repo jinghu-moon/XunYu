@@ -4,6 +4,9 @@ use std::time::Instant;
 
 use serde::Serialize;
 
+use crate::backup::artifact::common::{
+    collect_file_or_numbered_outputs, parse_split_size_bytes, paths_equal,
+};
 use crate::backup::artifact::dir::write_entries_to_dir;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::fs::scan_source_entries;
@@ -15,7 +18,8 @@ use crate::backup::artifact::progress::{
     ExportProgressEvent, ExportProgressPhase, emit_progress_event, should_emit_progress,
 };
 use crate::backup::artifact::sevenz::{
-    SevenZMethod, SevenZWriteOptions, write_entries_to_7z, write_entries_to_7z_split,
+    SevenZMethod, SevenZWriteOptions, parse_sevenz_method_for_cli, write_entries_to_7z,
+    write_entries_to_7z_split,
 };
 use crate::backup::artifact::sidecar::{
     SidecarPackingHint, build_sidecar_bytes, source_info_for_create, write_sidecar_to_dir,
@@ -706,6 +710,7 @@ fn cmd_backup_create_xunbak(options: &BackupCreateOptions) -> CliResult {
     let summary = crate::backup::artifact::xunbak::write_entries_to_xunbak(
         &refs,
         &output,
+        &options.source_dir.display().to_string(),
         &backup_options,
         crate::backup_formats::OverwriteMode::Fail,
     )?;
@@ -761,45 +766,8 @@ fn cmd_backup_create_xunbak(options: &BackupCreateOptions) -> CliResult {
     Ok(())
 }
 
-fn parse_split_size_bytes(raw: Option<&str>) -> Result<Option<u64>, CliError> {
-    let Some(raw) = raw else {
-        return Ok(None);
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return Ok(None);
-    }
-    let upper = value.to_ascii_uppercase();
-    let (number, multiplier) = if let Some(stripped) = upper.strip_suffix('K') {
-        (stripped, 1024u64)
-    } else if let Some(stripped) = upper.strip_suffix('M') {
-        (stripped, 1024u64 * 1024)
-    } else if let Some(stripped) = upper.strip_suffix('G') {
-        (stripped, 1024u64 * 1024 * 1024)
-    } else {
-        (upper.as_str(), 1u64)
-    };
-    let size = number
-        .parse::<u64>()
-        .map_err(|_| CliError::new(2, format!("Invalid split size: {raw}")))?;
-    Ok(Some(size.saturating_mul(multiplier)))
-}
-
 fn sevenz_method_for_create(method: Option<&str>) -> Result<SevenZMethod, CliError> {
-    match method.map(|value| value.trim().to_ascii_lowercase()) {
-        None => Ok(SevenZMethod::Lzma2),
-        Some(value) if value == "lzma2" => Ok(SevenZMethod::Lzma2),
-        Some(value) if value == "copy" => Ok(SevenZMethod::Copy),
-        Some(value) if value == "bzip2" => Ok(SevenZMethod::Bzip2),
-        Some(value) if value == "deflate" => Ok(SevenZMethod::Deflate),
-        Some(value) if value == "ppmd" => Ok(SevenZMethod::Ppmd),
-        Some(value) if value == "zstd" => Ok(SevenZMethod::Zstd),
-        Some(value) => Err(CliError::with_details(
-            2,
-            format!("backup create --method {value} is invalid for 7z"),
-            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
-        )),
-    }
+    parse_sevenz_method_for_cli("backup create", method)
 }
 
 fn compute_created_output_bytes(format: BackupArtifactFormat, output: &Path) -> u64 {
@@ -827,30 +795,6 @@ fn collect_created_output_paths(format: BackupArtifactFormat, output: &Path) -> 
             }
         }
     }
-}
-
-fn collect_file_or_numbered_outputs(output: &Path) -> Vec<PathBuf> {
-    if output.exists() {
-        return vec![output.to_path_buf()];
-    }
-    let mut outputs = Vec::new();
-    if let Some(parent) = output.parent()
-        && let Some(prefix) = output.file_name().and_then(|name| name.to_str())
-        && let Ok(read_dir) = fs::read_dir(parent)
-    {
-        for entry in read_dir.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with(&format!("{prefix}."))
-                && name[prefix.len() + 1..]
-                    .chars()
-                    .all(|ch| ch.is_ascii_digit())
-            {
-                outputs.push(entry.path());
-            }
-        }
-    }
-    outputs.sort();
-    outputs
 }
 
 fn throughput(bytes: u64, elapsed: std::time::Duration) -> u64 {
@@ -919,16 +863,6 @@ fn resolve_create_output_path(options: &BackupCreateOptions) -> Result<PathBuf, 
         return Ok(output.clone());
     }
     Ok(options.source_dir.join(output))
-}
-
-fn paths_equal(left: &Path, right: &Path) -> bool {
-    if left == right {
-        return true;
-    }
-    match (left.canonicalize(), right.canonicalize()) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
 }
 
 fn emit_selected_entries(entries: &[SourceEntry]) {

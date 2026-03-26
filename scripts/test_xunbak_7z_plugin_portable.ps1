@@ -1,13 +1,14 @@
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Config = 'Debug'
+    [string]$Config = 'Debug',
+    [string]$SevenZipHome = 'C:\A_Softwares\7-Zip',
+    [switch]$SkipBuild
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 . (Join-Path $repoRoot 'scripts/xunbak_7z_plugin_common.ps1')
-$sevenZipHome = 'C:\A_Softwares\7-Zip'
 $stageRoot = Join-Path $env:TEMP ('xunbak-7z-plugin-stage-' + [guid]::NewGuid().ToString())
 $workRoot = Join-Path $stageRoot 'work'
 $portable7z = Join-Path $stageRoot '7zip'
@@ -62,7 +63,10 @@ function Invoke-TraceList {
     }
 }
 
-if (!(Test-Path $pluginDll)) {
+if (-not $SkipBuild) {
+    & (Join-Path $repoRoot 'scripts/build_xunbak_7z_plugin.ps1') -Config $Config
+}
+elseif (!(Test-Path $pluginDll)) {
     & (Join-Path $repoRoot 'scripts/build_xunbak_7z_plugin.ps1') -Config $Config
 }
 
@@ -83,43 +87,58 @@ $env:HOME = $workRoot
 $env:XUN_NON_INTERACTIVE = '1'
 
 $single = Join-Path $workRoot 'sample.xunbak'
+$ppmd = Join-Path $workRoot 'ppmd_sample.xunbak'
 $split = Join-Path $workRoot 'split_sample.xunbak'
 $splitFirst = "$split.001"
 $sevenZipArgs = @('-sccUTF-8')
 
 Invoke-Checked { & $xunExe backup create -C $src --format xunbak -o $single } 'xun create single xunbak failed'
+Invoke-Checked { & $xunExe backup create -C $src --format xunbak -o $ppmd --compression ppmd } 'xun create ppmd xunbak failed'
 Invoke-Checked { & $xunExe backup create -C $src --format xunbak -o $split --split-size 1900 } 'xun create split xunbak failed'
 
 $singleList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l $single 2>&1
 $singleListCode = $LASTEXITCODE
+$ppmdList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l $ppmd 2>&1
+$ppmdListCode = $LASTEXITCODE
 $splitList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l $splitFirst 2>&1
 $splitListCode = $LASTEXITCODE
 $singleTechList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l -slt $single 2>&1
 $singleTechListCode = $LASTEXITCODE
+$ppmdTechList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l -slt $ppmd 2>&1
+$ppmdTechListCode = $LASTEXITCODE
 $splitTechList = & (Join-Path $portable7z '7z.exe') @sevenZipArgs l -slt $splitFirst 2>&1
 $splitTechListCode = $LASTEXITCODE
 
 $singleExtract = Join-Path $workRoot 'extract-single'
+$ppmdExtract = Join-Path $workRoot 'extract-ppmd'
 $splitExtract = Join-Path $workRoot 'extract-split'
 New-Item -ItemType Directory -Path $singleExtract | Out-Null
+New-Item -ItemType Directory -Path $ppmdExtract | Out-Null
 New-Item -ItemType Directory -Path $splitExtract | Out-Null
 
 $singleExtractOut = & (Join-Path $portable7z '7z.exe') @sevenZipArgs x $single "-o$singleExtract" -y 2>&1
 $singleExtractCode = $LASTEXITCODE
+$ppmdExtractOut = & (Join-Path $portable7z '7z.exe') @sevenZipArgs x $ppmd "-o$ppmdExtract" -y 2>&1
+$ppmdExtractCode = $LASTEXITCODE
 $splitExtractOut = & (Join-Path $portable7z '7z.exe') @sevenZipArgs x $splitFirst "-o$splitExtract" -y 2>&1
 $splitExtractCode = $LASTEXITCODE
 
 $expected = Get-XunbakPluginTreeHashMap $src
 $expected.Remove('.xun-bak.json') | Out-Null
 $actualSingle = Get-XunbakPluginTreeHashMap $singleExtract
+$actualPpmd = Get-XunbakPluginTreeHashMap $ppmdExtract
 $actualSplit = Get-XunbakPluginTreeHashMap $splitExtract
-$singleDiff = Compare-Object ($expected.GetEnumerator() | Sort-Object Name) ($actualSingle.GetEnumerator() | Sort-Object Name) -Property Name, Value
-$splitDiff = Compare-Object ($expected.GetEnumerator() | Sort-Object Name) ($actualSplit.GetEnumerator() | Sort-Object Name) -Property Name, Value
+$singleDiff = Compare-Object @($expected.GetEnumerator() | Sort-Object Name) @($actualSingle.GetEnumerator() | Sort-Object Name) -Property Name, Value
+$ppmdDiff = Compare-Object @($expected.GetEnumerator() | Sort-Object Name) @($actualPpmd.GetEnumerator() | Sort-Object Name) -Property Name, Value
+$splitDiff = Compare-Object @($expected.GetEnumerator() | Sort-Object Name) @($actualSplit.GetEnumerator() | Sort-Object Name) -Property Name, Value
 $singleMatch = @($singleDiff).Count -eq 0
+$ppmdMatch = @($ppmdDiff).Count -eq 0
 $splitMatch = @($splitDiff).Count -eq 0
 $singleDisplayOk = (($singleList | Out-String) -match 'Type = XUNBAK') -and (($singleList | Out-String) -match 'nested/深层\.txt')
+$ppmdDisplayOk = (($ppmdList | Out-String) -match 'Type = XUNBAK') -and (($ppmdList | Out-String) -match 'nested/深层\.txt')
 $splitDisplayOk = (($splitList | Out-String) -match 'Type = XUNBAK') -and (($splitList | Out-String) -match 'Volumes = 2') -and (($splitList | Out-String) -match 'nested/深层\.txt')
 $singleTechOk = (($singleTechList | Out-String) -match 'Files = 3') -and (($singleTechList | Out-String) -match 'Method = (Copy|ZSTD)')
+$ppmdTechOk = (($ppmdTechList | Out-String) -match 'Files = 3') -and (($ppmdTechList | Out-String) -match 'Method = PPMD')
 $splitTechOk = (($splitTechList | Out-String) -match 'Files = 3') -and (($splitTechList | Out-String) -match 'Volumes = 2') -and (($splitTechList | Out-String) -match 'Method = (Copy|ZSTD)')
 
 $singleCallbackTrace = Invoke-TraceList -ArchivePath $single -TracePath (Join-Path $workRoot 'trace-single-callback.log')
@@ -147,16 +166,22 @@ $largeRejectOk = $largeRejectTrace.Code -ne 0 -and
 
 Write-Host "StageRoot: $stageRoot"
 Write-Host "Single list exit: $singleListCode"
+Write-Host "PPMD list exit: $ppmdListCode"
 Write-Host "Split list exit: $splitListCode"
 Write-Host "Single extract exit: $singleExtractCode"
+Write-Host "PPMD extract exit: $ppmdExtractCode"
 Write-Host "Split extract exit: $splitExtractCode"
 Write-Host "Single tech exit: $singleTechListCode"
+Write-Host "PPMD tech exit: $ppmdTechListCode"
 Write-Host "Split tech exit: $splitTechListCode"
 Write-Host "Single match: $singleMatch"
+Write-Host "PPMD match: $ppmdMatch"
 Write-Host "Split match: $splitMatch"
 Write-Host "Single display: $singleDisplayOk"
+Write-Host "PPMD display: $ppmdDisplayOk"
 Write-Host "Split display: $splitDisplayOk"
 Write-Host "Single tech: $singleTechOk"
+Write-Host "PPMD tech: $ppmdTechOk"
 Write-Host "Split tech: $splitTechOk"
 Write-Host "Single callback trace: $singleCallbackOk"
 Write-Host "Split callback trace: $splitCallbackOk"
@@ -166,12 +191,18 @@ Write-Host "`n--- single list ---"
 $singleList
 Write-Host "`n--- split list ---"
 $splitList
+Write-Host "`n--- ppmd list ---"
+$ppmdList
 Write-Host "`n--- single tech list ---"
 $singleTechList
+Write-Host "`n--- ppmd tech list ---"
+$ppmdTechList
 Write-Host "`n--- split tech list ---"
 $splitTechList
 Write-Host "`n--- single extract ---"
 $singleExtractOut
+Write-Host "`n--- ppmd extract ---"
+$ppmdExtractOut
 Write-Host "`n--- split extract ---"
 $splitExtractOut
 Write-Host "`n--- single callback trace ---"
@@ -186,13 +217,18 @@ if (-not $singleMatch) {
     Write-Host "`n--- single diff ---"
     $singleDiff | Format-Table -AutoSize
 }
+if (-not $ppmdMatch) {
+    Write-Host "`n--- ppmd diff ---"
+    $ppmdDiff | Format-Table -AutoSize
+}
 if (-not $splitMatch) {
     Write-Host "`n--- split diff ---"
     $splitDiff | Format-Table -AutoSize
 }
 
-if ($singleListCode -ne 0 -or $splitListCode -ne 0 -or $singleTechListCode -ne 0 -or $splitTechListCode -ne 0 -or $singleExtractCode -ne 0 -or $splitExtractCode -ne 0 -or -not $singleMatch -or -not $splitMatch -or -not $singleDisplayOk -or -not $splitDisplayOk -or -not $singleTechOk -or -not $splitTechOk -or -not $singleCallbackOk -or -not $splitCallbackOk -or -not $singleFallbackOk -or -not $largeRejectOk) {
+if ($singleListCode -ne 0 -or $ppmdListCode -ne 0 -or $splitListCode -ne 0 -or $singleTechListCode -ne 0 -or $ppmdTechListCode -ne 0 -or $splitTechListCode -ne 0 -or $singleExtractCode -ne 0 -or $ppmdExtractCode -ne 0 -or $splitExtractCode -ne 0 -or -not $singleMatch -or -not $ppmdMatch -or -not $splitMatch -or -not $singleDisplayOk -or -not $ppmdDisplayOk -or -not $splitDisplayOk -or -not $singleTechOk -or -not $ppmdTechOk -or -not $splitTechOk -or -not $singleCallbackOk -or -not $splitCallbackOk -or -not $singleFallbackOk -or -not $largeRejectOk) {
     throw 'portable 7-Zip plugin smoke failed'
 }
 
 Write-Host 'portable 7-Zip plugin smoke passed'
+$global:LASTEXITCODE = 0

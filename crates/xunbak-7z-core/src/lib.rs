@@ -1319,6 +1319,7 @@ mod tests {
     fn split_options() -> BackupOptions {
         BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: Some(1900),
         }
@@ -1352,6 +1353,81 @@ mod tests {
             .extract_item_to_writer("nested/b.txt", &mut restored)
             .unwrap();
         assert_eq!(restored, b"bravo-bravo");
+    }
+
+    #[test]
+    fn open_single_container_extracts_extended_codec_payloads() {
+        let content = "alpha alpha alpha beta beta beta gamma gamma gamma ".repeat(512);
+
+        for (codec, file_name) in [
+            (Codec::LZ4, "lz4.txt"),
+            (Codec::DEFLATE, "deflate.txt"),
+            (Codec::BZIP2, "bzip2.txt"),
+            (Codec::PPMD, "ppmd.txt"),
+            (Codec::LZMA2, "lzma2.txt"),
+        ] {
+            let dir = tempdir().unwrap();
+            let source = dir.path().join("src");
+            fs::create_dir_all(&source).unwrap();
+            fs::write(source.join(file_name), &content).unwrap();
+            let container = dir.path().join("sample.xunbak");
+
+            ContainerWriter::backup(
+                &container,
+                &source,
+                &BackupOptions {
+                    codec,
+                    auto_compression: false,
+                    zstd_level: 1,
+                    split_size: None,
+                },
+            )
+            .unwrap();
+
+            let archive = XunbakArchive::open_path(&container).unwrap();
+            assert_eq!(archive.items().len(), 1, "codec={:?}", u8::from(codec));
+            let mut restored = Vec::new();
+            archive
+                .extract_item_to_writer(file_name, &mut restored)
+                .unwrap();
+            assert_eq!(restored, content.as_bytes(), "codec={:?}", u8::from(codec));
+        }
+    }
+
+    #[test]
+    fn open_single_container_reports_clear_error_for_unknown_codec() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("src");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("only.txt"), "hello-from-bytes").unwrap();
+        let container = dir.path().join("sample.xunbak");
+
+        ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+        let mut bytes = fs::read(&container).unwrap();
+
+        let reader = xun::xunbak::reader::ContainerReader::open(&container).unwrap();
+        let manifest = reader.load_manifest().unwrap();
+        let entry = manifest.entries.first().unwrap();
+        let header_start = entry.blob_offset as usize + xun::xunbak::constants::RECORD_PREFIX_SIZE;
+        let codec_index = header_start + 33;
+        bytes[codec_index] = 0x80;
+        let header =
+            bytes[header_start..header_start + xun::xunbak::constants::BLOB_HEADER_SIZE].to_vec();
+        let record_crc = xun::xunbak::record::compute_record_crc(
+            xun::xunbak::constants::RecordType::BLOB,
+            (entry.blob_len - xun::xunbak::constants::RECORD_PREFIX_SIZE as u64).to_le_bytes(),
+            &header,
+        );
+        bytes[entry.blob_offset as usize + 9..entry.blob_offset as usize + 13]
+            .copy_from_slice(&record_crc.to_le_bytes());
+        fs::write(&container, bytes).unwrap();
+
+        let archive = XunbakArchive::open_path(&container).unwrap();
+        let mut restored = Vec::new();
+        let err = archive
+            .extract_item_to_writer("only.txt", &mut restored)
+            .unwrap_err();
+        assert!(err.to_string().contains("unsupported codec"));
     }
 
     #[test]

@@ -1,10 +1,12 @@
 use std::path::{Path, PathBuf};
 
+use crate::backup::artifact::common::parse_split_size_bytes;
 use crate::backup::artifact::output_plan::{
     XunbakOutputPlan, XunbakSingleUpdatePlan, XunbakSplitOutputPlan, XunbakSplitUpdatePlan,
 };
 use crate::cli::{BackupCmd, VerifyCmd};
 use crate::output::{CliError, CliResult};
+use crate::xunbak::codec::XUNBAK_COMPRESSION_PROFILE_FIX_HINT;
 use crate::xunbak::codec::{CompressionMode, parse_compression_arg};
 use crate::xunbak::reader::ContainerReader;
 use crate::xunbak::verify::{
@@ -250,48 +252,81 @@ pub(crate) fn build_backup_options_from_raw(
     no_compress: bool,
 ) -> Result<BackupOptions, CliError> {
     if no_compress {
-        return Ok(BackupOptions {
-            codec: crate::xunbak::constants::Codec::NONE,
-            zstd_level: 1,
-            split_size: parse_split_size(split_size)?,
-        });
+        return build_backup_options_from_mode(CompressionMode::None, split_size, None);
     }
 
     match compression {
         None => Ok(BackupOptions {
-            split_size: parse_split_size(split_size)?,
+            split_size: parse_split_size_bytes(split_size)?,
             ..BackupOptions::default()
         }),
         Some(raw) => {
-            match parse_compression_arg(raw).map_err(|err| CliError::new(2, err.to_string()))? {
-                CompressionMode::None => Ok(BackupOptions {
-                    codec: crate::xunbak::constants::Codec::NONE,
-                    zstd_level: 1,
-                    split_size: parse_split_size(split_size)?,
-                }),
-                CompressionMode::Zstd { level } => Ok(BackupOptions {
-                    codec: crate::xunbak::constants::Codec::ZSTD,
-                    zstd_level: level,
-                    split_size: parse_split_size(split_size)?,
-                }),
-                CompressionMode::Lz4 => Ok(BackupOptions {
-                    codec: crate::xunbak::constants::Codec::LZ4,
-                    zstd_level: 1,
-                    split_size: parse_split_size(split_size)?,
-                }),
-                CompressionMode::Lzma => Ok(BackupOptions {
-                    codec: crate::xunbak::constants::Codec::LZMA,
-                    zstd_level: 1,
-                    split_size: parse_split_size(split_size)?,
-                }),
-                CompressionMode::Auto => Ok(BackupOptions {
-                    codec: crate::xunbak::constants::Codec::ZSTD,
-                    zstd_level: 1,
-                    split_size: parse_split_size(split_size)?,
-                }),
-            }
+            build_backup_options_from_mode(parse_xunbak_compression_arg(raw)?, split_size, None)
         }
     }
+}
+
+pub(crate) fn build_backup_options_from_mode(
+    compression_mode: CompressionMode,
+    split_size: Option<&str>,
+    zstd_level_override: Option<i32>,
+) -> Result<BackupOptions, CliError> {
+    let mut backup_options = match compression_mode {
+        CompressionMode::None => BackupOptions {
+            codec: crate::xunbak::constants::Codec::NONE,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Zstd { level } => BackupOptions {
+            codec: crate::xunbak::constants::Codec::ZSTD,
+            auto_compression: false,
+            zstd_level: zstd_level_override.unwrap_or(level),
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Lz4 => BackupOptions {
+            codec: crate::xunbak::constants::Codec::LZ4,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Lzma2 => BackupOptions {
+            codec: crate::xunbak::constants::Codec::LZMA2,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Deflate => BackupOptions {
+            codec: crate::xunbak::constants::Codec::DEFLATE,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Bzip2 => BackupOptions {
+            codec: crate::xunbak::constants::Codec::BZIP2,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Ppmd => BackupOptions {
+            codec: crate::xunbak::constants::Codec::PPMD,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+        CompressionMode::Auto => BackupOptions {
+            codec: crate::xunbak::constants::Codec::ZSTD,
+            auto_compression: true,
+            zstd_level: zstd_level_override.unwrap_or(1),
+            split_size: parse_split_size_bytes(split_size)?,
+        },
+    };
+    if matches!(backup_options.codec, crate::xunbak::constants::Codec::ZSTD)
+        && backup_options.zstd_level <= 0
+    {
+        backup_options.zstd_level = 1;
+    }
+    Ok(backup_options)
 }
 
 fn estimate_total_files(root: &Path) -> usize {
@@ -360,28 +395,14 @@ fn update_split_container_with_staging(
     }
 }
 
-fn parse_split_size(raw: Option<&str>) -> Result<Option<u64>, CliError> {
-    let Some(raw) = raw else {
-        return Ok(None);
-    };
-    let value = raw.trim();
-    if value.is_empty() {
-        return Ok(None);
-    }
-    let upper = value.to_ascii_uppercase();
-    let (number, multiplier) = if let Some(stripped) = upper.strip_suffix('K') {
-        (stripped, 1024u64)
-    } else if let Some(stripped) = upper.strip_suffix('M') {
-        (stripped, 1024u64 * 1024)
-    } else if let Some(stripped) = upper.strip_suffix('G') {
-        (stripped, 1024u64 * 1024 * 1024)
-    } else {
-        (upper.as_str(), 1u64)
-    };
-    let size = number
-        .parse::<u64>()
-        .map_err(|_| CliError::new(2, format!("Invalid split size: {raw}")))?;
-    Ok(Some(size.saturating_mul(multiplier)))
+pub(crate) fn parse_xunbak_compression_arg(raw: &str) -> Result<CompressionMode, CliError> {
+    parse_compression_arg(raw).map_err(|err| {
+        CliError::with_details(
+            2,
+            err.to_string(),
+            &[String::from(XUNBAK_COMPRESSION_PROFILE_FIX_HINT)],
+        )
+    })
 }
 
 fn container_exists(path: &Path) -> bool {

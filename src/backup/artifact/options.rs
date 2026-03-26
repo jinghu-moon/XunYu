@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
+use crate::backup::artifact::capabilities::{
+    validate_convert_capabilities, validate_create_capabilities,
+};
 use crate::backup::artifact::selection::SelectionSpec;
-use crate::backup::artifact::zip::parse_zip_method_for_cli;
 use crate::backup_formats::{
     BackupArtifactFormat, OverwriteMode, ProgressMode, VerifyOutputMode, VerifySourceMode,
 };
@@ -122,77 +124,13 @@ impl TryFrom<BackupCreateCmd> for BackupCreateOptions {
 
 impl BackupCreateOptions {
     fn validate(&self) -> Result<(), CliError> {
-        match self.format {
-            BackupArtifactFormat::Dir => {
-                reject_present(
-                    self.split_size.is_some(),
-                    "--split-size",
-                    "dir",
-                    "Remove `--split-size`; directory output does not support volumes.",
-                )?;
-                reject_present(
-                    self.solid,
-                    "--solid",
-                    "dir",
-                    "Remove `--solid`; directory output is not a compressed container.",
-                )?;
-                reject_present(
-                    self.method.is_some(),
-                    "--method",
-                    "dir",
-                    "Remove `--method`; directory output does not have a compression method.",
-                )?;
-                reject_present(
-                    self.level.is_some(),
-                    "--level",
-                    "dir",
-                    "Remove `--level`; directory output does not compress data.",
-                )?;
-            }
-            BackupArtifactFormat::Zip => {
-                reject_present(
-                    self.split_size.is_some(),
-                    "--split-size",
-                    "zip",
-                    "Remove `--split-size`; ZIP multi-disk output is not supported.",
-                )?;
-                reject_present(
-                    self.solid,
-                    "--solid",
-                    "zip",
-                    "Remove `--solid`; solid blocks are a 7z-only concept.",
-                )?;
-                if let Some(method) = &self.method {
-                    parse_zip_method_for_cli("backup create", Some(method.as_str()))?;
-                }
-            }
-            BackupArtifactFormat::SevenZ => {
-                if let Some(method) = &self.method {
-                    let normalized = method.trim().to_ascii_lowercase();
-                    if normalized != "copy"
-                        && normalized != "lzma2"
-                        && normalized != "bzip2"
-                        && normalized != "deflate"
-                        && normalized != "ppmd"
-                        && normalized != "zstd"
-                    {
-                        return Err(CliError::with_details(
-                            2,
-                            format!("backup create --method {method} is invalid for 7z"),
-                            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
-                        ));
-                    }
-                }
-            }
-            BackupArtifactFormat::Xunbak => {
-                reject_present(
-                    self.solid,
-                    "--solid",
-                    "xunbak",
-                    "Remove `--solid`; xunbak does not use 7z solid blocks.",
-                )?;
-            }
-        }
+        validate_create_capabilities(
+            self.format,
+            self.split_size.is_some(),
+            self.solid,
+            self.method.as_deref(),
+            self.level.is_some(),
+        )?;
         Ok(())
     }
 }
@@ -265,156 +203,18 @@ impl BackupConvertOptions {
             ));
         }
 
-        match self.format {
-            BackupArtifactFormat::Dir => {
-                reject_present(
-                    self.split_size.is_some(),
-                    "--split-size",
-                    "dir",
-                    "Remove `--split-size`; directory output does not support volumes.",
-                )?;
-                reject_present(
-                    self.solid,
-                    "--solid",
-                    "dir",
-                    "Remove `--solid`; directory output is not a compressed container.",
-                )?;
-                reject_present(
-                    self.method.is_some(),
-                    "--method",
-                    "dir",
-                    "Remove `--method`; directory output does not have a compression method.",
-                )?;
-                reject_present(
-                    self.level.is_some(),
-                    "--level",
-                    "dir",
-                    "Remove `--level`; directory output does not compress data.",
-                )?;
-                reject_present(
-                    self.threads.is_some(),
-                    "--threads",
-                    "dir",
-                    "Remove `--threads`; directory output does not perform compression.",
-                )?;
-                reject_present(
-                    self.password.is_some(),
-                    "--password",
-                    "dir",
-                    "Remove `--password`; directory output does not support encryption.",
-                )?;
-                reject_present(
-                    self.encrypt_header,
-                    "--encrypt-header",
-                    "dir",
-                    "Remove `--encrypt-header`; directory output does not support encrypted headers.",
-                )?;
-            }
-            BackupArtifactFormat::Zip => {
-                reject_present(
-                    self.split_size.is_some(),
-                    "--split-size",
-                    "zip",
-                    "Remove `--split-size`; ZIP multi-disk output is not supported in Phase 1.",
-                )?;
-                reject_present(
-                    self.solid,
-                    "--solid",
-                    "zip",
-                    "Remove `--solid`; solid blocks are a 7z-only concept.",
-                )?;
-                reject_present(
-                    self.password.is_some(),
-                    "--password",
-                    "zip",
-                    "Remove `--password`; ZIP encryption is out of scope for the current implementation.",
-                )?;
-                reject_present(
-                    self.encrypt_header,
-                    "--encrypt-header",
-                    "zip",
-                    "Remove `--encrypt-header`; ZIP header encryption is not supported.",
-                )?;
-                if let Some(method) = &self.method {
-                    parse_zip_method_for_cli("backup convert", Some(method.as_str()))?;
-                }
-            }
-            BackupArtifactFormat::Xunbak => {
-                reject_present(
-                    self.solid,
-                    "--solid",
-                    "xunbak",
-                    "Remove `--solid`; xunbak does not use 7z solid blocks.",
-                )?;
-                reject_present(
-                    self.password.is_some(),
-                    "--password",
-                    "xunbak",
-                    "Remove `--password`; xunbak encryption is not part of the current export path.",
-                )?;
-                reject_present(
-                    self.encrypt_header,
-                    "--encrypt-header",
-                    "xunbak",
-                    "Remove `--encrypt-header`; xunbak header encryption is not implemented.",
-                )?;
-            }
-            BackupArtifactFormat::SevenZ => {
-                reject_present(
-                    self.threads.is_some(),
-                    "--threads",
-                    "7z",
-                    "Remove `--threads`; custom 7z thread control is not implemented yet.",
-                )?;
-                reject_present(
-                    self.password.is_some(),
-                    "--password",
-                    "7z",
-                    "Remove `--password`; 7z encryption is not implemented yet.",
-                )?;
-                reject_present(
-                    self.encrypt_header,
-                    "--encrypt-header",
-                    "7z",
-                    "Remove `--encrypt-header`; 7z header encryption is not implemented yet.",
-                )?;
-                if let Some(method) = &self.method {
-                    let normalized = method.trim().to_ascii_lowercase();
-                    if normalized != "copy"
-                        && normalized != "lzma2"
-                        && normalized != "bzip2"
-                        && normalized != "deflate"
-                        && normalized != "ppmd"
-                        && normalized != "zstd"
-                    {
-                        return Err(CliError::with_details(
-                            2,
-                            format!("backup convert --method {method} is invalid for 7z"),
-                            &["Fix: Use `--method copy|lzma2|bzip2|deflate|ppmd|zstd`."],
-                        ));
-                    }
-                }
-            }
-        }
-
+        validate_convert_capabilities(
+            self.format,
+            self.split_size.is_some(),
+            self.solid,
+            self.method.as_deref(),
+            self.level.is_some(),
+            self.threads.is_some(),
+            self.password.is_some(),
+            self.encrypt_header,
+        )?;
         Ok(())
     }
-}
-
-fn reject_present(present: bool, flag: &str, format: &str, fix: &str) -> Result<(), CliError> {
-    if present {
-        let fix = if fix.trim_start().starts_with("Fix:") {
-            fix.to_string()
-        } else {
-            format!("Fix: {fix}")
-        };
-        return Err(CliError::with_details(
-            2,
-            format!("backup convert {flag} is invalid for {format} output"),
-            &[fix],
-        ));
-    }
-    Ok(())
 }
 
 impl TryFrom<BackupRestoreCmd> for BackupRestoreOptions {
@@ -584,6 +384,138 @@ mod tests {
         .unwrap_err();
 
         assert!(err.message.contains("invalid for zip"));
+    }
+
+    #[test]
+    fn backup_create_options_reject_xunbak_method_flag() {
+        let err = BackupCreateOptions::try_from(BackupCreateCmd {
+            msg: None,
+            dir: None,
+            format: Some("xunbak".to_string()),
+            output: Some("artifact.xunbak".to_string()),
+            compression: None,
+            split_size: None,
+            solid: false,
+            method: Some("zstd".to_string()),
+            level: Some(3),
+            dry_run: false,
+            list: false,
+            no_compress: false,
+            retain: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            incremental: false,
+            skip_if_unchanged: false,
+            diff_mode: None,
+            progress: None,
+            json: false,
+            no_sidecar: false,
+        })
+        .unwrap_err();
+
+        assert!(
+            err.message
+                .contains("backup create --method is invalid for xunbak output")
+        );
+    }
+
+    #[test]
+    fn backup_create_options_reject_xunbak_level_flag() {
+        let err = BackupCreateOptions::try_from(BackupCreateCmd {
+            msg: None,
+            dir: None,
+            format: Some("xunbak".to_string()),
+            output: Some("artifact.xunbak".to_string()),
+            compression: None,
+            split_size: None,
+            solid: false,
+            method: None,
+            level: Some(3),
+            dry_run: false,
+            list: false,
+            no_compress: false,
+            retain: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            incremental: false,
+            skip_if_unchanged: false,
+            diff_mode: None,
+            progress: None,
+            json: false,
+            no_sidecar: false,
+        })
+        .unwrap_err();
+
+        assert!(
+            err.message
+                .contains("backup create --level is invalid for xunbak output")
+        );
+    }
+
+    #[test]
+    fn backup_create_options_use_create_prefix_in_flag_errors() {
+        let err = BackupCreateOptions::try_from(BackupCreateCmd {
+            msg: None,
+            dir: None,
+            format: Some("dir".to_string()),
+            output: Some("out".to_string()),
+            compression: None,
+            split_size: Some("2G".to_string()),
+            solid: false,
+            method: None,
+            level: None,
+            dry_run: false,
+            list: false,
+            no_compress: false,
+            retain: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            incremental: false,
+            skip_if_unchanged: false,
+            diff_mode: None,
+            progress: None,
+            json: false,
+            no_sidecar: false,
+        })
+        .unwrap_err();
+
+        assert!(
+            err.message
+                .contains("backup create --split-size is invalid for dir output")
+        );
+    }
+
+    #[test]
+    fn backup_convert_options_reject_threads_for_zip_output() {
+        let err = BackupConvertOptions::try_from(BackupConvertCmd {
+            artifact: "input.zip".to_string(),
+            format: "zip".to_string(),
+            output: "out.zip".to_string(),
+            file: Vec::new(),
+            glob: Vec::new(),
+            patterns_from: Vec::new(),
+            split_size: None,
+            solid: false,
+            method: None,
+            level: None,
+            threads: Some(4),
+            password: None,
+            encrypt_header: false,
+            overwrite: None,
+            dry_run: false,
+            list: false,
+            verify_source: None,
+            verify_output: None,
+            progress: None,
+            json: false,
+            no_sidecar: false,
+        })
+        .unwrap_err();
+
+        assert!(
+            err.message
+                .contains("backup convert --threads is invalid for zip output")
+        );
     }
 
     #[test]

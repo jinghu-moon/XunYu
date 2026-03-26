@@ -36,6 +36,7 @@ fn backup_directory_writes_three_blobs_manifest_and_checkpoint() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -70,6 +71,7 @@ fn backup_manifest_entries_have_correct_offsets_and_hashes() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -112,6 +114,7 @@ fn backup_checkpoint_stats_match_written_files() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -146,6 +149,7 @@ fn backup_reuses_blob_for_duplicate_content_in_same_run() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },

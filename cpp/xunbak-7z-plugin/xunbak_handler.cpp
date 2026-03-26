@@ -72,7 +72,13 @@ const wchar_t *CodecName(uint32_t codec_id) noexcept {
     case 2:
       return L"LZ4";
     case 3:
-      return L"LZMA";
+      return L"LZMA2";
+    case 4:
+      return L"DEFLATE";
+    case 5:
+      return L"BZIP2";
+    case 6:
+      return L"PPMD";
     default:
       return L"Unknown";
   }

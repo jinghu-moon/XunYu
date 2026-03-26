@@ -21,6 +21,7 @@ fn single_thread_baseline_backup_of_100_files_is_correct() {
         &source,
         &BackupOptions {
             codec: Codec::NONE,
+            auto_compression: false,
             zstd_level: 1,
             split_size: None,
         },
@@ -117,4 +118,24 @@ fn streaming_hash_matches_one_shot_blake3() {
     let result =
         stream_hash_and_compress(&mut Cursor::new(&input), Codec::NONE, 1, 64 * 1024).unwrap();
     assert_eq!(result.hash, *blake3::hash(&input).as_bytes());
+}
+
+#[test]
+fn streaming_hash_and_compress_limits_buffer_growth_for_large_extended_codecs() {
+    let input = b"alpha alpha alpha beta beta beta gamma gamma gamma delta delta delta "
+        .repeat((8 * 1024 * 1024) / 72 + 1);
+    let chunk_size = 64 * 1024;
+
+    for codec in [Codec::LZ4, Codec::PPMD, Codec::LZMA2] {
+        let result =
+            stream_hash_and_compress(&mut Cursor::new(&input), codec, 1, chunk_size).unwrap();
+        assert_eq!(result.raw_size, input.len() as u64);
+        assert!(
+            result.peak_buffer_bytes <= 2 * chunk_size,
+            "codec={:?} peak={} chunk={}",
+            u8::from(codec),
+            result.peak_buffer_bytes,
+            chunk_size
+        );
+    }
 }
