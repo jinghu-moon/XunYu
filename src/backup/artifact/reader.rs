@@ -15,6 +15,7 @@ use crate::output::CliError;
 use crate::util::normalize_glob_path;
 use uuid::Uuid;
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn copy_entry_to_path(entry: &SourceEntry, dest: &Path) -> Result<(), CliError> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -35,6 +36,30 @@ pub(crate) fn copy_entry_to_path(entry: &SourceEntry, dest: &Path) -> Result<(),
     apply_entry_metadata(dest, entry)
 }
 
+pub(crate) fn copy_entry_to_path_with_hash(
+    entry: &SourceEntry,
+    dest: &Path,
+) -> Result<[u8; 32], CliError> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            CliError::new(
+                1,
+                format!("Create output directory failed {}: {err}", parent.display()),
+            )
+        })?;
+    }
+
+    let mut file = fs::File::create(dest).map_err(|err| {
+        CliError::new(
+            1,
+            format!("Create output file failed {}: {err}", dest.display()),
+        )
+    })?;
+    let hash = copy_entry_to_writer_with_hash(entry, &mut file)?;
+    apply_entry_metadata(dest, entry)?;
+    Ok(hash)
+}
+
 pub(crate) fn copy_entry_to_writer(
     entry: &SourceEntry,
     writer: &mut dyn Write,
@@ -51,6 +76,17 @@ pub(crate) fn copy_entry_to_writer(
     Ok(())
 }
 
+pub(crate) fn copy_entry_to_writer_with_hash(
+    entry: &SourceEntry,
+    writer: &mut dyn Write,
+) -> Result<[u8; 32], CliError> {
+    let mut reader = open_entry_reader(entry)?;
+    let mut hashing_writer = HashingWriter::new(writer);
+    std::io::copy(&mut reader, &mut hashing_writer)
+        .map_err(|err| CliError::new(1, format!("Copy entry failed {}: {err}", entry.path)))?;
+    Ok(hashing_writer.finalize())
+}
+
 pub(crate) fn open_entry_reader(entry: &SourceEntry) -> Result<EntryReader, CliError> {
     match entry.kind {
         SourceKind::Filesystem | SourceKind::DirArtifact => open_filesystem_reader(entry),
@@ -64,6 +100,36 @@ pub(crate) enum EntryReader {
     File(fs::File),
     Temp(TempReadableFile),
     Stream(StreamingEntryReader),
+}
+
+struct HashingWriter<'a> {
+    inner: &'a mut dyn Write,
+    hasher: blake3::Hasher,
+}
+
+impl<'a> HashingWriter<'a> {
+    fn new(inner: &'a mut dyn Write) -> Self {
+        Self {
+            inner,
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    fn finalize(self) -> [u8; 32] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl Write for HashingWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.write_all(buf)?;
+        self.hasher.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 impl Read for EntryReader {

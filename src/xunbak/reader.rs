@@ -27,7 +27,13 @@ pub struct ContainerReader {
     pub is_split: bool,
     pub volume_paths: Vec<PathBuf>,
     manifest_cache: OnceLock<ManifestBody>,
-    volume_files: Vec<Arc<Mutex<File>>>,
+    volume_files: Vec<Arc<Mutex<CachedVolumeFile>>>,
+}
+
+#[derive(Debug)]
+struct CachedVolumeFile {
+    file: File,
+    position: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -137,7 +143,7 @@ impl ContainerReader {
             .iter()
             .map(|path| {
                 File::open(path)
-                    .map(|file| Arc::new(Mutex::new(file)))
+                    .map(|file| Arc::new(Mutex::new(CachedVolumeFile { file, position: 0 })))
                     .map_err(|err| ReaderError::Io(err.to_string()))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -159,32 +165,31 @@ impl ContainerReader {
             return Ok(manifest.clone());
         }
         let manifest_volume = self.volume_paths.len().saturating_sub(1) as u16;
-        let manifest = self.with_volume_file(manifest_volume, |file| {
-            file.seek(SeekFrom::Start(self.checkpoint.manifest_offset))
-                .map_err(|err| ReaderError::Io(err.to_string()))?;
-            let manifest = read_manifest_record(file)?;
+        let manifest =
+            self.with_volume_file_at(manifest_volume, self.checkpoint.manifest_offset, |file| {
+                let manifest = read_manifest_record(file)?;
 
-            let payload_len = self
-                .checkpoint
-                .manifest_len
-                .checked_sub(RECORD_PREFIX_SIZE as u64)
-                .ok_or_else(|| {
-                    ReaderError::Io("manifest_len smaller than record prefix".to_string())
-                })?;
-            let mut payload = vec![0u8; payload_len as usize];
-            file.seek(SeekFrom::Start(
-                self.checkpoint.manifest_offset + RECORD_PREFIX_SIZE as u64,
-            ))
-            .map_err(|err| ReaderError::Io(err.to_string()))?;
-            file.read_exact(&mut payload)
+                let payload_len = self
+                    .checkpoint
+                    .manifest_len
+                    .checked_sub(RECORD_PREFIX_SIZE as u64)
+                    .ok_or_else(|| {
+                        ReaderError::Io("manifest_len smaller than record prefix".to_string())
+                    })?;
+                let mut payload = vec![0u8; payload_len as usize];
+                file.seek(SeekFrom::Start(
+                    self.checkpoint.manifest_offset + RECORD_PREFIX_SIZE as u64,
+                ))
                 .map_err(|err| ReaderError::Io(err.to_string()))?;
-            if crate::xunbak::checkpoint::compute_manifest_hash(&payload)
-                != self.checkpoint.manifest_hash
-            {
-                return Err(ReaderError::ManifestHashMismatch);
-            }
-            Ok(manifest.body)
-        })?;
+                file.read_exact(&mut payload)
+                    .map_err(|err| ReaderError::Io(err.to_string()))?;
+                if crate::xunbak::checkpoint::compute_manifest_hash(&payload)
+                    != self.checkpoint.manifest_hash
+                {
+                    return Err(ReaderError::ManifestHashMismatch);
+                }
+                Ok(manifest.body)
+            })?;
         let _ = self.manifest_cache.set(manifest.clone());
         Ok(manifest)
     }
@@ -193,11 +198,10 @@ impl ContainerReader {
         if let Some(parts) = &entry.parts {
             let mut out = Vec::new();
             for part in parts {
-                let blob = self.with_volume_file(part.volume_index, |file| {
-                    file.seek(SeekFrom::Start(part.blob_offset))
-                        .map_err(|err| ReaderError::Io(err.to_string()))?;
-                    read_blob_record(file).map_err(ReaderError::from)
-                })?;
+                let blob =
+                    self.with_volume_file_at(part.volume_index, part.blob_offset, |file| {
+                        read_blob_record(file).map_err(ReaderError::from)
+                    })?;
                 out.extend_from_slice(&blob.content);
             }
             if *blake3::hash(&out).as_bytes() != entry.content_hash {
@@ -206,9 +210,7 @@ impl ContainerReader {
             return Ok(out);
         }
 
-        let blob = self.with_volume_file(entry.volume_index, |file| {
-            file.seek(SeekFrom::Start(entry.blob_offset))
-                .map_err(|err| ReaderError::Io(err.to_string()))?;
+        let blob = self.with_volume_file_at(entry.volume_index, entry.blob_offset, |file| {
             read_blob_record(file).map_err(ReaderError::from)
         })?;
         if *blake3::hash(&blob.content).as_bytes() != entry.content_hash {
@@ -225,12 +227,11 @@ impl ContainerReader {
         let mut hashing_writer = ManifestHashingWriter::new(writer);
         if let Some(parts) = &entry.parts {
             for part in parts {
-                let result = self.with_volume_file(part.volume_index, |file| {
-                    file.seek(SeekFrom::Start(part.blob_offset))
-                        .map_err(|err| ReaderError::Io(err.to_string()))?;
-                    copy_blob_record_content_to_writer(file, &mut hashing_writer)
-                        .map_err(ReaderError::from)
-                })?;
+                let result =
+                    self.with_volume_file_at(part.volume_index, part.blob_offset, |file| {
+                        copy_blob_record_content_to_writer(file, &mut hashing_writer)
+                            .map_err(ReaderError::from)
+                    })?;
                 if result.header.blob_id != part.blob_id {
                     return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
                 }
@@ -241,9 +242,7 @@ impl ContainerReader {
             return Ok(());
         }
 
-        let result = self.with_volume_file(entry.volume_index, |file| {
-            file.seek(SeekFrom::Start(entry.blob_offset))
-                .map_err(|err| ReaderError::Io(err.to_string()))?;
+        let result = self.with_volume_file_at(entry.volume_index, entry.blob_offset, |file| {
             copy_blob_record_content_to_writer(file, &mut hashing_writer).map_err(ReaderError::from)
         })?;
         if result.header.blob_id != entry.blob_id || hashing_writer.finalize() != entry.content_hash
@@ -387,7 +386,12 @@ fn fallback_scan(volume_paths: &[PathBuf]) -> Result<(u64, CheckpointPayload), R
 }
 
 impl ContainerReader {
-    fn with_volume_file<R, F>(&self, volume_index: u16, action: F) -> Result<R, ReaderError>
+    fn with_volume_file_at<R, F>(
+        &self,
+        volume_index: u16,
+        offset: u64,
+        action: F,
+    ) -> Result<R, ReaderError>
     where
         F: FnOnce(&mut File) -> Result<R, ReaderError>,
     {
@@ -398,7 +402,18 @@ impl ContainerReader {
         let mut file = file
             .lock()
             .map_err(|_| ReaderError::Io("volume file cache poisoned".to_string()))?;
-        action(&mut file)
+        if file.position != offset {
+            file.file
+                .seek(SeekFrom::Start(offset))
+                .map_err(|err| ReaderError::Io(err.to_string()))?;
+            file.position = offset;
+        }
+        let result = action(&mut file.file)?;
+        file.position = file
+            .file
+            .stream_position()
+            .map_err(|err| ReaderError::Io(err.to_string()))?;
+        Ok(result)
     }
 }
 

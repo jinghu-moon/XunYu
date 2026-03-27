@@ -2,6 +2,7 @@ use std::fs;
 use std::io::Cursor;
 use std::io::{Read, Seek, Write};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::backup::artifact::entry::SourceEntry;
@@ -9,6 +10,7 @@ use crate::backup::artifact::reader::open_entry_reader;
 use crate::backup::artifact::sevenz_segmented::{
     MultiVolumeReader, SegmentedWriter, resolve_multivolume_base,
 };
+use crate::backup::artifact::sidecar::{SidecarPlan, build_sidecar_bytes_with_hashes};
 use crate::backup::common::cli::restore_path_not_found_message;
 use crate::output::CliError;
 use sevenz_rust2::encoder_options::{
@@ -55,6 +57,7 @@ pub struct SevenZWriteOptions {
     pub method: SevenZMethod,
     pub level: u32,
     pub sidecar: Option<Vec<u8>>,
+    pub sidecar_plan: Option<SidecarPlan>,
 }
 
 impl Default for SevenZWriteOptions {
@@ -64,6 +67,7 @@ impl Default for SevenZWriteOptions {
             method: SevenZMethod::Lzma2,
             level: 1,
             sidecar: None,
+            sidecar_plan: None,
         }
     }
 }
@@ -153,7 +157,10 @@ fn write_entries_with_writer<W: Write + Seek>(
 ) -> Result<ArchiveWriter<W>, CliError> {
     writer.set_content_methods(vec![method_config(options.method, options.level)]);
 
-    for directory in collect_directory_entries(entries, options.sidecar.is_some()) {
+    for directory in collect_directory_entries(
+        entries,
+        options.sidecar.is_some() || options.sidecar_plan.is_some(),
+    ) {
         writer
             .push_archive_entry::<&[u8]>(ArchiveEntry::new_directory(&directory), None)
             .map_err(|err| {
@@ -161,37 +168,107 @@ fn write_entries_with_writer<W: Write + Seek>(
             })?;
     }
 
+    let mut content_hashes = std::collections::HashMap::with_capacity(entries.len());
     if options.solid {
         let archive_entries: Vec<ArchiveEntry> = entries
             .iter()
             .map(|entry| build_archive_entry(entry))
             .collect();
+        let mut states = Vec::with_capacity(entries.len());
         let readers: Result<Vec<SourceReader<_>>, CliError> = entries
             .iter()
-            .map(|entry| open_entry_reader(entry).map(SourceReader::from))
+            .map(|entry| {
+                let state = Arc::new(Mutex::new(blake3::Hasher::new()));
+                states.push((entry.path.clone(), state.clone()));
+                open_entry_reader(entry)
+                    .map(|reader| SourceReader::from(HashingEntryReader::new(reader, state)))
+            })
             .collect();
         writer
             .push_archive_entries(archive_entries, readers?)
             .map_err(|err| CliError::new(1, format!("Write solid 7z failed: {err}")))?;
+        for (path, state) in states {
+            let hash = *state
+                .lock()
+                .map_err(|_| CliError::new(2, "7z hashing reader poisoned".to_string()))?
+                .finalize()
+                .as_bytes();
+            content_hashes.insert(path, hash);
+        }
     } else {
         for entry in entries {
+            let state = Arc::new(Mutex::new(blake3::Hasher::new()));
             writer
-                .push_archive_entry(build_archive_entry(entry), Some(open_entry_reader(entry)?))
+                .push_archive_entry(
+                    build_archive_entry(entry),
+                    Some(HashingEntryReader::new(
+                        open_entry_reader(entry)?,
+                        state.clone(),
+                    )),
+                )
                 .map_err(|err| {
                     CliError::new(1, format!("Write 7z entry failed {}: {err}", entry.path))
                 })?;
+            let hash = *state
+                .lock()
+                .map_err(|_| CliError::new(2, "7z hashing reader poisoned".to_string()))?
+                .finalize()
+                .as_bytes();
+            content_hashes.insert(entry.path.clone(), hash);
         }
     }
 
-    if let Some(sidecar) = &options.sidecar {
+    let sidecar_bytes = if let Some(sidecar) = &options.sidecar {
+        Some(sidecar.clone())
+    } else if let Some(plan) = &options.sidecar_plan {
+        Some(build_sidecar_bytes_with_hashes(
+            plan.format,
+            crate::backup::artifact::sidecar::SidecarPackingHint::SevenZ(options.method),
+            &plan.source,
+            entries,
+            &content_hashes,
+        )?)
+    } else {
+        None
+    };
+    if let Some(sidecar) = sidecar_bytes {
         writer
             .push_archive_entry(
                 ArchiveEntry::new_file(crate::backup::artifact::sidecar::SIDECAR_PATH),
-                Some(Cursor::new(sidecar.clone())),
+                Some(Cursor::new(sidecar)),
             )
             .map_err(|err| CliError::new(1, format!("Write 7z sidecar failed: {err}")))?;
     }
     Ok(writer)
+}
+
+struct HashingEntryReader<R> {
+    inner: R,
+    hasher: Arc<Mutex<blake3::Hasher>>,
+}
+
+impl<R> HashingEntryReader<R> {
+    fn new(inner: R, hasher: Arc<Mutex<blake3::Hasher>>) -> Self {
+        Self { inner, hasher }
+    }
+}
+
+impl<R: Read> Read for HashingEntryReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        if read > 0
+            && let Ok(mut hasher) = self.hasher.lock()
+        {
+            hasher.update(&buf[..read]);
+        }
+        Ok(read)
+    }
+}
+
+impl<R: Seek> Seek for HashingEntryReader<R> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.inner.seek(pos)
+    }
 }
 
 pub(crate) fn list_7z_entries(path: &Path) -> Result<Vec<SourceEntry>, CliError> {

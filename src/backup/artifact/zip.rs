@@ -3,7 +3,8 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::backup::artifact::entry::SourceEntry;
-use crate::backup::artifact::reader::copy_entry_to_writer;
+use crate::backup::artifact::reader::copy_entry_to_writer_with_hash;
+use crate::backup::artifact::sidecar::{SidecarPlan, build_sidecar_bytes_with_hashes};
 use crate::backup::artifact::zip_ppmd::write_ppmd_zip;
 use crate::output::CliError;
 use chrono::{Datelike, TimeZone, Timelike, Utc};
@@ -68,6 +69,7 @@ pub struct ZipWriteOptions {
     pub method: ZipCompressionMethod,
     pub level: Option<u32>,
     pub sidecar: Option<Vec<u8>>,
+    pub sidecar_plan: Option<SidecarPlan>,
 }
 
 impl Default for ZipWriteOptions {
@@ -76,6 +78,7 @@ impl Default for ZipWriteOptions {
             method: ZipCompressionMethod::Auto,
             level: None,
             sidecar: None,
+            sidecar_plan: None,
         }
     }
 }
@@ -113,7 +116,10 @@ pub fn write_entries_to_zip<P: AsRef<Path>>(
     let file = fs::File::create(path)
         .map_err(|err| CliError::new(1, format!("Create zip failed {}: {err}", path.display())))?;
     let mut writer = zip::ZipWriter::new(file);
-    let directory_entries = collect_directory_entries(entries, options.sidecar.is_some());
+    let directory_entries = collect_directory_entries(
+        entries,
+        options.sidecar.is_some() || options.sidecar_plan.is_some(),
+    );
     let directory_options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Stored)
         .unix_permissions(0o755);
@@ -127,6 +133,7 @@ pub fn write_entries_to_zip<P: AsRef<Path>>(
     }
 
     let mut bytes_in = 0u64;
+    let mut content_hashes = std::collections::HashMap::with_capacity(entries.len());
     for entry in entries {
         let file_options = build_file_options(entry, options.method)?;
         writer
@@ -134,11 +141,25 @@ pub fn write_entries_to_zip<P: AsRef<Path>>(
             .map_err(|err| {
                 CliError::new(1, format!("Start zip entry failed {}: {err}", entry.path))
             })?;
-        copy_entry_to_writer(entry, &mut writer)?;
+        let hash = copy_entry_to_writer_with_hash(entry, &mut writer)?;
         bytes_in += entry.size;
+        content_hashes.insert(entry.path.clone(), hash);
     }
 
-    if let Some(sidecar) = options.sidecar {
+    let sidecar_bytes = if let Some(sidecar) = options.sidecar {
+        Some(sidecar)
+    } else if let Some(plan) = options.sidecar_plan {
+        Some(build_sidecar_bytes_with_hashes(
+            plan.format,
+            crate::backup::artifact::sidecar::SidecarPackingHint::Zip(options.method),
+            &plan.source,
+            entries,
+            &content_hashes,
+        )?)
+    } else {
+        None
+    };
+    if let Some(sidecar) = sidecar_bytes {
         let file_options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Stored)
             .unix_permissions(0o644);

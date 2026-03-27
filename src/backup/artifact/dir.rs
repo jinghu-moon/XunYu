@@ -1,13 +1,14 @@
 use std::path::Path;
 
 use crate::backup::artifact::entry::SourceEntry;
-use crate::backup::artifact::reader::copy_entry_to_path;
+use crate::backup::artifact::reader::copy_entry_to_path_with_hash;
 use crate::output::CliError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirWriteSummary {
     pub entry_count: usize,
     pub bytes_in: u64,
+    pub content_hashes: std::collections::HashMap<String, [u8; 32]>,
 }
 
 pub(crate) fn write_entries_to_dir<P: AsRef<Path>>(
@@ -16,14 +17,17 @@ pub(crate) fn write_entries_to_dir<P: AsRef<Path>>(
 ) -> Result<DirWriteSummary, CliError> {
     let output_dir = output_dir.as_ref();
     let mut bytes_in = 0u64;
+    let mut content_hashes = std::collections::HashMap::with_capacity(entries.len());
     for entry in entries {
         let dest = output_dir.join(entry.path.replace('/', "\\"));
-        copy_entry_to_path(entry, &dest)?;
+        let hash = copy_entry_to_path_with_hash(entry, &dest)?;
         bytes_in += entry.size;
+        content_hashes.insert(entry.path.clone(), hash);
     }
     Ok(DirWriteSummary {
         entry_count: entries.len(),
         bytes_in,
+        content_hashes,
     })
 }
 
@@ -60,6 +64,10 @@ mod tests {
 
         assert_eq!(summary.entry_count, 1);
         assert_eq!(summary.bytes_in, 12);
+        assert_eq!(
+            summary.content_hashes.get("src/main.rs"),
+            Some(blake3::hash(b"fn main() {}").as_bytes())
+        );
         assert_eq!(
             fs::read_to_string(output.join("src").join("main.rs")).unwrap(),
             "fn main() {}"

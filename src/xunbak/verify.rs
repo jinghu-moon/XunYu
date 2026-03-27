@@ -174,7 +174,8 @@ pub fn verify_full(reader: &ContainerReader) -> VerifyReport {
         }
     };
     for entry in &manifest.entries {
-        if let Err(err) = reader.read_and_verify_blob(entry) {
+        let mut sink = std::io::sink();
+        if let Err(err) = reader.copy_and_verify_blob(entry, &mut sink) {
             return VerifyReport::failure(
                 VerifyLevel::Full,
                 vec![VerifyIssue {

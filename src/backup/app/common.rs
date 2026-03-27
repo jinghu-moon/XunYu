@@ -5,9 +5,7 @@ use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::sevenz::{
     SevenZMethod, SevenZWriteOptions, parse_sevenz_method_for_cli,
 };
-use crate::backup::artifact::sidecar::{
-    SidecarPackingHint, SidecarSourceInfo, build_sidecar_bytes,
-};
+use crate::backup::artifact::sidecar::{SidecarPlan, SidecarSourceInfo};
 use crate::backup::artifact::zip::{
     ZipCompressionMethod, ZipWriteOptions, parse_zip_method_for_cli,
 };
@@ -48,7 +46,7 @@ pub(crate) fn build_zip_write_options(
     no_sidecar: bool,
     format: BackupArtifactFormat,
     source: &SidecarSourceInfo,
-    entries: &[&SourceEntry],
+    _entries: &[&SourceEntry],
 ) -> Result<ZipWriteOptions, CliError> {
     let method = if no_compress {
         ZipCompressionMethod::Stored
@@ -58,16 +56,11 @@ pub(crate) fn build_zip_write_options(
     Ok(ZipWriteOptions {
         method,
         level,
-        sidecar: if no_sidecar {
-            None
-        } else {
-            Some(build_sidecar_bytes(
-                format,
-                SidecarPackingHint::Zip(method),
-                source,
-                entries,
-            )?)
-        },
+        sidecar: None,
+        sidecar_plan: (!no_sidecar).then(|| SidecarPlan {
+            format,
+            source: source.clone(),
+        }),
     })
 }
 
@@ -80,7 +73,7 @@ pub(crate) fn build_sevenz_write_options(
     no_sidecar: bool,
     format: BackupArtifactFormat,
     source: &SidecarSourceInfo,
-    entries: &[&SourceEntry],
+    _entries: &[&SourceEntry],
 ) -> Result<SevenZWriteOptions, CliError> {
     let method = if no_compress {
         SevenZMethod::Copy
@@ -91,16 +84,11 @@ pub(crate) fn build_sevenz_write_options(
         solid,
         method,
         level: level.unwrap_or(1),
-        sidecar: if no_sidecar {
-            None
-        } else {
-            Some(build_sidecar_bytes(
-                format,
-                SidecarPackingHint::SevenZ(method),
-                source,
-                entries,
-            )?)
-        },
+        sidecar: None,
+        sidecar_plan: (!no_sidecar).then(|| SidecarPlan {
+            format,
+            source: source.clone(),
+        }),
     })
 }
 
@@ -174,7 +162,7 @@ mod tests {
             options.method,
             crate::backup::artifact::zip::ZipCompressionMethod::Stored
         );
-        assert!(options.sidecar.is_some());
+        assert!(options.sidecar_plan.is_some());
     }
 
     #[test]
@@ -199,6 +187,6 @@ mod tests {
         );
         assert!(options.solid);
         assert_eq!(options.level, 1);
-        assert!(options.sidecar.is_some());
+        assert!(options.sidecar_plan.is_some());
     }
 }

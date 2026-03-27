@@ -21,6 +21,12 @@ pub(crate) struct SidecarSourceInfo {
     pub source_root: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SidecarPlan {
+    pub format: BackupArtifactFormat,
+    pub source: SidecarSourceInfo,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SidecarPackingHint {
     Dir,
@@ -94,9 +100,25 @@ pub(crate) fn build_sidecar_bytes(
     source: &SidecarSourceInfo,
     entries: &[&SourceEntry],
 ) -> Result<Vec<u8>, CliError> {
+    build_sidecar_bytes_with_hashes(
+        format,
+        packing_hint,
+        source,
+        entries,
+        &std::collections::HashMap::new(),
+    )
+}
+
+pub(crate) fn build_sidecar_bytes_with_hashes(
+    format: BackupArtifactFormat,
+    packing_hint: SidecarPackingHint,
+    source: &SidecarSourceInfo,
+    entries: &[&SourceEntry],
+    content_hashes: &std::collections::HashMap<String, [u8; 32]>,
+) -> Result<Vec<u8>, CliError> {
     let items = entries
         .iter()
-        .map(|entry| build_sidecar_entry(entry, packing_hint))
+        .map(|entry| build_sidecar_entry(entry, packing_hint, content_hashes))
         .collect::<Result<Vec<_>, _>>()?;
 
     let manifest = SidecarManifest {
@@ -114,13 +136,14 @@ pub(crate) fn build_sidecar_bytes(
 fn build_sidecar_entry(
     entry: &SourceEntry,
     packing_hint: SidecarPackingHint,
+    content_hashes: &std::collections::HashMap<String, [u8; 32]>,
 ) -> Result<SidecarEntry, CliError> {
     let effective_codec = sidecar_codec_for_entry(entry, packing_hint);
     Ok(SidecarEntry {
         path: entry.path.clone(),
         size: entry.size,
         mtime_ns: entry.mtime_ns.unwrap_or(0),
-        content_hash: resolve_content_hash_hex(entry)?,
+        content_hash: resolve_content_hash_hex(entry, content_hashes)?,
         created_time_ns: entry.created_time_ns.unwrap_or(0),
         win_attributes: entry.win_attributes,
         packed_size: sidecar_packed_size_for_entry(entry.size, effective_codec.as_deref()),
@@ -184,7 +207,13 @@ fn effective_zip_method_for_entry(
     resolve_zip_method_for_entry(entry, method)
 }
 
-fn resolve_content_hash_hex(entry: &SourceEntry) -> Result<String, CliError> {
+fn resolve_content_hash_hex(
+    entry: &SourceEntry,
+    content_hashes: &std::collections::HashMap<String, [u8; 32]>,
+) -> Result<String, CliError> {
+    if let Some(hash) = content_hashes.get(&entry.path) {
+        return Ok(encode_hash_hex(hash));
+    }
     if let Some(hash) = entry.content_hash {
         return Ok(encode_hash_hex(&hash));
     }

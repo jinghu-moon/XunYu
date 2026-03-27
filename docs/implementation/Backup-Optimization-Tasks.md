@@ -421,19 +421,23 @@
 
 - [x] 新增专项基准：`cargo bench --bench backup_perf_bench_divan --features xunbak`
 - [x] 优化 `sidecar` 缺失 `content_hash` 时的热点路径
-  现状：优先复用 `entry.content_hash`；对 `Filesystem / DirArtifact` 直接走 `compute_file_content_hash()`，避免通过 `copy_entry_to_writer() -> HashSink` 做额外包装层。
+  现状：对 `dir / zip / 7z` 写出路径，已改为“写入时顺手产出 per-entry hash，再由 sidecar 直接消费”，不再在 sidecar 阶段额外重读内容；缺失 hash 的回退路径仍保留。
 - [x] 为 `.xunbak` `ContainerReader` 增加 `manifest` 缓存与 volume file handle 复用
-  现状：`load_manifest()` 使用 `OnceLock`；blob 读取/校验改为按 volume 复用已打开文件句柄，避免每个 entry/part 反复 `File::open + seek`。
+  现状：`load_manifest()` 使用 `OnceLock`；blob 读取/校验改为按 volume 复用已打开文件句柄，并缓存当前 offset，减少顺序 restore/verify 中的多余 `seek`。
 - [x] 优化 `verify_entries_content()` 的并行策略
   现状：对 `DirArtifact / Filesystem / XunbakArtifact` 在文件数较多时启用可控并行；`zip / 7z` 仍保持保守路径，避免共享 archive/reader 竞争。
+- [x] 优化 `.xunbak verify_full()` 为流式 sink 校验
+  现状：已从 `read_and_verify_blob() -> Vec<u8>` 改为 `copy_and_verify_blob() -> std::io::sink()`，显著降低了分配量。
 - [x] 记录优化前后基线
   基准中位数对比：
-  `sidecar_build_missing_hash_1000_files`: `29.87ms -> 27.27ms`
-  `verify_entries_content_dir_1000_files`: `23.43ms -> 5.45ms`
-  `verify_entries_content_xunbak_1000_files`: `28.52ms -> 14.68ms`
-  `verify_full_xunbak_1000_files`: `25.72ms -> 9.58ms`
-  `xunbak_restore_all_1000_files`: `533.8ms -> 517.7ms`
-  结论：`verify` 热点收益显著，`.xunbak` restore 句柄复用有稳定但相对温和的收益，`sidecar` 缺失 hash 路径有小幅改善。
+  `sidecar_build_missing_hash_1000_files`: `29.87ms -> 28.50ms`
+  `verify_entries_content_dir_1000_files`: `23.43ms -> 6.06ms`
+  `verify_entries_content_xunbak_1000_files`: `28.52ms -> 14.56ms`
+  `verify_full_xunbak_1000_files`: `25.72ms -> 9.89ms`
+  `xunbak_restore_all_1000_files`: `533.8ms -> 510.1ms`
+  `create_zip_200_files`: `70.10ms -> 66.06ms`
+  `create_7z_200_files`: `95.04ms -> 92.66ms`
+  结论：`verify` 热点收益最显著；`.xunbak` restore 的 volume 句柄/offset 复用带来稳定但温和的改善；sidecar 单点基准改善有限，但导出链路 (`create_zip/create_7z`) 已能观察到真实收益，说明“写入时顺手产出 hash，sidecar 直接消费”的方向是有效的。
 
 ---
 

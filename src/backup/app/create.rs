@@ -22,7 +22,8 @@ use crate::backup::artifact::progress::{
 };
 use crate::backup::artifact::sevenz::{write_entries_to_7z, write_entries_to_7z_split};
 use crate::backup::artifact::sidecar::{
-    SidecarPackingHint, build_sidecar_bytes, source_info_for_create, write_sidecar_to_dir,
+    SidecarPackingHint, build_sidecar_bytes_with_hashes, source_info_for_create,
+    write_sidecar_to_dir,
 };
 use crate::backup::artifact::zip::write_entries_to_zip;
 use crate::backup::common::cli::{optional_path_display, path_display, path_strings};
@@ -212,8 +213,13 @@ fn cmd_backup_create_dir(options: &BackupCreateOptions) -> CliResult {
     let written = commit_output_plan(plan, |plan| {
         let summary = write_entries_to_dir(&refs, plan.temp_path())?;
         if !options.no_sidecar {
-            let sidecar =
-                build_sidecar_bytes(options.format, SidecarPackingHint::Dir, &source_info, &refs)?;
+            let sidecar = build_sidecar_bytes_with_hashes(
+                options.format,
+                SidecarPackingHint::Dir,
+                &source_info,
+                &refs,
+                &summary.content_hashes,
+            )?;
             write_sidecar_to_dir(plan.temp_path(), &sidecar)?;
         }
         Ok(summary.entry_count)

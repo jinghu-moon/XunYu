@@ -25,7 +25,8 @@ use crate::backup::artifact::reader::sort_entry_refs_for_read_locality;
 use crate::backup::artifact::selection::select_entries;
 use crate::backup::artifact::sevenz::{write_entries_to_7z, write_entries_to_7z_split};
 use crate::backup::artifact::sidecar::{
-    SidecarPackingHint, build_sidecar_bytes, source_info_for_convert, write_sidecar_to_dir,
+    SidecarPackingHint, build_sidecar_bytes_with_hashes, source_info_for_convert,
+    write_sidecar_to_dir,
 };
 use crate::backup::artifact::source::read_artifact_entries;
 use crate::backup::artifact::verify::{verify_convert_source, verify_output};
@@ -246,14 +247,16 @@ fn execute_backup_convert_to_dir(
         phase_started.elapsed().as_millis(),
     );
     let plan = prepare_dir_output(options)?;
+    let source_info = source_info_for_convert(&options.artifact);
     let summary = commit_output_plan(plan, |plan| {
         let summary = write_entries_to_dir(&selected, plan.temp_path())?;
         if !options.no_sidecar {
-            let sidecar = build_sidecar_bytes(
+            let sidecar = build_sidecar_bytes_with_hashes(
                 options.format,
                 SidecarPackingHint::Dir,
-                &source_info_for_convert(&options.artifact),
+                &source_info,
                 &selected,
+                &summary.content_hashes,
             )?;
             write_sidecar_to_dir(plan.temp_path(), &sidecar)?;
         }
