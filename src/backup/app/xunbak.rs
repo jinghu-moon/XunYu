@@ -4,6 +4,7 @@ use crate::backup::artifact::common::parse_split_size_bytes;
 use crate::backup::artifact::output_plan::{
     XunbakOutputPlan, XunbakSingleUpdatePlan, XunbakSplitOutputPlan, XunbakSplitUpdatePlan,
 };
+use crate::backup::common::cli::resolve_input_path;
 use crate::cli::{BackupCmd, VerifyCmd};
 use crate::output::{CliError, CliResult};
 use crate::xunbak::codec::XUNBAK_COMPRESSION_PROFILE_FIX_HINT;
@@ -16,7 +17,7 @@ use crate::xunbak::verify::{
 use crate::xunbak::writer::{BackupOptions, ContainerWriter, ProgressEvent};
 
 pub(crate) fn cmd_backup_container(args: &BackupCmd, root: &Path) -> CliResult {
-    let container = resolve_container_path(root, args.container.as_deref().unwrap_or_default());
+    let container = resolve_input_path(root, args.container.as_deref().unwrap_or_default());
     let options = parse_backup_options(args)?;
 
     if args.dry_run {
@@ -210,32 +211,42 @@ pub(crate) fn restore_container(
     target_dir: &Path,
     file: Option<&str>,
     glob: Option<&str>,
+    dry_run: bool,
 ) -> CliResult<(usize, usize)> {
     let reader =
         ContainerReader::open(container).map_err(|err| CliError::new(2, err.to_string()))?;
     let result = if let Some(path) = file {
-        reader
-            .restore_file(path, target_dir)
-            .map_err(|err| CliError::new(2, err.to_string()))?
+        if dry_run {
+            reader
+                .dry_run_restore_file(path, target_dir)
+                .map_err(|err| CliError::new(2, err.to_string()))?
+        } else {
+            reader
+                .restore_file(path, target_dir)
+                .map_err(|err| CliError::new(2, err.to_string()))?
+        }
     } else if let Some(pattern) = glob {
-        reader
-            .restore_glob(pattern, target_dir)
-            .map_err(|err| CliError::new(2, err.to_string()))?
+        if dry_run {
+            reader
+                .dry_run_restore_glob(pattern, target_dir)
+                .map_err(|err| CliError::new(2, err.to_string()))?
+        } else {
+            reader
+                .restore_glob(pattern, target_dir)
+                .map_err(|err| CliError::new(2, err.to_string()))?
+        }
     } else {
-        reader
-            .restore_all(target_dir)
-            .map_err(|err| CliError::new(2, err.to_string()))?
+        if dry_run {
+            reader
+                .dry_run_restore_all(target_dir)
+                .map_err(|err| CliError::new(2, err.to_string()))?
+        } else {
+            reader
+                .restore_all(target_dir)
+                .map_err(|err| CliError::new(2, err.to_string()))?
+        }
     };
     Ok((result.restored_files, 0))
-}
-
-fn resolve_container_path(root: &Path, raw: &str) -> PathBuf {
-    let path = PathBuf::from(raw);
-    if path.is_absolute() {
-        path
-    } else {
-        root.join(path)
-    }
 }
 
 fn parse_backup_options(args: &BackupCmd) -> Result<BackupOptions, CliError> {

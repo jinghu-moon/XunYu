@@ -52,9 +52,127 @@ pub(crate) fn emit_progress_event(event: &ExportProgressEvent) {
     );
 }
 
+pub(crate) fn emit_progress_snapshot(
+    enabled: bool,
+    phase: ExportProgressPhase,
+    selected_files: usize,
+    processed_files: usize,
+    bytes_in: u64,
+    bytes_out: u64,
+    throughput: u64,
+    elapsed_ms: u128,
+) {
+    if !enabled {
+        return;
+    }
+    emit_progress_event(&ExportProgressEvent {
+        phase,
+        selected_files,
+        processed_files,
+        bytes_in,
+        bytes_out,
+        throughput,
+        elapsed_ms,
+    });
+}
+
+pub(crate) fn emit_read_progress(
+    enabled: bool,
+    selected_files: usize,
+    bytes_in: u64,
+    elapsed_ms: u128,
+) {
+    emit_progress_snapshot(
+        enabled,
+        ExportProgressPhase::Read,
+        selected_files,
+        selected_files,
+        bytes_in,
+        0,
+        0,
+        elapsed_ms,
+    );
+}
+
+pub(crate) fn emit_compress_progress(
+    enabled: bool,
+    selected_files: usize,
+    bytes_in: u64,
+    elapsed_ms: u128,
+) {
+    emit_progress_snapshot(
+        enabled,
+        ExportProgressPhase::Compress,
+        selected_files,
+        0,
+        bytes_in,
+        0,
+        0,
+        elapsed_ms,
+    );
+}
+
+pub(crate) fn emit_write_progress(
+    enabled: bool,
+    selected_files: usize,
+    processed_files: usize,
+    bytes_in: u64,
+    bytes_out: u64,
+    throughput: u64,
+    elapsed_ms: u128,
+) {
+    emit_progress_snapshot(
+        enabled,
+        ExportProgressPhase::Write,
+        selected_files,
+        processed_files,
+        bytes_in,
+        bytes_out,
+        throughput,
+        elapsed_ms,
+    );
+}
+
+pub(crate) fn emit_verify_source_progress(enabled: bool, elapsed_ms: u128) {
+    emit_progress_snapshot(
+        enabled,
+        ExportProgressPhase::VerifySource,
+        0,
+        0,
+        0,
+        0,
+        0,
+        elapsed_ms,
+    );
+}
+
+pub(crate) fn emit_verify_output_progress(
+    enabled: bool,
+    selected_files: usize,
+    processed_files: usize,
+    bytes_in: u64,
+    bytes_out: u64,
+    elapsed_ms: u128,
+) {
+    emit_progress_snapshot(
+        enabled,
+        ExportProgressPhase::VerifyOutput,
+        selected_files,
+        processed_files,
+        bytes_in,
+        bytes_out,
+        0,
+        elapsed_ms,
+    );
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ExportProgressEvent, ExportProgressPhase};
+    use super::{
+        ExportProgressEvent, ExportProgressPhase, emit_compress_progress, emit_progress_snapshot,
+        emit_read_progress, emit_verify_output_progress, emit_verify_source_progress,
+        emit_write_progress,
+    };
 
     #[test]
     fn export_progress_event_contains_contract_fields() {
@@ -91,5 +209,15 @@ mod tests {
             encoded,
             r#"["verify_source","read","compress","write","verify_output"]"#
         );
+    }
+
+    #[test]
+    fn helper_emitters_are_noop_when_disabled() {
+        emit_progress_snapshot(false, ExportProgressPhase::Read, 1, 1, 2, 3, 4, 5);
+        emit_verify_source_progress(false, 1);
+        emit_read_progress(false, 1, 2, 3);
+        emit_compress_progress(false, 1, 2, 3);
+        emit_write_progress(false, 1, 1, 2, 3, 4, 5);
+        emit_verify_output_progress(false, 1, 1, 2, 3, 4);
     }
 }

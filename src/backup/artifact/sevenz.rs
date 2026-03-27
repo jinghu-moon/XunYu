@@ -9,6 +9,7 @@ use crate::backup::artifact::reader::open_entry_reader;
 use crate::backup::artifact::sevenz_segmented::{
     MultiVolumeReader, SegmentedWriter, resolve_multivolume_base,
 };
+use crate::backup::common::cli::restore_path_not_found_message;
 use crate::output::CliError;
 use sevenz_rust2::encoder_options::{
     Bzip2Options, DeflateOptions, Lzma2Options, PpmdOptions, ZstandardOptions,
@@ -225,10 +226,9 @@ where
                 }
                 let dest = destination.join(name.replace('/', "\\"));
                 if dry_run {
-                    crate::output::ui_println(format_args!(
-                        "DRY RUN: would restore {}",
-                        dest.strip_prefix(destination).unwrap_or(&dest).display()
-                    ));
+                    crate::commands::restore_core::emit_restore_dry_run(
+                        dest.strip_prefix(destination).unwrap_or(&dest),
+                    );
                     restored += 1;
                     return Ok(true);
                 }
@@ -264,10 +264,7 @@ pub(crate) fn restore_7z_single(
         matched
     })?;
     if !found {
-        return Err(CliError::new(
-            1,
-            format!("Restore failed: file not found in backup: {wanted}"),
-        ));
+        return Err(CliError::new(1, restore_path_not_found_message(&wanted)));
     }
     Ok(result)
 }

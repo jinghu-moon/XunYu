@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
+use crate::backup::artifact::common::is_xunbak_artifact_path;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup::artifact::sevenz::{list_7z_entries, list_7z_method_names};
@@ -35,7 +36,7 @@ pub(crate) fn verify_convert_source(path: &Path, mode: VerifySourceMode) -> CliR
     if matches!(mode, VerifySourceMode::Off) {
         return Ok(());
     }
-    if !is_xunbak_path(path) {
+    if !is_xunbak_artifact_path(path) {
         return Ok(());
     }
 
@@ -154,16 +155,6 @@ pub(crate) fn verify_output(
         }
         BackupArtifactFormat::Dir => Ok(()),
     }
-}
-
-fn is_xunbak_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("xunbak"))
-        || path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".xunbak.001"))
 }
 
 fn find_external_7z() -> Option<String> {

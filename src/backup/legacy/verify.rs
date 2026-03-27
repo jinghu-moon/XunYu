@@ -4,6 +4,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use crate::backup::common::cli::backup_not_found_error;
 use crate::output::{CliError, CliResult};
 
 use super::checksum::{VerifyResult, verify_manifest};
@@ -30,11 +31,7 @@ pub(crate) fn cmd_backup_verify(
     // 定位备份（dir 或 zip 目录）
     let backup_path = locate_backup(&backups_root, name);
     let Some(backup_path) = backup_path else {
-        return Err(CliError::with_details(
-            2,
-            format!("Backup not found: {name}"),
-            &["Fix: Run `xun backup list` to see available backups."],
-        ));
+        return Err(backup_not_found_error(name));
     };
 
     let backup_type = if backup_path.extension().is_some_and(|e| e == "zip") {

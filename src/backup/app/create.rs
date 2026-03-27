@@ -1,32 +1,31 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::Serialize;
 
+use crate::backup::app::common::{
+    build_sevenz_write_options, build_zip_write_options, ensure_create_output_distinct,
+};
 use crate::backup::artifact::common::{
-    collect_file_or_numbered_outputs, parse_split_size_bytes, paths_equal,
+    collect_artifact_output_paths, compute_artifact_output_bytes, parse_split_size_bytes,
+    throughput_bytes_per_sec,
 };
 use crate::backup::artifact::dir::write_entries_to_dir;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::fs::scan_source_entries;
 use crate::backup::artifact::options::BackupCreateOptions;
 use crate::backup::artifact::output_plan::{
-    DirOutputPlan, SevenZOutputPlan, SevenZSplitOutputPlan, ZipOutputPlan,
+    DirOutputPlan, SevenZOutputPlan, SevenZSplitOutputPlan, ZipOutputPlan, commit_output_plan,
 };
 use crate::backup::artifact::progress::{
-    ExportProgressEvent, ExportProgressPhase, emit_progress_event, should_emit_progress,
+    emit_compress_progress, emit_read_progress, emit_write_progress, should_emit_progress,
 };
-use crate::backup::artifact::sevenz::{
-    SevenZMethod, SevenZWriteOptions, parse_sevenz_method_for_cli, write_entries_to_7z,
-    write_entries_to_7z_split,
-};
+use crate::backup::artifact::sevenz::{write_entries_to_7z, write_entries_to_7z_split};
 use crate::backup::artifact::sidecar::{
     SidecarPackingHint, build_sidecar_bytes, source_info_for_create, write_sidecar_to_dir,
 };
-use crate::backup::artifact::zip::{
-    ZipCompressionMethod, ZipWriteOptions, parse_zip_method_for_cli, write_entries_to_zip,
-};
+use crate::backup::artifact::zip::write_entries_to_zip;
+use crate::backup::common::cli::{optional_path_display, path_display, path_strings};
 use crate::backup::legacy::{config, util};
 use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus};
 use crate::cli::{BackupCmd, BackupCreateCmd};
@@ -136,11 +135,8 @@ fn cmd_backup_create_list(options: &BackupCreateOptions) -> CliResult {
             action: BackupAction::Create,
             status: ExportStatus::Ok,
             mode: "list".to_string(),
-            source: options.source_dir.display().to_string(),
-            destination: options
-                .output
-                .as_ref()
-                .map(|path| path.display().to_string()),
+            source: path_display(&options.source_dir),
+            destination: optional_path_display(options.output.as_deref()),
             format: options.format,
             selected: paths.len(),
             bytes_in,
@@ -167,49 +163,31 @@ fn cmd_backup_create_list(options: &BackupCreateOptions) -> CliResult {
 fn cmd_backup_create_dir(options: &BackupCreateOptions) -> CliResult {
     let started = Instant::now();
     let output = resolve_create_output_path(options)?;
-    if paths_equal(&options.source_dir, &output) {
-        return Err(CliError::with_details(
-            2,
-            "backup create --format dir output must differ from source directory",
-            &["Fix: Choose a different `--output` path."],
-        ));
-    }
+    ensure_create_output_distinct(&options.source_dir, &output, options.format)?;
     let entries = collect_backup_create_entries(options)?;
     let selected = entries.len();
     let bytes_in: u64 = entries.iter().map(|entry| entry.size).sum();
     let show_progress = should_emit_progress(options.progress, options.json);
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Read,
-            selected_files: selected,
-            processed_files: selected,
-            bytes_in,
-            bytes_out: 0,
-            throughput: 0,
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    emit_read_progress(
+        show_progress,
+        selected,
+        bytes_in,
+        started.elapsed().as_millis(),
+    );
 
     if options.dry_run {
         if options.json {
-            let summary = BackupCreateExecutionSummary {
-                action: BackupAction::Create,
-                status: ExportStatus::Ok,
-                source: options.source_dir.display().to_string(),
-                destination: output.display().to_string(),
-                format: options.format,
-                dry_run: true,
+            let summary = build_create_execution_summary(
+                options,
+                &output,
+                true,
                 selected,
-                written: 0,
-                skipped: 0,
+                0,
                 bytes_in,
-                bytes_out: 0,
-                overwrite_count: 0,
-                verify_source: "off".to_string(),
-                verify_output: "off".to_string(),
-                duration_ms: started.elapsed().as_millis(),
-                outputs: Vec::new(),
-            };
+                0,
+                Vec::new(),
+                started.elapsed().as_millis(),
+            );
             out_println!(
                 "{}",
                 serde_json::to_string_pretty(&summary).map_err(|err| {
@@ -228,64 +206,41 @@ fn cmd_backup_create_dir(options: &BackupCreateOptions) -> CliResult {
         return Ok(());
     }
 
-    let plan = DirOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;
     let refs: Vec<&SourceEntry> = entries.iter().collect();
-    let write_result = (|| -> CliResult<usize> {
+    let source_info = source_info_for_create(&options.source_dir);
+    let plan = DirOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;
+    let written = commit_output_plan(plan, |plan| {
         let summary = write_entries_to_dir(&refs, plan.temp_path())?;
         if !options.no_sidecar {
-            let sidecar = build_sidecar_bytes(
-                options.format,
-                SidecarPackingHint::Dir,
-                &source_info_for_create(&options.source_dir),
-                &refs,
-            )?;
+            let sidecar =
+                build_sidecar_bytes(options.format, SidecarPackingHint::Dir, &source_info, &refs)?;
             write_sidecar_to_dir(plan.temp_path(), &sidecar)?;
         }
         Ok(summary.entry_count)
-    })();
-    let written = match write_result {
-        Ok(written) => written,
-        Err(err) => {
-            let _ = plan.cleanup();
-            return Err(err);
-        }
-    };
-    if let Err(err) = maybe_fail_after_write_for_tests() {
-        let _ = plan.cleanup();
-        return Err(err);
-    }
-    plan.finalize()?;
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Write,
-            selected_files: selected,
-            processed_files: written,
-            bytes_in,
-            bytes_out: dir_size_bytes(&output),
-            throughput: throughput(bytes_in, started.elapsed()),
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    })?;
+    let bytes_out = compute_artifact_output_bytes(options.format, &output);
+    emit_write_progress(
+        show_progress,
+        selected,
+        written,
+        bytes_in,
+        bytes_out,
+        throughput_bytes_per_sec(bytes_in, started.elapsed()),
+        started.elapsed().as_millis(),
+    );
 
     if options.json {
-        let summary = BackupCreateExecutionSummary {
-            action: BackupAction::Create,
-            status: ExportStatus::Ok,
-            source: options.source_dir.display().to_string(),
-            destination: output.display().to_string(),
-            format: options.format,
-            dry_run: false,
+        let summary = build_create_execution_summary(
+            options,
+            &output,
+            false,
             selected,
             written,
-            skipped: 0,
             bytes_in,
-            bytes_out: dir_size_bytes(&output),
-            overwrite_count: 0,
-            verify_source: "off".to_string(),
-            verify_output: "off".to_string(),
-            duration_ms: started.elapsed().as_millis(),
-            outputs: vec![output.display().to_string()],
-        };
+            bytes_out,
+            vec![path_display(&output)],
+            started.elapsed().as_millis(),
+        );
         out_println!(
             "{}",
             serde_json::to_string_pretty(&summary).map_err(|err| {
@@ -312,47 +267,32 @@ fn cmd_backup_create_7z(options: &BackupCreateOptions) -> CliResult {
     let bytes_in: u64 = entries.iter().map(|entry| entry.size).sum();
     let split_size = parse_split_size_bytes(options.split_size.as_deref())?;
     let show_progress = should_emit_progress(options.progress, options.json);
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Read,
-            selected_files: selected,
-            processed_files: selected,
-            bytes_in,
-            bytes_out: 0,
-            throughput: 0,
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Compress,
-            selected_files: selected,
-            processed_files: 0,
-            bytes_in,
-            bytes_out: 0,
-            throughput: 0,
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    emit_read_progress(
+        show_progress,
+        selected,
+        bytes_in,
+        started.elapsed().as_millis(),
+    );
+    emit_compress_progress(
+        show_progress,
+        selected,
+        bytes_in,
+        started.elapsed().as_millis(),
+    );
 
     if options.dry_run {
         if options.json {
-            let summary = BackupCreateExecutionSummary {
-                action: BackupAction::Create,
-                status: ExportStatus::Ok,
-                source: options.source_dir.display().to_string(),
-                destination: output.display().to_string(),
-                format: options.format,
-                dry_run: true,
+            let summary = build_create_execution_summary(
+                options,
+                &output,
+                true,
                 selected,
-                written: 0,
-                skipped: 0,
+                0,
                 bytes_in,
-                bytes_out: 0,
-                overwrite_count: 0,
-                verify_source: "off".to_string(),
-                verify_output: "off".to_string(),
-                duration_ms: started.elapsed().as_millis(),
-                outputs: Vec::new(),
-            };
+                0,
+                Vec::new(),
+                started.elapsed().as_millis(),
+            );
             out_println!(
                 "{}",
                 serde_json::to_string_pretty(&summary).map_err(|err| {
@@ -372,97 +312,52 @@ fn cmd_backup_create_7z(options: &BackupCreateOptions) -> CliResult {
     }
 
     let refs: Vec<&SourceEntry> = entries.iter().collect();
-    let sevenz_options = SevenZWriteOptions {
-        solid: options.solid,
-        method: if options.no_compress {
-            SevenZMethod::Copy
-        } else {
-            sevenz_method_for_create(options.method.as_deref())?
-        },
-        level: options.level.unwrap_or(1),
-        sidecar: if options.no_sidecar {
-            None
-        } else {
-            Some(build_sidecar_bytes(
-                options.format,
-                SidecarPackingHint::SevenZ(if options.no_compress {
-                    SevenZMethod::Copy
-                } else {
-                    sevenz_method_for_create(options.method.as_deref())?
-                }),
-                &source_info_for_create(&options.source_dir),
-                &refs,
-            )?)
-        },
-    };
+    let sevenz_options = build_sevenz_write_options(
+        "backup create",
+        options.method.as_deref(),
+        options.no_compress,
+        options.solid,
+        options.level,
+        options.no_sidecar,
+        options.format,
+        &source_info_for_create(&options.source_dir),
+        &refs,
+    )?;
     let summary = if let Some(split_size) = split_size {
         let plan =
             SevenZSplitOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;
-        let result =
-            write_entries_to_7z_split(&refs, plan.temp_base_path(), split_size, &sevenz_options);
-        let summary = match result {
-            Ok(summary) => summary,
-            Err(err) => {
-                let _ = plan.cleanup();
-                return Err(err);
-            }
-        };
-        if let Err(err) = maybe_fail_after_write_for_tests() {
-            let _ = plan.cleanup();
-            return Err(err);
-        }
-        plan.finalize()?;
-        summary
+        commit_output_plan(plan, |plan| {
+            write_entries_to_7z_split(&refs, plan.temp_base_path(), split_size, &sevenz_options)
+        })?
     } else {
         let plan = SevenZOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;
-        let summary = match write_entries_to_7z(&refs, plan.temp_path(), &sevenz_options) {
-            Ok(summary) => summary,
-            Err(err) => {
-                let _ = plan.cleanup();
-                return Err(err);
-            }
-        };
-        if let Err(err) = maybe_fail_after_write_for_tests() {
-            let _ = plan.cleanup();
-            return Err(err);
-        }
-        plan.finalize()?;
-        summary
+        commit_output_plan(plan, |plan| {
+            write_entries_to_7z(&refs, plan.temp_path(), &sevenz_options)
+        })?
     };
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Write,
-            selected_files: selected,
-            processed_files: summary.entry_count,
-            bytes_in: summary.bytes_in,
-            bytes_out: compute_created_output_bytes(options.format, &output),
-            throughput: throughput(summary.bytes_in, started.elapsed()),
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    let bytes_out = compute_artifact_output_bytes(options.format, &output);
+    emit_write_progress(
+        show_progress,
+        selected,
+        summary.entry_count,
+        summary.bytes_in,
+        bytes_out,
+        throughput_bytes_per_sec(summary.bytes_in, started.elapsed()),
+        started.elapsed().as_millis(),
+    );
 
     if options.json {
-        let result = BackupCreateExecutionSummary {
-            action: BackupAction::Create,
-            status: ExportStatus::Ok,
-            source: options.source_dir.display().to_string(),
-            destination: output.display().to_string(),
-            format: options.format,
-            dry_run: false,
+        let result = build_create_execution_summary(
+            options,
+            &output,
+            false,
             selected,
-            written: summary.entry_count,
-            skipped: 0,
-            bytes_in: summary.bytes_in,
-            bytes_out: compute_created_output_bytes(options.format, &output),
-            overwrite_count: 0,
-            verify_source: "off".to_string(),
-            verify_output: "off".to_string(),
-            duration_ms: started.elapsed().as_millis(),
-            outputs: collect_created_output_paths(options.format, &output)
-                .into_iter()
-                .map(|path| path.display().to_string())
-                .collect(),
-        };
+            summary.entry_count,
+            summary.bytes_in,
+            bytes_out,
+            path_strings(collect_artifact_output_paths(options.format, &output)),
+            started.elapsed().as_millis(),
+        );
         out_println!(
             "{}",
             serde_json::to_string_pretty(&result).map_err(|err| {
@@ -488,47 +383,32 @@ fn cmd_backup_create_zip(options: &BackupCreateOptions) -> CliResult {
     let selected = entries.len();
     let bytes_in: u64 = entries.iter().map(|entry| entry.size).sum();
     let show_progress = should_emit_progress(options.progress, options.json);
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Read,
-            selected_files: selected,
-            processed_files: selected,
-            bytes_in,
-            bytes_out: 0,
-            throughput: 0,
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Compress,
-            selected_files: selected,
-            processed_files: 0,
-            bytes_in,
-            bytes_out: 0,
-            throughput: 0,
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    emit_read_progress(
+        show_progress,
+        selected,
+        bytes_in,
+        started.elapsed().as_millis(),
+    );
+    emit_compress_progress(
+        show_progress,
+        selected,
+        bytes_in,
+        started.elapsed().as_millis(),
+    );
 
     if options.dry_run {
         if options.json {
-            let summary = BackupCreateExecutionSummary {
-                action: BackupAction::Create,
-                status: ExportStatus::Ok,
-                source: options.source_dir.display().to_string(),
-                destination: output.display().to_string(),
-                format: options.format,
-                dry_run: true,
+            let summary = build_create_execution_summary(
+                options,
+                &output,
+                true,
                 selected,
-                written: 0,
-                skipped: 0,
+                0,
                 bytes_in,
-                bytes_out: 0,
-                overwrite_count: 0,
-                verify_source: "off".to_string(),
-                verify_output: "off".to_string(),
-                duration_ms: started.elapsed().as_millis(),
-                outputs: Vec::new(),
-            };
+                0,
+                Vec::new(),
+                started.elapsed().as_millis(),
+            );
             out_println!(
                 "{}",
                 serde_json::to_string_pretty(&summary).map_err(|err| {
@@ -547,76 +427,44 @@ fn cmd_backup_create_zip(options: &BackupCreateOptions) -> CliResult {
         return Ok(());
     }
 
-    let plan = ZipOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;
     let refs: Vec<&SourceEntry> = entries.iter().collect();
-    let zip_options = ZipWriteOptions {
-        method: if options.no_compress {
-            ZipCompressionMethod::Stored
-        } else {
-            parse_zip_method_for_cli("backup create", options.method.as_deref())?
-        },
-        level: options.level,
-        sidecar: if options.no_sidecar {
-            None
-        } else {
-            Some(build_sidecar_bytes(
-                options.format,
-                SidecarPackingHint::Zip(if options.no_compress {
-                    ZipCompressionMethod::Stored
-                } else {
-                    parse_zip_method_for_cli("backup create", options.method.as_deref())?
-                }),
-                &source_info_for_create(&options.source_dir),
-                &refs,
-            )?)
-        },
-    };
-    let summary = match write_entries_to_zip(&refs, plan.temp_path(), zip_options) {
-        Ok(summary) => summary,
-        Err(err) => {
-            let _ = plan.cleanup();
-            return Err(err);
-        }
-    };
-    if let Err(err) = maybe_fail_after_write_for_tests() {
-        let _ = plan.cleanup();
-        return Err(err);
-    }
-    plan.finalize()?;
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Write,
-            selected_files: selected,
-            processed_files: summary.entry_count,
-            bytes_in: summary.bytes_in,
-            bytes_out: compute_created_output_bytes(options.format, &output),
-            throughput: throughput(summary.bytes_in, started.elapsed()),
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    let zip_options = build_zip_write_options(
+        "backup create",
+        options.method.as_deref(),
+        options.no_compress,
+        options.level,
+        options.no_sidecar,
+        options.format,
+        &source_info_for_create(&options.source_dir),
+        &refs,
+    )?;
+    let plan = ZipOutputPlan::prepare(&output, crate::backup_formats::OverwriteMode::Fail)?;
+    let summary = commit_output_plan(plan, |plan| {
+        write_entries_to_zip(&refs, plan.temp_path(), zip_options)
+    })?;
+    let bytes_out = compute_artifact_output_bytes(options.format, &output);
+    emit_write_progress(
+        show_progress,
+        selected,
+        summary.entry_count,
+        summary.bytes_in,
+        bytes_out,
+        throughput_bytes_per_sec(summary.bytes_in, started.elapsed()),
+        started.elapsed().as_millis(),
+    );
 
     if options.json {
-        let result = BackupCreateExecutionSummary {
-            action: BackupAction::Create,
-            status: ExportStatus::Ok,
-            source: options.source_dir.display().to_string(),
-            destination: output.display().to_string(),
-            format: options.format,
-            dry_run: false,
+        let result = build_create_execution_summary(
+            options,
+            &output,
+            false,
             selected,
-            written: summary.entry_count,
-            skipped: 0,
-            bytes_in: summary.bytes_in,
-            bytes_out: compute_created_output_bytes(options.format, &output),
-            overwrite_count: 0,
-            verify_source: "off".to_string(),
-            verify_output: "off".to_string(),
-            duration_ms: started.elapsed().as_millis(),
-            outputs: collect_created_output_paths(options.format, &output)
-                .into_iter()
-                .map(|path| path.display().to_string())
-                .collect(),
-        };
+            summary.entry_count,
+            summary.bytes_in,
+            bytes_out,
+            path_strings(collect_artifact_output_paths(options.format, &output)),
+            started.elapsed().as_millis(),
+        );
         out_println!(
             "{}",
             serde_json::to_string_pretty(&result).map_err(|err| {
@@ -639,50 +487,32 @@ fn cmd_backup_create_zip(options: &BackupCreateOptions) -> CliResult {
 fn cmd_backup_create_xunbak(options: &BackupCreateOptions) -> CliResult {
     let started = Instant::now();
     let output = resolve_create_output_path(options)?;
-    if paths_equal(&options.source_dir, &output) {
-        return Err(CliError::with_details(
-            2,
-            "backup create --format xunbak output must differ from source directory",
-            &["Fix: Choose a different `--output` path."],
-        ));
-    }
+    ensure_create_output_distinct(&options.source_dir, &output, options.format)?;
 
     let entries = collect_backup_create_entries(options)?;
     let selected = entries.len();
     let bytes_in: u64 = entries.iter().map(|entry| entry.size).sum();
     let show_progress = should_emit_progress(options.progress, options.json);
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Read,
-            selected_files: selected,
-            processed_files: selected,
-            bytes_in,
-            bytes_out: 0,
-            throughput: 0,
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    emit_read_progress(
+        show_progress,
+        selected,
+        bytes_in,
+        started.elapsed().as_millis(),
+    );
 
     if options.dry_run {
         if options.json {
-            let summary = BackupCreateExecutionSummary {
-                action: BackupAction::Create,
-                status: ExportStatus::Ok,
-                source: options.source_dir.display().to_string(),
-                destination: output.display().to_string(),
-                format: options.format,
-                dry_run: true,
+            let summary = build_create_execution_summary(
+                options,
+                &output,
+                true,
                 selected,
-                written: 0,
-                skipped: 0,
+                0,
                 bytes_in,
-                bytes_out: 0,
-                overwrite_count: 0,
-                verify_source: "off".to_string(),
-                verify_output: "off".to_string(),
-                duration_ms: started.elapsed().as_millis(),
-                outputs: Vec::new(),
-            };
+                0,
+                Vec::new(),
+                started.elapsed().as_millis(),
+            );
             out_println!(
                 "{}",
                 serde_json::to_string_pretty(&summary).map_err(|err| {
@@ -707,47 +537,40 @@ fn cmd_backup_create_xunbak(options: &BackupCreateOptions) -> CliResult {
         options.split_size.as_deref(),
         options.no_compress,
     )?;
+    let source_root = path_display(&options.source_dir);
     let summary = crate::backup::artifact::xunbak::write_entries_to_xunbak(
         &refs,
         &output,
-        &options.source_dir.display().to_string(),
+        &source_root,
         &backup_options,
         crate::backup_formats::OverwriteMode::Fail,
     )?;
-    if show_progress {
-        emit_progress_event(&ExportProgressEvent {
-            phase: ExportProgressPhase::Write,
-            selected_files: selected,
-            processed_files: summary.entry_count,
-            bytes_in: summary.bytes_in,
-            bytes_out: compute_created_output_bytes(options.format, &summary.destination),
-            throughput: throughput(summary.bytes_in, started.elapsed()),
-            elapsed_ms: started.elapsed().as_millis(),
-        });
-    }
+    let bytes_out = compute_artifact_output_bytes(options.format, &summary.destination);
+    emit_write_progress(
+        show_progress,
+        selected,
+        summary.entry_count,
+        summary.bytes_in,
+        bytes_out,
+        throughput_bytes_per_sec(summary.bytes_in, started.elapsed()),
+        started.elapsed().as_millis(),
+    );
 
     if options.json {
-        let summary = BackupCreateExecutionSummary {
-            action: BackupAction::Create,
-            status: ExportStatus::Ok,
-            source: options.source_dir.display().to_string(),
-            destination: summary.destination.display().to_string(),
-            format: options.format,
-            dry_run: false,
+        let summary = build_create_execution_summary(
+            options,
+            &summary.destination,
+            false,
             selected,
-            written: summary.entry_count,
-            skipped: 0,
-            bytes_in: summary.bytes_in,
-            bytes_out: compute_created_output_bytes(options.format, &summary.destination),
-            overwrite_count: 0,
-            verify_source: "off".to_string(),
-            verify_output: "off".to_string(),
-            duration_ms: started.elapsed().as_millis(),
-            outputs: collect_created_output_paths(options.format, &summary.destination)
-                .into_iter()
-                .map(|path| path.display().to_string())
-                .collect(),
-        };
+            summary.entry_count,
+            summary.bytes_in,
+            bytes_out,
+            path_strings(collect_artifact_output_paths(
+                options.format,
+                &summary.destination,
+            )),
+            started.elapsed().as_millis(),
+        );
         out_println!(
             "{}",
             serde_json::to_string_pretty(&summary).map_err(|err| {
@@ -766,70 +589,35 @@ fn cmd_backup_create_xunbak(options: &BackupCreateOptions) -> CliResult {
     Ok(())
 }
 
-fn sevenz_method_for_create(method: Option<&str>) -> Result<SevenZMethod, CliError> {
-    parse_sevenz_method_for_cli("backup create", method)
-}
-
-fn compute_created_output_bytes(format: BackupArtifactFormat, output: &Path) -> u64 {
-    match format {
-        BackupArtifactFormat::Dir => dir_size_bytes(output),
-        BackupArtifactFormat::Zip | BackupArtifactFormat::SevenZ | BackupArtifactFormat::Xunbak => {
-            collect_created_output_paths(format, output)
-                .into_iter()
-                .filter_map(|path| fs::metadata(path).ok().map(|meta| meta.len()))
-                .sum()
-        }
+fn build_create_execution_summary(
+    options: &BackupCreateOptions,
+    destination: &Path,
+    dry_run: bool,
+    selected: usize,
+    written: usize,
+    bytes_in: u64,
+    bytes_out: u64,
+    outputs: Vec<String>,
+    duration_ms: u128,
+) -> BackupCreateExecutionSummary {
+    BackupCreateExecutionSummary {
+        action: BackupAction::Create,
+        status: ExportStatus::Ok,
+        source: path_display(&options.source_dir),
+        destination: path_display(destination),
+        format: options.format,
+        dry_run,
+        selected,
+        written,
+        skipped: 0,
+        bytes_in,
+        bytes_out,
+        overwrite_count: 0,
+        verify_source: "off".to_string(),
+        verify_output: "off".to_string(),
+        duration_ms,
+        outputs,
     }
-}
-
-fn collect_created_output_paths(format: BackupArtifactFormat, output: &Path) -> Vec<PathBuf> {
-    match format {
-        BackupArtifactFormat::Xunbak | BackupArtifactFormat::SevenZ => {
-            collect_file_or_numbered_outputs(output)
-        }
-        _ => {
-            if output.exists() {
-                vec![output.to_path_buf()]
-            } else {
-                Vec::new()
-            }
-        }
-    }
-}
-
-fn throughput(bytes: u64, elapsed: std::time::Duration) -> u64 {
-    let millis = elapsed.as_millis();
-    if millis == 0 {
-        return bytes;
-    }
-    ((bytes as u128 * 1000) / millis) as u64
-}
-
-fn maybe_fail_after_write_for_tests() -> CliResult {
-    if std::env::var_os("XUN_TEST_FAIL_AFTER_WRITE").is_none() {
-        return Ok(());
-    }
-    Err(CliError::with_details(
-        1,
-        "simulated export failure after write",
-        &["Fix: Retry the export; resume is not supported yet."],
-    ))
-}
-
-fn dir_size_bytes(root: &Path) -> u64 {
-    let mut total = 0u64;
-    let Ok(read_dir) = fs::read_dir(root) else {
-        return 0;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            total += dir_size_bytes(&path);
-        } else if let Ok(meta) = entry.metadata() {
-            total += meta.len();
-        }
-    }
-    total
 }
 
 fn collect_backup_create_entries(options: &BackupCreateOptions) -> CliResult<Vec<SourceEntry>> {

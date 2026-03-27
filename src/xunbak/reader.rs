@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+use crate::backup::common::cli::restore_path_not_found_message;
+use crate::commands::restore_core::emit_restore_dry_run;
 use crate::xunbak::blob::{BlobRecordError, copy_blob_record_content_to_writer, read_blob_record};
 use crate::xunbak::checkpoint::{CheckpointError, CheckpointPayload, read_checkpoint_record};
 use crate::xunbak::constants::{
@@ -46,7 +48,7 @@ pub enum ReaderError {
     Blob(#[from] BlobRecordError),
     #[error("manifest hash mismatch")]
     ManifestHashMismatch,
-    #[error("path not found: {0}")]
+    #[error("{0}")]
     PathNotFound(String),
     #[error("unrecoverable container")]
     UnrecoverableContainer,
@@ -242,7 +244,15 @@ impl ContainerReader {
     pub fn restore_all(&self, target_dir: &Path) -> Result<RestoreResult, ReaderError> {
         let manifest = self.load_manifest()?;
         std::fs::create_dir_all(target_dir).map_err(|err| ReaderError::Io(err.to_string()))?;
-        self.restore_matching(&manifest, target_dir, |entry| {
+        self.restore_matching(&manifest, target_dir, false, |entry| {
+            let _ = entry;
+            true
+        })
+    }
+
+    pub fn dry_run_restore_all(&self, target_dir: &Path) -> Result<RestoreResult, ReaderError> {
+        let manifest = self.load_manifest()?;
+        self.restore_matching(&manifest, target_dir, true, |entry| {
             let _ = entry;
             true
         })
@@ -254,11 +264,30 @@ impl ContainerReader {
         target_dir: &Path,
     ) -> Result<RestoreResult, ReaderError> {
         let manifest = self.load_manifest()?;
-        let result = self.restore_matching(&manifest, target_dir, |entry| {
+        let result = self.restore_matching(&manifest, target_dir, false, |entry| {
             entry.path.eq_ignore_ascii_case(path)
         })?;
         if result.restored_files == 0 {
-            return Err(ReaderError::PathNotFound(path.to_string()));
+            return Err(ReaderError::PathNotFound(restore_path_not_found_message(
+                path,
+            )));
+        }
+        Ok(result)
+    }
+
+    pub fn dry_run_restore_file(
+        &self,
+        path: &str,
+        target_dir: &Path,
+    ) -> Result<RestoreResult, ReaderError> {
+        let manifest = self.load_manifest()?;
+        let result = self.restore_matching(&manifest, target_dir, true, |entry| {
+            entry.path.eq_ignore_ascii_case(path)
+        })?;
+        if result.restored_files == 0 {
+            return Err(ReaderError::PathNotFound(restore_path_not_found_message(
+                path,
+            )));
         }
         Ok(result)
     }
@@ -269,7 +298,18 @@ impl ContainerReader {
         target_dir: &Path,
     ) -> Result<RestoreResult, ReaderError> {
         let manifest = self.load_manifest()?;
-        self.restore_matching(&manifest, target_dir, |entry| {
+        self.restore_matching(&manifest, target_dir, false, |entry| {
+            glob_match(pattern, &entry.path)
+        })
+    }
+
+    pub fn dry_run_restore_glob(
+        &self,
+        pattern: &str,
+        target_dir: &Path,
+    ) -> Result<RestoreResult, ReaderError> {
+        let manifest = self.load_manifest()?;
+        self.restore_matching(&manifest, target_dir, true, |entry| {
             glob_match(pattern, &entry.path)
         })
     }
@@ -488,6 +528,7 @@ impl ContainerReader {
         &self,
         manifest: &ManifestBody,
         target_dir: &Path,
+        dry_run: bool,
         mut predicate: F,
     ) -> Result<RestoreResult, ReaderError>
     where
@@ -497,6 +538,11 @@ impl ContainerReader {
         let mut entries = sorted_restore_entries(manifest, |entry| predicate(entry));
         for entry in entries.drain(..) {
             let dest = target_dir.join(entry.path.replace('/', "\\"));
+            if dry_run {
+                emit_restore_dry_run(dest.strip_prefix(target_dir).unwrap_or(&dest));
+                restored += 1;
+                continue;
+            }
             if let Some(parent) = dest.parent() {
                 std::fs::create_dir_all(parent).map_err(|err| ReaderError::Io(err.to_string()))?;
             }

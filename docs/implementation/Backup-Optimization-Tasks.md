@@ -393,11 +393,29 @@
 - [x] **测试**：source == output 判定与 overwrite 交互逻辑在 `create / convert` 路径上一致
 - [x] 下沉 `split size`、`collect numbered outputs`、`paths_equal`、overwrite 解析等重复 helper
   当前已下沉到 `artifact/common.rs`，包括 `split size`、`collect_file_or_numbered_outputs()`、`paths_equal()`、`resolve_effective_overwrite()`
+  本轮继续补齐了 `artifact` 路径判定与输出统计 helper：`is_zip/7z/xunbak_artifact_path()`、`collect_artifact_output_paths()`、`compute_artifact_output_bytes()`、`throughput_bytes_per_sec()`、`maybe_fail_after_write_for_tests()`；同时修复了 `backup convert -> split xunbak` JSON 摘要里 `bytes_out` 只看单一路径、未汇总真实 outputs 的漂移问题。
 
 ### H.3 诊断文案校准
 
 - [x] **测试**：artifact 错误提示与当前已实现格式能力一致
 - [x] 清理过时帮助文案，例如仍暗示“7z artifact support 未完成”的错误提示
+
+### H.4 create / convert 编排层收敛
+
+> 自审结论：目前高价值重复已经从“能力表 / helper 漂移”收敛到“编排流程重复”。剩余重复主要集中在 `create.rs / convert.rs` 的 plan 生命周期、progress 发射、JSON 摘要拼装与 sidecar 写入时序。
+
+- [x] **测试**：`create / convert` 的 plan `prepare -> write -> fail-after-write hook -> finalize/cleanup` 事务语义由统一 helper 覆盖
+  已在 `artifact/output_plan.rs` 增加 `commit_output_plan()` 与对应单测，并接入 `create.rs / convert.rs / artifact::xunbak.rs`
+- [x] **测试**：`create / convert` 的 progress 发射与摘要字段在同类输出上共享同一统计入口
+  已在 `artifact/progress.rs` 增加 `emit_read/compress/write/verify_*_progress()`；`create.rs / convert.rs` 的 progress 事件模板不再重复拼装。`create.rs` 已补 `build_create_execution_summary()`，`convert.rs` 已补 `build_convert_selection/execution/failure_summary()`，收敛 preview / dry-run / success / failure 的 JSON 字段组装。
+- [x] 收敛 `Dir/Zip/7z/Xunbak` 写出编排，避免 `create.rs / convert.rs` 再次复制 cleanup / finalize / summary 逻辑
+  当前已把 `prepare -> write -> fail-after-write -> finalize/cleanup` 收口到 `commit_output_plan()`；格式差异仍保留在各自的 `temp_path/temp_base_path` 与 writer 调用层，避免过度抽象
+- [x] 评估 `restore` 的 `preview / summary / 分发辅助层` 是否值得抽象
+  已在 `restore.rs` 引入 `RestoreArtifactKind`、`RestoreMode`、`execute_restore_request()`、`build_restore_execution_summary()`、`build_restore_preview_items_for_kind()`，收敛了 `all / file / glob` 与 `dir / zip / 7z / xunbak` 的多处分发判断。
+  `.xunbak` 的 `dry_run` 现已补齐到 `ContainerReader::dry_run_restore_all/file/glob()`；CLI 侧 `backup restore *.xunbak --dry-run` 不再假执行，能够返回真实的 planned restore 数量且不落地目标文件。
+  `restore preview` 现已补 `RestorePreviewSummary`，把 `overwrite/new` 计数、最多展示条数与隐藏条数收成结构化摘要；同时将 preview 的目标路径映射、差异收集与结果排序下沉成小 helper，避免 `dir / zip / artifact` 三条 preview 链继续复制模板代码。
+  `restore_core` 与 `restore.rs` 之间的 dry-run 输出与统计辅助层也已对齐：`commands::restore_core::emit_restore_dry_run()` 统一了 `dir / zip / 7z / xunbak` 的 dry-run 输出风格，`restore.rs` 增加 `RestoreStats` 收敛 `restored/failed/status` 派生逻辑，减少 tuple 解包与 `Ok((1,0))` 散落分支。
+  `backup/common/cli.rs` 现已作为 app 层共享 helper：收敛了 summary 路径字符串转换、相对输入路径解析、按备份名查找 artifact、以及 restore 相关错误文案模板，减少 `create / convert / restore / xunbak / restore_core / sevenz / xunbak::reader` 之间的重复字符串和路径处理逻辑。
 
 ---
 

@@ -5,10 +5,45 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "xunbak")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::backup::artifact::common::maybe_fail_after_write_for_tests;
 use crate::backup_formats::OverwriteMode;
 use crate::output::{CliError, CliResult};
 #[cfg(feature = "xunbak")]
 use uuid::Uuid;
+
+pub(crate) trait TransactionalOutputPlan: Sized {
+    fn finalize(self) -> CliResult<()>;
+    fn cleanup(&self) -> CliResult<()>;
+}
+
+pub(crate) fn commit_output_plan<P, T, F>(plan: P, write: F) -> CliResult<T>
+where
+    P: TransactionalOutputPlan,
+    F: FnOnce(&P) -> CliResult<T>,
+{
+    commit_output_plan_with_hook(plan, maybe_fail_after_write_for_tests, write)
+}
+
+fn commit_output_plan_with_hook<P, T, H, F>(plan: P, after_write_hook: H, write: F) -> CliResult<T>
+where
+    P: TransactionalOutputPlan,
+    H: FnOnce() -> CliResult,
+    F: FnOnce(&P) -> CliResult<T>,
+{
+    let result = match write(&plan) {
+        Ok(result) => result,
+        Err(err) => {
+            let _ = plan.cleanup();
+            return Err(err);
+        }
+    };
+    if let Err(err) = after_write_hook() {
+        let _ = plan.cleanup();
+        return Err(err);
+    }
+    plan.finalize()?;
+    Ok(result)
+}
 
 /// Represents the planning result for a zip output target.
 pub struct ZipOutputPlan {
@@ -31,12 +66,24 @@ impl ZipOutputPlan {
         &self.temp
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn finalize(self) -> CliResult<()> {
         finalize_temp_target(&self.temp, &self.target)
     }
 
     /// Clean any temp file produced by this plan.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn cleanup(&self) -> CliResult<()> {
+        cleanup_temp_target(&self.temp)
+    }
+}
+
+impl TransactionalOutputPlan for ZipOutputPlan {
+    fn finalize(self) -> CliResult<()> {
+        finalize_temp_target(&self.temp, &self.target)
+    }
+
+    fn cleanup(&self) -> CliResult<()> {
         cleanup_temp_target(&self.temp)
     }
 }
@@ -63,6 +110,7 @@ impl DirOutputPlan {
         &self.temp
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn finalize(self) -> CliResult<()> {
         if self.target.exists() {
             remove_existing_target_path(&self.target)?;
@@ -80,7 +128,31 @@ impl DirOutputPlan {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn cleanup(&self) -> CliResult<()> {
+        cleanup_temp_dir(&self.temp)
+    }
+}
+
+impl TransactionalOutputPlan for DirOutputPlan {
+    fn finalize(self) -> CliResult<()> {
+        if self.target.exists() {
+            remove_existing_target_path(&self.target)?;
+        }
+        fs::rename(&self.temp, &self.target).map_err(|err| {
+            CliError::new(
+                1,
+                format!(
+                    "Finalize directory output failed {} -> {}: {err}",
+                    self.temp.display(),
+                    self.target.display()
+                ),
+            )
+        })?;
+        Ok(())
+    }
+
+    fn cleanup(&self) -> CliResult<()> {
         cleanup_temp_dir(&self.temp)
     }
 }
@@ -106,11 +178,23 @@ impl SevenZOutputPlan {
         &self.temp
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn finalize(self) -> CliResult<()> {
         finalize_temp_target(&self.temp, &self.target)
     }
 
+    #[allow(dead_code)]
     pub fn cleanup(&self) -> CliResult<()> {
+        cleanup_temp_target(&self.temp)
+    }
+}
+
+impl TransactionalOutputPlan for SevenZOutputPlan {
+    fn finalize(self) -> CliResult<()> {
+        finalize_temp_target(&self.temp, &self.target)
+    }
+
+    fn cleanup(&self) -> CliResult<()> {
         cleanup_temp_target(&self.temp)
     }
 }
@@ -137,11 +221,23 @@ impl SevenZSplitOutputPlan {
         &self.temp_base
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn finalize(self) -> CliResult<()> {
         finalize_numbered_outputs(&self.temp_base, &self.target_base)
     }
 
+    #[allow(dead_code)]
     pub fn cleanup(&self) -> CliResult<()> {
+        cleanup_numbered_outputs(&self.temp_base)
+    }
+}
+
+impl TransactionalOutputPlan for SevenZSplitOutputPlan {
+    fn finalize(self) -> CliResult<()> {
+        finalize_numbered_outputs(&self.temp_base, &self.target_base)
+    }
+
+    fn cleanup(&self) -> CliResult<()> {
         cleanup_numbered_outputs(&self.temp_base)
     }
 }
@@ -173,6 +269,17 @@ impl XunbakOutputPlan {
     }
 
     pub fn cleanup(&self) -> CliResult<()> {
+        cleanup_temp_target(&self.temp)
+    }
+}
+
+#[cfg(feature = "xunbak")]
+impl TransactionalOutputPlan for XunbakOutputPlan {
+    fn finalize(self) -> CliResult<()> {
+        finalize_temp_target(&self.temp, &self.target)
+    }
+
+    fn cleanup(&self) -> CliResult<()> {
         cleanup_temp_target(&self.temp)
     }
 }
@@ -239,6 +346,50 @@ impl XunbakSplitOutputPlan {
     }
 
     pub fn cleanup(&self) -> CliResult<()> {
+        cleanup_split_outputs(&self.temp_base)
+    }
+}
+
+#[cfg(feature = "xunbak")]
+impl TransactionalOutputPlan for XunbakSplitOutputPlan {
+    fn finalize(self) -> CliResult<()> {
+        let staged = list_split_outputs(&self.temp_base)?;
+        if staged.is_empty() {
+            return Err(CliError::new(
+                1,
+                format!(
+                    "No staged split outputs found for {}",
+                    self.temp_base.display()
+                ),
+            ));
+        }
+        for staged_path in staged {
+            let suffix = split_suffix(&staged_path).ok_or_else(|| {
+                CliError::new(
+                    1,
+                    format!("Invalid staged split output: {}", staged_path.display()),
+                )
+            })?;
+            let target_path = PathBuf::from(format!("{}.{}", self.target_base.display(), suffix));
+            if target_path.exists() {
+                replace_file(&staged_path, &target_path)?;
+            } else {
+                fs::rename(&staged_path, &target_path).map_err(|err| {
+                    CliError::new(
+                        1,
+                        format!(
+                            "Finalize split output failed {} -> {}: {err}",
+                            staged_path.display(),
+                            target_path.display()
+                        ),
+                    )
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    fn cleanup(&self) -> CliResult<()> {
         cleanup_split_outputs(&self.temp_base)
     }
 }
@@ -808,12 +959,17 @@ fn replace_file(from: &Path, to: &Path) -> CliResult<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::fs;
+    use std::rc::Rc;
     use tempfile::tempdir;
 
     use crate::backup_formats::OverwriteMode;
 
-    use super::{DirOutputPlan, SevenZOutputPlan, SevenZSplitOutputPlan, ZipOutputPlan};
+    use super::{
+        DirOutputPlan, SevenZOutputPlan, SevenZSplitOutputPlan, TransactionalOutputPlan,
+        ZipOutputPlan, commit_output_plan_with_hook,
+    };
     #[cfg(feature = "xunbak")]
     use super::{
         XunbakOutputPlan, XunbakSingleUpdatePlan, XunbakSplitOutputPlan, XunbakSplitUpdatePlan,
@@ -827,6 +983,89 @@ mod tests {
         fs::write(plan.temp_path(), "temp").unwrap();
         plan.finalize().unwrap();
         assert!(target.exists());
+    }
+
+    #[derive(Clone)]
+    struct FakePlan {
+        events: Rc<RefCell<Vec<&'static str>>>,
+    }
+
+    impl TransactionalOutputPlan for FakePlan {
+        fn finalize(self) -> crate::output::CliResult<()> {
+            self.events.borrow_mut().push("finalize");
+            Ok(())
+        }
+
+        fn cleanup(&self) -> crate::output::CliResult<()> {
+            self.events.borrow_mut().push("cleanup");
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn commit_output_plan_finalizes_after_successful_write() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let result = commit_output_plan_with_hook(
+            FakePlan {
+                events: events.clone(),
+            },
+            || {
+                events.borrow_mut().push("hook");
+                Ok(())
+            },
+            |_plan| {
+                events.borrow_mut().push("write");
+                Ok(7usize)
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result, 7);
+        assert_eq!(&*events.borrow(), &["write", "hook", "finalize"]);
+    }
+
+    #[test]
+    fn commit_output_plan_cleans_up_when_write_fails() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let err = commit_output_plan_with_hook(
+            FakePlan {
+                events: events.clone(),
+            },
+            || {
+                events.borrow_mut().push("hook");
+                Ok(())
+            },
+            |_plan| {
+                events.borrow_mut().push("write");
+                Err::<usize, _>(crate::output::CliError::new(1, "write failed"))
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.message, "write failed");
+        assert_eq!(&*events.borrow(), &["write", "cleanup"]);
+    }
+
+    #[test]
+    fn commit_output_plan_cleans_up_when_after_write_hook_fails() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let err = commit_output_plan_with_hook(
+            FakePlan {
+                events: events.clone(),
+            },
+            || {
+                events.borrow_mut().push("hook");
+                Err(crate::output::CliError::new(1, "hook failed"))
+            },
+            |_plan| {
+                events.borrow_mut().push("write");
+                Ok::<(), crate::output::CliError>(())
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(err.message, "hook failed");
+        assert_eq!(&*events.borrow(), &["write", "hook", "cleanup"]);
     }
 
     #[test]

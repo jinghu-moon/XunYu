@@ -4,6 +4,9 @@ use std::path::Path;
 #[cfg(feature = "xunbak")]
 use std::path::PathBuf;
 
+use crate::backup::artifact::common::{
+    is_7z_artifact_path, is_xunbak_artifact_path, is_zip_artifact_path,
+};
 use crate::backup::artifact::entry::{
     SourceEntry, SourceKind, file_attributes, metadata_created_time_ns, system_time_to_unix_ns,
 };
@@ -16,13 +19,13 @@ pub(crate) fn read_artifact_entries(path: &Path) -> Result<Vec<SourceEntry>, Cli
     if path.is_dir() {
         return read_dir_artifact_entries(path);
     }
-    if is_zip_artifact(path) {
+    if is_zip_artifact_path(path) {
         return read_zip_artifact_entries(path);
     }
-    if is_xunbak_artifact(path) {
+    if is_xunbak_artifact_path(path) {
         return read_xunbak_artifact_entries(path);
     }
-    if is_7z_artifact(path) {
+    if is_7z_artifact_path(path) {
         return list_7z_entries(path);
     }
     Err(CliError::with_details(
@@ -190,32 +193,6 @@ fn primary_xunbak_path(path: &Path) -> PathBuf {
         return PathBuf::from(path.to_string_lossy().trim_end_matches(".001"));
     }
     path.to_path_buf()
-}
-
-fn is_zip_artifact(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
-}
-
-fn is_7z_artifact(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"))
-        || path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".7z.001"))
-}
-
-fn is_xunbak_artifact(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("xunbak"))
-        || path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".xunbak.001"))
 }
 
 fn zip_datetime_to_unix_ns(datetime: Option<zip::DateTime>) -> Option<u64> {

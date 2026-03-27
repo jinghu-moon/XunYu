@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::backup::artifact::entry::SourceEntry;
-use crate::backup::artifact::output_plan::{XunbakOutputPlan, XunbakSplitOutputPlan};
+use crate::backup::artifact::output_plan::{
+    XunbakOutputPlan, XunbakSplitOutputPlan, commit_output_plan,
+};
 use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup_formats::OverwriteMode;
 use crate::output::{CliError, CliResult};
@@ -29,46 +31,29 @@ pub(crate) fn write_entries_to_xunbak(
         .map(|entry| StreamingSourceEntry { entry })
         .collect();
 
-    let write_result = if options.split_size.is_none() {
+    if options.split_size.is_none() {
         let plan = XunbakOutputPlan::prepare(output, overwrite)?;
-        let result = ContainerWriter::backup_virtual_entries(
-            plan.temp_path(),
-            &source_root,
-            &adapters,
-            options,
-        )
-        .map_err(|err| CliError::new(2, err.to_string()));
-        match result {
-            Ok(_) => {
-                plan.finalize()?;
-                Ok(())
-            }
-            Err(err) => {
-                let _ = plan.cleanup();
-                Err(err)
-            }
-        }
+        commit_output_plan(plan, |plan| {
+            ContainerWriter::backup_virtual_entries(
+                plan.temp_path(),
+                &source_root,
+                &adapters,
+                options,
+            )
+            .map_err(|err| CliError::new(2, err.to_string()))
+        })?;
     } else {
         let plan = XunbakSplitOutputPlan::prepare(output, overwrite)?;
-        let result = ContainerWriter::backup_virtual_entries(
-            plan.temp_base_path(),
-            &source_root,
-            &adapters,
-            options,
-        )
-        .map_err(|err| CliError::new(2, err.to_string()));
-        match result {
-            Ok(_) => {
-                plan.finalize()?;
-                Ok(())
-            }
-            Err(err) => {
-                let _ = plan.cleanup();
-                Err(err)
-            }
-        }
-    };
-    write_result?;
+        commit_output_plan(plan, |plan| {
+            ContainerWriter::backup_virtual_entries(
+                plan.temp_base_path(),
+                &source_root,
+                &adapters,
+                options,
+            )
+            .map_err(|err| CliError::new(2, err.to_string()))
+        })?;
+    }
 
     Ok(XunbakWriteSummary {
         entry_count: entries.len(),

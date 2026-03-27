@@ -1438,6 +1438,107 @@ fn cli_backup_restore_subcommand_restores_xunbak_to_target_dir() {
 }
 
 #[test]
+fn cli_backup_restore_xunbak_dry_run_does_not_write_files() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_dry_run");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        "artifact.xunbak",
+    ]));
+
+    let out_dir = root.join("restore-dry-run");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--to",
+        out_dir.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--dry-run",
+        "-y",
+    ]));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("DRY RUN: would restore a.txt"),
+        "stderr should contain dry-run restore preview, got: {stderr}"
+    );
+    assert!(
+        !out_dir.exists(),
+        "dry-run should not create restore target directory"
+    );
+}
+
+#[test]
+fn cli_backup_restore_xunbak_dry_run_json_reports_planned_count() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_dry_run_json");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(root.join("nested")).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("nested").join("b.txt"), "bbb").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "nested" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        "artifact.xunbak",
+    ]));
+
+    let out_dir = root.join("restore-dry-run-json");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--to",
+        out_dir.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--dry-run",
+        "--json",
+        "-y",
+    ]));
+
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["action"], "preview");
+    assert_eq!(value["mode"], "all");
+    assert_eq!(value["dry_run"], true);
+    assert_eq!(value["restored"], 2);
+    assert_eq!(value["failed"], 0);
+    assert!(!out_dir.exists());
+}
+
+#[test]
 fn cli_restore_container_restores_single_file() {
     let env = TestEnv::new();
     let root = env.root.join("proj");
@@ -2387,6 +2488,61 @@ fn cli_backup_convert_zip_to_split_xunbak_output_creates_numbered_volumes_withou
         !temp_staged,
         "temporary split staging files should be cleaned up"
     );
+}
+
+#[test]
+fn cli_backup_convert_zip_to_split_xunbak_json_reports_volume_outputs_and_bytes() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_zip_to_split_xunbak_json");
+    fs::create_dir_all(&root).unwrap();
+
+    let zip_path = root.join("source.zip");
+    let cursor = std::io::Cursor::new(Vec::<u8>::new());
+    let mut writer = zip::ZipWriter::new(cursor);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    writer.start_file("a.txt", options).unwrap();
+    writer.write_all(&vec![b'a'; 800]).unwrap();
+    writer.start_file("b.txt", options).unwrap();
+    writer.write_all(&vec![b'b'; 800]).unwrap();
+    writer.start_file("c.txt", options).unwrap();
+    writer.write_all(&vec![b'c'; 800]).unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+    fs::write(&zip_path, bytes).unwrap();
+
+    let container = root.join("converted.xunbak");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "convert",
+        zip_path.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        container.to_str().unwrap(),
+        "--method",
+        "none",
+        "--split-size",
+        "1900",
+        "--json",
+    ]));
+
+    let value: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let outputs: Vec<String> = value["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    assert_eq!(value["format"], "xunbak");
+    assert!(value["bytes_out"].as_u64().unwrap() > 0);
+    assert!(outputs.len() >= 2);
+    assert!(
+        outputs.iter().all(|path| path.contains("converted.xunbak.")
+            && path.starts_with(&root.display().to_string()))
+    );
+    assert!(outputs.iter().any(|path| path.ends_with(".001")));
+    assert!(outputs.iter().any(|path| path.ends_with(".002")));
 }
 
 #[test]

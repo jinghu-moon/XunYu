@@ -6,7 +6,8 @@ use std::time::Instant;
 
 use rayon::prelude::*;
 
-use crate::output::{CliError, CliResult};
+use crate::backup::common::cli::{restore_internal_files_error, restore_path_not_found_message};
+use crate::output::{CliError, CliResult, ui_println};
 use crate::path_guard::{PathPolicy, validate_paths};
 use crate::windows::file_copy::{copy_file, detect_copy_backend_for_restore};
 
@@ -41,8 +42,15 @@ struct RestoreCopyJob {
     rel_display: String,
 }
 
-fn norm_path_display(p: &str) -> String {
-    p.trim().replace('/', "\\").trim_matches('\\').to_string()
+pub(crate) fn normalize_restore_path_display(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "\\")
+}
+
+pub(crate) fn emit_restore_dry_run(rel: &Path) {
+    ui_println(format_args!(
+        "DRY RUN: would restore {}",
+        normalize_restore_path_display(rel)
+    ));
 }
 
 pub(crate) fn is_safe_zip_entry(name: &str) -> bool {
@@ -85,10 +93,7 @@ pub(crate) fn restore_from_dir(
     let copy_backend = detect_copy_backend_for_restore();
     if let Some(rel) = file {
         if is_backup_internal_rel_path(rel) {
-            return Err(CliError::new(
-                1,
-                "Restore failed: backup internal files cannot be restored.",
-            ));
+            return Err(restore_internal_files_error());
         }
         let src = src_dir.join(rel);
         let dst = dest_root.join(rel);
@@ -98,7 +103,7 @@ pub(crate) fn restore_from_dir(
             let _ = fs::create_dir_all(parent);
         }
         if dry_run {
-            ui_println!("DRY RUN: would restore {}", rel.display());
+            emit_restore_dry_run(rel);
             return Ok(());
         }
         copy_file(&src, &dst, copy_backend)
@@ -145,17 +150,11 @@ pub(crate) fn restore_from_dir(
 
         let dst = dest_root.join(rel);
         if dry_run {
-            ui_println!(
-                "DRY RUN: would restore {}",
-                norm_path_display(&rel.to_string_lossy())
-            );
+            emit_restore_dry_run(rel);
             return;
         }
         if let Err(e) = copy_file(src_path, &dst, copy_backend) {
-            eprintln!(
-                "Restore error {}: {e}",
-                norm_path_display(&rel.to_string_lossy())
-            );
+            eprintln!("Restore error {}: {e}", normalize_restore_path_display(rel));
             had_error.store(true, Ordering::Relaxed);
         }
     });
@@ -197,10 +196,7 @@ pub(crate) fn restore_from_zip(
     if let Some(ref wanted) = want
         && is_backup_internal_name(wanted)
     {
-        return Err(CliError::new(
-            1,
-            "Restore failed: backup internal files cannot be restored.",
-        ));
+        return Err(restore_internal_files_error());
     }
     let mut matched = false;
     let mut created_dirs = std::collections::HashSet::new();
@@ -239,7 +235,7 @@ pub(crate) fn restore_from_zip(
             let _ = fs::create_dir_all(parent);
         }
         if dry_run {
-            ui_println!("DRY RUN: would restore {}", rel.display());
+            emit_restore_dry_run(&rel);
             if want.is_some() {
                 break;
             }
@@ -258,10 +254,7 @@ pub(crate) fn restore_from_zip(
     if let Some(wanted) = want
         && !matched
     {
-        return Err(CliError::new(
-            1,
-            format!("Restore failed: file not found in backup: {wanted}"),
-        ));
+        return Err(CliError::new(1, restore_path_not_found_message(&wanted)));
     }
     if timing {
         emit_restore_core_timing("copy-zip", t_iter.elapsed(), None);
@@ -325,7 +318,7 @@ where
 
     jobs.par_iter().for_each(|job| {
         if dry_run {
-            eprintln!("DRY RUN: would restore {}", job.rel_display);
+            emit_restore_dry_run(Path::new(&job.rel_display));
             restored.fetch_add(1, Ordering::Relaxed);
             return;
         }
@@ -407,7 +400,7 @@ where
         let rel = PathBuf::from(name.replace('/', "\\"));
         let dst = dest_root.join(&rel);
         if dry_run {
-            eprintln!("DRY RUN: would restore {}", rel.display());
+            emit_restore_dry_run(&rel);
             restored += 1;
             continue;
         }

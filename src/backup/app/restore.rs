@@ -4,10 +4,16 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
+use crate::backup::artifact::common::{
+    is_7z_artifact_path, is_xunbak_artifact_path, is_zip_artifact_path,
+};
 use crate::backup::artifact::entry::{file_attributes, system_time_to_unix_ns};
 use crate::backup::artifact::reader::{open_entry_reader, sort_entries_for_read_locality};
 use crate::backup::artifact::sevenz::{restore_7z_entries, restore_7z_single};
 use crate::backup::artifact::source::read_artifact_entries;
+use crate::backup::common::cli::{
+    backup_named_artifact_path, backup_not_found_error, path_display, unsafe_restore_path_error,
+};
 use crate::cli::BackupRestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
@@ -51,6 +57,44 @@ struct RestoreExecutionSummary {
     snapshot: bool,
     restored: usize,
     failed: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RestoreStats {
+    restored: usize,
+    failed: usize,
+}
+
+impl RestoreStats {
+    fn new(restored: usize, failed: usize) -> Self {
+        Self { restored, failed }
+    }
+
+    fn single_success() -> Self {
+        Self::new(1, 0)
+    }
+
+    fn status_label(&self) -> &'static str {
+        if self.failed == 0 {
+            "ok"
+        } else {
+            "partial_failed"
+        }
+    }
+}
+
+impl From<(usize, usize)> for RestoreStats {
+    fn from(value: (usize, usize)) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RestoreArtifactKind {
+    Dir,
+    Zip,
+    SevenZ,
+    Xunbak,
 }
 
 pub(crate) fn cmd_restore(args: BackupRestoreCmd) -> CliResult {
@@ -117,11 +161,9 @@ pub(crate) fn cmd_restore(args: BackupRestoreCmd) -> CliResult {
     // 交互确认
     if !args.yes && can_interact() {
         let t_preview = Instant::now();
-        show_restore_preview(
-            &dest_root,
-            &src,
-            PreviewMode::from_args(args.file.as_deref(), args.glob.as_deref()),
-        );
+        let mode = RestoreMode::from_args(args.file.as_deref(), args.glob.as_deref());
+        let source_kind = detect_restore_artifact_kind(&src);
+        show_restore_preview(&dest_root, &src, source_kind, mode);
         let ok = dialoguer::Confirm::new()
             .with_prompt("Restore may overwrite files. Continue?")
             .default(false)
@@ -136,56 +178,19 @@ pub(crate) fn cmd_restore(args: BackupRestoreCmd) -> CliResult {
     }
 
     let t_start = Instant::now();
-    let (restored, failed) = if is_xunbak_path(&src) {
-        #[cfg(feature = "xunbak")]
-        {
-            crate::backup::app::xunbak::restore_container(
-                &src,
-                &dest_root,
-                args.file.as_deref(),
-                args.glob.as_deref(),
-            )?
-        }
-        #[cfg(not(feature = "xunbak"))]
-        {
-            return Err(CliError::with_details(
-                2,
-                "xunbak restore is not enabled in this build",
-                &["Fix: Rebuild with `--features xunbak`."],
-            ));
-        }
-    } else if let Some(ref glob_pat) = args.glob {
-        restore_with_glob(&src, &dest_root, glob_pat, args.dry_run)?
-    } else if let Some(ref file) = args.file {
-        restore_single_file(&src, &dest_root, file, args.dry_run)?
-    } else {
-        restore_all(&src, &dest_root, args.dry_run)?
-    };
+    let mode = RestoreMode::from_args(args.file.as_deref(), args.glob.as_deref());
+    let source_kind = detect_restore_artifact_kind(&src);
+    let stats = execute_restore_request(&src, source_kind, &dest_root, mode, args.dry_run)?;
 
     if args.json {
-        let mode = if args.glob.is_some() {
-            "glob"
-        } else if args.file.is_some() {
-            "file"
-        } else {
-            "all"
-        };
-        let action = if args.dry_run { "preview" } else { "restore" };
-        let summary = RestoreExecutionSummary {
-            action: action.to_string(),
-            status: if failed == 0 {
-                "ok".to_string()
-            } else {
-                "partial_failed".to_string()
-            },
-            source: src.display().to_string(),
-            destination: dest_root.display().to_string(),
-            mode: mode.to_string(),
-            dry_run: args.dry_run,
-            snapshot: args.snapshot && !args.dry_run,
-            restored,
-            failed,
-        };
+        let summary = build_restore_execution_summary(
+            &src,
+            &dest_root,
+            mode,
+            args.dry_run,
+            args.snapshot && !args.dry_run,
+            stats,
+        );
         out_println!(
             "{}",
             serde_json::to_string_pretty(&summary).unwrap_or_default()
@@ -194,30 +199,28 @@ pub(crate) fn cmd_restore(args: BackupRestoreCmd) -> CliResult {
 
     let elapsed = t_start.elapsed();
     if timing {
-        let mode = if args.glob.is_some() {
-            "glob"
-        } else if args.file.is_some() {
-            "file"
-        } else {
-            "all"
-        };
         emit_restore_timing(
             "execute",
             elapsed,
-            Some(format!("mode={mode} restored={restored} failed={failed}")),
+            Some(format!(
+                "mode={} restored={} failed={}",
+                mode.label(),
+                stats.restored,
+                stats.failed
+            )),
         );
         emit_restore_timing("total", t_total.elapsed(), None);
     }
     eprintln!(
         "Restored: {}  Failed: {}  Time: {:.2}s",
-        restored,
-        failed,
+        stats.restored,
+        stats.failed,
         elapsed.as_secs_f64()
     );
-    if failed > 0 {
+    if stats.failed > 0 {
         return Err(CliError::new(
             1,
-            format!("{failed} file(s) failed to restore."),
+            format!("{} file(s) failed to restore.", stats.failed),
         ));
     }
     Ok(())
@@ -228,153 +231,196 @@ fn resolve_backup_src(backups_root: &Path, name_or_path: &str) -> Result<PathBuf
     let p = PathBuf::from(name_or_path);
     if p.is_dir()
         || p.is_file()
-        || p.extension().and_then(|e| e.to_str()) == Some("xunbak")
-            && PathBuf::from(format!("{}.001", p.display())).exists()
-        || p.extension().and_then(|e| e.to_str()) == Some("7z")
-            && PathBuf::from(format!("{}.001", p.display())).exists()
+        || is_xunbak_artifact_path(&p) && PathBuf::from(format!("{}.001", p.display())).exists()
+        || is_7z_artifact_path(&p) && PathBuf::from(format!("{}.001", p.display())).exists()
     {
         return Ok(p);
     }
-    backup_source_path(backups_root, name_or_path).ok_or_else(|| {
-        CliError::with_details(
-            2,
-            format!("Backup not found: {name_or_path}"),
-            &[
-                "Fix: Run `xun backup list` to see available backups.",
-                "Fix: Pass a direct path to a backup dir, .zip, .7z, or .xunbak file.",
-            ],
-        )
-    })
+    backup_named_artifact_path(backups_root, name_or_path)
+        .ok_or_else(|| backup_not_found_error(name_or_path))
 }
 
-fn is_xunbak_path(path: &Path) -> bool {
-    path.extension().and_then(|ext| ext.to_str()) == Some("xunbak")
-        || path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".xunbak.001"))
-}
-
-fn backup_source_path(backups_root: &Path, name: &str) -> Option<PathBuf> {
-    let candidate = backups_root.join(name);
-    if candidate.is_dir() || candidate.is_file() {
-        return Some(candidate);
-    }
-    let zip = backups_root.join(format!("{name}.zip"));
-    if zip.is_file() {
-        return Some(zip);
-    }
-    let sevenz = backups_root.join(format!("{name}.7z"));
-    if sevenz.is_file() {
-        return Some(sevenz);
-    }
-    None
-}
-
-/// 全量还原，返回 (restored, failed)
-fn restore_all(src: &Path, dest_root: &Path, dry_run: bool) -> Result<(usize, usize), CliError> {
-    if src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        restore_core::restore_many_from_zip(src, dest_root, dry_run, |_| true)
-    } else if is_7z_path(src) {
-        restore_7z_entries(src, dest_root, dry_run, |_| true)
+fn detect_restore_artifact_kind(path: &Path) -> RestoreArtifactKind {
+    if is_xunbak_artifact_path(path) {
+        RestoreArtifactKind::Xunbak
+    } else if is_zip_artifact_path(path) {
+        RestoreArtifactKind::Zip
+    } else if is_7z_artifact_path(path) {
+        RestoreArtifactKind::SevenZ
     } else {
-        Ok(restore_core::restore_many_from_dir(
-            src,
-            dest_root,
-            dry_run,
-            |_, _| true,
-        ))
+        RestoreArtifactKind::Dir
     }
 }
 
-/// 单文件还原
-fn restore_single_file(
-    src: &Path,
-    dest_root: &Path,
-    file: &str,
-    dry_run: bool,
-) -> Result<(usize, usize), CliError> {
+fn validate_restore_file_request(file: &str) -> Result<PathBuf, CliError> {
     let rel = PathBuf::from(file);
     if rel.is_absolute() || rel.components().any(|c| c == Component::ParentDir) {
-        return Err(CliError::with_details(
-            2,
-            format!("Unsafe restore path: {file}"),
-            &["Fix: Use a relative path without '..' components."],
-        ));
+        return Err(unsafe_restore_path_error(file));
     }
 
     let mut policy = PathPolicy::for_output();
     policy.allow_relative = true;
     let result = validate_paths([file], &policy);
     if !result.issues.is_empty() {
-        return Err(CliError::with_details(
-            2,
-            format!("Unsafe restore path: {file}"),
-            &["Fix: Use a relative path without '..' components."],
-        ));
+        return Err(unsafe_restore_path_error(file));
     }
 
-    if src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        restore_core::restore_from_zip(src, dest_root, Some(&rel), dry_run)?;
-    } else if is_7z_path(src) {
-        restore_7z_single(src, dest_root, &rel.to_string_lossy(), dry_run)?;
-    } else {
-        restore_core::restore_from_dir(src, dest_root, Some(&rel), dry_run)?;
+    Ok(rel)
+}
+
+fn execute_restore_request(
+    src: &Path,
+    source_kind: RestoreArtifactKind,
+    dest_root: &Path,
+    mode: RestoreMode<'_>,
+    dry_run: bool,
+) -> Result<RestoreStats, CliError> {
+    match source_kind {
+        RestoreArtifactKind::Xunbak => {
+            #[cfg(feature = "xunbak")]
+            {
+                crate::backup::app::xunbak::restore_container(
+                    src,
+                    dest_root,
+                    mode.selected_file(),
+                    mode.selected_glob(),
+                    dry_run,
+                )
+                .map(Into::into)
+            }
+            #[cfg(not(feature = "xunbak"))]
+            {
+                Err(CliError::with_details(
+                    2,
+                    "xunbak restore is not enabled in this build",
+                    &["Fix: Rebuild with `--features xunbak`."],
+                ))
+            }
+        }
+        RestoreArtifactKind::Zip => match mode {
+            RestoreMode::All => {
+                restore_core::restore_many_from_zip(src, dest_root, dry_run, |_| true)
+                    .map(Into::into)
+            }
+            RestoreMode::File(file) => {
+                let rel = validate_restore_file_request(file)?;
+                restore_core::restore_from_zip(src, dest_root, Some(&rel), dry_run)?;
+                Ok(RestoreStats::single_success())
+            }
+            RestoreMode::Glob(glob_pat) => {
+                restore_core::restore_many_from_zip(src, dest_root, dry_run, |name| {
+                    glob_match(glob_pat, name)
+                })
+                .map(Into::into)
+            }
+        },
+        RestoreArtifactKind::SevenZ => match mode {
+            RestoreMode::All => {
+                restore_7z_entries(src, dest_root, dry_run, |_| true).map(Into::into)
+            }
+            RestoreMode::File(file) => {
+                let rel = validate_restore_file_request(file)?;
+                restore_7z_single(src, dest_root, &rel.to_string_lossy(), dry_run)?;
+                Ok(RestoreStats::single_success())
+            }
+            RestoreMode::Glob(glob_pat) => {
+                restore_7z_entries(src, dest_root, dry_run, |name| glob_match(glob_pat, name))
+                    .map(Into::into)
+            }
+        },
+        RestoreArtifactKind::Dir => match mode {
+            RestoreMode::All => {
+                Ok(
+                    restore_core::restore_many_from_dir(src, dest_root, dry_run, |_, _| true)
+                        .into(),
+                )
+            }
+            RestoreMode::File(file) => {
+                let rel = validate_restore_file_request(file)?;
+                restore_core::restore_from_dir(src, dest_root, Some(&rel), dry_run)?;
+                Ok(RestoreStats::single_success())
+            }
+            RestoreMode::Glob(glob_pat) => Ok(restore_core::restore_many_from_dir(
+                src,
+                dest_root,
+                dry_run,
+                |_, rel_str| glob_match(glob_pat, rel_str),
+            )
+            .into()),
+        },
     }
-    Ok((1, 0))
+}
+
+fn build_restore_execution_summary(
+    source: &Path,
+    destination: &Path,
+    mode: RestoreMode<'_>,
+    dry_run: bool,
+    snapshot: bool,
+    stats: RestoreStats,
+) -> RestoreExecutionSummary {
+    RestoreExecutionSummary {
+        action: if dry_run {
+            "preview".to_string()
+        } else {
+            "restore".to_string()
+        },
+        status: stats.status_label().to_string(),
+        source: path_display(source),
+        destination: path_display(destination),
+        mode: mode.label().to_string(),
+        dry_run,
+        snapshot,
+        restored: stats.restored,
+        failed: stats.failed,
+    }
 }
 
 /// restore 前展示将被覆盖的文件列表（modify/new 文件数）
-fn show_restore_preview(root: &Path, backup_src: &Path, mode: PreviewMode<'_>) {
-    let entries = match build_restore_preview_items(backup_src, root, mode) {
+fn show_restore_preview(
+    root: &Path,
+    backup_src: &Path,
+    source_kind: RestoreArtifactKind,
+    mode: RestoreMode<'_>,
+) {
+    let entries = match build_restore_preview_items_for_kind(backup_src, source_kind, root, mode) {
         Ok(items) => items,
         Err(err) => {
             eprintln!("  preview unavailable: {}", err.message);
             return;
         }
     };
-
-    let overwrite_count = entries
-        .iter()
-        .filter(|e| e.kind == RestorePreviewKind::Overwrite)
-        .count();
-    let new_count = entries
-        .iter()
-        .filter(|e| e.kind == RestorePreviewKind::New)
-        .count();
-
-    if overwrite_count == 0 && new_count == 0 {
+    let summary = build_restore_preview_summary(&entries, 20);
+    if summary.is_empty() {
         eprintln!("  (no files will be changed)");
         return;
     }
 
     eprintln!("Files to be restored:");
-    let max_show = 20usize;
-    let mut shown = 0;
-    for e in &entries {
-        if shown < max_show {
-            let tag = match e.kind {
-                RestorePreviewKind::Overwrite => "overwrite",
-                RestorePreviewKind::New => "new",
-            };
-            eprintln!("  [{tag}] {}", e.rel);
-        }
-        shown += 1;
+    for e in &summary.visible_items {
+        let tag = match e.kind {
+            RestorePreviewKind::Overwrite => "overwrite",
+            RestorePreviewKind::New => "new",
+        };
+        eprintln!("  [{tag}] {}", e.rel);
     }
-    if shown > max_show {
-        eprintln!("  ... and {} more", shown - max_show);
+    if summary.hidden_count > 0 {
+        eprintln!("  ... and {} more", summary.hidden_count);
     }
-    eprintln!("  Total: {} overwrite, {} new", overwrite_count, new_count);
+    eprintln!(
+        "  Total: {} overwrite, {} new",
+        summary.overwrite_count, summary.new_count
+    );
 }
 
 #[derive(Debug, Clone, Copy)]
-enum PreviewMode<'a> {
+enum RestoreMode<'a> {
     All,
     File(&'a str),
     Glob(&'a str),
 }
 
-impl<'a> PreviewMode<'a> {
+impl<'a> RestoreMode<'a> {
     fn from_args(file: Option<&'a str>, glob: Option<&'a str>) -> Self {
         match (file, glob) {
             (Some(file), _) => Self::File(file),
@@ -383,11 +429,33 @@ impl<'a> PreviewMode<'a> {
         }
     }
 
+    fn label(&self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::File(_) => "file",
+            Self::Glob(_) => "glob",
+        }
+    }
+
+    fn selected_file(&self) -> Option<&'a str> {
+        match self {
+            Self::File(path) => Some(*path),
+            _ => None,
+        }
+    }
+
+    fn selected_glob(&self) -> Option<&'a str> {
+        match self {
+            Self::Glob(pattern) => Some(*pattern),
+            _ => None,
+        }
+    }
+
     fn matches_path(&self, rel: &str) -> bool {
         match self {
-            PreviewMode::All => true,
-            PreviewMode::File(file) => rel.eq_ignore_ascii_case(&file.replace('/', "\\")),
-            PreviewMode::Glob(glob) => glob_match(glob, &rel.replace('\\', "/")),
+            RestoreMode::All => true,
+            RestoreMode::File(file) => rel.eq_ignore_ascii_case(&file.replace('/', "\\")),
+            RestoreMode::Glob(glob) => glob_match(glob, &rel.replace('\\', "/")),
         }
     }
 }
@@ -404,6 +472,20 @@ struct RestorePreviewItem {
     kind: RestorePreviewKind,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RestorePreviewSummary {
+    overwrite_count: usize,
+    new_count: usize,
+    visible_items: Vec<RestorePreviewItem>,
+    hidden_count: usize,
+}
+
+impl RestorePreviewSummary {
+    fn is_empty(&self) -> bool {
+        self.overwrite_count == 0 && self.new_count == 0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PreviewFastPathDecision {
     New,
@@ -412,24 +494,43 @@ enum PreviewFastPathDecision {
     NeedContentCheck,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn build_restore_preview_items(
     backup_src: &Path,
     dest_root: &Path,
-    mode: PreviewMode<'_>,
+    mode: RestoreMode<'_>,
 ) -> Result<Vec<RestorePreviewItem>, CliError> {
-    if backup_src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        build_restore_preview_items_from_zip(backup_src, dest_root, mode)
-    } else if is_7z_path(backup_src) || is_xunbak_path(backup_src) {
-        build_restore_preview_items_from_artifact(backup_src, dest_root, mode)
-    } else {
-        build_restore_preview_items_from_dir(backup_src, dest_root, mode)
+    build_restore_preview_items_for_kind(
+        backup_src,
+        detect_restore_artifact_kind(backup_src),
+        dest_root,
+        mode,
+    )
+}
+
+fn build_restore_preview_items_for_kind(
+    backup_src: &Path,
+    source_kind: RestoreArtifactKind,
+    dest_root: &Path,
+    mode: RestoreMode<'_>,
+) -> Result<Vec<RestorePreviewItem>, CliError> {
+    match source_kind {
+        RestoreArtifactKind::Zip => {
+            build_restore_preview_items_from_zip(backup_src, dest_root, mode)
+        }
+        RestoreArtifactKind::SevenZ | RestoreArtifactKind::Xunbak => {
+            build_restore_preview_items_from_artifact(backup_src, dest_root, mode)
+        }
+        RestoreArtifactKind::Dir => {
+            build_restore_preview_items_from_dir(backup_src, dest_root, mode)
+        }
     }
 }
 
 fn build_restore_preview_items_from_dir(
     backup_src: &Path,
     dest_root: &Path,
-    mode: PreviewMode<'_>,
+    mode: RestoreMode<'_>,
 ) -> Result<Vec<RestorePreviewItem>, CliError> {
     let mut items = Vec::new();
     let mut stack = vec![backup_src.to_path_buf()];
@@ -456,21 +557,19 @@ fn build_restore_preview_items_from_dir(
                 continue;
             }
 
-            let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-            if let Some(item) = classify_preview_item(&path, &dst, &rel)? {
-                items.push(item);
-            }
+            let dst = preview_destination_path(dest_root, &rel);
+            maybe_push_preview_item(&mut items, classify_preview_path(&path, &dst, &rel)?);
         }
     }
 
-    items.sort_by(|a, b| a.rel.cmp(&b.rel));
+    sort_restore_preview_items(&mut items);
     Ok(items)
 }
 
 fn build_restore_preview_items_from_zip(
     backup_src: &Path,
     dest_root: &Path,
-    mode: PreviewMode<'_>,
+    mode: RestoreMode<'_>,
 ) -> Result<Vec<RestorePreviewItem>, CliError> {
     let file = fs::File::open(backup_src)
         .map_err(|e| CliError::new(1, format!("Preview open zip failed: {e}")))?;
@@ -493,20 +592,18 @@ fn build_restore_preview_items_from_zip(
             continue;
         }
 
-        let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-        if let Some(item) = classify_preview_item_zip(&mut entry, &dst, &rel)? {
-            items.push(item);
-        }
+        let dst = preview_destination_path(dest_root, &rel);
+        maybe_push_preview_item(&mut items, classify_preview_reader(&mut entry, &dst, &rel)?);
     }
 
-    items.sort_by(|a, b| a.rel.cmp(&b.rel));
+    sort_restore_preview_items(&mut items);
     Ok(items)
 }
 
 fn build_restore_preview_items_from_artifact(
     backup_src: &Path,
     dest_root: &Path,
-    mode: PreviewMode<'_>,
+    mode: RestoreMode<'_>,
 ) -> Result<Vec<RestorePreviewItem>, CliError> {
     let mut entries = read_artifact_entries(backup_src)?;
     if entries.first().is_some_and(|entry| {
@@ -523,82 +620,127 @@ fn build_restore_preview_items_from_artifact(
         if !mode.matches_path(&rel) {
             continue;
         }
-        let dst = dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
-        match classify_preview_item_fast(
+        let dst = preview_destination_path(dest_root, &rel);
+        let fast_path = classify_preview_item_fast(
             entry.size,
             entry.mtime_ns,
             entry.win_attributes,
             &dst,
             &rel,
-        )? {
-            PreviewFastPathDecision::New => {
-                items.push(RestorePreviewItem {
-                    rel,
-                    kind: RestorePreviewKind::New,
-                });
+        )?;
+        match preview_kind_from_fast_path(fast_path) {
+            Some(kind) => {
+                push_restore_preview_item(&mut items, rel, kind);
                 continue;
             }
-            PreviewFastPathDecision::Overwrite => {
-                items.push(RestorePreviewItem {
-                    rel,
-                    kind: RestorePreviewKind::Overwrite,
-                });
-                continue;
-            }
-            PreviewFastPathDecision::Unchanged => continue,
-            PreviewFastPathDecision::NeedContentCheck => {}
+            None if matches!(fast_path, PreviewFastPathDecision::Unchanged) => continue,
+            None => {}
         }
         let mut reader = open_entry_reader(&entry)?;
-        if let Some(item) = classify_preview_item_zip(&mut reader, &dst, &rel)? {
-            items.push(item);
-        }
+        maybe_push_preview_item(
+            &mut items,
+            classify_preview_reader(&mut reader, &dst, &rel)?,
+        );
     }
-    items.sort_by(|a, b| a.rel.cmp(&b.rel));
+    sort_restore_preview_items(&mut items);
     Ok(items)
 }
 
-fn classify_preview_item(
+fn preview_destination_path(dest_root: &Path, rel: &str) -> PathBuf {
+    dest_root.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR))
+}
+
+fn build_restore_preview_summary(
+    items: &[RestorePreviewItem],
+    max_show: usize,
+) -> RestorePreviewSummary {
+    let overwrite_count = items
+        .iter()
+        .filter(|item| item.kind == RestorePreviewKind::Overwrite)
+        .count();
+    let new_count = items
+        .iter()
+        .filter(|item| item.kind == RestorePreviewKind::New)
+        .count();
+    let visible_items = items.iter().take(max_show).cloned().collect::<Vec<_>>();
+    let hidden_count = items.len().saturating_sub(visible_items.len());
+
+    RestorePreviewSummary {
+        overwrite_count,
+        new_count,
+        visible_items,
+        hidden_count,
+    }
+}
+
+fn sort_restore_preview_items(items: &mut [RestorePreviewItem]) {
+    items.sort_by(|left, right| left.rel.cmp(&right.rel));
+}
+
+fn push_restore_preview_item(
+    items: &mut Vec<RestorePreviewItem>,
+    rel: impl Into<String>,
+    kind: RestorePreviewKind,
+) {
+    items.push(RestorePreviewItem {
+        rel: rel.into(),
+        kind,
+    });
+}
+
+fn maybe_push_preview_item(items: &mut Vec<RestorePreviewItem>, item: Option<RestorePreviewItem>) {
+    if let Some(item) = item {
+        items.push(item);
+    }
+}
+
+fn preview_kind_from_fast_path(decision: PreviewFastPathDecision) -> Option<RestorePreviewKind> {
+    match decision {
+        PreviewFastPathDecision::New => Some(RestorePreviewKind::New),
+        PreviewFastPathDecision::Overwrite => Some(RestorePreviewKind::Overwrite),
+        PreviewFastPathDecision::Unchanged | PreviewFastPathDecision::NeedContentCheck => None,
+    }
+}
+
+fn classify_preview_item_from_diff<F>(
+    dst: &Path,
+    rel: &str,
+    differs: F,
+) -> Result<Option<RestorePreviewItem>, CliError>
+where
+    F: FnOnce() -> Result<bool, CliError>,
+{
+    if !dst.exists() {
+        return Ok(Some(RestorePreviewItem {
+            rel: rel.to_string(),
+            kind: RestorePreviewKind::New,
+        }));
+    }
+
+    if differs()? {
+        return Ok(Some(RestorePreviewItem {
+            rel: rel.to_string(),
+            kind: RestorePreviewKind::Overwrite,
+        }));
+    }
+
+    Ok(None)
+}
+
+fn classify_preview_path(
     src: &Path,
     dst: &Path,
     rel: &str,
 ) -> Result<Option<RestorePreviewItem>, CliError> {
-    if !dst.exists() {
-        return Ok(Some(RestorePreviewItem {
-            rel: rel.to_string(),
-            kind: RestorePreviewKind::New,
-        }));
-    }
-
-    if paths_differ(src, dst)? {
-        return Ok(Some(RestorePreviewItem {
-            rel: rel.to_string(),
-            kind: RestorePreviewKind::Overwrite,
-        }));
-    }
-
-    Ok(None)
+    classify_preview_item_from_diff(dst, rel, || paths_differ(src, dst))
 }
 
-fn classify_preview_item_zip<R: Read>(
+fn classify_preview_reader<R: Read>(
     entry: &mut R,
     dst: &Path,
     rel: &str,
 ) -> Result<Option<RestorePreviewItem>, CliError> {
-    if !dst.exists() {
-        return Ok(Some(RestorePreviewItem {
-            rel: rel.to_string(),
-            kind: RestorePreviewKind::New,
-        }));
-    }
-
-    if reader_differs_from_file(entry, dst)? {
-        return Ok(Some(RestorePreviewItem {
-            rel: rel.to_string(),
-            kind: RestorePreviewKind::Overwrite,
-        }));
-    }
-
-    Ok(None)
+    classify_preview_item_from_diff(dst, rel, || reader_differs_from_file(entry, dst))
 }
 
 fn classify_preview_item_fast(
@@ -673,39 +815,6 @@ fn reader_differs_from_file<R: Read>(reader: &mut R, dst: &Path) -> Result<bool,
             return Ok(true);
         }
     }
-}
-
-/// glob 模式还原
-fn restore_with_glob(
-    src: &Path,
-    dest_root: &Path,
-    glob_pat: &str,
-    dry_run: bool,
-) -> Result<(usize, usize), CliError> {
-    if src.extension().and_then(|e| e.to_str()) == Some("zip") {
-        restore_core::restore_many_from_zip(src, dest_root, dry_run, |name| {
-            glob_match(glob_pat, name)
-        })
-    } else if is_7z_path(src) {
-        restore_7z_entries(src, dest_root, dry_run, |name| glob_match(glob_pat, name))
-    } else {
-        Ok(restore_core::restore_many_from_dir(
-            src,
-            dest_root,
-            dry_run,
-            |_, rel_str| glob_match(glob_pat, rel_str),
-        ))
-    }
-}
-
-fn is_7z_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"))
-        || path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with(".7z.001"))
 }
 
 /// snapshot：调用 cmd_backup 备份当前状态（desc = pre_restore）
@@ -794,6 +903,7 @@ mod tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::io::Write;
+    use std::path::Path;
     use tempfile::tempdir;
 
     #[cfg(feature = "xunbak")]
@@ -805,8 +915,10 @@ mod tests {
     use crate::backup::artifact::source::read_artifact_entries;
 
     use super::{
-        PreviewMode, RestorePreviewItem, RestorePreviewKind, build_restore_preview_items,
-        glob_match, restore_timing_enabled_with,
+        RestoreArtifactKind, RestoreMode, RestorePreviewItem, RestorePreviewKind, RestoreStats,
+        build_restore_execution_summary, build_restore_preview_items,
+        build_restore_preview_summary, detect_restore_artifact_kind, glob_match,
+        restore_timing_enabled_with,
     };
 
     #[test]
@@ -843,7 +955,7 @@ mod tests {
         std::fs::write(dest.path().join("a.txt"), "current-a").unwrap();
 
         let items =
-            build_restore_preview_items(backup.path(), dest.path(), PreviewMode::File("a.txt"))
+            build_restore_preview_items(backup.path(), dest.path(), RestoreMode::File("a.txt"))
                 .unwrap();
         assert_eq!(
             items,
@@ -862,7 +974,7 @@ mod tests {
         std::fs::write(dest.path().join("same.txt"), "bbbb").unwrap();
 
         let items =
-            build_restore_preview_items(backup.path(), dest.path(), PreviewMode::All).unwrap();
+            build_restore_preview_items(backup.path(), dest.path(), RestoreMode::All).unwrap();
         assert_eq!(
             items,
             vec![RestorePreviewItem {
@@ -895,7 +1007,7 @@ mod tests {
         std::fs::write(dest.path().join("src").join("a.txt"), "same").unwrap();
 
         let items =
-            build_restore_preview_items(&zip_path, dest.path(), PreviewMode::Glob("**/*.txt"))
+            build_restore_preview_items(&zip_path, dest.path(), RestoreMode::Glob("**/*.txt"))
                 .unwrap();
         assert!(
             items.is_empty(),
@@ -942,7 +1054,7 @@ mod tests {
 
         clear_xunbak_reader_cache_for_tests();
         let items =
-            build_restore_preview_items(&artifact, restore_dest.path(), PreviewMode::All).unwrap();
+            build_restore_preview_items(&artifact, restore_dest.path(), RestoreMode::All).unwrap();
 
         assert!(items.is_empty());
         assert_eq!(cached_xunbak_reader_count_for_tests(), 0);
@@ -955,5 +1067,86 @@ mod tests {
 
         let env = HashMap::from([("XUN_RESTORE_TIMING", OsString::from("1"))]);
         assert!(restore_timing_enabled_with(|name| env.get(name).cloned()));
+    }
+
+    #[test]
+    fn detect_restore_artifact_kind_distinguishes_supported_sources() {
+        assert_eq!(
+            detect_restore_artifact_kind(Path::new("backup.zip")),
+            RestoreArtifactKind::Zip
+        );
+        assert_eq!(
+            detect_restore_artifact_kind(Path::new("backup.7z")),
+            RestoreArtifactKind::SevenZ
+        );
+        assert_eq!(
+            detect_restore_artifact_kind(Path::new("backup.xunbak")),
+            RestoreArtifactKind::Xunbak
+        );
+        assert_eq!(
+            detect_restore_artifact_kind(Path::new("backup-dir")),
+            RestoreArtifactKind::Dir
+        );
+    }
+
+    #[test]
+    fn restore_execution_summary_uses_mode_label_and_partial_status() {
+        let summary = build_restore_execution_summary(
+            Path::new("source.zip"),
+            Path::new("dest"),
+            RestoreMode::Glob("**/*.txt"),
+            false,
+            true,
+            RestoreStats::new(3, 1),
+        );
+
+        assert_eq!(summary.action, "restore");
+        assert_eq!(summary.status, "partial_failed");
+        assert_eq!(summary.mode, "glob");
+        assert!(summary.snapshot);
+        assert_eq!(summary.restored, 3);
+        assert_eq!(summary.failed, 1);
+    }
+
+    #[test]
+    fn restore_stats_status_label_matches_failure_count() {
+        assert_eq!(RestoreStats::new(2, 0).status_label(), "ok");
+        assert_eq!(RestoreStats::new(2, 1).status_label(), "partial_failed");
+        assert_eq!(RestoreStats::single_success(), RestoreStats::new(1, 0));
+    }
+
+    #[test]
+    fn restore_preview_summary_counts_and_truncates_items() {
+        let items = vec![
+            RestorePreviewItem {
+                rel: "a.txt".to_string(),
+                kind: RestorePreviewKind::Overwrite,
+            },
+            RestorePreviewItem {
+                rel: "b.txt".to_string(),
+                kind: RestorePreviewKind::New,
+            },
+            RestorePreviewItem {
+                rel: "c.txt".to_string(),
+                kind: RestorePreviewKind::Overwrite,
+            },
+        ];
+
+        let summary = build_restore_preview_summary(&items, 2);
+        assert_eq!(summary.overwrite_count, 2);
+        assert_eq!(summary.new_count, 1);
+        assert_eq!(summary.visible_items, items[..2].to_vec());
+        assert_eq!(summary.hidden_count, 1);
+        assert!(!summary.is_empty());
+    }
+
+    #[test]
+    fn restore_preview_summary_empty_items_is_empty() {
+        let summary = build_restore_preview_summary(&[], 20);
+        assert_eq!(summary.overwrite_count, 0);
+        assert_eq!(summary.new_count, 0);
+        assert!(summary.visible_items.is_empty());
+        assert_eq!(summary.hidden_count, 0);
+        assert!(summary.is_empty());
     }
 }
