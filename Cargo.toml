@@ -282,6 +282,11 @@ name = "backup_export_bench_divan"
 harness = false
 required-features = ["xunbak"]
 
+[[bench]]
+name = "backup_perf_bench_divan"
+harness = false
+required-features = ["xunbak"]
+
 [[test]]
 name = "general_cli_core"
 path = "tests/general/cli_core.rs"

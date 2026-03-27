@@ -2,6 +2,8 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 
+use rayon::prelude::*;
+
 use crate::backup::artifact::common::is_xunbak_artifact_path;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::copy_entry_to_writer;
@@ -95,7 +97,7 @@ pub(crate) fn verify_output(
 
     match format {
         BackupArtifactFormat::Zip => {
-            verify_entries_content(path)?;
+            verify_entries_content_for_bench(path)?;
             if contains_ppmd_entries(path).unwrap_or(false) {
                 verify_ppmd_zip_entries(path)?;
             }
@@ -129,7 +131,7 @@ pub(crate) fn verify_output(
         }
         BackupArtifactFormat::SevenZ => {
             list_7z_entries(path).map_err(|err| verify_output_error(path, None, err.message))?;
-            verify_entries_content(path)?;
+            verify_entries_content_for_bench(path)?;
             if let Some(cmd) = find_external_7z() {
                 let target = external_7z_target(path);
                 let output = Command::new(&cmd)
@@ -235,14 +237,33 @@ fn first_external_7z_error_line(output: &std::process::Output) -> Option<String>
         .map(str::to_string)
 }
 
-fn verify_entries_content(path: &Path) -> CliResult {
+pub(crate) fn verify_entries_content_for_bench(path: &Path) -> CliResult {
     let entries = read_artifact_entries(path)
         .map_err(|err| verify_output_error(path, None, err.message.clone()))?;
-    for entry in &entries {
-        verify_entry_content(entry)
-            .map_err(|err| verify_output_error(path, Some(&entry.path), err.message))?;
+    if should_verify_entries_in_parallel(&entries) {
+        entries.par_iter().try_for_each(|entry| {
+            verify_entry_content(entry)
+                .map_err(|err| verify_output_error(path, Some(&entry.path), err.message))
+        })?;
+    } else {
+        for entry in &entries {
+            verify_entry_content(entry)
+                .map_err(|err| verify_output_error(path, Some(&entry.path), err.message))?;
+        }
     }
     Ok(())
+}
+
+fn should_verify_entries_in_parallel(entries: &[SourceEntry]) -> bool {
+    entries.len() >= 64
+        && entries.first().is_some_and(|entry| {
+            matches!(
+                entry.kind,
+                crate::backup::artifact::entry::SourceKind::Filesystem
+                    | crate::backup::artifact::entry::SourceKind::DirArtifact
+                    | crate::backup::artifact::entry::SourceKind::XunbakArtifact
+            )
+        })
 }
 
 fn verify_entry_content(entry: &SourceEntry) -> CliResult {

@@ -139,3 +139,181 @@ pub mod backup {
         false
     }
 }
+
+#[cfg(feature = "xunbak")]
+#[doc(hidden)]
+pub mod backup_perf {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    use crate::backup::artifact::entry::{SourceEntry, SourceKind};
+    use crate::backup::artifact::sidecar::{
+        SidecarPackingHint, SidecarSourceInfo, build_sidecar_bytes,
+    };
+    use crate::backup::artifact::verify::verify_entries_content_for_bench;
+    use crate::backup_formats::BackupArtifactFormat;
+    use crate::xunbak::constants::Codec;
+    use crate::xunbak::reader::ContainerReader;
+    use crate::xunbak::verify::verify_full_path;
+    use crate::xunbak::writer::{BackupOptions, ContainerWriter};
+
+    pub struct SidecarBenchFixture {
+        _root: PathBuf,
+        source: SidecarSourceInfo,
+        entries: Vec<SourceEntry>,
+    }
+
+    impl SidecarBenchFixture {
+        pub fn build_sidecar_bytes(&self) -> usize {
+            let refs = self.entries.iter().collect::<Vec<_>>();
+            build_sidecar_bytes(
+                BackupArtifactFormat::Zip,
+                SidecarPackingHint::Zip(crate::backup::artifact::zip::ZipCompressionMethod::Stored),
+                &self.source,
+                &refs,
+            )
+            .unwrap()
+            .len()
+        }
+    }
+
+    pub fn prepare_sidecar_fixture(
+        root: &Path,
+        file_count: usize,
+        file_size: usize,
+        prehash: bool,
+    ) -> SidecarBenchFixture {
+        let source_root = root.join("sidecar-src");
+        let _ = fs::remove_dir_all(&source_root);
+        fs::create_dir_all(&source_root).unwrap();
+        let mut entries = Vec::with_capacity(file_count);
+        for i in 0..file_count {
+            let dir = source_root.join(format!("d{:03}", i / 100));
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(format!("f{i:04}.txt"));
+            let content = vec![b'a' + (i % 23) as u8; file_size];
+            fs::write(&path, &content).unwrap();
+            entries.push(SourceEntry {
+                path: path
+                    .strip_prefix(&source_root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                source_path: Some(path.clone()),
+                size: content.len() as u64,
+                mtime_ns: None,
+                created_time_ns: None,
+                win_attributes: 0,
+                content_hash: prehash.then(|| *blake3::hash(&content).as_bytes()),
+                kind: SourceKind::Filesystem,
+            });
+        }
+        SidecarBenchFixture {
+            _root: source_root.clone(),
+            source: SidecarSourceInfo {
+                snapshot_id: "bench-sidecar".to_string(),
+                source_root: source_root.display().to_string(),
+            },
+            entries,
+        }
+    }
+
+    pub struct VerifyBenchFixture {
+        _root: PathBuf,
+        dir_path: PathBuf,
+        xunbak_path: PathBuf,
+    }
+
+    impl VerifyBenchFixture {
+        pub fn verify_dir_entries_content(&self) {
+            verify_entries_content_for_bench(&self.dir_path).unwrap();
+        }
+
+        pub fn verify_xunbak_entries_content(&self) {
+            verify_entries_content_for_bench(&self.xunbak_path).unwrap();
+        }
+
+        pub fn verify_xunbak_full(&self) {
+            let report = verify_full_path(&self.xunbak_path);
+            assert!(report.passed);
+        }
+    }
+
+    pub fn prepare_verify_fixture(
+        root: &Path,
+        file_count: usize,
+        file_size: usize,
+    ) -> VerifyBenchFixture {
+        let dir_path = root.join("verify-src");
+        let _ = fs::remove_dir_all(&dir_path);
+        fs::create_dir_all(&dir_path).unwrap();
+        for i in 0..file_count {
+            let dir = dir_path.join(format!("d{:03}", i / 100));
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(format!("f{i:04}.txt"));
+            let content = vec![b'a' + (i % 19) as u8; file_size];
+            fs::write(path, content).unwrap();
+        }
+
+        let xunbak_path = root.join("verify-bench.xunbak");
+        let options = BackupOptions {
+            codec: Codec::NONE,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: None,
+        };
+        let _ = fs::remove_file(&xunbak_path);
+        ContainerWriter::backup(&xunbak_path, &dir_path, &options).unwrap();
+
+        VerifyBenchFixture {
+            _root: root.to_path_buf(),
+            dir_path,
+            xunbak_path,
+        }
+    }
+
+    pub struct RestoreBenchFixture {
+        _root: PathBuf,
+        xunbak_path: PathBuf,
+    }
+
+    impl RestoreBenchFixture {
+        pub fn restore_all(&self, target: &Path) {
+            let reader = ContainerReader::open(&self.xunbak_path).unwrap();
+            let _ = fs::remove_dir_all(target);
+            reader.restore_all(target).unwrap();
+        }
+    }
+
+    pub fn prepare_restore_fixture(
+        root: &Path,
+        file_count: usize,
+        file_size: usize,
+    ) -> RestoreBenchFixture {
+        let dir_path = root.join("restore-src");
+        let _ = fs::remove_dir_all(&dir_path);
+        fs::create_dir_all(&dir_path).unwrap();
+        for i in 0..file_count {
+            let dir = dir_path.join(format!("d{:03}", i / 100));
+            fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(format!("f{i:04}.txt"));
+            let content = vec![b'a' + (i % 17) as u8; file_size];
+            fs::write(path, content).unwrap();
+        }
+
+        let xunbak_path = root.join("restore-bench.xunbak");
+        let options = BackupOptions {
+            codec: Codec::NONE,
+            auto_compression: false,
+            zstd_level: 1,
+            split_size: None,
+        };
+        let _ = fs::remove_file(&xunbak_path);
+        ContainerWriter::backup(&xunbak_path, &dir_path, &options).unwrap();
+
+        RestoreBenchFixture {
+            _root: root.to_path_buf(),
+            xunbak_path,
+        }
+    }
+}

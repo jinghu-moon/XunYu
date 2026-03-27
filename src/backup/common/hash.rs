@@ -11,7 +11,7 @@ fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
 pub(crate) fn compute_file_content_hash(path: &Path) -> io::Result<[u8; 32]> {
     let mut input = File::open(path)?;
     let mut hasher = blake3::Hasher::new();
-    let mut buf = vec![0u8; 16 * 1024 * 1024];
+    let mut buf = [0u8; 64 * 1024];
     loop {
         let n = input.read(&mut buf)?;
         if n == 0 {

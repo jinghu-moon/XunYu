@@ -417,6 +417,24 @@
   `restore_core` 与 `restore.rs` 之间的 dry-run 输出与统计辅助层也已对齐：`commands::restore_core::emit_restore_dry_run()` 统一了 `dir / zip / 7z / xunbak` 的 dry-run 输出风格，`restore.rs` 增加 `RestoreStats` 收敛 `restored/failed/status` 派生逻辑，减少 tuple 解包与 `Ok((1,0))` 散落分支。
   `backup/common/cli.rs` 现已作为 app 层共享 helper：收敛了 summary 路径字符串转换、相对输入路径解析、按备份名查找 artifact、以及 restore 相关错误文案模板，减少 `create / convert / restore / xunbak / restore_core / sevenz / xunbak::reader` 之间的重复字符串和路径处理逻辑。
 
+### H.5 backup 热点性能优化
+
+- [x] 新增专项基准：`cargo bench --bench backup_perf_bench_divan --features xunbak`
+- [x] 优化 `sidecar` 缺失 `content_hash` 时的热点路径
+  现状：优先复用 `entry.content_hash`；对 `Filesystem / DirArtifact` 直接走 `compute_file_content_hash()`，避免通过 `copy_entry_to_writer() -> HashSink` 做额外包装层。
+- [x] 为 `.xunbak` `ContainerReader` 增加 `manifest` 缓存与 volume file handle 复用
+  现状：`load_manifest()` 使用 `OnceLock`；blob 读取/校验改为按 volume 复用已打开文件句柄，避免每个 entry/part 反复 `File::open + seek`。
+- [x] 优化 `verify_entries_content()` 的并行策略
+  现状：对 `DirArtifact / Filesystem / XunbakArtifact` 在文件数较多时启用可控并行；`zip / 7z` 仍保持保守路径，避免共享 archive/reader 竞争。
+- [x] 记录优化前后基线
+  基准中位数对比：
+  `sidecar_build_missing_hash_1000_files`: `29.87ms -> 27.27ms`
+  `verify_entries_content_dir_1000_files`: `23.43ms -> 5.45ms`
+  `verify_entries_content_xunbak_1000_files`: `28.52ms -> 14.68ms`
+  `verify_full_xunbak_1000_files`: `25.72ms -> 9.58ms`
+  `xunbak_restore_all_1000_files`: `533.8ms -> 517.7ms`
+  结论：`verify` 热点收益显著，`.xunbak` restore 句柄复用有稳定但相对温和的收益，`sidecar` 缺失 hash 路径有小幅改善。
+
 ---
 
 ## Backlog：`xunbak` codec 扩展（`LZ4` 优先）

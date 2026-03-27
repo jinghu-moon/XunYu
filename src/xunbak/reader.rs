@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::backup::common::cli::restore_path_not_found_message;
 use crate::commands::restore_core::emit_restore_dry_run;
@@ -16,7 +17,7 @@ use crate::xunbak::manifest::{
 };
 use crate::xunbak::record::{RecordPrefix, compute_record_crc};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ContainerReader {
     pub path: PathBuf,
     pub file_size: u64,
@@ -25,6 +26,8 @@ pub struct ContainerReader {
     pub checkpoint: CheckpointPayload,
     pub is_split: bool,
     pub volume_paths: Vec<PathBuf>,
+    manifest_cache: OnceLock<ManifestBody>,
+    volume_files: Vec<Arc<Mutex<File>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -130,6 +133,14 @@ impl ContainerReader {
         } else {
             last_size
         };
+        let volume_files = active_volume_paths
+            .iter()
+            .map(|path| {
+                File::open(path)
+                    .map(|file| Arc::new(Mutex::new(file)))
+                    .map_err(|err| ReaderError::Io(err.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             path: primary_path,
             file_size: active_file_size,
@@ -138,54 +149,55 @@ impl ContainerReader {
             checkpoint,
             is_split: header.header.flags & FLAG_SPLIT != 0,
             volume_paths: active_volume_paths,
+            manifest_cache: OnceLock::new(),
+            volume_files,
         })
     }
 
     pub fn load_manifest(&self) -> Result<ManifestBody, ReaderError> {
-        let manifest_path = self
-            .volume_paths
-            .last()
-            .cloned()
-            .unwrap_or_else(|| self.path.clone());
-        let mut file =
-            File::open(&manifest_path).map_err(|err| ReaderError::Io(err.to_string()))?;
-        file.seek(SeekFrom::Start(self.checkpoint.manifest_offset))
-            .map_err(|err| ReaderError::Io(err.to_string()))?;
-        let manifest = read_manifest_record(&mut file)?;
-
-        let payload_len = self
-            .checkpoint
-            .manifest_len
-            .checked_sub(RECORD_PREFIX_SIZE as u64)
-            .ok_or_else(|| {
-                ReaderError::Io("manifest_len smaller than record prefix".to_string())
-            })?;
-        let mut payload = vec![0u8; payload_len as usize];
-        file.seek(SeekFrom::Start(
-            self.checkpoint.manifest_offset + RECORD_PREFIX_SIZE as u64,
-        ))
-        .map_err(|err| ReaderError::Io(err.to_string()))?;
-        file.read_exact(&mut payload)
-            .map_err(|err| ReaderError::Io(err.to_string()))?;
-        if crate::xunbak::checkpoint::compute_manifest_hash(&payload)
-            != self.checkpoint.manifest_hash
-        {
-            return Err(ReaderError::ManifestHashMismatch);
+        if let Some(manifest) = self.manifest_cache.get() {
+            return Ok(manifest.clone());
         }
+        let manifest_volume = self.volume_paths.len().saturating_sub(1) as u16;
+        let manifest = self.with_volume_file(manifest_volume, |file| {
+            file.seek(SeekFrom::Start(self.checkpoint.manifest_offset))
+                .map_err(|err| ReaderError::Io(err.to_string()))?;
+            let manifest = read_manifest_record(file)?;
 
-        Ok(manifest.body)
+            let payload_len = self
+                .checkpoint
+                .manifest_len
+                .checked_sub(RECORD_PREFIX_SIZE as u64)
+                .ok_or_else(|| {
+                    ReaderError::Io("manifest_len smaller than record prefix".to_string())
+                })?;
+            let mut payload = vec![0u8; payload_len as usize];
+            file.seek(SeekFrom::Start(
+                self.checkpoint.manifest_offset + RECORD_PREFIX_SIZE as u64,
+            ))
+            .map_err(|err| ReaderError::Io(err.to_string()))?;
+            file.read_exact(&mut payload)
+                .map_err(|err| ReaderError::Io(err.to_string()))?;
+            if crate::xunbak::checkpoint::compute_manifest_hash(&payload)
+                != self.checkpoint.manifest_hash
+            {
+                return Err(ReaderError::ManifestHashMismatch);
+            }
+            Ok(manifest.body)
+        })?;
+        let _ = self.manifest_cache.set(manifest.clone());
+        Ok(manifest)
     }
 
     pub fn read_and_verify_blob(&self, entry: &ManifestEntry) -> Result<Vec<u8>, ReaderError> {
         if let Some(parts) = &entry.parts {
             let mut out = Vec::new();
             for part in parts {
-                let volume_path = self.volume_path(part.volume_index)?;
-                let mut file =
-                    File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
-                file.seek(SeekFrom::Start(part.blob_offset))
-                    .map_err(|err| ReaderError::Io(err.to_string()))?;
-                let blob = read_blob_record(&mut file)?;
+                let blob = self.with_volume_file(part.volume_index, |file| {
+                    file.seek(SeekFrom::Start(part.blob_offset))
+                        .map_err(|err| ReaderError::Io(err.to_string()))?;
+                    read_blob_record(file).map_err(ReaderError::from)
+                })?;
                 out.extend_from_slice(&blob.content);
             }
             if *blake3::hash(&out).as_bytes() != entry.content_hash {
@@ -194,11 +206,11 @@ impl ContainerReader {
             return Ok(out);
         }
 
-        let volume_path = self.volume_path(entry.volume_index)?;
-        let mut file = File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
-        file.seek(SeekFrom::Start(entry.blob_offset))
-            .map_err(|err| ReaderError::Io(err.to_string()))?;
-        let blob = read_blob_record(&mut file)?;
+        let blob = self.with_volume_file(entry.volume_index, |file| {
+            file.seek(SeekFrom::Start(entry.blob_offset))
+                .map_err(|err| ReaderError::Io(err.to_string()))?;
+            read_blob_record(file).map_err(ReaderError::from)
+        })?;
         if *blake3::hash(&blob.content).as_bytes() != entry.content_hash {
             return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
         }
@@ -213,12 +225,12 @@ impl ContainerReader {
         let mut hashing_writer = ManifestHashingWriter::new(writer);
         if let Some(parts) = &entry.parts {
             for part in parts {
-                let volume_path = self.volume_path(part.volume_index)?;
-                let mut file =
-                    File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
-                file.seek(SeekFrom::Start(part.blob_offset))
-                    .map_err(|err| ReaderError::Io(err.to_string()))?;
-                let result = copy_blob_record_content_to_writer(&mut file, &mut hashing_writer)?;
+                let result = self.with_volume_file(part.volume_index, |file| {
+                    file.seek(SeekFrom::Start(part.blob_offset))
+                        .map_err(|err| ReaderError::Io(err.to_string()))?;
+                    copy_blob_record_content_to_writer(file, &mut hashing_writer)
+                        .map_err(ReaderError::from)
+                })?;
                 if result.header.blob_id != part.blob_id {
                     return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
                 }
@@ -229,11 +241,11 @@ impl ContainerReader {
             return Ok(());
         }
 
-        let volume_path = self.volume_path(entry.volume_index)?;
-        let mut file = File::open(volume_path).map_err(|err| ReaderError::Io(err.to_string()))?;
-        file.seek(SeekFrom::Start(entry.blob_offset))
-            .map_err(|err| ReaderError::Io(err.to_string()))?;
-        let result = copy_blob_record_content_to_writer(&mut file, &mut hashing_writer)?;
+        let result = self.with_volume_file(entry.volume_index, |file| {
+            file.seek(SeekFrom::Start(entry.blob_offset))
+                .map_err(|err| ReaderError::Io(err.to_string()))?;
+            copy_blob_record_content_to_writer(file, &mut hashing_writer).map_err(ReaderError::from)
+        })?;
         if result.header.blob_id != entry.blob_id || hashing_writer.finalize() != entry.content_hash
         {
             return Err(ReaderError::Blob(BlobRecordError::BlobHashMismatch));
@@ -375,11 +387,18 @@ fn fallback_scan(volume_paths: &[PathBuf]) -> Result<(u64, CheckpointPayload), R
 }
 
 impl ContainerReader {
-    fn volume_path(&self, volume_index: u16) -> Result<&Path, ReaderError> {
-        self.volume_paths
+    fn with_volume_file<R, F>(&self, volume_index: u16, action: F) -> Result<R, ReaderError>
+    where
+        F: FnOnce(&mut File) -> Result<R, ReaderError>,
+    {
+        let file = self
+            .volume_files
             .get(volume_index as usize)
-            .map(|path| path.as_path())
-            .ok_or(ReaderError::UnrecoverableContainer)
+            .ok_or(ReaderError::UnrecoverableContainer)?;
+        let mut file = file
+            .lock()
+            .map_err(|_| ReaderError::Io("volume file cache poisoned".to_string()))?;
+        action(&mut file)
     }
 }
 

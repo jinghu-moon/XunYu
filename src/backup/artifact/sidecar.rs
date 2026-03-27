@@ -9,7 +9,7 @@ use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::reader::copy_entry_to_writer;
 use crate::backup::artifact::sevenz::SevenZMethod;
 use crate::backup::artifact::zip::{ZipCompressionMethod, resolve_zip_method_for_entry};
-use crate::backup::common::hash::encode_hash_hex;
+use crate::backup::common::hash::{compute_file_content_hash, encode_hash_hex};
 use crate::backup_formats::BackupArtifactFormat;
 use crate::output::CliError;
 
@@ -94,20 +94,10 @@ pub(crate) fn build_sidecar_bytes(
     source: &SidecarSourceInfo,
     entries: &[&SourceEntry],
 ) -> Result<Vec<u8>, CliError> {
-    let mut items = Vec::with_capacity(entries.len());
-    for entry in entries {
-        let effective_codec = sidecar_codec_for_entry(entry, packing_hint);
-        items.push(SidecarEntry {
-            path: entry.path.clone(),
-            size: entry.size,
-            mtime_ns: entry.mtime_ns.unwrap_or(0),
-            content_hash: resolve_content_hash_hex(entry)?,
-            created_time_ns: entry.created_time_ns.unwrap_or(0),
-            win_attributes: entry.win_attributes,
-            packed_size: sidecar_packed_size_for_entry(entry.size, effective_codec.as_deref()),
-            codec: effective_codec.map(str::to_string),
-        });
-    }
+    let items = entries
+        .iter()
+        .map(|entry| build_sidecar_entry(entry, packing_hint))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let manifest = SidecarManifest {
         format: format.to_string(),
@@ -119,6 +109,23 @@ pub(crate) fn build_sidecar_bytes(
     };
     serde_json::to_vec_pretty(&manifest)
         .map_err(|err| CliError::new(1, format!("Serialize sidecar failed: {err}")))
+}
+
+fn build_sidecar_entry(
+    entry: &SourceEntry,
+    packing_hint: SidecarPackingHint,
+) -> Result<SidecarEntry, CliError> {
+    let effective_codec = sidecar_codec_for_entry(entry, packing_hint);
+    Ok(SidecarEntry {
+        path: entry.path.clone(),
+        size: entry.size,
+        mtime_ns: entry.mtime_ns.unwrap_or(0),
+        content_hash: resolve_content_hash_hex(entry)?,
+        created_time_ns: entry.created_time_ns.unwrap_or(0),
+        win_attributes: entry.win_attributes,
+        packed_size: sidecar_packed_size_for_entry(entry.size, effective_codec.as_deref()),
+        codec: effective_codec.map(str::to_string),
+    })
 }
 
 pub(crate) fn write_sidecar_to_dir(
@@ -180,6 +187,16 @@ fn effective_zip_method_for_entry(
 fn resolve_content_hash_hex(entry: &SourceEntry) -> Result<String, CliError> {
     if let Some(hash) = entry.content_hash {
         return Ok(encode_hash_hex(&hash));
+    }
+    if matches!(
+        entry.kind,
+        crate::backup::artifact::entry::SourceKind::Filesystem
+            | crate::backup::artifact::entry::SourceKind::DirArtifact
+    ) && let Some(path) = &entry.source_path
+    {
+        return compute_file_content_hash(path)
+            .map(|hash| encode_hash_hex(&hash))
+            .map_err(|err| CliError::new(1, format!("Compute content hash failed: {err}")));
     }
     let mut sink = HashSink::default();
     copy_entry_to_writer(entry, &mut sink)?;
