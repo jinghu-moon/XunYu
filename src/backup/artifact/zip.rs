@@ -459,6 +459,7 @@ mod tests {
                 method: ZipCompressionMethod::Stored,
                 level: None,
                 sidecar: None,
+                sidecar_plan: None,
             },
         )
         .unwrap();
@@ -506,6 +507,7 @@ mod tests {
                     method,
                     level: None,
                     sidecar: None,
+                    sidecar_plan: None,
                 },
             )
             .unwrap();
@@ -549,6 +551,7 @@ mod tests {
                 method: ZipCompressionMethod::Ppmd,
                 level: None,
                 sidecar: None,
+                sidecar_plan: None,
             },
         )
         .unwrap();
@@ -586,6 +589,7 @@ mod tests {
                 method: ZipCompressionMethod::Stored,
                 level: None,
                 sidecar: None,
+                sidecar_plan: None,
             },
         )
         .unwrap();

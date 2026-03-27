@@ -150,7 +150,8 @@ pub mod backup_perf {
     use crate::backup::artifact::sidecar::{
         SidecarPackingHint, SidecarSourceInfo, build_sidecar_bytes,
     };
-    use crate::backup::artifact::verify::verify_entries_content_for_bench;
+    use crate::backup::artifact::verify::verify_entries_content;
+    use crate::backup::common::hash::compute_file_content_hash;
     use crate::backup_formats::BackupArtifactFormat;
     use crate::xunbak::constants::Codec;
     use crate::xunbak::reader::ContainerReader;
@@ -218,6 +219,29 @@ pub mod backup_perf {
         }
     }
 
+    pub struct HashBenchFixture {
+        _root: PathBuf,
+        path: PathBuf,
+    }
+
+    impl HashBenchFixture {
+        pub fn compute_hash(&self) -> [u8; 32] {
+            compute_file_content_hash(&self.path).unwrap()
+        }
+    }
+
+    pub fn prepare_hash_fixture(root: &Path, file_size: usize) -> HashBenchFixture {
+        let source_root = root.join("hash-src");
+        let _ = fs::remove_dir_all(&source_root);
+        fs::create_dir_all(&source_root).unwrap();
+        let path = source_root.join("large.bin");
+        fs::write(&path, vec![0x5Au8; file_size]).unwrap();
+        HashBenchFixture {
+            _root: source_root,
+            path,
+        }
+    }
+
     pub struct VerifyBenchFixture {
         _root: PathBuf,
         dir_path: PathBuf,
@@ -226,11 +250,11 @@ pub mod backup_perf {
 
     impl VerifyBenchFixture {
         pub fn verify_dir_entries_content(&self) {
-            verify_entries_content_for_bench(&self.dir_path).unwrap();
+            verify_entries_content(&self.dir_path).unwrap();
         }
 
         pub fn verify_xunbak_entries_content(&self) {
-            verify_entries_content_for_bench(&self.xunbak_path).unwrap();
+            verify_entries_content(&self.xunbak_path).unwrap();
         }
 
         pub fn verify_xunbak_full(&self) {

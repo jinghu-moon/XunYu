@@ -6,7 +6,9 @@ use std::time::Instant;
 use serde::Serialize;
 
 use crate::backup::app::common::{
-    build_sevenz_write_options, build_zip_write_options, ensure_convert_output_distinct,
+    SummaryActionStatus, SummaryDurationOutputs, SummaryExecutionStats, SummaryPaths,
+    SummarySelectionStats, SummaryVerifyModes, build_sevenz_write_options, build_zip_write_options,
+    ensure_convert_output_distinct, summary_action_status,
 };
 use crate::backup::artifact::common::{
     collect_artifact_output_paths, compute_artifact_output_bytes, parse_split_size_bytes,
@@ -38,57 +40,48 @@ use crate::output::{CliError, CliResult};
 
 #[derive(Serialize)]
 struct BackupConvertSelectionSummary {
-    action: BackupAction,
-    status: ExportStatus,
+    #[serde(flatten)]
+    meta: SummaryActionStatus<BackupAction, ExportStatus>,
     mode: String,
-    source: String,
-    destination: String,
+    #[serde(flatten)]
+    paths: SummaryPaths,
     format: String,
-    dry_run: bool,
-    selected: usize,
-    skipped: usize,
-    bytes_in: u64,
-    bytes_out: u64,
-    overwrite_count: usize,
-    verify_source: String,
-    verify_output: String,
-    duration_ms: u128,
-    outputs: Vec<String>,
+    #[serde(flatten)]
+    stats: SummarySelectionStats,
+    #[serde(flatten)]
+    verify: SummaryVerifyModes,
+    #[serde(flatten)]
+    timing: SummaryDurationOutputs,
     entries: Vec<String>,
 }
 
 #[derive(Serialize)]
 struct BackupConvertExecutionSummary {
-    action: BackupAction,
-    status: ExportStatus,
-    source: String,
-    destination: String,
+    #[serde(flatten)]
+    meta: SummaryActionStatus<BackupAction, ExportStatus>,
+    #[serde(flatten)]
+    paths: SummaryPaths,
     format: String,
-    dry_run: bool,
-    selected: usize,
-    written: usize,
-    skipped: usize,
-    bytes_in: u64,
-    bytes_out: u64,
-    overwrite_count: usize,
-    verify_source: String,
-    verify_output: String,
-    duration_ms: u128,
-    outputs: Vec<String>,
+    #[serde(flatten)]
+    stats: SummaryExecutionStats,
+    #[serde(flatten)]
+    verify: SummaryVerifyModes,
+    #[serde(flatten)]
+    timing: SummaryDurationOutputs,
 }
 
 #[derive(Serialize)]
 struct BackupConvertFailureSummary {
-    action: BackupAction,
-    status: ExportStatus,
-    source: String,
-    destination: String,
+    #[serde(flatten)]
+    meta: SummaryActionStatus<BackupAction, ExportStatus>,
+    #[serde(flatten)]
+    paths: SummaryPaths,
     format: String,
     error: String,
     dry_run: bool,
     overwrite_count: usize,
-    verify_source: String,
-    verify_output: String,
+    #[serde(flatten)]
+    verify: SummaryVerifyModes,
     duration_ms: u128,
 }
 
@@ -606,22 +599,29 @@ fn build_convert_selection_summary(
     duration_ms: u128,
 ) -> BackupConvertSelectionSummary {
     BackupConvertSelectionSummary {
-        action: BackupAction::Convert,
-        status: ExportStatus::Ok,
+        meta: summary_action_status(BackupAction::Convert, ExportStatus::Ok),
         mode: mode.to_string(),
-        source: path_display(&options.artifact),
-        destination: path_display(&options.output),
+        paths: SummaryPaths {
+            source: path_display(&options.artifact),
+            destination: path_display(&options.output),
+        },
         format: options.format.to_string(),
-        dry_run: options.dry_run,
-        selected: entries.len(),
-        skipped: 0,
-        bytes_in,
-        bytes_out: 0,
-        overwrite_count,
-        verify_source: options.verify_source.to_string(),
-        verify_output: options.verify_output.to_string(),
-        duration_ms,
-        outputs: Vec::new(),
+        stats: SummarySelectionStats {
+            dry_run: options.dry_run,
+            selected: entries.len(),
+            skipped: 0,
+            bytes_in,
+            bytes_out: 0,
+            overwrite_count,
+        },
+        verify: SummaryVerifyModes {
+            verify_source: options.verify_source.to_string(),
+            verify_output: options.verify_output.to_string(),
+        },
+        timing: SummaryDurationOutputs {
+            duration_ms,
+            outputs: Vec::new(),
+        },
         entries,
     }
 }
@@ -633,22 +633,29 @@ fn build_convert_execution_summary(
     duration_ms: u128,
 ) -> BackupConvertExecutionSummary {
     BackupConvertExecutionSummary {
-        action: BackupAction::Convert,
-        status: ExportStatus::Ok,
-        source: path_display(&options.artifact),
-        destination: path_display(&options.output),
+        meta: summary_action_status(BackupAction::Convert, ExportStatus::Ok),
+        paths: SummaryPaths {
+            source: path_display(&options.artifact),
+            destination: path_display(&options.output),
+        },
         format: options.format.to_string(),
-        dry_run: false,
-        selected: result.selected,
-        written: result.written,
-        skipped: result.skipped,
-        bytes_in: result.bytes_in,
-        bytes_out: result.bytes_out,
-        overwrite_count: result.overwrite_count,
-        verify_source: options.verify_source.to_string(),
-        verify_output: options.verify_output.to_string(),
-        duration_ms,
-        outputs,
+        stats: SummaryExecutionStats {
+            dry_run: false,
+            selected: result.selected,
+            written: result.written,
+            skipped: result.skipped,
+            bytes_in: result.bytes_in,
+            bytes_out: result.bytes_out,
+            overwrite_count: result.overwrite_count,
+        },
+        verify: SummaryVerifyModes {
+            verify_source: options.verify_source.to_string(),
+            verify_output: options.verify_output.to_string(),
+        },
+        timing: SummaryDurationOutputs {
+            duration_ms,
+            outputs,
+        },
     }
 }
 
@@ -659,16 +666,19 @@ fn build_convert_failure_summary(
     duration_ms: u128,
 ) -> BackupConvertFailureSummary {
     BackupConvertFailureSummary {
-        action: BackupAction::Convert,
-        status,
-        source: path_display(&options.artifact),
-        destination: path_display(&options.output),
+        meta: summary_action_status(BackupAction::Convert, status),
+        paths: SummaryPaths {
+            source: path_display(&options.artifact),
+            destination: path_display(&options.output),
+        },
         format: options.format.to_string(),
         error: err.message.clone(),
         dry_run: options.dry_run,
         overwrite_count: existing_output_count(options.format, &options.output),
-        verify_source: options.verify_source.to_string(),
-        verify_output: options.verify_output.to_string(),
+        verify: SummaryVerifyModes {
+            verify_source: options.verify_source.to_string(),
+            verify_output: options.verify_output.to_string(),
+        },
         duration_ms,
     }
 }

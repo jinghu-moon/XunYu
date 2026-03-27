@@ -4,6 +4,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
+use crate::backup::app::common::{RestoreSummaryStats, SummaryPaths};
 use crate::backup::artifact::common::{
     is_7z_artifact_path, is_xunbak_artifact_path, is_zip_artifact_path,
 };
@@ -50,13 +51,11 @@ fn emit_restore_timing(label: &str, elapsed: std::time::Duration, extra: Option<
 struct RestoreExecutionSummary {
     action: String,
     status: String,
-    source: String,
-    destination: String,
+    #[serde(flatten)]
+    paths: SummaryPaths,
     mode: String,
-    dry_run: bool,
-    snapshot: bool,
-    restored: usize,
-    failed: usize,
+    #[serde(flatten)]
+    stats: RestoreSummaryStats,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -366,13 +365,17 @@ fn build_restore_execution_summary(
             "restore".to_string()
         },
         status: stats.status_label().to_string(),
-        source: path_display(source),
-        destination: path_display(destination),
+        paths: SummaryPaths {
+            source: path_display(source),
+            destination: path_display(destination),
+        },
         mode: mode.label().to_string(),
-        dry_run,
-        snapshot,
-        restored: stats.restored,
-        failed: stats.failed,
+        stats: RestoreSummaryStats {
+            dry_run,
+            snapshot,
+            restored: stats.restored,
+            failed: stats.failed,
+        },
     }
 }
 
@@ -1103,9 +1106,9 @@ mod tests {
         assert_eq!(summary.action, "restore");
         assert_eq!(summary.status, "partial_failed");
         assert_eq!(summary.mode, "glob");
-        assert!(summary.snapshot);
-        assert_eq!(summary.restored, 3);
-        assert_eq!(summary.failed, 1);
+        assert!(summary.stats.snapshot);
+        assert_eq!(summary.stats.restored, 3);
+        assert_eq!(summary.stats.failed, 1);
     }
 
     #[test]

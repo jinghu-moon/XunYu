@@ -4,7 +4,9 @@ use std::time::Instant;
 use serde::Serialize;
 
 use crate::backup::app::common::{
+    SummaryActionStatus, SummaryDurationOutputs, SummaryExecutionStats, SummaryPaths,
     build_sevenz_write_options, build_zip_write_options, ensure_create_output_distinct,
+    summary_action_status,
 };
 use crate::backup::artifact::common::{
     collect_artifact_output_paths, compute_artifact_output_bytes, parse_split_size_bytes,
@@ -41,8 +43,8 @@ struct BackupScanRules {
 
 #[derive(Serialize)]
 struct BackupCreateSelectionSummary {
-    action: BackupAction,
-    status: ExportStatus,
+    #[serde(flatten)]
+    meta: SummaryActionStatus<BackupAction, ExportStatus>,
     mode: String,
     source: String,
     destination: Option<String>,
@@ -54,22 +56,17 @@ struct BackupCreateSelectionSummary {
 
 #[derive(Serialize)]
 struct BackupCreateExecutionSummary {
-    action: BackupAction,
-    status: ExportStatus,
-    source: String,
-    destination: String,
+    #[serde(flatten)]
+    meta: SummaryActionStatus<BackupAction, ExportStatus>,
+    #[serde(flatten)]
+    paths: SummaryPaths,
     format: BackupArtifactFormat,
-    dry_run: bool,
-    selected: usize,
-    written: usize,
-    skipped: usize,
-    bytes_in: u64,
-    bytes_out: u64,
-    overwrite_count: usize,
+    #[serde(flatten)]
+    stats: SummaryExecutionStats,
     verify_source: String,
     verify_output: String,
-    duration_ms: u128,
-    outputs: Vec<String>,
+    #[serde(flatten)]
+    timing: SummaryDurationOutputs,
 }
 
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
@@ -133,8 +130,7 @@ fn cmd_backup_create_list(options: &BackupCreateOptions) -> CliResult {
 
     if options.json {
         let summary = BackupCreateSelectionSummary {
-            action: BackupAction::Create,
-            status: ExportStatus::Ok,
+            meta: summary_action_status(BackupAction::Create, ExportStatus::Ok),
             mode: "list".to_string(),
             source: path_display(&options.source_dir),
             destination: optional_path_display(options.output.as_deref()),
@@ -607,22 +603,27 @@ fn build_create_execution_summary(
     duration_ms: u128,
 ) -> BackupCreateExecutionSummary {
     BackupCreateExecutionSummary {
-        action: BackupAction::Create,
-        status: ExportStatus::Ok,
-        source: path_display(&options.source_dir),
-        destination: path_display(destination),
+        meta: summary_action_status(BackupAction::Create, ExportStatus::Ok),
+        paths: SummaryPaths {
+            source: path_display(&options.source_dir),
+            destination: path_display(destination),
+        },
         format: options.format,
-        dry_run,
-        selected,
-        written,
-        skipped: 0,
-        bytes_in,
-        bytes_out,
-        overwrite_count: 0,
+        stats: SummaryExecutionStats {
+            dry_run,
+            selected,
+            written,
+            skipped: 0,
+            bytes_in,
+            bytes_out,
+            overwrite_count: 0,
+        },
         verify_source: "off".to_string(),
         verify_output: "off".to_string(),
-        duration_ms,
-        outputs,
+        timing: SummaryDurationOutputs {
+            duration_ms,
+            outputs,
+        },
     }
 }
 

@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::backup::artifact::common::paths_equal;
 use crate::backup::artifact::entry::SourceEntry;
 use crate::backup::artifact::sevenz::{
@@ -9,8 +11,68 @@ use crate::backup::artifact::sidecar::{SidecarPlan, SidecarSourceInfo};
 use crate::backup::artifact::zip::{
     ZipCompressionMethod, ZipWriteOptions, parse_zip_method_for_cli,
 };
-use crate::backup_formats::BackupArtifactFormat;
+use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus};
 use crate::output::{CliError, CliResult};
+
+#[derive(Serialize)]
+pub(crate) struct SummaryActionStatus<A, S> {
+    pub action: A,
+    pub status: S,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SummaryPaths {
+    pub source: String,
+    pub destination: String,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SummaryVerifyModes {
+    pub verify_source: String,
+    pub verify_output: String,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SummaryExecutionStats {
+    pub dry_run: bool,
+    pub selected: usize,
+    pub written: usize,
+    pub skipped: usize,
+    pub bytes_in: u64,
+    pub bytes_out: u64,
+    pub overwrite_count: usize,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SummarySelectionStats {
+    pub dry_run: bool,
+    pub selected: usize,
+    pub skipped: usize,
+    pub bytes_in: u64,
+    pub bytes_out: u64,
+    pub overwrite_count: usize,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SummaryDurationOutputs {
+    pub duration_ms: u128,
+    pub outputs: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct RestoreSummaryStats {
+    pub dry_run: bool,
+    pub snapshot: bool,
+    pub restored: usize,
+    pub failed: usize,
+}
+
+pub(crate) fn summary_action_status(
+    action: BackupAction,
+    status: ExportStatus,
+) -> SummaryActionStatus<BackupAction, ExportStatus> {
+    SummaryActionStatus { action, status }
+}
 
 pub(crate) fn ensure_create_output_distinct(
     source: &Path,

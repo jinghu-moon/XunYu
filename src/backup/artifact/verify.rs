@@ -97,7 +97,7 @@ pub(crate) fn verify_output(
 
     match format {
         BackupArtifactFormat::Zip => {
-            verify_entries_content_for_bench(path)?;
+            verify_entries_content(path)?;
             if contains_ppmd_entries(path).unwrap_or(false) {
                 verify_ppmd_zip_entries(path)?;
             }
@@ -131,7 +131,7 @@ pub(crate) fn verify_output(
         }
         BackupArtifactFormat::SevenZ => {
             list_7z_entries(path).map_err(|err| verify_output_error(path, None, err.message))?;
-            verify_entries_content_for_bench(path)?;
+            verify_entries_content(path)?;
             if let Some(cmd) = find_external_7z() {
                 let target = external_7z_target(path);
                 let output = Command::new(&cmd)
@@ -237,7 +237,7 @@ fn first_external_7z_error_line(output: &std::process::Output) -> Option<String>
         .map(str::to_string)
 }
 
-pub(crate) fn verify_entries_content_for_bench(path: &Path) -> CliResult {
+pub(crate) fn verify_entries_content(path: &Path) -> CliResult {
     let entries = read_artifact_entries(path)
         .map_err(|err| verify_output_error(path, None, err.message.clone()))?;
     if should_verify_entries_in_parallel(&entries) {

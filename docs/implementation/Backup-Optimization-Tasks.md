@@ -437,7 +437,17 @@
   `xunbak_restore_all_1000_files`: `533.8ms -> 510.1ms`
   `create_zip_200_files`: `70.10ms -> 66.06ms`
   `create_7z_200_files`: `95.04ms -> 92.66ms`
+  `hash_file_content_64mb`: 当前基线 `21.66ms`
   结论：`verify` 热点收益最显著；`.xunbak` restore 的 volume 句柄/offset 复用带来稳定但温和的改善；sidecar 单点基准改善有限，但导出链路 (`create_zip/create_7z`) 已能观察到真实收益，说明“写入时顺手产出 hash，sidecar 直接消费”的方向是有效的。
+
+### H.6 打磨收尾
+
+- [x] 共享哈希函数补大文件吞吐 benchmark 护栏
+  已在 `backup_perf_bench_divan` 增加 `hash_file_content_64mb`，用于守护 `backup/common/hash.rs` 的缓冲区策略不会在超大文件场景下无声退化。
+- [x] 清理历史命名：`verify_entries_content_for_bench()` -> `verify_entries_content()`
+  现已恢复为生产语义命名，bench 与生产路径共用同一实现，不再误导维护者。
+- [x] 收敛 summary 公共字段
+  `create / convert / restore` 的 summary 结构已引入 `SummaryActionStatus / SummaryPaths / SummaryExecutionStats / SummarySelectionStats / SummaryVerifyModes / SummaryDurationOutputs / RestoreSummaryStats` 等公共字段层，通过 `serde(flatten)` 复用，减少最后一层并行定义。
 
 ---
 

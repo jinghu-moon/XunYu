@@ -1,7 +1,7 @@
 use divan::{AllocProfiler, Bencher};
 use tempfile::tempdir;
 use xun::bench_support::backup_perf::{
-    prepare_restore_fixture, prepare_sidecar_fixture, prepare_verify_fixture,
+    prepare_hash_fixture, prepare_restore_fixture, prepare_sidecar_fixture, prepare_verify_fixture,
 };
 
 #[global_allocator]
@@ -26,6 +26,15 @@ fn sidecar_build_prehash_1000_files(bencher: Bencher) {
     let fixture = prepare_sidecar_fixture(tmp.path(), 1_000, 16 * 1024, true);
     bencher.bench_local(|| {
         let _ = fixture.build_sidecar_bytes();
+    });
+}
+
+#[divan::bench]
+fn hash_file_content_64mb(bencher: Bencher) {
+    let tmp = tempdir().unwrap();
+    let fixture = prepare_hash_fixture(tmp.path(), 64 * 1024 * 1024);
+    bencher.bench_local(|| {
+        let _ = fixture.compute_hash();
     });
 }
 

@@ -1291,6 +1291,7 @@ mod tests {
                 method: crate::backup::artifact::zip::ZipCompressionMethod::Ppmd,
                 level: None,
                 sidecar: None,
+                sidecar_plan: None,
             },
         )
         .unwrap();
@@ -1414,6 +1415,7 @@ mod tests {
                 method: crate::backup::artifact::sevenz::SevenZMethod::Copy,
                 level: 1,
                 sidecar: None,
+                sidecar_plan: None,
             },
         )
         .unwrap();
@@ -1498,6 +1500,7 @@ mod tests {
                 method: crate::backup::artifact::sevenz::SevenZMethod::Copy,
                 level: 1,
                 sidecar: None,
+                sidecar_plan: None,
             },
         )
         .unwrap();
