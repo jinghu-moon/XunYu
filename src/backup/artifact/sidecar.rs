@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
+use rayon::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -116,9 +117,10 @@ pub(crate) fn build_sidecar_bytes_with_hashes(
     entries: &[&SourceEntry],
     content_hashes: &std::collections::HashMap<String, [u8; 32]>,
 ) -> Result<Vec<u8>, CliError> {
+    let resolved_hashes = build_missing_content_hashes(entries, content_hashes)?;
     let items = entries
         .iter()
-        .map(|entry| build_sidecar_entry(entry, packing_hint, content_hashes))
+        .map(|entry| build_sidecar_entry(entry, packing_hint, &resolved_hashes))
         .collect::<Result<Vec<_>, _>>()?;
 
     let manifest = SidecarManifest {
@@ -131,6 +133,55 @@ pub(crate) fn build_sidecar_bytes_with_hashes(
     };
     serde_json::to_vec_pretty(&manifest)
         .map_err(|err| CliError::new(1, format!("Serialize sidecar failed: {err}")))
+}
+
+fn build_missing_content_hashes(
+    entries: &[&SourceEntry],
+    content_hashes: &std::collections::HashMap<String, [u8; 32]>,
+) -> Result<std::collections::HashMap<String, [u8; 32]>, CliError> {
+    let mut resolved = content_hashes.clone();
+    let candidates = entries
+        .iter()
+        .filter_map(|entry| {
+            if resolved.contains_key(&entry.path) || entry.content_hash.is_some() {
+                return None;
+            }
+            if matches!(
+                entry.kind,
+                crate::backup::artifact::entry::SourceKind::Filesystem
+                    | crate::backup::artifact::entry::SourceKind::DirArtifact
+            ) {
+                return entry.source_path.as_ref().map(|path| (entry.path.clone(), path.clone()));
+            }
+            None
+        })
+        .collect::<Vec<_>>();
+    if candidates.is_empty() {
+        return Ok(resolved);
+    }
+    let computed = if candidates.len() >= 128 {
+        candidates
+            .par_iter()
+            .map(|(entry_path, path)| {
+                compute_file_content_hash(path)
+                    .map(|hash| (entry_path.clone(), hash))
+                    .map_err(|err| CliError::new(1, format!("Compute content hash failed: {err}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        candidates
+            .iter()
+            .map(|(entry_path, path)| {
+                compute_file_content_hash(path)
+                    .map(|hash| (entry_path.clone(), hash))
+                    .map_err(|err| CliError::new(1, format!("Compute content hash failed: {err}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    for (entry_path, hash) in computed {
+        resolved.insert(entry_path, hash);
+    }
+    Ok(resolved)
 }
 
 fn build_sidecar_entry(

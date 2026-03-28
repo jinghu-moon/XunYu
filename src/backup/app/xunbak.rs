@@ -212,7 +212,7 @@ pub(crate) fn restore_container(
     file: Option<&str>,
     glob: Option<&str>,
     dry_run: bool,
-) -> CliResult<(usize, usize)> {
+) -> CliResult<(usize, usize, usize)> {
     let reader =
         ContainerReader::open(container).map_err(|err| CliError::new(2, err.to_string()))?;
     let result = if let Some(path) = file {
@@ -246,7 +246,7 @@ pub(crate) fn restore_container(
                 .map_err(|err| CliError::new(2, err.to_string()))?
         }
     };
-    Ok((result.restored_files, 0))
+    Ok((result.restored_files, result.skipped_unchanged, 0))
 }
 
 fn parse_backup_options(args: &BackupCmd) -> Result<BackupOptions, CliError> {

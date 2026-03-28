@@ -74,6 +74,7 @@ pub(crate) struct RestoreSummaryStats {
     pub dry_run: bool,
     pub snapshot: bool,
     pub restored: usize,
+    pub skipped_unchanged: usize,
     pub failed: usize,
 }
 

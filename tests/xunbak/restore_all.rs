@@ -116,10 +116,12 @@ fn restore_all_skips_unchanged_existing_files() {
     let reader = ContainerReader::open(&container).unwrap();
     let first = reader.restore_all(&target).unwrap();
     assert_eq!(first.restored_files, 2);
+    assert_eq!(first.skipped_unchanged, 0);
 
     let reader = ContainerReader::open(&container).unwrap();
     let second = reader.restore_all(&target).unwrap();
     assert_eq!(second.restored_files, 0);
+    assert_eq!(second.skipped_unchanged, 2);
 }
 
 #[test]
@@ -139,5 +141,6 @@ fn restore_all_rewrites_same_size_changed_file() {
     let reader = ContainerReader::open(&container).unwrap();
     let result = reader.restore_all(&target).unwrap();
     assert_eq!(result.restored_files, 1);
+    assert_eq!(result.skipped_unchanged, 0);
     assert_eq!(fs::read_to_string(target.join("a.txt")).unwrap(), "aaaa");
 }

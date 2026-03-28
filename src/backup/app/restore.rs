@@ -61,16 +61,21 @@ struct RestoreExecutionSummary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RestoreStats {
     restored: usize,
+    skipped_unchanged: usize,
     failed: usize,
 }
 
 impl RestoreStats {
-    fn new(restored: usize, failed: usize) -> Self {
-        Self { restored, failed }
+    fn new(restored: usize, skipped_unchanged: usize, failed: usize) -> Self {
+        Self {
+            restored,
+            skipped_unchanged,
+            failed,
+        }
     }
 
     fn single_success() -> Self {
-        Self::new(1, 0)
+        Self::new(1, 0, 0)
     }
 
     fn status_label(&self) -> &'static str {
@@ -84,7 +89,13 @@ impl RestoreStats {
 
 impl From<(usize, usize)> for RestoreStats {
     fn from(value: (usize, usize)) -> Self {
-        Self::new(value.0, value.1)
+        Self::new(value.0, 0, value.1)
+    }
+}
+
+impl From<(usize, usize, usize)> for RestoreStats {
+    fn from(value: (usize, usize, usize)) -> Self {
+        Self::new(value.0, value.1, value.2)
     }
 }
 
@@ -211,8 +222,9 @@ pub(crate) fn cmd_restore(args: BackupRestoreCmd) -> CliResult {
         emit_restore_timing("total", t_total.elapsed(), None);
     }
     eprintln!(
-        "Restored: {}  Failed: {}  Time: {:.2}s",
+        "Restored: {}  Skipped: {}  Failed: {}  Time: {:.2}s",
         stats.restored,
+        stats.skipped_unchanged,
         stats.failed,
         elapsed.as_secs_f64()
     );
@@ -376,6 +388,7 @@ fn build_restore_execution_summary(
             dry_run,
             snapshot,
             restored: stats.restored,
+            skipped_unchanged: stats.skipped_unchanged,
             failed: stats.failed,
         },
     }
@@ -1097,7 +1110,7 @@ mod tests {
             RestoreMode::Glob("**/*.txt"),
             false,
             true,
-            RestoreStats::new(3, 1),
+            RestoreStats::new(3, 0, 1),
         );
 
         assert_eq!(summary.meta.action, "restore");
@@ -1105,14 +1118,15 @@ mod tests {
         assert_eq!(summary.mode, "glob");
         assert!(summary.stats.snapshot);
         assert_eq!(summary.stats.restored, 3);
+        assert_eq!(summary.stats.skipped_unchanged, 0);
         assert_eq!(summary.stats.failed, 1);
     }
 
     #[test]
     fn restore_stats_status_label_matches_failure_count() {
-        assert_eq!(RestoreStats::new(2, 0).status_label(), "ok");
-        assert_eq!(RestoreStats::new(2, 1).status_label(), "partial_failed");
-        assert_eq!(RestoreStats::single_success(), RestoreStats::new(1, 0));
+        assert_eq!(RestoreStats::new(2, 0, 0).status_label(), "ok");
+        assert_eq!(RestoreStats::new(2, 0, 1).status_label(), "partial_failed");
+        assert_eq!(RestoreStats::single_success(), RestoreStats::new(1, 0, 0));
     }
 
     #[test]

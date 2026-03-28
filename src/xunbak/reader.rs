@@ -172,6 +172,7 @@ struct RestoreWorkerLane<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RestoreResult {
     pub restored_files: usize,
+    pub skipped_unchanged: usize,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -729,6 +730,7 @@ fn split_base_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::PathBuf;
 
     use tempfile::tempdir;
 
@@ -959,6 +961,7 @@ impl ContainerReader {
         F: FnMut(&ManifestEntry) -> bool,
     {
         let mut restored = 0usize;
+        let mut skipped_unchanged = 0usize;
         let t_plan = Instant::now();
         let mut entries = sorted_restore_entries(manifest, |entry| predicate(entry));
         if dry_run {
@@ -975,6 +978,7 @@ impl ContainerReader {
                     if let Some(debug) = debug.as_deref_mut() {
                         debug.skipped_unchanged += 1;
                     }
+                    skipped_unchanged += 1;
                     return None;
                 }
                 Some(RestoreJob { dest, entry })
@@ -1029,6 +1033,7 @@ impl ContainerReader {
             }
             return Ok(RestoreResult {
                 restored_files: restored,
+                skipped_unchanged,
             });
         }
         for job in jobs {
@@ -1045,6 +1050,7 @@ impl ContainerReader {
         }
         Ok(RestoreResult {
             restored_files: restored,
+            skipped_unchanged,
         })
     }
 }

@@ -1534,6 +1534,55 @@ fn restore_cmd_json_outputs_summary() {
     assert_eq!(value["status"], "ok");
     assert_eq!(value["mode"], "all");
     assert_eq!(value["restored"], 2);
+    assert_eq!(value["skipped_unchanged"], 0);
     assert_eq!(value["failed"], 0);
     assert_eq!(value["dry_run"], false);
+}
+
+#[test]
+fn restore_cmd_reports_skipped_unchanged_for_xunbak() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_skip_unchanged");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        "artifact.xunbak",
+    ]));
+
+    let out_dir = root.join("restore-target");
+    run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--to",
+        out_dir.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--to",
+        out_dir.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "-y",
+    ]));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Restored: 0"));
+    assert!(stderr.contains("Skipped: 1"));
 }

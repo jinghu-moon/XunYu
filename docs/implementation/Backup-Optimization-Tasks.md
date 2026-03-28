@@ -459,6 +459,8 @@
   `create / convert / restore` 的 summary 结构已引入 `SummaryActionStatus / SummaryPaths / SummaryExecutionStats / SummarySelectionStats / SummaryVerifyModes / SummaryDurationOutputs / RestoreSummaryStats` 等公共字段层，通过 `serde(flatten)` 复用，减少最后一层并行定义。
 - [x] 保留 `.xunbak restore_all()` 默认自适应并行策略
   10 次单样本对比中，`adaptive(auto)` 实际解析到 `workers=4`，与 `fixed4` 同档且明显优于 `fixed1 / fixed2`；因此默认保留自适应，继续允许通过环境变量做人工覆盖。
+- [x] 固化 backup/xunbak 性能基线采集
+  已新增 [backup_perf_baseline.ps1](/D:/100_Projects/110_Daily/XunYu/scripts/backup_perf_baseline.ps1) 与 [Backup-Performance-Baselines.md](/D:/100_Projects/110_Daily/XunYu/docs/implementation/Backup-Performance-Baselines.md)，把 `backup_perf_bench_divan / backup_export_bench_divan / xunbak_bench_divan` 的关键项、restore 单样本阶段 timing、以及结果判定规则固化为可重复执行的流程。
 
 ---
 
