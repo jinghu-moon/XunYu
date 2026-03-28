@@ -1,5 +1,5 @@
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use console::Term;
 use dialoguer::{Confirm, theme::ColorfulTheme};
@@ -7,14 +7,16 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use crate::cli::{RenameCmd, SaveCmd, SetCmd, TouchCmd};
 use crate::output::{CliError, CliResult, can_interact, emit_warning};
 use crate::path_guard::{PathPolicy, validate_paths};
-use crate::store::{Lock, append_visit, db_path, load, now_secs, save_db};
+use crate::store::{Lock, append_visit, db_path, now_secs, save_db};
 use crate::util::parse_tags;
+
+use super::load_bookmark_db;
 
 pub(crate) fn cmd_save(args: SaveCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let path = env::current_dir()
         .unwrap_or_else(|_| Path::new(".").to_path_buf())
@@ -52,34 +54,15 @@ pub(crate) fn cmd_set(args: SetCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
-    let path = args.path.unwrap_or_else(|| {
+    let raw_path = args.path.unwrap_or_else(|| {
         env::current_dir()
             .unwrap_or_else(|_| Path::new(".").to_path_buf())
             .to_string_lossy()
             .to_string()
     });
-    let mut policy = PathPolicy::for_output();
-    policy.allow_relative = true;
-    let validation = validate_paths(vec![path.clone()], &policy);
-    if !validation.issues.is_empty() {
-        let details: Vec<String> = validation
-            .issues
-            .iter()
-            .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
-            .collect();
-        return Err(CliError::with_details(
-            2,
-            "Invalid bookmark path.".to_string(),
-            &details,
-        ));
-    }
-    let path = validation
-        .ok
-        .first()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or(path);
+    let path = resolve_bookmark_path(&raw_path)?;
 
     let tags = args.tag.map(|t| parse_tags(&t)).unwrap_or_default();
 
@@ -112,7 +95,7 @@ pub(crate) fn delete_bookmark(name: &str, yes: bool) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     if !db.contains_key(name) {
         emit_warning(
@@ -147,7 +130,7 @@ pub(crate) fn cmd_touch(args: TouchCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     if db.contains_key(&args.name) {
         let _ = append_visit(&file, &args.name, now_secs());
     } else {
@@ -163,7 +146,7 @@ pub(crate) fn cmd_rename(args: RenameCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     if args.old == args.new {
         emit_warning("Same name, nothing to do.", &[]);
@@ -189,4 +172,43 @@ pub(crate) fn cmd_rename(args: RenameCmd) -> CliResult {
         ui_println!("Renamed '{}' -> '{}'.", args.old, args.new);
     }
     Ok(())
+}
+
+fn resolve_bookmark_path(raw: &str) -> CliResult<String> {
+    let input = raw.trim();
+    if input.is_empty() {
+        return Err(CliError::new(2, "Invalid bookmark path."));
+    }
+
+    let path = PathBuf::from(input);
+    let absolute = if path.is_absolute() {
+        path
+    } else {
+        env::current_dir()
+            .map_err(|e| CliError::new(1, format!("Failed to get current directory: {e}")))?
+            .join(path)
+    };
+
+    let validation = validate_paths(
+        vec![absolute.to_string_lossy().to_string()],
+        &PathPolicy::for_output(),
+    );
+    if !validation.issues.is_empty() {
+        let details: Vec<String> = validation
+            .issues
+            .iter()
+            .map(|issue| format!("Invalid path: {} ({})", issue.raw, issue.detail))
+            .collect();
+        return Err(CliError::with_details(
+            2,
+            "Invalid bookmark path.".to_string(),
+            &details,
+        ));
+    }
+
+    validation
+        .ok
+        .first()
+        .map(|p| p.to_string_lossy().to_string())
+        .ok_or_else(|| CliError::new(2, "Invalid bookmark path."))
 }

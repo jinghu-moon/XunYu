@@ -2,8 +2,11 @@ use super::*;
 
 // --- Bookmarks ---
 
-pub(in crate::commands::dashboard) async fn list_bookmarks() -> Json<Vec<ListItem>> {
-    let db = store::load(&store::db_path());
+pub(in crate::commands::dashboard) async fn list_bookmarks() -> Response {
+    let db = match store::load_strict(&store::db_path()) {
+        Ok(db) => db,
+        Err(err) => return bookmark_db_error_response(err),
+    };
     let items: Vec<ListItem> = db
         .into_iter()
         .map(|(name, e)| ListItem {
@@ -14,7 +17,7 @@ pub(in crate::commands::dashboard) async fn list_bookmarks() -> Json<Vec<ListIte
             last_visited: e.last_visited,
         })
         .collect();
-    Json(items)
+    Json(items).into_response()
 }
 
 #[derive(Deserialize)]
@@ -43,7 +46,10 @@ pub(in crate::commands::dashboard) async fn export_bookmarks(
         return (StatusCode::BAD_REQUEST, "invalid format").into_response();
     };
 
-    let db = store::load(&store::db_path());
+    let db = match store::load_strict(&store::db_path()) {
+        Ok(db) => db,
+        Err(err) => return bookmark_db_error_response(err),
+    };
     let mut items: Vec<ListItem> = db
         .iter()
         .map(|(name, entry)| ListItem {
@@ -150,7 +156,10 @@ pub(in crate::commands::dashboard) async fn import_bookmarks(
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT.into_response();
     };
-    let mut db = store::load(&db_path);
+    let mut db = match store::load_strict(&db_path) {
+        Ok(db) => db,
+        Err(err) => return bookmark_db_error_response(err),
+    };
 
     let mut added = 0usize;
     let mut updated = 0usize;
@@ -220,7 +229,10 @@ pub(in crate::commands::dashboard) async fn upsert_bookmark(
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT;
     };
-    let mut db = store::load(&db_path);
+    let mut db = match store::load_strict(&db_path) {
+        Ok(db) => db,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
     let entry = db.entry(name).or_default();
     entry.path = body.path;
     entry.tags = body.tags;
@@ -237,7 +249,10 @@ pub(in crate::commands::dashboard) async fn delete_bookmark(
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT;
     };
-    let mut db = store::load(&db_path);
+    let mut db = match store::load_strict(&db_path) {
+        Ok(db) => db,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
     if db.remove(&name).is_none() {
         return StatusCode::NOT_FOUND;
     }
@@ -263,7 +278,10 @@ pub(in crate::commands::dashboard) async fn rename_bookmark(
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT.into_response();
     };
-    let mut db = store::load(&db_path);
+    let mut db = match store::load_strict(&db_path) {
+        Ok(db) => db,
+        Err(err) => return bookmark_db_error_response(err),
+    };
 
     if !db.contains_key(&name) {
         return (StatusCode::NOT_FOUND, "bookmark not found").into_response();
@@ -308,7 +326,10 @@ pub(in crate::commands::dashboard) async fn bookmarks_batch(
         return StatusCode::CONFLICT.into_response();
     };
 
-    let mut db = store::load(&db_path);
+    let mut db = match store::load_strict(&db_path) {
+        Ok(db) => db,
+        Err(err) => return bookmark_db_error_response(err),
+    };
 
     if req.op.eq_ignore_ascii_case("delete") {
         let mut deleted = 0usize;
@@ -357,4 +378,15 @@ pub(in crate::commands::dashboard) async fn bookmarks_batch(
     }
 
     (StatusCode::BAD_REQUEST, "unknown op").into_response()
+}
+
+fn bookmark_db_error_response(err: std::io::Error) -> Response {
+    if err.kind() == std::io::ErrorKind::InvalidData {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("bookmark db is corrupted: {err}"),
+        )
+            .into_response();
+    }
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
 }

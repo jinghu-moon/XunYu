@@ -147,3 +147,41 @@ fn rename_changes_key() {
     assert!(arr.iter().any(|x| x["name"] == "new"));
     assert!(!arr.iter().any(|x| x["name"] == "old"));
 }
+
+#[test]
+fn set_relative_path_is_stored_as_absolute() {
+    let env = TestEnv::new();
+    let base = env.root.join("base");
+    let rel = base.join("subdir");
+    fs::create_dir_all(&rel).unwrap();
+
+    run_ok(
+        env.cmd()
+            .current_dir(&base)
+            .args(["set", "rel", "subdir"]),
+    );
+
+    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let v: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let item = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["name"] == "rel")
+        .unwrap();
+    assert_eq!(item["path"].as_str().unwrap(), rel.to_str().unwrap());
+}
+
+#[test]
+fn set_refuses_to_overwrite_corrupted_bookmark_db() {
+    let env = TestEnv::new();
+    let db_path = env.root.join(".xun.json");
+    let work = env.root.join("work");
+    fs::create_dir_all(&work).unwrap();
+    fs::write(&db_path, "{not-json").unwrap();
+
+    let out = run_err(env.cmd().args(["set", "home", work.to_str().unwrap()]));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("Bookmark db is corrupted"));
+    assert_eq!(fs::read_to_string(&db_path).unwrap(), "{not-json");
+}

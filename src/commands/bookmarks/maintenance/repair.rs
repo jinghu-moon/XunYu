@@ -8,10 +8,11 @@ use crate::cli::DedupCmd;
 use crate::model::{DedupMode, Entry, ListFormat, parse_dedup_mode};
 use crate::output::{CliError, CliResult, can_interact};
 use crate::output::{apply_pretty_table_style, format_age, print_table};
-use crate::store::{Lock, db_path, load, save_db};
+use crate::store::{Lock, db_path, save_db};
 use crate::util::normalize_path;
 
 use super::report::resolve_output_format;
+use super::super::load_bookmark_db;
 
 pub(crate) fn cmd_dedup(args: DedupCmd) -> CliResult {
     let mode = parse_dedup_mode(&args.mode).ok_or_else(|| {
@@ -26,7 +27,7 @@ pub(crate) fn cmd_dedup(args: DedupCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let mut groups: std::collections::BTreeMap<String, Vec<String>> =
         std::collections::BTreeMap::new();

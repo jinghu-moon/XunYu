@@ -47,7 +47,6 @@ crypt = [
     "dep:hmac",
     "dep:getrandom",
     "dep:base64",
-    "dep:crc32fast",
     "dep:zeroize",
 ]
 alias = ["dep:walkdir"]
@@ -120,7 +119,7 @@ pbkdf2 = { version = "0.12", optional = true, features = ["simple"] }
 hmac = { version = "0.12", optional = true }
 getrandom = { version = "0.3", optional = true, features = ["std"] }
 base64 = { version = "0.22", optional = true }
-crc32fast = { version = "1.4", optional = true }
+crc32fast = { version = "1.4" }
 crc32c = { version = "0.6", optional = true }
 zeroize = { version = "1", optional = true, features = ["zeroize_derive"] }
 axum       = { version = "0.8", optional = true, default-features = false, features = ["json", "tokio", "http1", "query", "ws"] }
@@ -201,7 +200,6 @@ lzma-rust2 = { version = "0.16", default-features = false, features = ["std", "e
 ulid = { version = "1" }
 memchr  = { version = "2" }
 indexmap = { version = "2", features = ["std"] }
-crc32fast_zip = { package = "crc32fast", version = "1.4" }
 ppmd-rust = "=1.4.0"
 sevenz-rust2 = { version = "=0.20.2", features = ["deflate", "zstd"] }
 

@@ -1,6 +1,13 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
-use std::path::Path;
+#[cfg(windows)]
+use std::ffi::OsString;
+use std::path::{Component, Path};
+
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
 
 use comfy_table::{Attribute, Cell, Color, Table};
 
@@ -9,11 +16,26 @@ use crate::fuzzy::{FuzzyIndex, matches_tag};
 use crate::model::{Entry, ListFormat, ListItem, parse_list_format};
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, format_age, prefer_table_output, print_table};
-use crate::store::{db_path, load};
+use crate::store::db_path;
+
+use super::load_bookmark_db;
+
+const TABLE_PATH_PROBE_LIMIT: usize = 128;
+#[cfg(windows)]
+const DRIVE_FIXED_TYPE: u32 = 3;
+#[cfg(windows)]
+const DRIVE_RAMDISK_TYPE: u32 = 6;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BookmarkPathStatus {
+    Existing,
+    Missing,
+    Unknown,
+}
 
 pub(crate) fn cmd_list(args: ListCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
 
     let tag = args.tag.clone().or_else(|| {
         env::var("XUN_DEFAULT_TAG")
@@ -121,8 +143,9 @@ pub(crate) fn cmd_list(args: ListCmd) -> CliResult {
             .fg(Color::Green),
     ]);
 
+    let path_statuses =
+        collect_path_probe_states(entries.iter().map(|(_, e)| e.path.as_str()), default_path_status);
     for (k, e) in entries {
-        let path_exists = Path::new(&e.path).exists();
         let tags = if e.tags.is_empty() {
             Cell::new("-")
                 .fg(Color::DarkGrey)
@@ -133,17 +156,13 @@ pub(crate) fn cmd_list(args: ListCmd) -> CliResult {
 
         table.add_row(vec![
             Cell::new(k).add_attribute(Attribute::Bold).fg(Color::Cyan),
-            Cell::new(e.path.clone())
-                .fg(if path_exists {
-                    Color::DarkGrey
-                } else {
-                    Color::Red
-                })
-                .add_attribute(if path_exists {
-                    Attribute::Dim
-                } else {
-                    Attribute::Bold
-                }),
+            render_path_cell(
+                &e.path,
+                path_statuses
+                    .get(&e.path)
+                    .copied()
+                    .unwrap_or(BookmarkPathStatus::Unknown),
+            ),
             tags,
             Cell::new(e.visit_count).fg(Color::Green),
         ]);
@@ -155,7 +174,7 @@ pub(crate) fn cmd_list(args: ListCmd) -> CliResult {
 
 pub(crate) fn cmd_recent(args: RecentCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     let tag = args.tag.clone().or_else(|| {
         env::var("XUN_DEFAULT_TAG")
             .ok()
@@ -231,21 +250,18 @@ pub(crate) fn cmd_recent(args: RecentCmd) -> CliResult {
             .add_attribute(Attribute::Bold)
             .fg(Color::Green),
     ]);
+    let path_statuses =
+        collect_path_probe_states(entries.iter().map(|(_, e)| e.path.as_str()), default_path_status);
     for (k, e) in entries {
-        let path_exists = Path::new(&e.path).exists();
         table.add_row(vec![
             Cell::new(k).add_attribute(Attribute::Bold).fg(Color::Cyan),
-            Cell::new(e.path.clone())
-                .fg(if path_exists {
-                    Color::DarkGrey
-                } else {
-                    Color::Red
-                })
-                .add_attribute(if path_exists {
-                    Attribute::Dim
-                } else {
-                    Attribute::Bold
-                }),
+            render_path_cell(
+                &e.path,
+                path_statuses
+                    .get(&e.path)
+                    .copied()
+                    .unwrap_or(BookmarkPathStatus::Unknown),
+            ),
             Cell::new(format_age(e.last_visited)).fg(Color::Yellow),
             Cell::new(e.visit_count).fg(Color::Green),
         ]);
@@ -256,7 +272,7 @@ pub(crate) fn cmd_recent(args: RecentCmd) -> CliResult {
 
 pub(crate) fn cmd_stats(args: StatsCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
 
     let total = db.len() as u32;
     let dead = db.values().filter(|e| !Path::new(&e.path).exists()).count() as u32;
@@ -334,7 +350,7 @@ pub(crate) fn cmd_stats(args: StatsCmd) -> CliResult {
 
 pub(crate) fn cmd_all(args: AllCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     for (k, e) in db
         .iter()
         .filter(|(_, e)| matches_tag(e, args.tag.as_deref()))
@@ -353,7 +369,7 @@ pub(crate) fn cmd_all(args: AllCmd) -> CliResult {
 
 pub(crate) fn cmd_fuzzy(args: FuzzyCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     let index = FuzzyIndex::from_db(&db);
     let mut scored: Vec<(f64, String, Entry)> =
         index.search(&args.pattern, args.tag.as_deref(), None);
@@ -375,9 +391,143 @@ pub(crate) fn cmd_fuzzy(args: FuzzyCmd) -> CliResult {
 
 pub(crate) fn cmd_keys(_args: KeysCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     for k in db.keys() {
         out_println!("{}", k);
     }
     Ok(())
+}
+
+fn collect_path_probe_states<'a, I, F>(
+    paths: I,
+    mut probe: F,
+) -> HashMap<String, BookmarkPathStatus>
+where
+    I: IntoIterator<Item = &'a str>,
+    F: FnMut(&Path) -> BookmarkPathStatus,
+{
+    let mut unique_paths = Vec::new();
+    let mut seen = HashSet::new();
+    for path in paths {
+        if seen.insert(path.to_string()) {
+            unique_paths.push(path.to_string());
+        }
+    }
+
+    if unique_paths.len() > TABLE_PATH_PROBE_LIMIT {
+        return unique_paths
+            .into_iter()
+            .map(|path| (path, BookmarkPathStatus::Unknown))
+            .collect();
+    }
+
+    unique_paths
+        .into_iter()
+        .map(|path| {
+            let status = probe(Path::new(&path));
+            (path, status)
+        })
+        .collect()
+}
+
+fn default_path_status(path: &Path) -> BookmarkPathStatus {
+    if !should_probe_path_exists(path) {
+        return BookmarkPathStatus::Unknown;
+    }
+    if path.exists() {
+        BookmarkPathStatus::Existing
+    } else {
+        BookmarkPathStatus::Missing
+    }
+}
+
+fn render_path_cell(path: &str, status: BookmarkPathStatus) -> Cell {
+    match status {
+        BookmarkPathStatus::Existing => Cell::new(path)
+            .fg(Color::DarkGrey)
+            .add_attribute(Attribute::Dim),
+        BookmarkPathStatus::Missing => Cell::new(path)
+            .fg(Color::Red)
+            .add_attribute(Attribute::Bold),
+        BookmarkPathStatus::Unknown => Cell::new(path)
+            .fg(Color::DarkGrey)
+            .add_attribute(Attribute::Dim),
+    }
+}
+
+#[cfg(windows)]
+fn should_probe_path_exists(path: &Path) -> bool {
+    if path.as_os_str().is_empty() {
+        return false;
+    }
+    let raw = path.to_string_lossy();
+    if raw.starts_with(r"\\") || raw.starts_with("//") {
+        return false;
+    }
+    if !path.is_absolute() {
+        return true;
+    }
+    let Some(root) = drive_root(path) else {
+        return false;
+    };
+    let wide: Vec<u16> = root.encode_wide().chain(std::iter::once(0)).collect();
+    matches!(
+        unsafe { GetDriveTypeW(wide.as_ptr()) },
+        DRIVE_FIXED_TYPE | DRIVE_RAMDISK_TYPE
+    )
+}
+
+#[cfg(not(windows))]
+fn should_probe_path_exists(path: &Path) -> bool {
+    !path.as_os_str().is_empty()
+}
+
+#[cfg(windows)]
+fn drive_root(path: &Path) -> Option<OsString> {
+    let mut components = path.components();
+    match (components.next(), components.next()) {
+        (Some(Component::Prefix(prefix)), Some(Component::RootDir)) => {
+            let mut root = prefix.as_os_str().to_os_string();
+            root.push("\\");
+            Some(root)
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_path_probe_states_deduplicates_identical_paths() {
+        let paths = [r"C:\a", r"C:\a", r"C:\b"];
+        let mut probes = 0usize;
+
+        let statuses = collect_path_probe_states(paths.iter().copied(), |_| {
+            probes += 1;
+            BookmarkPathStatus::Unknown
+        });
+
+        assert_eq!(probes, 2);
+        assert_eq!(statuses.len(), 2);
+    }
+
+    #[test]
+    fn collect_path_probe_states_skips_large_path_sets() {
+        let paths: Vec<String> = (0..=TABLE_PATH_PROBE_LIMIT)
+            .map(|idx| format!(r"C:\bulk\{idx}"))
+            .collect();
+        let mut probes = 0usize;
+
+        let statuses = collect_path_probe_states(paths.iter().map(String::as_str), |_| {
+            probes += 1;
+            BookmarkPathStatus::Existing
+        });
+
+        assert_eq!(probes, 0);
+        assert!(statuses
+            .values()
+            .all(|status| *status == BookmarkPathStatus::Unknown));
+    }
 }

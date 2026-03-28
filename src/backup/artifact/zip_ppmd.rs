@@ -331,7 +331,7 @@ fn copy_manual_zip_entry_to_writer(
     match entry.compression_method {
         METHOD_STORED => {
             let mut remaining = entry.compressed_size;
-            let mut crc = crc32fast_zip::Hasher::new();
+            let mut crc = crc32fast::Hasher::new();
             let mut buffer = [0u8; 64 * 1024];
             while remaining > 0 {
                 let read_len = usize::try_from(remaining.min(buffer.len() as u64))
@@ -379,7 +379,7 @@ fn decode_ppmd_entry_to_writer(
     let limited = file.take(compressed_remaining);
     let mut decoder = Ppmd8Decoder::new(limited, order, memory_size, restore_method)
         .map_err(|err| CliError::new(1, format!("Create ZIP PPMD decoder failed: {err}")))?;
-    let mut crc = crc32fast_zip::Hasher::new();
+    let mut crc = crc32fast::Hasher::new();
     let mut written = 0u64;
     let mut buffer = [0u8; 64 * 1024];
     loop {
@@ -925,7 +925,7 @@ impl PendingZipRecord {
     ) -> Self {
         let name = path.replace('\\', "/").into_bytes();
         let flags = if name.is_ascii() { 0 } else { UTF8_FLAG };
-        let crc32 = crc32fast_zip::hash(&data);
+        let crc32 = crc32fast::hash(&data);
         let (mod_time, mod_date) = dos_time_date_from_unix_ns(mtime_ns);
         let external_attributes = if readonly || win_attributes & FILE_ATTRIBUTE_READONLY != 0 {
             (0o100444u32 << 16) | FILE_ATTRIBUTE_READONLY
@@ -980,7 +980,7 @@ impl PendingZipRecord {
         let mut encoder = Ppmd8Encoder::new(temp, order, memory_size, RestoreMethod::Restart)
             .map_err(|err| CliError::new(1, format!("Create ZIP PPMD encoder failed: {err}")))?;
         let mut reader = open_entry_reader(entry)?;
-        let mut crc = crc32fast_zip::Hasher::new();
+        let mut crc = crc32fast::Hasher::new();
         let mut buffer = [0u8; 64 * 1024];
         let mut uncompressed_size = 0u64;
         loop {

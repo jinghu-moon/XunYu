@@ -8,15 +8,16 @@ use crate::cli::GcCmd;
 use crate::model::ListFormat;
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, can_interact, print_table};
-use crate::store::{Lock, db_path, load, save_db};
+use crate::store::{Lock, db_path, save_db};
 
 use super::report::resolve_output_format;
+use super::super::load_bookmark_db;
 
 pub(crate) fn cmd_gc(args: GcCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let dead: Vec<String> = db
         .iter()

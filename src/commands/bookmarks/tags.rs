@@ -5,8 +5,10 @@ use comfy_table::{Attribute, Cell, Color, Table};
 use crate::cli::{TagAddCmd, TagCmd, TagListCmd, TagRemoveCmd, TagRenameCmd, TagSubCommand};
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, prefer_table_output, print_table};
-use crate::store::{Lock, db_path, load, save_db};
+use crate::store::{Lock, db_path, save_db};
 use crate::util::parse_tags;
+
+use super::load_bookmark_db;
 
 pub(crate) fn cmd_tag(args: TagCmd) -> CliResult {
     match args.cmd {
@@ -27,7 +29,7 @@ pub(crate) fn cmd_tag_add(args: TagAddCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let Some(entry) = db.get_mut(&args.name) else {
         return Err(CliError::with_details(
@@ -66,7 +68,7 @@ pub(crate) fn cmd_tag_remove(args: TagRemoveCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let Some(entry) = db.get_mut(&args.name) else {
         return Err(CliError::with_details(
@@ -100,7 +102,7 @@ pub(crate) fn cmd_tag_rename(args: TagRenameCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let mut changed_tags = 0usize;
     let mut changed_entries = 0usize;
@@ -142,7 +144,7 @@ pub(crate) fn cmd_tag_rename(args: TagRenameCmd) -> CliResult {
 
 pub(crate) fn cmd_tag_list(_args: TagListCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
 
     let mut tags: std::collections::BTreeMap<String, (String, u32)> =
         std::collections::BTreeMap::new();

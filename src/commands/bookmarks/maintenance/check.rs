@@ -6,14 +6,15 @@ use crate::cli::CheckCmd;
 use crate::model::ListFormat;
 use crate::output::CliResult;
 use crate::output::{apply_pretty_table_style, format_age, print_table};
-use crate::store::{db_path, load, now_secs};
+use crate::store::{db_path, now_secs};
 use crate::util::normalize_path;
 
 use super::report::resolve_output_format;
+use super::super::load_bookmark_db;
 
 pub(crate) fn cmd_check(args: CheckCmd) -> CliResult {
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     if db.is_empty() {
         ui_println!("No bookmarks found.");
         return Ok(());

@@ -48,13 +48,24 @@ impl Lock {
     }
 }
 
-pub(crate) fn load(path: &Path) -> Db {
-    let mut db: Db = fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
+pub(crate) fn load_strict(path: &Path) -> io::Result<Db> {
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Db::default()),
+        Err(err) => return Err(err),
+    };
+    let mut db: Db = serde_json::from_str(&content).map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("bookmark db parse error: {err}"),
+        )
+    })?;
     apply_visit_log(path, &mut db);
-    db
+    Ok(db)
+}
+
+pub(crate) fn load(path: &Path) -> Db {
+    load_strict(path).unwrap_or_default()
 }
 
 /// Frecency aging threshold (zoxide-style). When total visit_count exceeds this,
@@ -135,8 +146,9 @@ pub(crate) fn append_visit(db_path: &Path, name: &str, ts: u64) -> io::Result<()
         .map(|m| m.len() > VISIT_LOG_MAX_BYTES)
         .unwrap_or(false)
     {
-        let db = load(db_path);
-        let _ = save_db(db_path, &db);
+        if let Ok(db) = load_strict(db_path) {
+            let _ = save_db(db_path, &db);
+        }
     }
     Ok(())
 }
@@ -181,6 +193,17 @@ mod tests {
         fs::write(&p, "{not-json").unwrap();
         let db = load(&p);
         assert!(db.is_empty());
+    }
+
+    #[test]
+    fn load_strict_invalid_json_returns_error() {
+        let dir = tempdir().unwrap();
+        let p = dir.path().join("bad.json");
+        fs::write(&p, "{not-json").unwrap();
+
+        let err = load_strict(&p).err().expect("expected invalid json error");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("bookmark db parse error"));
     }
 
     #[test]

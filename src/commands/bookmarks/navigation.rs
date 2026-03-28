@@ -9,13 +9,15 @@ use crate::cli::{OpenCmd, WorkspaceCmd, ZCmd};
 use crate::fuzzy::{FuzzyIndex, matches_tag};
 use crate::model::Entry;
 use crate::output::{CliError, CliResult, can_interact};
-use crate::store::{Lock, append_visit, db_path, load, now_secs};
+use crate::store::{Lock, append_visit, db_path, now_secs};
 use crate::util::has_cmd;
+
+use super::load_bookmark_db;
 
 pub(crate) fn cmd_z(args: ZCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock")).ok();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
 
     let tag = args.tag.clone().or_else(|| {
         env::var("XUN_DEFAULT_TAG")
@@ -62,7 +64,7 @@ pub(crate) fn cmd_z(args: ZCmd) -> CliResult {
     };
 
     if let Some((name, entry)) = selected_entry {
-        let _ = append_visit(&file, &name, now_secs());
+        record_bookmark_visit(&file, &name);
 
         out_println!("__CD__:{}", entry.path);
     }
@@ -103,7 +105,7 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
 
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock")).ok();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
 
     let cwd = std::env::current_dir().ok();
     let cwd_str = cwd.as_ref().and_then(|p| p.to_str());
@@ -142,7 +144,7 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
         }
     };
 
-    if let Some((_name, entry)) = selected_entry {
+    if let Some((name, entry)) = selected_entry {
         if !Path::new(&entry.path).exists() {
             return Err(CliError::with_details(
                 2,
@@ -153,6 +155,7 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
                 ],
             ));
         }
+        record_bookmark_visit(&file, &name);
         open_in_explorer(Path::new(&entry.path));
     }
     Ok(())
@@ -161,7 +164,7 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
 pub(crate) fn cmd_workspace(args: WorkspaceCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock")).ok();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
 
     let mut entries: Vec<(String, Entry)> = db
         .iter()
@@ -190,10 +193,12 @@ pub(crate) fn cmd_workspace(args: WorkspaceCmd) -> CliResult {
     }
 
     let first = entries.remove(0);
+    record_bookmark_visit(&file, &first.0);
     out_println!("__CD__:{}", first.1.path);
     ui_println!("-> {}", first.0);
 
     for (name, e) in entries {
+        record_bookmark_visit(&file, &name);
         let _ = Command::new("wt").args(wt_new_tab_args(&e.path)).spawn();
         ui_println!("+ {} ({})", name, e.path);
     }
@@ -210,8 +215,19 @@ fn wt_new_tab_args(starting_dir: &str) -> [&str; 5] {
     ]
 }
 
+fn record_bookmark_visit(file: &Path, name: &str) {
+    let _ = append_visit(file, name, now_secs());
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use tempfile::tempdir;
+
+    use crate::model::Entry;
+    use crate::store::{load_strict, save_db};
+
     use super::*;
 
     #[test]
@@ -240,5 +256,29 @@ mod tests {
             args,
             ["--window", "0", "new-tab", "--startingDirectory", r"C:\tmp"]
         );
+    }
+
+    #[test]
+    fn record_bookmark_visit_updates_visit_stats() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join(".xun.json");
+        let mut db = BTreeMap::new();
+        db.insert(
+            "home".to_string(),
+            Entry {
+                path: dir.path().to_string_lossy().to_string(),
+                tags: Vec::new(),
+                visit_count: 0,
+                last_visited: 0,
+            },
+        );
+        save_db(&db_path, &db).unwrap();
+
+        record_bookmark_visit(&db_path, "home");
+
+        let loaded = load_strict(&db_path).unwrap();
+        let entry = loaded.get("home").unwrap();
+        assert_eq!(entry.visit_count, 1);
+        assert!(entry.last_visited > 0);
     }
 }

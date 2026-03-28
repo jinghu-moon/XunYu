@@ -8,8 +8,10 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use crate::cli::{ExportCmd, ImportCmd};
 use crate::model::{Entry, ImportMode, IoFormat, ListItem, parse_import_mode, parse_io_format};
 use crate::output::{CliError, CliResult, can_interact};
-use crate::store::{Lock, db_path, load, save_db};
+use crate::store::{Lock, db_path, save_db};
 use crate::util::parse_tags;
+
+use super::load_bookmark_db;
 
 pub(crate) fn cmd_export(args: ExportCmd) -> CliResult {
     let format = parse_io_format(&args.format).ok_or_else(|| {
@@ -21,7 +23,7 @@ pub(crate) fn cmd_export(args: ExportCmd) -> CliResult {
     })?;
 
     let file = db_path();
-    let db = load(&file);
+    let db = load_bookmark_db(&file)?;
     let mut items: Vec<ListItem> = db
         .iter()
         .map(|(k, e)| ListItem {
@@ -139,7 +141,7 @@ pub(crate) fn cmd_import(args: ImportCmd) -> CliResult {
     let file = db_path();
     let _lock = Lock::acquire(&file.with_extension("lock"))
         .map_err(|e| CliError::new(1, format!("Failed to acquire db lock: {e}")))?;
-    let mut db = load(&file);
+    let mut db = load_bookmark_db(&file)?;
 
     let conflicts = items.iter().filter(|i| db.contains_key(&i.name)).count();
     if mode == ImportMode::Overwrite && conflicts > 0 && !args.yes {
