@@ -1,8 +1,8 @@
 use std::io::{Cursor, Write};
 
 use xun::xunbak::blob::{
-    BlobReadResult, BlobRecordError, BlobWriteResult, copy_blob_record_content_to_writer,
-    read_blob_record, write_blob_record,
+    BlobHeader, BlobReadResult, BlobRecordError, BlobWriteResult,
+    copy_blob_record_content_to_writer, read_blob_record, write_blob_record,
 };
 use xun::xunbak::constants::{BLOB_HEADER_SIZE, Codec, RECORD_PREFIX_SIZE, RecordType};
 use xun::xunbak::record::RecordPrefix;
@@ -327,6 +327,58 @@ fn blob_hash_mismatch_is_rejected() {
 }
 
 #[test]
+fn read_blob_record_rejects_raw_size_smaller_than_actual_output() {
+    let mut out = Vec::new();
+    let BlobWriteResult { record_len, .. } =
+        write_blob_record(&mut out, b"plain", Codec::NONE, 1).unwrap();
+    out[RECORD_PREFIX_SIZE + 34..RECORD_PREFIX_SIZE + 42].copy_from_slice(&1u64.to_le_bytes());
+    let prefix = RecordPrefix {
+        record_type: RecordType::BLOB,
+        record_len,
+        record_crc: xun::xunbak::record::compute_record_crc(
+            RecordType::BLOB,
+            record_len.to_le_bytes(),
+            &out[RECORD_PREFIX_SIZE..RECORD_PREFIX_SIZE + BLOB_HEADER_SIZE],
+        ),
+    };
+    out[..RECORD_PREFIX_SIZE].copy_from_slice(&prefix.to_bytes());
+    assert!(matches!(
+        read_blob_record(&mut Cursor::new(out)),
+        Err(BlobRecordError::BlobLengthMismatch {
+            expected_len: 1,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn copy_blob_record_content_to_writer_rejects_raw_size_smaller_than_actual_output() {
+    let mut out = Vec::new();
+    let BlobWriteResult { record_len, .. } =
+        write_blob_record(&mut out, b"plain", Codec::NONE, 1).unwrap();
+    out[RECORD_PREFIX_SIZE + 34..RECORD_PREFIX_SIZE + 42].copy_from_slice(&1u64.to_le_bytes());
+    let prefix = RecordPrefix {
+        record_type: RecordType::BLOB,
+        record_len,
+        record_crc: xun::xunbak::record::compute_record_crc(
+            RecordType::BLOB,
+            record_len.to_le_bytes(),
+            &out[RECORD_PREFIX_SIZE..RECORD_PREFIX_SIZE + BLOB_HEADER_SIZE],
+        ),
+    };
+    out[..RECORD_PREFIX_SIZE].copy_from_slice(&prefix.to_bytes());
+    let mut copied = Vec::new();
+    assert!(matches!(
+        copy_blob_record_content_to_writer(&mut Cursor::new(out), &mut copied),
+        Err(BlobRecordError::BlobLengthMismatch {
+            expected_len: 1,
+            ..
+        })
+    ));
+    assert_eq!(copied, b"p");
+}
+
+#[test]
 fn unknown_codec_is_rejected_during_read() {
     let mut out = Vec::new();
     let BlobWriteResult { record_len, .. } =
@@ -345,5 +397,33 @@ fn unknown_codec_is_rejected_during_read() {
     assert!(matches!(
         read_blob_record(&mut Cursor::new(out)),
         Err(BlobRecordError::Codec(_))
+    ));
+}
+
+#[test]
+fn oversized_blob_payload_is_rejected_before_allocating() {
+    let header = BlobHeader {
+        blob_id: [0x11; 32],
+        blob_flags: 0,
+        codec: Codec::NONE,
+        raw_size: 0,
+        stored_size: u64::MAX - BLOB_HEADER_SIZE as u64,
+    };
+    let record_len = header.stored_size + BLOB_HEADER_SIZE as u64;
+    let prefix = RecordPrefix {
+        record_type: RecordType::BLOB,
+        record_len,
+        record_crc: xun::xunbak::record::compute_record_crc(
+            RecordType::BLOB,
+            record_len.to_le_bytes(),
+            &header.to_bytes(),
+        ),
+    };
+    let mut out = Vec::new();
+    out.extend_from_slice(&prefix.to_bytes());
+    out.extend_from_slice(&header.to_bytes());
+    assert!(matches!(
+        read_blob_record(&mut Cursor::new(out)),
+        Err(BlobRecordError::ResourceLimit(_))
     ));
 }

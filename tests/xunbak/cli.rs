@@ -1539,6 +1539,63 @@ fn cli_backup_restore_xunbak_dry_run_json_reports_planned_count() {
 }
 
 #[test]
+fn cli_backup_restore_xunbak_dry_run_lists_entries_in_sorted_order() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_restore_dry_run_sorted");
+    fs::create_dir_all(root.join("nested")).unwrap();
+    fs::write(root.join("z.txt"), "zzz").unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("nested").join("b.txt"), "bbb").unwrap();
+    let cfg = r#"{
+  "storage": { "backupsDir": "A_backups", "compress": false },
+  "naming": { "prefix": "v", "dateFormat": "yyyy-MM-dd_HHmm", "defaultDesc": "backup" },
+  "retention": { "maxBackups": 5, "deleteCount": 1 },
+  "include": [ "a.txt", "z.txt", "nested" ],
+  "exclude": []
+}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(env.cmd().args([
+        "backup",
+        "create",
+        "-C",
+        root.to_str().unwrap(),
+        "--format",
+        "xunbak",
+        "-o",
+        "artifact.xunbak",
+    ]));
+
+    let out_dir = root.join("restore-dry-run-sorted");
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        root.join("artifact.xunbak").to_str().unwrap(),
+        "--to",
+        out_dir.to_str().unwrap(),
+        "-C",
+        root.to_str().unwrap(),
+        "--dry-run",
+        "-y",
+    ]));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let lines = stderr
+        .lines()
+        .filter(|line| line.contains("DRY RUN: would restore "))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        lines,
+        vec![
+            "DRY RUN: would restore a.txt",
+            "DRY RUN: would restore nested\\b.txt",
+            "DRY RUN: would restore z.txt",
+        ]
+    );
+    assert!(!out_dir.exists());
+}
+
+#[test]
 fn cli_restore_container_restores_single_file() {
     let env = TestEnv::new();
     let root = env.root.join("proj");

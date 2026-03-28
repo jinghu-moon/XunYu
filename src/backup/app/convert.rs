@@ -6,9 +6,9 @@ use std::time::Instant;
 use serde::Serialize;
 
 use crate::backup::app::common::{
-    SummaryActionStatus, SummaryDurationOutputs, SummaryExecutionStats, SummaryPaths,
-    SummarySelectionStats, SummaryVerifyModes, build_sevenz_write_options, build_zip_write_options,
-    ensure_convert_output_distinct, summary_action_status,
+    SummaryActionStatus, SummaryDurationOutputs, SummaryExecutionStats, SummaryFailureStats,
+    SummaryPaths, SummarySelectionStats, SummaryVerifyModes, build_sevenz_write_options,
+    build_zip_write_options, ensure_convert_output_distinct, summary_action_status,
 };
 use crate::backup::artifact::common::{
     collect_artifact_output_paths, compute_artifact_output_bytes, parse_split_size_bytes,
@@ -78,11 +78,10 @@ struct BackupConvertFailureSummary {
     paths: SummaryPaths,
     format: String,
     error: String,
-    dry_run: bool,
-    overwrite_count: usize,
+    #[serde(flatten)]
+    stats: SummaryFailureStats,
     #[serde(flatten)]
     verify: SummaryVerifyModes,
-    duration_ms: u128,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -673,13 +672,15 @@ fn build_convert_failure_summary(
         },
         format: options.format.to_string(),
         error: err.message.clone(),
-        dry_run: options.dry_run,
-        overwrite_count: existing_output_count(options.format, &options.output),
+        stats: SummaryFailureStats {
+            dry_run: options.dry_run,
+            overwrite_count: existing_output_count(options.format, &options.output),
+            duration_ms,
+        },
         verify: SummaryVerifyModes {
             verify_source: options.verify_source.to_string(),
             verify_output: options.verify_output.to_string(),
         },
-        duration_ms,
     }
 }
 

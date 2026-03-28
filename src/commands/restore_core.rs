@@ -316,13 +316,27 @@ where
         }
     }
 
-    jobs.par_iter().for_each(|job| {
-        if dry_run {
+    if dry_run {
+        jobs.sort_by(|left, right| left.rel_display.cmp(&right.rel_display));
+        for job in &jobs {
             emit_restore_dry_run(Path::new(&job.rel_display));
             restored.fetch_add(1, Ordering::Relaxed);
-            return;
         }
-        match copy_file(&job.src, &job.dst, copy_backend) {
+        if timing {
+            emit_restore_core_timing(
+                "copy-dir",
+                t_copy.elapsed(),
+                Some(format!("backend={copy_backend:?}")),
+            );
+        }
+        return (
+            restored.load(Ordering::Relaxed),
+            fail_count.load(Ordering::Relaxed),
+        );
+    }
+
+    jobs.par_iter()
+        .for_each(|job| match copy_file(&job.src, &job.dst, copy_backend) {
             Ok(_) => {
                 restored.fetch_add(1, Ordering::Relaxed);
             }
@@ -330,8 +344,7 @@ where
                 eprintln!("Error restoring {}: {e}", job.rel_display);
                 fail_count.fetch_add(1, Ordering::Relaxed);
             }
-        }
-    });
+        });
 
     if timing {
         emit_restore_core_timing(

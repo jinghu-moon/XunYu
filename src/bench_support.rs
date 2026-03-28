@@ -307,6 +307,11 @@ pub mod backup_perf {
             let _ = fs::remove_dir_all(target);
             reader.restore_all(target).unwrap();
         }
+
+        pub fn restore_all_incremental(&self, target: &Path) {
+            let reader = ContainerReader::open(&self.xunbak_path).unwrap();
+            reader.restore_all(target).unwrap();
+        }
     }
 
     pub fn prepare_restore_fixture(

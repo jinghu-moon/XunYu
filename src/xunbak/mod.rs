@@ -6,6 +6,7 @@ pub mod footer;
 pub mod header;
 pub mod lock;
 pub mod manifest;
+pub(crate) mod memory;
 pub mod reader;
 pub mod record;
 pub mod verify;

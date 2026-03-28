@@ -2296,8 +2296,11 @@ fn backup_create_list_outputs_selected_files_without_creating_backup() {
     ]));
     let json: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(json["action"], "create");
+    assert_eq!(json["status"], "ok");
     assert_eq!(json["mode"], "list");
     assert_eq!(json["format"], "zip");
+    assert_eq!(json["source"], root.to_string_lossy().to_string());
+    assert_eq!(json["destination"], Value::Null);
     assert_eq!(json["selected"], 2);
     assert_eq!(
         json["entries"],

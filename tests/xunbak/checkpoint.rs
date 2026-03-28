@@ -125,3 +125,16 @@ fn manifest_hash_matches_payload_hash() {
     let hash = compute_manifest_hash(manifest_payload);
     assert_eq!(hash, *blake3::hash(manifest_payload).as_bytes());
 }
+
+#[test]
+fn oversized_checkpoint_record_is_rejected_before_allocating() {
+    let prefix = RecordPrefix {
+        record_type: RecordType::CHECKPOINT,
+        record_len: u64::MAX,
+        record_crc: 0,
+    };
+    assert!(matches!(
+        read_checkpoint_record(&mut Cursor::new(prefix.to_bytes())),
+        Err(CheckpointError::ResourceLimit(_))
+    ));
+}

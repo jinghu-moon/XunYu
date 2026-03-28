@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 
 use tempfile::tempdir;
 use xun::xunbak::constants::Codec;
@@ -169,6 +169,106 @@ fn restore_glob_returns_zero_when_nothing_matches() {
     let reader = ContainerReader::open(&container).unwrap();
     let result = reader.restore_glob("**/*.rs", &target).unwrap();
     assert_eq!(result.restored_files, 0);
+}
+
+#[test]
+fn restore_file_failure_keeps_existing_target_file_intact() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+
+    let reader = ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let entry = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "a.txt")
+        .unwrap();
+    let corrupt_offset = entry.blob_offset
+        + xun::xunbak::constants::RECORD_PREFIX_SIZE as u64
+        + xun::xunbak::constants::BLOB_HEADER_SIZE as u64;
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&container)
+        .unwrap();
+    file.seek(SeekFrom::Start(corrupt_offset)).unwrap();
+    let mut byte = [0u8; 1];
+    file.read_exact(&mut byte).unwrap();
+    byte[0] ^= 0x5A;
+    file.seek(SeekFrom::Start(corrupt_offset)).unwrap();
+    file.write_all(&byte).unwrap();
+    drop(file);
+
+    let target = dir.path().join("restore");
+    fs::create_dir_all(&target).unwrap();
+    fs::write(target.join("a.txt"), "old").unwrap();
+    let reader = ContainerReader::open(&container).unwrap();
+    assert!(matches!(
+        reader.restore_file("a.txt", &target),
+        Err(ReaderError::Blob(_))
+    ));
+    assert_eq!(fs::read_to_string(target.join("a.txt")).unwrap(), "old");
+    let target_entries = fs::read_dir(&target)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(target_entries, vec!["a.txt"]);
+}
+
+#[test]
+fn restore_file_failure_without_existing_target_leaves_no_output_or_temp_file() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+
+    let reader = ContainerReader::open(&container).unwrap();
+    let manifest = reader.load_manifest().unwrap();
+    let entry = manifest
+        .entries
+        .iter()
+        .find(|entry| entry.path == "a.txt")
+        .unwrap();
+    let corrupt_offset = entry.blob_offset
+        + xun::xunbak::constants::RECORD_PREFIX_SIZE as u64
+        + xun::xunbak::constants::BLOB_HEADER_SIZE as u64;
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&container)
+        .unwrap();
+    file.seek(SeekFrom::Start(corrupt_offset)).unwrap();
+    let mut byte = [0u8; 1];
+    file.read_exact(&mut byte).unwrap();
+    byte[0] ^= 0x5A;
+    file.seek(SeekFrom::Start(corrupt_offset)).unwrap();
+    file.write_all(&byte).unwrap();
+    drop(file);
+
+    let target = dir.path().join("restore");
+    fs::create_dir_all(&target).unwrap();
+    let reader = ContainerReader::open(&container).unwrap();
+    assert!(matches!(
+        reader.restore_file("a.txt", &target),
+        Err(ReaderError::Blob(_))
+    ));
+    assert!(!target.join("a.txt").exists());
+    let target_entries = fs::read_dir(&target)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert!(
+        target_entries.is_empty(),
+        "unexpected files: {target_entries:?}"
+    );
 }
 
 #[test]

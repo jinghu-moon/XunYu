@@ -48,6 +48,17 @@ fn xunbak_restore_all_1000_files(bencher: Bencher) {
 }
 
 #[divan::bench]
+fn xunbak_restore_incremental_1000_files(bencher: Bencher) {
+    let tmp = tempdir().unwrap();
+    let fixture = prepare_restore_fixture(tmp.path(), 1_000, 4 * 1024);
+    let target = tmp.path().join("restore-target");
+    fixture.restore_all(&target);
+    bencher.bench_local(|| {
+        fixture.restore_all_incremental(&target);
+    });
+}
+
+#[divan::bench]
 fn verify_entries_content_dir_1000_files(bencher: Bencher) {
     let tmp = tempdir().unwrap();
     let fixture = prepare_verify_fixture(tmp.path(), 1_000, 4 * 1024);

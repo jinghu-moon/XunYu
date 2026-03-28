@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use serde::{Deserialize, Serialize};
 
 use crate::xunbak::constants::{Codec, RecordType};
+use crate::xunbak::memory::allocate_zeroed_buffer;
 use crate::xunbak::record::{RecordPrefix, RecordScanError, compute_record_crc};
 
 const MANIFEST_PREFIX_SIZE: usize = 4;
@@ -126,6 +127,7 @@ pub struct ManifestReadResult {
     pub prefix: ManifestPrefix,
     pub body: ManifestBody,
     pub record_len: u64,
+    pub payload_hash: [u8; 32],
 }
 
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -146,6 +148,8 @@ pub enum ManifestError {
     EmptyPath,
     #[error("path case conflict: {0}")]
     PathCaseConflict(String),
+    #[error("resource limit: {0}")]
+    ResourceLimit(String),
     #[error("I/O error: {0}")]
     Io(String),
 }
@@ -222,7 +226,8 @@ pub fn read_manifest_record<R: Read>(reader: &mut R) -> Result<ManifestReadResul
         ));
     }
 
-    let mut payload = vec![0u8; record_prefix.record_len as usize];
+    let mut payload = allocate_zeroed_buffer(record_prefix.record_len, "manifest payload")
+        .map_err(ManifestError::ResourceLimit)?;
     reader
         .read_exact(&mut payload)
         .map_err(|err| ManifestError::Io(err.to_string()))?;
@@ -235,7 +240,8 @@ pub fn read_manifest_record<R: Read>(reader: &mut R) -> Result<ManifestReadResul
         return Err(ManifestError::ManifestCrcMismatch);
     }
 
-    let prefix = ManifestPrefix::from_bytes(&payload[..MANIFEST_PREFIX_SIZE])?;
+    let payload_hash = crate::xunbak::checkpoint::compute_manifest_hash(&payload);
+    let prefix = ManifestPrefix::from_bytes(&payload)?;
     let body = match prefix.manifest_codec {
         codec if codec == ManifestCodec::JSON => {
             serde_json::from_slice(&payload[MANIFEST_PREFIX_SIZE..])
@@ -248,6 +254,7 @@ pub fn read_manifest_record<R: Read>(reader: &mut R) -> Result<ManifestReadResul
         prefix,
         body,
         record_len: record_prefix.record_len,
+        payload_hash,
     })
 }
 

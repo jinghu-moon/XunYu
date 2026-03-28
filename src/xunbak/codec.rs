@@ -2,6 +2,7 @@ use std::io::{Cursor, Read, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::xunbak::constants::Codec;
+use crate::xunbak::memory::reserve_buffer_capacity;
 
 const DEFLATE_LEVEL_DEFAULT: u32 = 6;
 const BZIP2_LEVEL_DEFAULT: u32 = 6;
@@ -166,6 +167,25 @@ pub fn decompress(codec: Codec, data: &[u8]) -> Result<Vec<u8>, CodecError> {
     let mut decoder = decompressed_reader(codec, Cursor::new(data))?;
     let mut out = Vec::new();
     decoder
+        .read_to_end(&mut out)
+        .map_err(|err| decode_error(codec, err))?;
+    Ok(out)
+}
+
+pub fn decompress_bounded(
+    codec: Codec,
+    data: &[u8],
+    max_output_bytes: u64,
+) -> Result<Vec<u8>, CodecError> {
+    let limit = max_output_bytes
+        .checked_add(1)
+        .ok_or_else(|| decode_error(codec, "max output size overflow"))?;
+    let decoder = decompressed_reader(codec, Cursor::new(data))?;
+    let mut limited = decoder.take(limit);
+    let mut out = Vec::new();
+    reserve_buffer_capacity(&mut out, limit, "decompressed content")
+        .map_err(|err| decode_error(codec, err))?;
+    limited
         .read_to_end(&mut out)
         .map_err(|err| decode_error(codec, err))?;
     Ok(out)

@@ -4,9 +4,9 @@ use std::time::Instant;
 use serde::Serialize;
 
 use crate::backup::app::common::{
-    SummaryActionStatus, SummaryDurationOutputs, SummaryExecutionStats, SummaryPaths,
-    build_sevenz_write_options, build_zip_write_options, ensure_create_output_distinct,
-    summary_action_status,
+    SummaryActionStatus, SummaryDurationOutputs, SummaryExecutionStats, SummaryOptionalPaths,
+    SummaryPaths, SummaryVerifyModes, build_sevenz_write_options, build_zip_write_options,
+    ensure_create_output_distinct, summary_action_status,
 };
 use crate::backup::artifact::common::{
     collect_artifact_output_paths, compute_artifact_output_bytes, parse_split_size_bytes,
@@ -46,8 +46,8 @@ struct BackupCreateSelectionSummary {
     #[serde(flatten)]
     meta: SummaryActionStatus<BackupAction, ExportStatus>,
     mode: String,
-    source: String,
-    destination: Option<String>,
+    #[serde(flatten)]
+    paths: SummaryOptionalPaths,
     format: BackupArtifactFormat,
     selected: usize,
     bytes_in: u64,
@@ -63,8 +63,8 @@ struct BackupCreateExecutionSummary {
     format: BackupArtifactFormat,
     #[serde(flatten)]
     stats: SummaryExecutionStats,
-    verify_source: String,
-    verify_output: String,
+    #[serde(flatten)]
+    verify: SummaryVerifyModes,
     #[serde(flatten)]
     timing: SummaryDurationOutputs,
 }
@@ -132,8 +132,10 @@ fn cmd_backup_create_list(options: &BackupCreateOptions) -> CliResult {
         let summary = BackupCreateSelectionSummary {
             meta: summary_action_status(BackupAction::Create, ExportStatus::Ok),
             mode: "list".to_string(),
-            source: path_display(&options.source_dir),
-            destination: optional_path_display(options.output.as_deref()),
+            paths: SummaryOptionalPaths {
+                source: path_display(&options.source_dir),
+                destination: optional_path_display(options.output.as_deref()),
+            },
             format: options.format,
             selected: paths.len(),
             bytes_in,
@@ -618,8 +620,10 @@ fn build_create_execution_summary(
             bytes_out,
             overwrite_count: 0,
         },
-        verify_source: "off".to_string(),
-        verify_output: "off".to_string(),
+        verify: SummaryVerifyModes {
+            verify_source: "off".to_string(),
+            verify_output: "off".to_string(),
+        },
         timing: SummaryDurationOutputs {
             duration_ms,
             outputs,

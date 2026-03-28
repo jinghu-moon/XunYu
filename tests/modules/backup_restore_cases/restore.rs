@@ -1434,6 +1434,56 @@ fn restore_cmd_dry_run_stderr_mentions_files() {
     );
 }
 
+#[test]
+fn restore_cmd_dry_run_lists_directory_entries_in_sorted_order() {
+    let env = TestEnv::new();
+    let root = env.root.join("proj_dry_order");
+    fs::create_dir_all(root.join("nested")).unwrap();
+    fs::write(root.join("z.txt"), "zzz").unwrap();
+    fs::write(root.join("a.txt"), "aaa").unwrap();
+    fs::write(root.join("nested").join("b.txt"), "bbb").unwrap();
+    let cfg = r#"{"storage":{"backupsDir":"A_backups","compress":false},"naming":{"prefix":"v","dateFormat":"yyyy-MM-dd_HHmm","defaultDesc":"backup"},"retention":{"maxBackups":5,"deleteCount":1},"include":["a.txt","z.txt","nested"],"exclude":[]}"#;
+    fs::write(root.join(".xun-bak.json"), cfg).unwrap();
+
+    run_ok(
+        env.cmd()
+            .args(["backup", "-C", root.to_str().unwrap(), "-m", "t"]),
+    );
+
+    let name = fs::read_dir(root.join("A_backups"))
+        .unwrap()
+        .flatten()
+        .find(|entry| entry.file_type().unwrap().is_dir())
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+
+    let out = run_ok(env.cmd().args([
+        "backup",
+        "restore",
+        &name,
+        "-C",
+        root.to_str().unwrap(),
+        "--dry-run",
+        "-y",
+    ]));
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let lines = stderr
+        .lines()
+        .filter(|line| line.contains("DRY RUN: would restore "))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        lines,
+        vec![
+            "DRY RUN: would restore a.txt",
+            "DRY RUN: would restore nested\\b.txt",
+            "DRY RUN: would restore z.txt",
+        ]
+    );
+}
+
 // ─── 边界：--snapshot + --dry-run 不创建 snapshot ────────────────────────────
 
 #[test]

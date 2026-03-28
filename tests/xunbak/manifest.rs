@@ -8,6 +8,7 @@ use xun::xunbak::manifest::{
     ManifestType, detect_case_conflicts, filetime_to_unix_ns, normalize_path, read_manifest_record,
     unix_ns_to_filetime, write_manifest_record,
 };
+use xun::xunbak::record::RecordPrefix;
 
 fn sample_entry() -> ManifestEntry {
     ManifestEntry {
@@ -143,15 +144,49 @@ fn manifest_record_read_roundtrips() {
     };
     let body = sample_manifest_body();
     write_manifest_record(&mut out, prefix, &body).unwrap();
+    let expected_payload_hash = xun::xunbak::checkpoint::compute_manifest_hash(&out[13..]);
     let read = read_manifest_record(&mut Cursor::new(out)).unwrap();
+    assert_eq!(read.payload_hash, expected_payload_hash);
     assert_eq!(
         read,
         ManifestReadResult {
             prefix,
             body,
             record_len: read.record_len,
+            payload_hash: expected_payload_hash,
         }
     );
+}
+
+#[test]
+fn oversized_manifest_record_is_rejected_before_allocating() {
+    let prefix = RecordPrefix {
+        record_type: xun::xunbak::constants::RecordType::MANIFEST,
+        record_len: u64::MAX,
+        record_crc: 0,
+    };
+    assert!(matches!(
+        read_manifest_record(&mut Cursor::new(prefix.to_bytes())),
+        Err(ManifestError::ResourceLimit(_))
+    ));
+}
+
+#[test]
+fn short_manifest_payload_is_rejected_without_panic() {
+    let prefix = RecordPrefix {
+        record_type: xun::xunbak::constants::RecordType::MANIFEST,
+        record_len: 0,
+        record_crc: xun::xunbak::record::compute_record_crc(
+            xun::xunbak::constants::RecordType::MANIFEST,
+            0u64.to_le_bytes(),
+            &[],
+        ),
+    };
+    let out = prefix.to_bytes();
+    assert!(matches!(
+        read_manifest_record(&mut Cursor::new(out)),
+        Err(ManifestError::PrefixTooShort { actual: 0 })
+    ));
 }
 
 #[test]

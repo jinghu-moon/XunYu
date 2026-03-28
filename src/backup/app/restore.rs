@@ -4,17 +4,17 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::time::Instant;
 
-use crate::backup::app::common::{RestoreSummaryStats, SummaryPaths};
+use crate::backup::app::common::{RestoreSummaryStats, SummaryActionStatus, SummaryPaths};
 use crate::backup::artifact::common::{
     is_7z_artifact_path, is_xunbak_artifact_path, is_zip_artifact_path,
 };
-use crate::backup::artifact::entry::{file_attributes, system_time_to_unix_ns};
 use crate::backup::artifact::reader::{open_entry_reader, sort_entries_for_read_locality};
 use crate::backup::artifact::sevenz::{restore_7z_entries, restore_7z_single};
 use crate::backup::artifact::source::read_artifact_entries;
 use crate::backup::common::cli::{
     backup_named_artifact_path, backup_not_found_error, path_display, unsafe_restore_path_error,
 };
+use crate::backup::common::hash::compute_file_content_hash;
 use crate::cli::BackupRestoreCmd;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::path_guard::{PathPolicy, validate_paths};
@@ -49,8 +49,8 @@ fn emit_restore_timing(label: &str, elapsed: std::time::Duration, extra: Option<
 
 #[derive(Serialize)]
 struct RestoreExecutionSummary {
-    action: String,
-    status: String,
+    #[serde(flatten)]
+    meta: SummaryActionStatus<String, String>,
     #[serde(flatten)]
     paths: SummaryPaths,
     mode: String,
@@ -359,12 +359,14 @@ fn build_restore_execution_summary(
     stats: RestoreStats,
 ) -> RestoreExecutionSummary {
     RestoreExecutionSummary {
-        action: if dry_run {
-            "preview".to_string()
-        } else {
-            "restore".to_string()
+        meta: SummaryActionStatus {
+            action: if dry_run {
+                "preview".to_string()
+            } else {
+                "restore".to_string()
+            },
+            status: stats.status_label().to_string(),
         },
-        status: stats.status_label().to_string(),
         paths: SummaryPaths {
             source: path_display(source),
             destination: path_display(destination),
@@ -624,13 +626,7 @@ fn build_restore_preview_items_from_artifact(
             continue;
         }
         let dst = preview_destination_path(dest_root, &rel);
-        let fast_path = classify_preview_item_fast(
-            entry.size,
-            entry.mtime_ns,
-            entry.win_attributes,
-            &dst,
-            &rel,
-        )?;
+        let fast_path = classify_preview_item_fast(entry.size, entry.content_hash, &dst, &rel)?;
         match preview_kind_from_fast_path(fast_path) {
             Some(kind) => {
                 push_restore_preview_item(&mut items, rel, kind);
@@ -748,8 +744,7 @@ fn classify_preview_reader<R: Read>(
 
 fn classify_preview_item_fast(
     source_size: u64,
-    source_mtime_ns: Option<u64>,
-    source_win_attributes: u32,
+    source_content_hash: Option<[u8; 32]>,
     dst: &Path,
     _rel: &str,
 ) -> Result<PreviewFastPathDecision, CliError> {
@@ -763,11 +758,13 @@ fn classify_preview_item_fast(
         return Ok(PreviewFastPathDecision::Overwrite);
     }
 
-    let dst_mtime_ns = dst_meta.modified().ok().map(system_time_to_unix_ns);
-    let dst_attributes = file_attributes(&dst_meta);
-    let attributes_match = source_win_attributes == 0 || source_win_attributes == dst_attributes;
-    if source_mtime_ns.is_some() && source_mtime_ns == dst_mtime_ns && attributes_match {
-        return Ok(PreviewFastPathDecision::Unchanged);
+    if let Some(source_content_hash) = source_content_hash {
+        let dst_hash = compute_file_content_hash(dst)
+            .map_err(|e| CliError::new(1, format!("Preview read failed: {e}")))?;
+        if dst_hash == source_content_hash {
+            return Ok(PreviewFastPathDecision::Unchanged);
+        }
+        return Ok(PreviewFastPathDecision::Overwrite);
     }
 
     Ok(PreviewFastPathDecision::NeedContentCheck)
@@ -1103,8 +1100,8 @@ mod tests {
             RestoreStats::new(3, 1),
         );
 
-        assert_eq!(summary.action, "restore");
-        assert_eq!(summary.status, "partial_failed");
+        assert_eq!(summary.meta.action, "restore");
+        assert_eq!(summary.meta.status, "partial_failed");
         assert_eq!(summary.mode, "glob");
         assert!(summary.stats.snapshot);
         assert_eq!(summary.stats.restored, 3);

@@ -21,10 +21,13 @@ pub(crate) struct SummaryActionStatus<A, S> {
 }
 
 #[derive(Serialize)]
-pub(crate) struct SummaryPaths {
+pub(crate) struct SummaryPathPair<D> {
     pub source: String,
-    pub destination: String,
+    pub destination: D,
 }
+
+pub(crate) type SummaryPaths = SummaryPathPair<String>;
+pub(crate) type SummaryOptionalPaths = SummaryPathPair<Option<String>>;
 
 #[derive(Serialize)]
 pub(crate) struct SummaryVerifyModes {
@@ -57,6 +60,13 @@ pub(crate) struct SummarySelectionStats {
 pub(crate) struct SummaryDurationOutputs {
     pub duration_ms: u128,
     pub outputs: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SummaryFailureStats {
+    pub dry_run: bool,
+    pub overwrite_count: usize,
+    pub duration_ms: u128,
 }
 
 #[derive(Serialize)]

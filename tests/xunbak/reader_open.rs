@@ -120,6 +120,41 @@ fn manifest_hash_mismatch_is_reported() {
 }
 
 #[test]
+fn manifest_length_mismatch_is_reported() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+
+    let reader = ContainerReader::open(&container).unwrap();
+    let mut bytes = fs::read(&container).unwrap();
+    let checkpoint_offset = reader.footer.checkpoint_offset as usize;
+    let checkpoint_payload_offset = checkpoint_offset + xun::xunbak::constants::RECORD_PREFIX_SIZE;
+    let checkpoint_payload = &mut bytes[checkpoint_payload_offset
+        ..checkpoint_payload_offset + xun::xunbak::constants::CHECKPOINT_PAYLOAD_SIZE];
+    let manifest_len = reader.checkpoint.manifest_len - 1;
+    checkpoint_payload[24..32].copy_from_slice(&manifest_len.to_le_bytes());
+    let payload_crc = crc32c::crc32c(&checkpoint_payload[..124]);
+    checkpoint_payload[124..128].copy_from_slice(&payload_crc.to_le_bytes());
+    let record_len = xun::xunbak::constants::CHECKPOINT_PAYLOAD_SIZE as u64;
+    let record_crc = compute_record_crc(
+        xun::xunbak::constants::RecordType::CHECKPOINT,
+        record_len.to_le_bytes(),
+        checkpoint_payload,
+    );
+    bytes[checkpoint_offset + 9..checkpoint_offset + 13].copy_from_slice(&record_crc.to_le_bytes());
+    fs::write(&container, bytes).unwrap();
+
+    let reader = ContainerReader::open(&container).unwrap();
+    assert!(matches!(
+        reader.load_manifest(),
+        Err(ReaderError::ManifestLengthMismatch { .. })
+    ));
+}
+
+#[test]
 fn unrecoverable_container_is_reported_when_footer_and_records_are_damaged() {
     let dir = tempdir().unwrap();
     let source = dir.path().join("src");

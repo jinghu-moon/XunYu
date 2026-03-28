@@ -101,3 +101,43 @@ fn restore_all_on_empty_container_creates_empty_target() {
     assert!(target.exists());
     assert!(fs::read_dir(&target).unwrap().next().is_none());
 }
+
+#[test]
+fn restore_all_skips_unchanged_existing_files() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(source.join("nested")).unwrap();
+    fs::write(source.join("a.txt"), "aaa").unwrap();
+    fs::write(source.join("nested").join("b.txt"), "bbb").unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+    let target = dir.path().join("restore");
+    let reader = ContainerReader::open(&container).unwrap();
+    let first = reader.restore_all(&target).unwrap();
+    assert_eq!(first.restored_files, 2);
+
+    let reader = ContainerReader::open(&container).unwrap();
+    let second = reader.restore_all(&target).unwrap();
+    assert_eq!(second.restored_files, 0);
+}
+
+#[test]
+fn restore_all_rewrites_same_size_changed_file() {
+    let dir = tempdir().unwrap();
+    let source = dir.path().join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), "aaaa").unwrap();
+    let container = dir.path().join("backup.xunbak");
+
+    ContainerWriter::backup(&container, &source, &BackupOptions::default()).unwrap();
+    let target = dir.path().join("restore");
+    let reader = ContainerReader::open(&container).unwrap();
+    reader.restore_all(&target).unwrap();
+
+    fs::write(target.join("a.txt"), "zzzz").unwrap();
+    let reader = ContainerReader::open(&container).unwrap();
+    let result = reader.restore_all(&target).unwrap();
+    assert_eq!(result.restored_files, 1);
+    assert_eq!(fs::read_to_string(target.join("a.txt")).unwrap(), "aaaa");
+}

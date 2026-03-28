@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 
 use crate::xunbak::constants::{CHECKPOINT_PAYLOAD_SIZE, RecordType};
+use crate::xunbak::memory::allocate_zeroed_buffer;
 use crate::xunbak::record::{RecordPrefix, RecordScanError, compute_record_crc};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,6 +50,8 @@ pub enum CheckpointError {
         manifest_len: u64,
         container_end: u64,
     },
+    #[error("resource limit: {0}")]
+    ResourceLimit(String),
     #[error("I/O error: {0}")]
     Io(String),
 }
@@ -149,7 +152,8 @@ pub fn read_checkpoint_record<R: Read>(
             prefix.record_type.as_u8(),
         ));
     }
-    let mut payload_bytes = vec![0u8; prefix.record_len as usize];
+    let mut payload_bytes = allocate_zeroed_buffer(prefix.record_len, "checkpoint payload")
+        .map_err(CheckpointError::ResourceLimit)?;
     reader
         .read_exact(&mut payload_bytes)
         .map_err(|err| CheckpointError::Io(err.to_string()))?;

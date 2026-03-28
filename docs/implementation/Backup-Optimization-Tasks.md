@@ -428,17 +428,26 @@
   现状：对 `DirArtifact / Filesystem / XunbakArtifact` 在文件数较多时启用可控并行；`zip / 7z` 仍保持保守路径，避免共享 archive/reader 竞争。
 - [x] 优化 `.xunbak verify_full()` 为流式 sink 校验
   现状：已从 `read_and_verify_blob() -> Vec<u8>` 改为 `copy_and_verify_blob() -> std::io::sink()`，显著降低了分配量。
+- [x] 优化 `.xunbak restore_all()` 的 Windows 写入热路径
+  现状：目标文件创建已切到 `CreateFileW + FILE_FLAG_SEQUENTIAL_SCAN`，元数据设置已切到 `SetFileInformationByHandle(FileBasicInfo)`，staged commit 使用 `MoveFileExW(REPLACE_EXISTING | WRITE_THROUGH)`；失败时仍保持“已有文件不被破坏、新文件不留垃圾文件”的语义。
+- [x] 为 `.xunbak restore_all()` 增加有限并行落盘
+  现状：已将归档读取锁范围缩小到“读取 encoded blob”阶段，解压 / 写入 / 元数据设置在锁外完成；`restore_all()` 默认启用有限并行 worker，`restore_file / restore_glob` 仍保持单线程语义。
+- [x] 为 `.xunbak restore_all()` 增加增量跳过未变化文件
+  现状：当目标目录已有内容时，执行路径会基于目标文件 `blake3` 与 manifest `content_hash` 比较，命中则直接跳过，不再打开归档 / 写目标文件；preview 路径也已同步为内容级判断，避免 dry-run 与真实 restore 分叉。
+- [x] 为 `.xunbak restore_all()` 增加并行度自适应策略
+  现状：默认根据 `job_count + total_bytes` 决定 worker 数，小任务单线程，大量小文件自动放大并发，大体积任务保持保守；仍支持通过 `XUN_XUNBAK_RESTORE_WORKERS` 手工覆盖。
 - [x] 记录优化前后基线
   基准中位数对比：
   `sidecar_build_missing_hash_1000_files`: `29.87ms -> 28.50ms`
   `verify_entries_content_dir_1000_files`: `23.43ms -> 6.06ms`
   `verify_entries_content_xunbak_1000_files`: `28.52ms -> 14.56ms`
   `verify_full_xunbak_1000_files`: `25.72ms -> 9.89ms`
-  `xunbak_restore_all_1000_files`: `533.8ms -> 510.1ms`
+  `xunbak_restore_all_1000_files`: `533.8ms -> 250.0ms`
+  `xunbak_restore_incremental_1000_files`: 当前基线 `74.37ms`
   `create_zip_200_files`: `70.10ms -> 66.06ms`
   `create_7z_200_files`: `95.04ms -> 92.66ms`
   `hash_file_content_64mb`: 当前基线 `21.66ms`
-  结论：`verify` 热点收益最显著；`.xunbak` restore 的 volume 句柄/offset 复用带来稳定但温和的改善；sidecar 单点基准改善有限，但导出链路 (`create_zip/create_7z`) 已能观察到真实收益，说明“写入时顺手产出 hash，sidecar 直接消费”的方向是有效的。
+  结论：`verify` 热点收益最显著；`.xunbak restore` 在“缩小 volume 读锁范围 + Win32 写入 fast path + 有限并行落盘 + 自适应 worker + 增量跳过”后，全量恢复基线已从 500ms 量级压到 250ms 左右，增量恢复命中时可进一步落到 75ms 左右；sidecar 单点基准改善有限，但导出链路 (`create_zip/create_7z`) 已能观察到真实收益，说明“写入时顺手产出 hash，sidecar 直接消费”的方向是有效的。
 
 ### H.6 打磨收尾
 
@@ -448,6 +457,8 @@
   现已恢复为生产语义命名，bench 与生产路径共用同一实现，不再误导维护者。
 - [x] 收敛 summary 公共字段
   `create / convert / restore` 的 summary 结构已引入 `SummaryActionStatus / SummaryPaths / SummaryExecutionStats / SummarySelectionStats / SummaryVerifyModes / SummaryDurationOutputs / RestoreSummaryStats` 等公共字段层，通过 `serde(flatten)` 复用，减少最后一层并行定义。
+- [x] 保留 `.xunbak restore_all()` 默认自适应并行策略
+  10 次单样本对比中，`adaptive(auto)` 实际解析到 `workers=4`，与 `fixed4` 同档且明显优于 `fixed1 / fixed2`；因此默认保留自适应，继续允许通过环境变量做人工覆盖。
 
 ---
 
