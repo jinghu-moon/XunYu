@@ -15,6 +15,7 @@ use xun::bookmark_state::Store;
 
 const CACHE_DISABLED_ENV: [(&str, &str); 1] = [("XUN_BM_DISABLE_BINARY_CACHE", "1")];
 const CACHE_ENABLED_ENV: [(&str, &str); 1] = [("XUN_BM_ENABLE_BINARY_CACHE", "1")];
+const LIGHTWEIGHT_DISABLED_ENV: [(&str, &str); 1] = [("XUN_BM_DISABLE_LIGHTWEIGHT_VIEW", "1")];
 
 fn write_large_store(env: &TestEnv, total: usize) {
     let mut bookmarks = Vec::with_capacity(total);
@@ -136,6 +137,10 @@ fn resolve_release_bm() -> Option<PathBuf> {
     candidate.is_file().then_some(candidate)
 }
 
+fn file_size_bytes(path: &Path) -> u64 {
+    fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
+}
+
 fn measure_release_avg_ms(
     exe: &Path,
     env: &TestEnv,
@@ -169,6 +174,13 @@ fn measure_release_avg_ms_with_env(
         assert!(status.success(), "release command failed: {:?}", args);
     }
     start.elapsed().as_millis() as u64 / iters.max(1) as u64
+}
+
+fn merge_env<'a>(left: &'a [(&'a str, &'a str)], right: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+    let mut merged = Vec::with_capacity(left.len() + right.len());
+    merged.extend_from_slice(left);
+    merged.extend_from_slice(right);
+    merged
 }
 
 fn measure_store_load_avg_ms(env: &TestEnv, total: usize, iters: usize) -> u64 {
@@ -439,6 +451,30 @@ fn perf_bookmark_release_compare_matrix() {
         bm_zi,
         xun_complete,
         bm_complete_backend
+    );
+}
+
+#[test]
+#[ignore]
+fn perf_release_startup_compare_version_only() {
+    let Some(xun) = resolve_release_xun() else {
+        eprintln!("perf: release xun.exe missing, run `cargo build --release` first");
+        return;
+    };
+    let Some(bm) = resolve_release_bm() else {
+        eprintln!("perf: release bm.exe missing, run `cargo build --release` first");
+        return;
+    };
+
+    let env = TestEnv::new();
+    let iters = env_usize("XUN_TEST_BM_RELEASE_ITERS", 20);
+    let xun_ms = measure_release_avg_ms(&xun, &env, &["--version"], iters);
+    let bm_ms = measure_release_avg_ms(&bm, &env, &["--version"], iters);
+    let xun_bytes = file_size_bytes(&xun);
+    let bm_bytes = file_size_bytes(&bm);
+    eprintln!(
+        "perf: release_startup_version_only iters={} xun_ms={} bm_ms={} xun_bytes={} bm_bytes={}",
+        iters, xun_ms, bm_ms, xun_bytes, bm_bytes
     );
 }
 
@@ -767,5 +803,75 @@ fn perf_bookmark_release_compare_matrix_50000_binary_cache() {
     eprintln!(
         "perf: bookmark_compare_matrix_50000_binary_cache iters={} bytes={} xun_z_ms={} bm_z_ms={} xun_complete_ms={}",
         iters, bytes, xun_z, bm_z, xun_complete
+    );
+}
+
+#[test]
+#[ignore]
+fn perf_bookmark_release_complete_20000_lightweight_view() {
+    let Some(xun) = resolve_release_xun() else {
+        eprintln!("perf: release xun.exe missing, run `cargo build --release` first");
+        return;
+    };
+
+    let env = TestEnv::new();
+    let iters = env_usize("XUN_TEST_BM_RELEASE_ITERS_LARGE", 10);
+    write_large_store_existing(&env, 20_000);
+    compact_store_via_touch(&env, "client-00000");
+    warm_binary_cache(&env, "client");
+
+    let owned_env = merge_env(&CACHE_ENABLED_ENV, &LIGHTWEIGHT_DISABLED_ENV);
+    let complete_owned = measure_release_avg_ms_with_env(
+        &xun,
+        &env,
+        &["__complete", "bookmark", "z", "client"],
+        iters,
+        &owned_env,
+    );
+    let complete_light = measure_release_avg_ms_with_env(
+        &xun,
+        &env,
+        &["__complete", "bookmark", "z", "client"],
+        iters,
+        &CACHE_ENABLED_ENV,
+    );
+    eprintln!(
+        "perf: bookmark_complete_20000_lightweight_view iters={} owned_ms={} lightweight_ms={}",
+        iters, complete_owned, complete_light
+    );
+}
+
+#[test]
+#[ignore]
+fn perf_bookmark_release_complete_50000_lightweight_view() {
+    let Some(xun) = resolve_release_xun() else {
+        eprintln!("perf: release xun.exe missing, run `cargo build --release` first");
+        return;
+    };
+
+    let env = TestEnv::new();
+    let iters = env_usize("XUN_TEST_BM_RELEASE_ITERS_HUGE", 2);
+    write_large_store_existing(&env, 50_000);
+    compact_store_via_touch(&env, "client-00000");
+    warm_binary_cache(&env, "client");
+
+    let owned_env = merge_env(&CACHE_ENABLED_ENV, &LIGHTWEIGHT_DISABLED_ENV);
+    let complete_owned = measure_release_avg_ms_with_env(
+        &xun,
+        &env,
+        &["__complete", "bookmark", "z", "client"],
+        iters,
+        &owned_env,
+    );
+    let complete_light = measure_release_avg_ms_with_env(
+        &xun,
+        &env,
+        &["__complete", "bookmark", "z", "client"],
+        iters,
+        &CACHE_ENABLED_ENV,
+    );
+    eprintln!(
+        "perf: bookmark_complete_50000_lightweight_view iters={} owned_ms={} lightweight_ms={}",
+        iters, complete_owned, complete_light
     );
 }

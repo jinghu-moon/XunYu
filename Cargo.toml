@@ -474,5 +474,9 @@ name = "bookmark_binary_cache_phase_a"
 path = "tests/bookmark_binary_cache_phase_a.rs"
 
 [[test]]
+name = "bookmark_lightweight_phase_a"
+path = "tests/bookmark_lightweight_phase_a.rs"
+
+[[test]]
 name = "special_bookmark_performance"
 path = "tests/special/bookmark_performance.rs"

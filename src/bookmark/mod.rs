@@ -3,6 +3,7 @@ pub(crate) mod cache;
 pub(crate) mod completion;
 pub(crate) mod debug;
 pub(crate) mod index;
+pub(crate) mod lightweight;
 pub(crate) mod migration;
 pub(crate) mod path_probe;
 pub(crate) mod standalone;

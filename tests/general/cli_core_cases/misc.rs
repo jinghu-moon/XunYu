@@ -208,3 +208,23 @@ fn config_set_and_get_roundtrip() {
     let s = String::from_utf8_lossy(&out.stdout);
     assert!(s.contains("http://127.0.0.1:7890"));
 }
+
+#[test]
+fn top_level_quiet_before_bookmark_still_works() {
+    let env = TestEnv::new();
+    let work = env.root.join("work");
+    fs::create_dir_all(&work).unwrap();
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+
+    let out = run_ok(env.cmd().args(["--quiet", "bookmark", "z", "home"]));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("__BM_CD__"));
+}
+
+#[test]
+fn global_flag_after_bookmark_still_errors() {
+    let env = TestEnv::new();
+    let out = run_err(env.cmd().args(["bookmark", "--quiet", "z"]));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("Unrecognized argument: --quiet"));
+}

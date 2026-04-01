@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::bookmark::debug::BookmarkTiming;
 use crate::bookmark_core::{
     compute_final_score, compute_match_score, compute_scope_mult, frecency_mult, pin_mult,
     source_mult, BookmarkRecordView, BookmarkSource, QueryContext, QueryScope, ScoreFactors,
@@ -77,6 +78,17 @@ pub fn query(
     ctx: &QueryContext,
     now: u64,
 ) -> Vec<RankedBookmark> {
+    query_with_timing(spec, store, ctx, now, None)
+}
+
+#[doc(hidden)]
+pub(crate) fn query_with_timing(
+    spec: &BookmarkQuerySpec,
+    store: &Store,
+    ctx: &QueryContext,
+    now: u64,
+    mut timing: Option<&mut BookmarkTiming>,
+) -> Vec<RankedBookmark> {
     if store.bookmarks.is_empty() {
         return Vec::new();
     }
@@ -94,8 +106,28 @@ pub fn query(
         .map(str::trim)
         .filter(|tag| !tag.is_empty());
 
-    let global_max = store
-        .bookmarks
+    let recalled = recall_candidate_indices(store, &tokens);
+
+    let mut candidates: Vec<&Bookmark> = match recalled {
+        Some(indices) => indices
+            .into_iter()
+            .filter_map(|idx| store.bookmarks.get(idx))
+            .collect(),
+        None => store.bookmarks.iter().collect(),
+    };
+    mark_query_timing(&mut timing, "query_recall");
+
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    candidates.retain(|bookmark| matches_tag_filter(bookmark, tag_filter));
+    mark_query_timing(&mut timing, "query_filter");
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+
+    let global_max = candidates
         .iter()
         .map(|bookmark| {
             frecency_mult(
@@ -107,16 +139,10 @@ pub fn query(
             )
         })
         .fold(1.0, f64::max);
+    mark_query_timing(&mut timing, "query_global_max");
 
-    let recalled = recall_candidate_indices(store, &tokens);
-
-    let bookmark_iter: Box<dyn Iterator<Item = &Bookmark>> = match recalled {
-        Some(indices) => Box::new(indices.into_iter().filter_map(|idx| store.bookmarks.get(idx))),
-        None => Box::new(store.bookmarks.iter()),
-    };
-
-    let mut ranked: Vec<RankedBookmarkRef<'_>> = bookmark_iter
-        .filter(|bookmark| matches_tag_filter(bookmark, tag_filter))
+    let mut ranked: Vec<RankedBookmarkRef<'_>> = candidates
+        .into_iter()
         .filter_map(|bookmark| {
             let view = as_view(bookmark);
             let match_score = if tokens.is_empty() {
@@ -152,6 +178,7 @@ pub fn query(
             })
         })
         .collect();
+    mark_query_timing(&mut timing, "query_rank");
 
     let effective_limit = query_result_limit(spec);
     if let Some(limit) = effective_limit.filter(|limit| *limit < ranked.len()) {
@@ -160,15 +187,24 @@ pub fn query(
         ranked.truncate(limit);
     }
     ranked.sort_by(rank_cmp);
+    mark_query_timing(&mut timing, "query_topk");
 
-    ranked
+    let materialized = ranked
         .into_iter()
         .map(|item| RankedBookmark {
             bookmark: item.bookmark.clone(),
             factors: item.factors,
             final_score: item.final_score,
         })
-        .collect()
+        .collect();
+    mark_query_timing(&mut timing, "query_materialize");
+    materialized
+}
+
+fn mark_query_timing(timing: &mut Option<&mut BookmarkTiming>, label: &'static str) {
+    if let Some(timing) = timing.as_mut() {
+        (*timing).mark(label);
+    }
 }
 
 fn recall_candidate_indices(store: &Store, tokens: &[String]) -> Option<Vec<usize>> {
@@ -253,23 +289,22 @@ fn rank_cmp(a: &RankedBookmarkRef<'_>, b: &RankedBookmarkRef<'_>) -> std::cmp::O
 impl QueryContext {
     #[doc(hidden)]
     pub fn from_env() -> Self {
-        Self {
-            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-            workspace: None,
-        }
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let cwd_key = normalize_cwd_key(&cwd);
+        Self { cwd, cwd_key, workspace: None }
     }
 
     #[doc(hidden)]
     pub fn from_cwd_and_store(cwd: PathBuf, store: &Store) -> Self {
-        let cwd_norm = cwd.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+        let cwd_key = normalize_cwd_key(&cwd);
         let workspace = store
             .bookmarks
             .iter()
             .filter(|bookmark| bookmark.workspace.is_some())
-            .filter(|bookmark| cwd_norm.starts_with(&bookmark.path_norm))
+            .filter(|bookmark| cwd_key.starts_with(&bookmark.path_norm))
             .max_by_key(|bookmark| bookmark.path_norm.len())
             .and_then(|bookmark| bookmark.workspace.clone());
-        Self { cwd, workspace }
+        Self { cwd, cwd_key, workspace }
     }
 
     #[doc(hidden)]
@@ -277,6 +312,10 @@ impl QueryContext {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         Self::from_cwd_and_store(cwd, store)
     }
+}
+
+fn normalize_cwd_key(cwd: &std::path::Path) -> String {
+    cwd.to_string_lossy().replace('\\', "/").to_ascii_lowercase()
 }
 
 fn source_rank(source: BookmarkSource) -> u8 {
@@ -347,6 +386,7 @@ mod tests {
         let store = Store::new();
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
+            cwd_key: "c:/dev".to_string(),
             workspace: None,
         };
         let result = query(&BookmarkQuerySpec::default(), &store, &ctx, 100);
@@ -379,6 +419,7 @@ mod tests {
         let store = make_store();
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
+            cwd_key: "c:/dev".to_string(),
             workspace: Some("xunyu".to_string()),
         };
         let spec = BookmarkQuerySpec {
@@ -399,6 +440,7 @@ mod tests {
         store.learn("C:/dev/client-tools", cwd, None, 10).unwrap();
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
+            cwd_key: "c:/dev".to_string(),
             workspace: None,
         };
         let spec = BookmarkQuerySpec {
@@ -418,6 +460,7 @@ mod tests {
         store.learn("C:/dev/client-tools", cwd, None, 10).unwrap();
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
+            cwd_key: "c:/dev".to_string(),
             workspace: None,
         };
         let spec = BookmarkQuerySpec {
@@ -437,6 +480,7 @@ mod tests {
             .unwrap();
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
+            cwd_key: "c:/dev".to_string(),
             workspace: None,
         };
         let spec = BookmarkQuerySpec {
@@ -452,6 +496,7 @@ mod tests {
         let store = make_store();
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
+            cwd_key: "c:/dev".to_string(),
             workspace: Some("xunyu".to_string()),
         };
         let spec = BookmarkQuerySpec {

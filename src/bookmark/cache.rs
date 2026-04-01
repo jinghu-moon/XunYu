@@ -8,12 +8,13 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use rkyv::{from_bytes, to_bytes, rancor::Error as RkyvError, util::AlignedVec};
+use rkyv::{access, from_bytes, to_bytes, rancor::Error as RkyvError, util::AlignedVec};
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::bookmark::index::PersistedBookmarkIndex;
-use crate::bookmark_core::BookmarkSource;
+use crate::bookmark::index::{BookmarkIndex, PersistedBookmarkIndex};
+use crate::bookmark::lightweight::BookmarkArchivedPayloadOwner;
+use crate::bookmark_core::{normalize_name, BookmarkSource};
 use crate::bookmark_state::Bookmark;
 use crate::bookmark::debug::BookmarkLoadTiming;
 
@@ -76,9 +77,7 @@ impl CacheHeader {
 pub(crate) struct CachedBookmark {
     pub(crate) id: String,
     pub(crate) name: Option<String>,
-    pub(crate) name_norm: Option<String>,
     pub(crate) path: String,
-    pub(crate) path_norm: String,
     pub(crate) source: u8,
     pub(crate) pinned: bool,
     pub(crate) tags: Vec<String>,
@@ -266,45 +265,98 @@ pub(crate) fn load_cache_payload_checked(
     if std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some() {
         return Ok(None);
     }
-    let header = match read_cache_header(path)? {
-        Some(header) => header,
+    let aligned = match read_validated_aligned_payload(
+        path,
+        current_schema_version,
+        fingerprint,
+        timing.as_deref_mut(),
+    )? {
+        Some(aligned) => aligned,
         None => return Ok(None),
     };
-    if validate_cache_header(
-        &header,
-        current_schema_version,
-        fingerprint.len,
-        fingerprint.modified_ms,
-        fingerprint.hash,
-    )
-    .is_err()
-    {
-        return Ok(None);
-    }
-    if let Some(ref mut timing) = timing {
-        timing.mark("read_cache_header");
-    }
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(_) => return Ok(None),
-    };
-    let payload_end = HEADER_SIZE.saturating_add(header.payload_len as usize);
-    if payload_end > bytes.len() {
-        return Ok(None);
-    }
-    let payload_bytes = &bytes[HEADER_SIZE..payload_end];
-    // The fixed 52-byte header makes the payload slice potentially unaligned,
-    // so we copy it into an aligned buffer before checked access/deserialization.
-    let mut aligned: AlignedVec<CACHE_PAYLOAD_ALIGNMENT> =
-        AlignedVec::with_capacity(payload_bytes.len());
-    aligned.extend_from_slice(payload_bytes);
-    if let Some(ref mut timing) = timing {
-        timing.mark("read_cache_body");
-    }
     match from_bytes::<CachePayload, RkyvError>(&aligned) {
-        Ok(payload) => Ok(Some(payload)),
+        Ok(payload) => {
+            if let Some(ref mut timing) = timing {
+                timing.mark("deserialize_cache_payload");
+            }
+            Ok(Some(payload))
+        }
         Err(_) => Ok(None),
     }
+}
+
+pub(crate) struct CacheStoreData {
+    pub(crate) bookmarks: Vec<Bookmark>,
+    pub(crate) index: Option<BookmarkIndex>,
+}
+
+pub(crate) fn load_cache_owner_checked(
+    path: &Path,
+    current_schema_version: u32,
+    fingerprint: &SourceFingerprint,
+    timing: Option<&mut BookmarkLoadTiming>,
+) -> io::Result<Option<BookmarkArchivedPayloadOwner>> {
+    if std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some() {
+        return Ok(None);
+    }
+    let aligned = match read_validated_aligned_payload(
+        path,
+        current_schema_version,
+        fingerprint,
+        timing,
+    )? {
+        Some(aligned) => aligned,
+        None => return Ok(None),
+    };
+    Ok(Some(BookmarkArchivedPayloadOwner::from_aligned_bytes(aligned)))
+}
+
+pub(crate) fn load_cache_store_data_checked(
+    path: &Path,
+    current_schema_version: u32,
+    fingerprint: &SourceFingerprint,
+    mut timing: Option<&mut BookmarkLoadTiming>,
+) -> io::Result<Option<CacheStoreData>> {
+    if std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some() {
+        return Ok(None);
+    }
+    let aligned = match read_validated_aligned_payload(
+        path,
+        current_schema_version,
+        fingerprint,
+        timing.as_deref_mut(),
+    )? {
+        Some(aligned) => aligned,
+        None => return Ok(None),
+    };
+
+    let archived = match access::<rkyv::Archived<CachePayload>, RkyvError>(&aligned) {
+        Ok(archived) => archived,
+        Err(_) => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("deserialize_cache_payload");
+    }
+
+    let bookmarks: Vec<Bookmark> = archived
+        .bookmarks
+        .as_slice()
+        .iter()
+        .map(materialize_archived_bookmark)
+        .collect();
+    if let Some(ref mut timing) = timing {
+        timing.mark("materialize_cache_payload");
+    }
+
+    let index = archived
+        .index
+        .as_ref()
+        .and_then(|index| BookmarkIndex::from_archived_embedded_persisted(index, bookmarks.len()));
+    if let Some(ref mut timing) = timing {
+        timing.mark("deserialize_cache_index");
+    }
+
+    Ok(Some(CacheStoreData { bookmarks, index }))
 }
 
 pub(crate) fn write_cache_payload_atomic(
@@ -338,6 +390,53 @@ pub(crate) fn write_cache_payload_atomic(
         payload_len: payload_bytes.len() as u64,
     };
     write_cache_atomic(path, &header, payload_bytes.as_slice())
+}
+
+fn read_validated_aligned_payload(
+    path: &Path,
+    current_schema_version: u32,
+    fingerprint: &SourceFingerprint,
+    mut timing: Option<&mut BookmarkLoadTiming>,
+) -> io::Result<Option<AlignedVec<CACHE_PAYLOAD_ALIGNMENT>>> {
+    let header = match read_cache_header(path)? {
+        Some(header) => header,
+        None => return Ok(None),
+    };
+    if validate_cache_header(
+        &header,
+        current_schema_version,
+        fingerprint.len,
+        fingerprint.modified_ms,
+        fingerprint.hash,
+    )
+    .is_err()
+    {
+        return Ok(None);
+    }
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_header");
+    }
+
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_file");
+    }
+
+    let payload_end = HEADER_SIZE.saturating_add(header.payload_len as usize);
+    if payload_end > bytes.len() {
+        return Ok(None);
+    }
+    let payload_bytes = &bytes[HEADER_SIZE..payload_end];
+    let mut aligned: AlignedVec<CACHE_PAYLOAD_ALIGNMENT> =
+        AlignedVec::with_capacity(payload_bytes.len());
+    aligned.extend_from_slice(payload_bytes);
+    if let Some(ref mut timing) = timing {
+        timing.mark("align_cache_payload");
+    }
+    Ok(Some(aligned))
 }
 
 pub(crate) struct CacheLock(#[allow(dead_code)] fs::File);
@@ -432,9 +531,7 @@ impl CachedBookmark {
         Self {
             id: bookmark.id.clone(),
             name: bookmark.name.clone(),
-            name_norm: bookmark.name_norm.clone(),
             path: bookmark.path.clone(),
-            path_norm: bookmark.path_norm.clone(),
             source: source_code(bookmark.source),
             pinned: bookmark.pinned,
             tags: bookmark.tags.clone(),
@@ -448,12 +545,14 @@ impl CachedBookmark {
     }
 
     pub(crate) fn into_bookmark(self) -> Bookmark {
+        let name_norm = self.name.as_deref().map(normalize_name);
+        let path_norm = self.path.to_ascii_lowercase();
         Bookmark {
             id: self.id,
             name: self.name,
-            name_norm: self.name_norm,
+            name_norm,
             path: self.path,
-            path_norm: self.path_norm,
+            path_norm,
             source: source_from_code(self.source),
             pinned: self.pinned,
             tags: self.tags,
@@ -464,6 +563,49 @@ impl CachedBookmark {
             visit_count: self.visit_count,
             frecency_score: self.frecency_score,
         }
+    }
+}
+
+fn materialize_archived_bookmark(
+    archived: &rkyv::Archived<CachedBookmark>,
+) -> Bookmark {
+    let name = archived
+        .name
+        .as_ref()
+        .map(|value| value.as_str().to_string());
+    let path = archived.path.as_str().to_string();
+    let name_norm = name.as_deref().map(normalize_name);
+    let path_norm = path.to_ascii_lowercase();
+
+    Bookmark {
+        id: archived.id.as_str().to_string(),
+        name,
+        name_norm,
+        path,
+        path_norm,
+        source: source_from_code(archived.source),
+        pinned: archived.pinned,
+        tags: archived
+            .tags
+            .as_slice()
+            .iter()
+            .map(|tag| tag.as_str().to_string())
+            .collect(),
+        desc: archived.desc.as_str().to_string(),
+        workspace: archived
+            .workspace
+            .as_ref()
+            .map(|value| value.as_str().to_string()),
+        created_at: archived.created_at.to_native(),
+        last_visited: archived
+            .last_visited
+            .as_ref()
+            .map(|value| value.to_native()),
+        visit_count: archived
+            .visit_count
+            .as_ref()
+            .map(|value| value.to_native()),
+        frecency_score: archived.frecency_score.to_native(),
     }
 }
 
@@ -779,9 +921,7 @@ mod tests {
 
         assert_eq!(cached.id, bookmark.id);
         assert_eq!(cached.name, bookmark.name);
-        assert_eq!(cached.name_norm, bookmark.name_norm);
         assert_eq!(cached.path, bookmark.path);
-        assert_eq!(cached.path_norm, bookmark.path_norm);
         assert_eq!(cached.tags, bookmark.tags);
         assert_eq!(cached.desc, bookmark.desc);
         assert_eq!(cached.workspace, bookmark.workspace);
@@ -809,9 +949,7 @@ mod tests {
         let cached = CachedBookmark {
             id: "1".to_string(),
             name: Some("home".to_string()),
-            name_norm: Some("home".to_string()),
             path: "C:/work/home".to_string(),
-            path_norm: "c:/work/home".to_string(),
             source: 1,
             pinned: true,
             tags: vec!["work".to_string()],
@@ -969,6 +1107,177 @@ mod tests {
 
         let loaded = load_cache_payload_checked(&cache, 1, &fingerprint, None).unwrap();
         assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn load_cache_owner_checked_returns_owner_on_hit() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+
+        let mut store = Store::new();
+        store
+            .set("client-api", "C:/work/client-api", Path::new("C:/work"), None, 10)
+            .unwrap();
+        store
+            .set_explicit_metadata(
+                "client-api",
+                vec!["team".to_string(), "api".to_string()],
+                "main service".to_string(),
+            )
+            .unwrap();
+        store.bookmarks[0].workspace = Some("xunyu".to_string());
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let payload = CachePayload {
+            bookmarks: store
+                .bookmarks
+                .iter()
+                .map(CachedBookmark::from_bookmark)
+                .collect(),
+            index: Some(BookmarkIndex::to_persisted(&store.bookmarks)),
+        };
+
+        write_cache_payload_atomic(&cache, 1, &fingerprint, &payload).unwrap();
+        let owner = load_cache_owner_checked(&cache, 1, &fingerprint, None)
+            .unwrap()
+            .expect("expected cache owner");
+        let rows = owner.rows().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows.get(0).unwrap().name(), Some("client-api"));
+    }
+
+    #[test]
+    fn cache_owner_exposes_archived_row_slice() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+
+        let mut store = Store::new();
+        store
+            .set("client-api", "C:/work/client-api", Path::new("C:/work"), None, 10)
+            .unwrap();
+        store
+            .set_explicit_metadata(
+                "client-api",
+                vec!["team".to_string(), "api".to_string()],
+                "main service".to_string(),
+            )
+            .unwrap();
+        store.bookmarks[0].workspace = Some("xunyu".to_string());
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let payload = CachePayload {
+            bookmarks: store
+                .bookmarks
+                .iter()
+                .map(CachedBookmark::from_bookmark)
+                .collect(),
+            index: Some(BookmarkIndex::to_persisted(&store.bookmarks)),
+        };
+
+        write_cache_payload_atomic(&cache, 1, &fingerprint, &payload).unwrap();
+        let owner = load_cache_owner_checked(&cache, 1, &fingerprint, None)
+            .unwrap()
+            .expect("expected cache owner");
+        let row = owner.rows().unwrap().get(0).unwrap();
+        let tags: Vec<&str> = row.tags().collect();
+        assert_eq!(row.path(), "C:/work/client-api");
+        assert_eq!(row.workspace(), Some("xunyu"));
+        assert_eq!(tags, vec!["team", "api"]);
+    }
+
+    #[test]
+    fn cache_owner_exposes_archived_index_view() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+
+        let mut store = Store::new();
+        store
+            .set("client-api", "C:/work/client-api", Path::new("C:/work"), None, 10)
+            .unwrap();
+        store
+            .set_explicit_metadata(
+                "client-api",
+                vec!["team".to_string(), "api".to_string()],
+                "main service".to_string(),
+            )
+            .unwrap();
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let payload = CachePayload {
+            bookmarks: store
+                .bookmarks
+                .iter()
+                .map(CachedBookmark::from_bookmark)
+                .collect(),
+            index: Some(BookmarkIndex::to_persisted(&store.bookmarks)),
+        };
+
+        write_cache_payload_atomic(&cache, 1, &fingerprint, &payload).unwrap();
+        let owner = load_cache_owner_checked(&cache, 1, &fingerprint, None)
+            .unwrap()
+            .expect("expected cache owner");
+        let index = owner.index_view().unwrap().expect("expected archived index");
+        assert_eq!(index.lookup_prefix("clie"), vec![0]);
+        assert_eq!(index.lookup_prefix("tea"), vec![0]);
+    }
+
+    #[test]
+    fn lightweight_read_falls_back_to_owned_store_on_cache_miss() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+        fs::write(&cache, b"not-a-valid-cache").unwrap();
+
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let owner = load_cache_owner_checked(&cache, 1, &fingerprint, None).unwrap();
+        assert!(owner.is_none());
+    }
+
+    #[test]
+    fn cache_hit_lightweight_read_avoids_owned_bookmark_materialization() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        let debug = dir.path().join("lightweight-debug.log");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+
+        let mut store = Store::new();
+        store
+            .set("client-api", "C:/work/client-api", Path::new("C:/work"), None, 10)
+            .unwrap();
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let payload = CachePayload {
+            bookmarks: store
+                .bookmarks
+                .iter()
+                .map(CachedBookmark::from_bookmark)
+                .collect(),
+            index: Some(BookmarkIndex::to_persisted(&store.bookmarks)),
+        };
+
+        write_cache_payload_atomic(&cache, 1, &fingerprint, &payload).unwrap();
+        unsafe {
+            std::env::set_var("XUN_BM_DEBUG_FILE", &debug);
+        }
+        let mut timing = BookmarkLoadTiming::new(&source, fingerprint.len as usize);
+        let owner = load_cache_owner_checked(&cache, 1, &fingerprint, Some(&mut timing))
+            .unwrap()
+            .expect("expected cache owner");
+        drop(owner);
+        timing.finish(1, true, &[("cache", "hit".to_string())]);
+        unsafe {
+            std::env::remove_var("XUN_BM_DEBUG_FILE");
+        }
+
+        let line = fs::read_to_string(&debug).unwrap();
+        assert!(line.contains("read_cache_header="));
+        assert!(line.contains("read_cache_file="));
+        assert!(line.contains("align_cache_payload="));
+        assert!(!line.contains("materialize_cache_payload="));
     }
 
     fn header_for_fingerprint(fingerprint: &SourceFingerprint) -> CacheHeader {

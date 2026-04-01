@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::bookmark::cache::{CachePayload, CachedBookmark, SourceFingerprint, load_cache_payload_checked, store_cache_path, write_cache_payload_atomic};
+use crate::bookmark::cache::{CachePayload, CachedBookmark, SourceFingerprint, load_cache_store_data_checked, store_cache_path, write_cache_payload_atomic};
 use crate::bookmark::index::BookmarkIndex;
 use crate::bookmark::debug::BookmarkLoadTiming;
 use crate::bookmark::undo::{BookmarkUndoBatch, BookmarkUndoOp};
@@ -155,18 +155,25 @@ impl Store {
         let mut timing = BookmarkLoadTiming::new(path, fingerprint.len as usize);
         timing.mark("stat_file");
         let cache_disabled = std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some();
-        if let Some(payload) = load_cache_payload_checked(
+        if let Some(payload) = load_cache_store_data_checked(
             &store_cache_path(path),
             CURRENT_SCHEMA_VERSION,
             &fingerprint,
             if cache_disabled { None } else { Some(&mut timing) },
         )? {
             let bookmark_count = payload.bookmarks.len();
-            let bookmarks: Vec<Bookmark> = payload
-                .bookmarks
-                .into_iter()
-                .map(CachedBookmark::into_bookmark)
-                .collect();
+            let store = Self {
+                schema_version: CURRENT_SCHEMA_VERSION,
+                bookmarks: payload.bookmarks,
+                dirty_count: 0,
+                last_save_at: 0,
+                storage_path: Some(path.to_path_buf()),
+                index: OnceLock::new(),
+            };
+            if let Some(index) = payload.index {
+                let _ = store.index.set(index);
+            }
+            timing.mark("restore_cache_index");
             timing.finish(
                 bookmark_count,
                 true,
@@ -179,20 +186,6 @@ impl Store {
                     },
                 )],
             );
-            let store = Self {
-                schema_version: CURRENT_SCHEMA_VERSION,
-                bookmarks,
-                dirty_count: 0,
-                last_save_at: 0,
-                storage_path: Some(path.to_path_buf()),
-                index: OnceLock::new(),
-            };
-            if let Some(index) = payload
-                .index
-                .and_then(|persisted| BookmarkIndex::from_persisted(persisted, &store.bookmarks))
-            {
-                let _ = store.index.set(index);
-            }
             return Ok(store);
         }
 

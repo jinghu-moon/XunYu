@@ -83,6 +83,9 @@ cargo bench --bench bookmark_bench_divan --no-run
 - `perf_bookmark_release_compare_matrix_50000`
 - `perf_bookmark_release_compare_matrix_50000_compact`
 - `perf_bookmark_release_compare_matrix_50000_binary_cache`
+- `perf_release_startup_compare_version_only`
+- `perf_bookmark_release_complete_20000_lightweight_view`
+- `perf_bookmark_release_complete_50000_lightweight_view`
 
 执行命令：
 
@@ -148,6 +151,19 @@ cargo test --test special_bookmark_performance perf_bookmark_release_compare_mat
 - `xun __complete bookmark z`：约 `56ms`
 - `bm completion backend`：约 `45ms`
 
+补充启动基线：
+
+- `xun --version`：约 `27~51ms`
+- `bm --version`：约 `17~28ms`
+- `xun.exe`：约 `4.79 MiB`
+- `bm.exe`：约 `1.03 MiB`
+
+结论：
+
+- `xun` 与 `bm` 的一部分差值发生在进入 bookmark 业务逻辑之前
+- 这部分差值更像是总入口装载成本，而不是 `Store::load` 或 query core 的差异
+- 继续压缩 `xun` 的方式，应优先围绕总入口瘦身，而不是继续打 bookmark 内核
+
 ### 4.3 release timing 拆分
 
 在 `XUN_BM_TIMING=1` 下，5000 条数据的单次样例约为：
@@ -176,14 +192,14 @@ bookmark timing [z] db_path=0ms store_load=6ms build_spec=0ms build_ctx=0ms quer
 release 命令级对照：
 
 - `xun bookmark z --list`（20k, raw JSON, cache disabled）：约 `252ms`
-- `xun bookmark z --list`（20k, compact JSON, cache disabled）：约 `237ms`
+- `xun bookmark z --list`（20k, compact JSON, cache disabled）：约 `223~237ms`
 - `xun bookmark z --list`（20k, warm binary cache hit）：约 `65ms`
 - `bm z --list`（20k, raw JSON, cache disabled）：约 `235ms`
 - `bm z --list`（20k, compact JSON, cache disabled）：约 `208ms`
 - `bm z --list`（20k, warm binary cache hit）：约 `54ms`
 - `xun __complete bookmark z`（20k, raw JSON, cache disabled）：约 `258ms`
 - `xun __complete bookmark z`（20k, compact JSON, cache disabled）：约 `255ms`
-- `xun __complete bookmark z`（20k, warm binary cache hit）：约 `98ms`
+- `xun __complete bookmark z`（20k, warm binary cache hit）：约 `73~98ms`
 - `xun bookmark z --list`（50k, raw JSON, cache disabled）：约 `843ms`
 - `xun bookmark z --list`（50k, compact JSON, cache disabled）：约 `520ms`
 - `xun bookmark z --list`（50k, warm binary cache hit）：约 `119ms`
@@ -192,7 +208,9 @@ release 命令级对照：
 - `bm z --list`（50k, warm binary cache hit）：约 `111ms`
 - `xun __complete bookmark z`（50k, raw JSON, cache disabled）：约 `613ms`
 - `xun __complete bookmark z`（50k, compact JSON, cache disabled）：约 `602ms`
-- `xun __complete bookmark z`（50k, warm binary cache hit）：约 `206ms`
+- `xun __complete bookmark z`（50k, warm binary cache hit）：约 `133~206ms`
+- `xun __complete bookmark z`（20k, cache-hit owned vs lightweight）：约 `55ms vs 56ms`
+- `xun __complete bookmark z`（50k, cache-hit owned vs lightweight）：约 `94ms vs 98ms`
 
 结论：
 
@@ -203,6 +221,29 @@ release 命令级对照：
 - 对 `z --list`，20k 提速约 `3.6x`，50k 提速约 `4.4x`
 - 对 `__complete`，20k 提速约 `2.6x`，50k 提速约 `2.9x`
 - 旧结论“binary cache + JSON payload 不值得默认开启”已经失效；当前应以 `rkyv` payload 结果为准
+- `xun bookmark ...` 已增加前置 fast-path，能绕开顶层大 `argh` 解析；对普通 bookmark 命令有局部收益，但不会改变 `xun` 与 `bm` 的总装载体积差
+- `bookmark completion/query` 已追加一轮轻量优化：
+  候选召回后再计算 `global_max`，并在 name/basename 命中高分时跳过路径分段与 subsequence 模糊评分
+- 分段调试显示，20k 热命中时 `complete.bookmark` 里：
+  `query_recall≈1ms`、`query_rank≈4ms`，其它 query 子阶段接近 `0ms`
+- 这说明 completion 当前剩余主要成本已重新回到 `store_load` 和总入口装载，而不再是 query 内核本身
+- 进一步拆解 cache-hit 的 `store_load` 可见：
+  - 20k 热命中样本：`read_cache_file≈1ms`、`deserialize_cache_payload≈15ms`、`materialize_cache_payload≈2ms`、`deserialize_cache_index≈0ms`
+  - 50k 热命中样本：`read_cache_file≈2~3ms`、`deserialize_cache_payload≈4ms`、`materialize_cache_payload≈12ms`、`deserialize_cache_index≈6ms`
+- 因此下一阶段如果继续打性能，优先级应是：
+  `cache payload materialize` > `总入口装载` > `query 内核`
+- 当前已落地的有效收口：
+  - embedded index 恢复跳过指纹重算与二次清洗
+  - binary cache payload 移除 `name_norm / path_norm` 这类可推导字段，加载时再重建
+  - embedded index 从 archived 结构直接恢复，索引结构从 `BTreeMap` 收口为按 term 排序的 `Vec`
+- lightweight runtime view 的实验性结论：
+  - 工程正确性已验证
+  - cache-hit 下 borrowed 路径能显著压低 `store_load`
+  - 但会把更多成本转移到 `query_recall / query_rank`
+  - 当前 release 端到端对 `__complete` 没有形成稳定净收益
+  - 因此暂不建议继续默认扩张 lightweight runtime view
+- 已验证无收益并回退的尝试：
+  - 将 persisted index 项从 `usize` 压到 `u32`
 
 ### 4.5 completion 内存归因
 
