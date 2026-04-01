@@ -11,14 +11,12 @@ fn init_powershell_contains_wrappers() {
     assert!(s.contains("_xun_apply_magic"));
     assert!(s.contains("__ENV_SET__"));
     for name in [
-        "function list",
-        "function gc",
+        "function bm",
         "function delete",
-        "function rename",
-        "function tag",
-        "function recent",
-        "function stats",
-        "function dedup",
+        "function z",
+        "function zi",
+        "function o",
+        "function oi",
         "function bak",
         "function xtree",
     ] {
@@ -47,10 +45,10 @@ fn recent_outputs_tsv() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
-    run_ok(env.cmd().args(["touch", "home"]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "touch", "home"]));
 
-    let output = run_ok(env.cmd().args(["recent", "-n", "1"]));
+    let output = run_ok(env.cmd().args(["bookmark", "recent", "-n", "1"]));
     let line = String::from_utf8_lossy(&output.stdout);
     let first = line.lines().next().unwrap_or("");
     let parts: Vec<&str> = first.split('\t').collect();
@@ -64,8 +62,8 @@ fn stats_outputs_tsv() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
-    let output = run_ok(env.cmd().args(["stats"]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+    let output = run_ok(env.cmd().args(["bookmark", "stats"]));
     let s = String::from_utf8_lossy(&output.stdout);
     let mut found = false;
     for line in s.lines() {
@@ -83,10 +81,10 @@ fn del_deletes_existing_bookmark() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
     run_ok(env.cmd().args(["del", "-bm", "home"]));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(!v.as_array().unwrap().iter().any(|x| x["name"] == "home"));
 }
@@ -114,20 +112,83 @@ fn check_outputs_missing_stale_and_duplicate_in_json() {
     let stale_ts = now.saturating_sub(100 * 24 * 3600);
 
     let db = json!({
-        "missing": { "path": env.root.join("missing").to_str().unwrap(), "tags": [], "visit_count": 0, "last_visited": 0 },
-        "stale": { "path": stale_dir.to_str().unwrap(), "tags": [], "visit_count": 1, "last_visited": stale_ts },
-        "dup1": { "path": dup_dir.to_str().unwrap(), "tags": [], "visit_count": 1, "last_visited": now },
-        "dup2": { "path": dup_dir.to_str().unwrap(), "tags": [], "visit_count": 2, "last_visited": now }
+        "schema_version": 1,
+        "bookmarks": [
+            {
+                "id": "1",
+                "name": "missing",
+                "name_norm": "missing",
+                "path": env.root.join("missing").to_string_lossy().replace('\\', "/"),
+                "path_norm": env.root.join("missing").to_string_lossy().replace('\\', "/").to_lowercase(),
+                "source": "Explicit",
+                "pinned": false,
+                "tags": [],
+                "desc": "",
+                "workspace": null,
+                "created_at": 1,
+                "last_visited": 0,
+                "visit_count": 0,
+                "frecency_score": 0.0
+            },
+            {
+                "id": "2",
+                "name": "stale",
+                "name_norm": "stale",
+                "path": stale_dir.to_string_lossy().replace('\\', "/"),
+                "path_norm": stale_dir.to_string_lossy().replace('\\', "/").to_lowercase(),
+                "source": "Explicit",
+                "pinned": false,
+                "tags": [],
+                "desc": "",
+                "workspace": null,
+                "created_at": 1,
+                "last_visited": stale_ts,
+                "visit_count": 1,
+                "frecency_score": 1.0
+            },
+            {
+                "id": "3",
+                "name": "dup1",
+                "name_norm": "dup1",
+                "path": dup_dir.to_string_lossy().replace('\\', "/"),
+                "path_norm": dup_dir.to_string_lossy().replace('\\', "/").to_lowercase(),
+                "source": "Explicit",
+                "pinned": false,
+                "tags": [],
+                "desc": "",
+                "workspace": null,
+                "created_at": 1,
+                "last_visited": now,
+                "visit_count": 1,
+                "frecency_score": 1.0
+            },
+            {
+                "id": "4",
+                "name": "dup2",
+                "name_norm": "dup2",
+                "path": dup_dir.to_string_lossy().replace('\\', "/"),
+                "path_norm": dup_dir.to_string_lossy().replace('\\', "/").to_lowercase(),
+                "source": "Explicit",
+                "pinned": false,
+                "tags": [],
+                "desc": "",
+                "workspace": null,
+                "created_at": 1,
+                "last_visited": now,
+                "visit_count": 2,
+                "frecency_score": 2.0
+            }
+        ]
     });
     fs::write(
-        env.root.join(".xun.json"),
+        env.root.join(".xun.bookmark.json"),
         serde_json::to_string(&db).unwrap(),
     )
     .unwrap();
 
     let out = run_ok(
         env.cmd()
-            .args(["check", "--format", "json", "--days", "30"]),
+            .args(["bookmark", "check", "--format", "json", "--days", "30"]),
     );
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
     let arr = v.as_array().unwrap();

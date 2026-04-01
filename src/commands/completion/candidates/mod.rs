@@ -1,8 +1,6 @@
-use crate::fuzzy::{cwd_boost, frecency};
-
 #[cfg(feature = "redirect")]
 use super::cache::cached_audit_txs;
-use super::cache::{cached_config_keys_and_profiles, cached_ctx_profiles, cached_db};
+use super::cache::{cached_config_keys_and_profiles, cached_ctx_profiles};
 use super::types::CompletionItem;
 use super::{
     ACL_SUBCOMMANDS, CONFIG_SUBCOMMANDS, CTX_SUBCOMMANDS, ENV_ANNOTATE_SUBCOMMANDS,
@@ -14,7 +12,6 @@ use super::{
 };
 
 mod common;
-mod dynamic_bookmarks;
 mod dynamic_config;
 mod dynamic_profiles;
 mod flags;

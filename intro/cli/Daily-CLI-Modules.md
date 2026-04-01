@@ -1,10 +1,10 @@
 ﻿# 日常 CLI 模块导读
 
-本文档聚焦 `xun` 里最适合日常高频使用、也最容易拿来建立项目直觉的四组命令：`bookmarks`、`proxy`、`ports`、`tree`。
+本文档聚焦 `xun` 里最适合日常高频使用、也最容易拿来建立项目直觉的四组命令：`bookmark`、`proxy`、`ports`、`tree`。
 
 和 `env`、`acl`、`redirect`、`diff` 这种“系统级子模块”相比，这四组命令更像是项目的日常工作台：
 
-- `bookmarks` 负责目录导航、书签维护和标签组织。
+- `bookmark` 负责目录导航、书签维护和标签组织。
 - `proxy` 负责代理状态查看、配置写入和带代理执行。
 - `ports` 负责端口占用、进程查询与快速结束进程。
 - `tree` 负责目录树构建、过滤、统计和输出。
@@ -31,7 +31,7 @@ src/main.rs
   -> src/cli.rs 暴露顶层 Xun / SubCommand
   -> src/commands/dispatch/mod.rs
      -> src/commands/dispatch/misc.rs
-        -> bookmarks / proxy / ports / tree
+        -> bookmark / proxy / ports / tree
 ```
 
 这个结构的价值在于：
@@ -42,31 +42,32 @@ src/main.rs
 
 读这四组命令时，建议都按这个顺序走一遍，不要一上来就钻进执行细节。
 
-## 3. 书签模块：`bookmarks`
+## 3. 书签模块：`bookmark`
 
-### 3.1 命令定义层：`src/cli/bookmarks.rs`
+### 3.1 命令定义层：`src/bookmark/cli_namespace.rs` + `src/bookmark/cli_commands.rs`
 
-这一层回答的是“书签系统对外暴露了哪些动作”。从定义上看，`bookmarks` 不是单命令，而是一整组围绕目录导航的数据管理能力：
+这一层回答的是“书签系统对外暴露了哪些动作”。从定义上看，`bookmark` 不是单命令，而是一整组围绕目录导航的数据管理能力：
 
-- 列表与查询：`list`、`recent`、`stats`、`all`、`fuzzy`、`keys`
-- 导航动作：`z`、`o`、`ws`
-- 数据写入：`sv`、`set`、`touch`、`rename`
+- 列表与查询：`list`、`recent`、`stats`、`all`、`keys`
+- 导航动作：`z`、`zi`、`o`、`oi`、`open`
+- 数据写入：`save`、`set`、`touch`、`rename`、`pin`、`learn`
 - 标签管理：`tag add/remove/list/rename`
 - 维护动作：`check`、`gc`、`dedup`
 - 数据交换：`export`、`import`
 
-这里最值得注意的一点是：**书签既有面向人类交互的命令，也有面向脚本 / 补全 / 机器消费的命令**。例如 `all`、`fuzzy`、`keys` 就明显偏机器接口。
+这里最值得注意的一点是：**书签既有面向人类交互的命令，也有面向脚本 / 补全 / 机器消费的命令**。例如 `all`、`keys`、`z --list` 就明显偏机器接口。
 
-### 3.2 执行层拆分：`src/commands/bookmarks/*`
+### 3.2 执行层拆分：`src/bookmark/commands/*`
 
 书签模块是一个职责边界很清晰的命令族：
 
 - `list.rs`：负责展示、最近访问、统计、机器输出等“读路径”。
-- `navigation.rs`：负责 `z`、`open`、`workspace` 等“跳转路径”。
+- `navigation.rs`：负责 `z / zi / o / oi / open` 等“导航路径”。
 - `mutate.rs`：负责 `save`、`set`、`touch`、`rename`、`delete_bookmark` 等“写路径”。
 - `tags.rs`：负责标签增删改查。
 - `io.rs`：负责导入导出。
 - `maintenance/*`：负责 `check`、`gc`、`dedup` 等“数据健康治理”。
+- `integration.rs`：负责 `learn / init / import --from ...` 等外部集成。
 
 这种拆法很符合单一职责原则：
 
@@ -80,11 +81,11 @@ src/main.rs
 
 虽然“删除书签”能力最终会落到 `bookmarks::delete_bookmark()`，但它的 CLI 入口不是单独的 `rm-bookmark` 之类，而是复用了更通用的 `delete` 命令：
 
-- `src/cli/bookmarks.rs` 定义了 `delete`，并提供 `--bookmark / -bm`
+- `src/bookmark/cli_commands.rs` 定义了 `delete`，并提供 `--bookmark / -bm`
 - `src/commands/dispatch/misc.rs` 把它分发到 `src/commands/delete/*`
 - `src/commands/delete/cmd.rs` 检查 `args.bookmark`
 - 如果是 `--bookmark`，再转到 `src/commands/delete/cmd/bookmark.rs`
-- 最终调用 `bookmarks::delete_bookmark()`
+- 最终调用 `bookmarks::delete_bookmark()`；其实现源码位于 `src/bookmark/commands/mutate.rs`
 
 这说明项目并没有把“删除”只理解为书签动作，而是抽象成了一个更通用的删除框架；书签删除只是其中一个分支。
 
@@ -110,17 +111,19 @@ src/main.rs
 
 ### 3.5 推荐阅读顺序
 
-1. `src/cli/bookmarks.rs`
-2. `src/commands/dispatch/misc.rs`
-3. `src/commands/bookmarks/mod.rs`
-4. `src/commands/bookmarks/list.rs`
-5. `src/commands/bookmarks/navigation.rs`
-6. `src/commands/bookmarks/mutate.rs`
-7. `src/commands/bookmarks/tags.rs`
-8. `src/commands/bookmarks/io.rs`
-9. `src/commands/bookmarks/maintenance/*`
-10. `src/commands/dashboard/handlers/bookmarks.rs`
-11. `dashboard-ui/src/components/BookmarksPanel.vue`
+1. `src/bookmark/cli_namespace.rs`
+2. `src/bookmark/cli_commands.rs`
+3. `src/commands/dispatch/misc.rs`
+4. `src/bookmark/commands/mod.rs`
+5. `src/bookmark/commands/list.rs`
+6. `src/bookmark/commands/navigation.rs`
+7. `src/bookmark/commands/mutate.rs`
+8. `src/bookmark/commands/tags.rs`
+9. `src/bookmark/commands/io.rs`
+10. `src/bookmark/commands/integration.rs`
+11. `src/bookmark/commands/maintenance/*`
+12. `src/commands/dashboard/handlers/bookmarks.rs`
+13. `dashboard-ui/src/components/BookmarksPanel.vue`
 
 ## 4. 代理模块：`proxy`
 
@@ -322,7 +325,7 @@ src/main.rs
 
 ### 6.5 Dashboard 映射
 
-目前这部分能力没有像 `bookmarks / proxy / ports` 那样对应到独立 Dashboard 面板。
+目前这部分能力没有像 `bookmark / proxy / ports` 那样对应到独立 Dashboard 面板。
 
 换句话说，`tree` 现在更像一个纯 CLI 工具模块：
 
@@ -364,7 +367,7 @@ src/main.rs
 
 在这四组里：
 
-- `bookmarks`、`proxy`、`ports` 同时服务 CLI 与 Dashboard
+- `bookmark`、`proxy`、`ports` 同时服务 CLI 与 Dashboard
 - `tree` 目前主要服务 CLI
 
 这能帮助你快速判断一个子模块处于哪种成熟阶段：
@@ -385,7 +388,7 @@ src/main.rs
 
 如果你准备按“从最容易建立直觉，到最复杂系统”的顺序继续理解项目，建议：
 
-1. 先读 `bookmarks`
+1. 先读 `bookmark`
 2. 再读 `proxy`
 3. 再读 `ports`
 4. 再读 `tree`
@@ -398,7 +401,7 @@ src/main.rs
 
 ## 9. 当前实现上的几个观察
 
-- `bookmarks` 是默认能力里最像“核心产品功能”的模块，不只是工具函数集合。
+- `bookmark` 是默认能力里最像“核心产品功能”的模块，不只是工具函数集合。
 - `proxy` 明显在往“多后端状态编排器”方向发展，而不是单纯环境变量脚本。
 - `ports` 的 CLI 和 Dashboard 复用关系很自然，是观察型能力复用得最顺的一组。
 - `tree` 虽然没有 Dashboard 面板，但内部管线已经很完整，是纯 CLI 模块的优秀样本。

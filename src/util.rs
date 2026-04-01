@@ -26,6 +26,7 @@ pub(crate) fn parse_tags(raw: &str) -> Vec<String> {
     out
 }
 
+#[cfg_attr(not(feature = "redirect"), allow(dead_code))]
 pub(crate) fn normalize_path(raw: &str) -> String {
     let mut s = raw.trim().replace('\\', "/");
     while s.ends_with('/') {

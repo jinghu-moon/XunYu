@@ -56,30 +56,33 @@
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
-| `xun all [tag]` | 所有书签（机器输出）。 | - |
-| `xun check` | 检查书签健康（缺失/重复/过期）。 | `--days <days>`；`--format <auto|table|tsv|json>` |
-| `xun dedup` | 书签去重。 | `--mode <path|name>`；`--format <auto|table|tsv|json>`；`--yes` |
-| `xun del -bm <name>` | 删除书签（需 -bm/--bookmark）。 | - |
-| `xun delete -bm <name>` | 删除书签（需 -bm/--bookmark）。 | - |
-| `xun export` | 导出书签。 | `--format <json|tsv>`；`--out <path>` |
-| `xun fuzzy <pattern> [tag]` | 模糊搜索（机器输出）。 | - |
-| `xun gc` | 清理无效路径。 | `--purge`；`--format <auto|table|tsv|json>` |
-| `xun import` | 导入书签。 | `--format <json|tsv>`；`--input <path>`；`--mode <merge|overwrite>`；`--yes` |
-| `xun keys` | 输出所有键（用于补全）。 | - |
-| `xun list` | 列出所有书签。 | `--tag <tag>`；`--sort <name|last|visits>`；`--limit <limit>`；`--offset <offset>`；`--reverse`；`--tsv`；`--format <auto|table|tsv|json>` |
-| `xun o [pattern]` | 在资源管理器中打开。 | `--tag <tag>` |
-| `xun recent` | 显示最近书签。 | `--limit <limit>`；`--tag <tag>`；`--format <auto|table|tsv|json>` |
-| `xun rename <old> <new>` | 重命名书签。 | - |
-| `xun set <name> [path]` | 保存当前目录或指定路径为书签。 | `--tag <tag>` |
-| `xun stats` | 显示统计信息。 | `--format <auto|table|tsv|json>` |
-| `xun sv [name]` | 保存当前目录为书签（sv）。 | `--tag <tag>` |
-| `xun tag add <name> <tags>` | 为书签添加标签。 | - |
-| `xun tag list` | 列出所有标签及数量。 | - |
-| `xun tag remove <name> <tags>` | 从书签移除标签。 | - |
-| `xun tag rename <old> <new>` | 重命名标签（全局）。 | - |
-| `xun touch <name>` | 更新访问频次（touch）。 | - |
-| `xun ws <tag>` | Workspace：在 Windows Terminal 多标签打开标签下所有路径。 | - |
-| `xun z [pattern]` | 跳转到书签（模糊匹配）。 | `--tag <tag>` |
+| `xun bookmark z [keywords...]` | 跳转到 Top-1 书签。 | `--list`；`--score`；`--why`；`--preview`；`--tag`；`--global`；`--child`；`--base`；`--workspace`；`--json`；`--tsv` |
+| `xun bookmark zi [keywords...]` | 交互式跳转。 | 与 `z` 共享 query 选项；非交互模式回落 Top-1 |
+| `xun bookmark o [keywords...]` | 用文件管理器打开 Top-1。 | 与 `z` 共享 query 选项 |
+| `xun bookmark oi [keywords...]` | 交互式打开。 | 与 `zi` 共享行为 |
+| `xun bookmark open [keywords...]` | `o` 的长命令形式。 | 与 `o` 等价 |
+| `xun bookmark save [name]` | 保存当前目录为显式书签。 | `--tag <tag>`；`--desc <text>` |
+| `xun bookmark set <name> [path]` | 保存当前目录或指定路径为显式书签。 | `--tag <tag>`；`--desc <text>` |
+| `xun bookmark tag add|remove|list|rename ...` | 书签标签管理。 | - |
+| `xun bookmark pin <name>` | 置顶显式书签。 | - |
+| `xun bookmark undo` | 撤销最近的书签变更。 | `--steps <n>` |
+| `xun bookmark redo` | 重做最近撤销的书签变更。 | `--steps <n>` |
+| `xun bookmark rename <old> <new>` | 重命名显式书签。 | - |
+| `xun bookmark list` | 列出书签。 | `--tag <tag>`；`--sort <name|last|visits>`；`--limit <limit>`；`--offset <offset>`；`--reverse`；`--tsv`；`--format <auto|table|tsv|json>` |
+| `xun bookmark recent` | 显示最近访问书签。 | `--limit <limit>`；`--tag <tag>`；`--workspace <name>`；`--since <duration>`；`--format <auto|table|tsv|json>` |
+| `xun bookmark stats` | 显示统计信息。 | `--format <auto|table|tsv|json>` |
+| `xun bookmark check` | 检查书签健康（缺失/重复/过期）。 | `--days <days>`；`--format <auto|table|tsv|json>` |
+| `xun bookmark gc` | 清理无效路径。 | `--purge`；`--dry-run`；`--learned`；`--format <auto|table|tsv|json>` |
+| `xun bookmark dedup` | 书签去重。 | `--mode <path|name>`；`--format <auto|table|tsv|json>`；`--yes` |
+| `xun bookmark export` | 导出书签。 | `--format <json|tsv>`；`--out <path>` |
+| `xun bookmark import` | 导入书签或外部导航数据。 | `--format <json|tsv>`；`--from <autojump|zoxide|z|fasd|history>`；`--input <path>`；`--mode <merge|overwrite>`；`--yes` |
+| `xun bookmark learn --path <path>` | 手动记录一次目录访问。 | 受 `bookmark.autoLearn.enabled` 与 `_BM_EXCLUDE_DIRS` 控制 |
+| `xun bookmark init <shell>` | 生成 bookmark shell 集成脚本。 | `--cmd <prefix>` |
+| `xun bookmark touch <name>` | 更新显式书签访问频次。 | - |
+| `xun bookmark keys` | 输出所有具名书签名（补全用）。 | - |
+| `xun bookmark all [tag]` | 机器输出所有书签。 | - |
+
+删除书签请使用 `xun del -bm <name>` 或 `xun delete -bm <name>`。
 
 ---
 
@@ -304,5 +307,5 @@ Watch 调优环境变量：`XUN_REDIRECT_WATCH_DEBOUNCE_MS`、`XUN_REDIRECT_WATC
 ## Shell wrapper 别名
 
 `xun init` 输出的脚本中包含：
-`x`、`sv`、`list`、`ctx`、`delete`、`gc`、`z`、`o`、`ws`、`pon`、`poff`、`pst`、`px`、`rename`、`tag`、`recent`、`stats`、`dedup`、`bak`、`xtree`、`xr`、`redir`。
-其中 `xtree` 用于避免覆盖系统 `tree` 命令。
+`x`、`ctx`、`bm`、`z`、`zi`、`o`、`oi`、`delete`、`pon`、`poff`、`pst`、`px`、`bak`、`xtree`、`xr`、`redir`。
+其中 `xtree` 用于避免覆盖系统 `tree` 命令；`z / zi / o / oi` 由 bookmark wrapper 提供，等价于 `xun bookmark ...`。

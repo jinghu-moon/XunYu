@@ -1,8 +1,8 @@
 use std::env;
 
 use super::{
-    ACL_SUBCOMMANDS, CONFIG_SUBCOMMANDS, CTX_SUBCOMMANDS, ENV_SUBCOMMANDS, PROXY_SUBCOMMANDS,
-    SUBCOMMANDS, XUNBAK_SUBCOMMANDS,
+    ACL_SUBCOMMANDS, BOOKMARK_SUBCOMMANDS, CONFIG_SUBCOMMANDS, CTX_SUBCOMMANDS, ENV_SUBCOMMANDS,
+    PROXY_SUBCOMMANDS, SUBCOMMANDS, XUNBAK_SUBCOMMANDS,
 };
 
 pub(super) fn split_flag_value(raw: &str) -> Option<(String, String)> {
@@ -46,6 +46,7 @@ pub(super) fn find_subsub(
         "acl" => ACL_SUBCOMMANDS,
         "config" => CONFIG_SUBCOMMANDS,
         "ctx" => CTX_SUBCOMMANDS,
+        "bookmark" => BOOKMARK_SUBCOMMANDS,
         "proxy" => PROXY_SUBCOMMANDS,
         "env" => ENV_SUBCOMMANDS,
         "xunbak" => XUNBAK_SUBCOMMANDS,

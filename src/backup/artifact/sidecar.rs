@@ -95,6 +95,7 @@ pub(crate) fn source_info_for_convert(artifact: &Path) -> SidecarSourceInfo {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn build_sidecar_bytes(
     format: BackupArtifactFormat,
     packing_hint: SidecarPackingHint,

@@ -11,12 +11,13 @@
 常用格式选项（多数命令支持）：`-f <auto|table|tsv|json>`。  
 说明：目前使用 `argh`，不支持共享 option group，因此 `--format` 在各子命令里重复定义；如需彻底消除重复，需要迁移到 `clap`。
 
-Windows 路径在 PowerShell/CMD 中不需要转义反斜杠：`xun set proj D:\Repo\MyProj -t work,rust`。  
+Windows 路径在 PowerShell/CMD 中不需要转义反斜杠：`xun bookmark set proj D:\Repo\MyProj -t work,rust`。  
 仅在 JSON/字符串字面量中需要使用双反斜杠：`"path": "D:\\Repo\\MyProj"`。
 
 ## 命令分层与默认行为
 
 - 默认可用命令族：`acl`、书签、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`backup/bak`、`restore/rst`、`tree`、`find`、`delete/del`、`rm`
+- 书签正式入口：`xun bookmark <sub>`；加载 shell 集成后可直接使用 `bm <sub>`、`z / zi / o / oi`
 - 需 feature 的命令族：`alias`、`lock`、`protect`、`crypt`、`redirect`、`serve`、`diff`、`brn`、`cstat`、`img`
 - `ports` 默认展示常见开发端口（3000-3999/5000-5999/8000-8999/4173/5173）；查看全部请加 `--all`
 - `ps`/`pkill` 用于进程检索与终止；支持按名称、PID 或窗口标题（`-w`）
@@ -25,13 +26,13 @@ Windows 路径在 PowerShell/CMD 中不需要转义反斜杠：`xun set proj D:\
 
 | 名称 | 默认路径 | 用途 |
 | --- | --- | --- |
-| 书签数据库 | `%USERPROFILE%\.xun.json` | 书签数据（可用 `XUN_DB` 覆盖） |
-| 访问日志（WAL） | `%USERPROFILE%\.xun.visits.jsonl` | 高频访问记录（合并回书签库以更新 frecency） |
+| 书签数据库 | `%USERPROFILE%\.xun.bookmark.json` | 书签数据（推荐用 `_BM_DATA_FILE` 覆盖） |
+| 访问日志（WAL） | `%USERPROFILE%\.xun.bookmark.visits.jsonl` | 高频访问记录 |
 | 全局配置 | `%USERPROFILE%\.xun.config.json` | `protect` / `redirect` 等模块配置 |
 | Context 配置 | `%USERPROFILE%\.xun.ctx.json` | ctx profile（可用 `XUN_CTX_FILE` 覆盖） |
 | 代理配置 | `%USERPROFILE%\.xun.proxy.json` | `proxy` / `pon` / `poff` 持久化 |
 | Context 会话 | `%TEMP%\xun-ctx-<pid>.json` | ctx 会话态（由 `XUN_CTX_STATE` 指定） |
-| 审计日志 | `%USERPROFILE%\audit.jsonl` | JSON Lines（用于追溯/undo 等；与 `XUN_DB` 同目录） |
+| 审计日志 | `%USERPROFILE%\audit.jsonl` | JSON Lines（用于追溯/undo 等；与书签数据库同目录） |
 | 备份配置 | `.xun-bak.json` | `backup` 在工作目录自动创建；旧 `.svconfig.json` 会自动迁移 |
 | 树忽略 | `.xunignore` | `redirect`/`tree` 等忽略规则（类 `.gitignore`） |
 

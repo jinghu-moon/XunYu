@@ -40,7 +40,7 @@ impl TestEnv {
         let exe = env!("CARGO_BIN_EXE_xun");
         let mut c = Command::new(exe);
         let _ = fs::create_dir_all(&self.root);
-        c.env("XUN_DB", self.root.join(".xun.json"));
+        c.env("_BM_DATA_FILE", self.root.join(".xun.bookmark.json"));
         c.env("USERPROFILE", &self.root);
         c.env("HOME", &self.root);
         c.env("XUN_NON_INTERACTIVE", "1");

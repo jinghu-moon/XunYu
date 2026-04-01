@@ -6,7 +6,10 @@ mod model;
 use std::path::PathBuf;
 
 #[allow(unused_imports)]
-pub(crate) use model::{AclConfig, GlobalConfig, ProxyConfig, TreeConfig};
+pub(crate) use model::{
+    AclConfig, BookmarkAutoLearnConfig, BookmarkConfig, BookmarkFzfConfig, GlobalConfig, ProxyConfig,
+    TreeConfig,
+};
 #[cfg(feature = "desktop")]
 #[allow(unused_imports)]
 pub(crate) use model::{
@@ -38,6 +41,52 @@ pub(crate) fn save_config(cfg: &GlobalConfig) -> Result<(), std::io::Error> {
 
 pub(crate) fn config_path() -> PathBuf {
     load_save::config_path()
+}
+
+pub(crate) fn bookmark_default_scope() -> String {
+    std::env::var("_BM_DEFAULT_SCOPE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| load_config().bookmark.default_scope)
+}
+
+pub(crate) fn bookmark_default_list_limit() -> usize {
+    std::env::var("_BM_DEFAULT_LIST_LIMIT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or_else(|| load_config().bookmark.default_list_limit)
+}
+
+pub(crate) fn bookmark_max_age() -> u64 {
+    std::env::var("_BM_MAXAGE")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or_else(|| load_config().bookmark.max_age)
+}
+
+pub(crate) fn bookmark_resolve_symlinks() -> bool {
+    env_bool_override("_BM_RESOLVE_SYMLINKS").unwrap_or_else(|| load_config().bookmark.resolve_symlinks)
+}
+
+pub(crate) fn bookmark_echo() -> bool {
+    env_bool_override("_BM_ECHO").unwrap_or_else(|| load_config().bookmark.echo)
+}
+
+pub(crate) fn bookmark_fzf_opts() -> String {
+    std::env::var("_BM_FZF_OPTS")
+        .ok()
+        .unwrap_or_else(|| load_config().bookmark.fzf.opts)
+}
+
+fn env_bool_override(name: &str) -> Option<bool> {
+    let raw = std::env::var(name).ok()?;
+    let raw = raw.trim().to_ascii_lowercase();
+    match raw.as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -73,6 +122,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let p = dir.path().join("missing.config.json");
         let cfg = load_save::load_config_from_path(&p);
+        assert_eq!(cfg.bookmark.version, 1);
+        assert!(cfg.bookmark.data_file.ends_with(".xun.bookmark.json"));
+        assert!(cfg.bookmark.visit_log_file.ends_with(".xun.bookmark.visits.jsonl"));
         assert_eq!(cfg.tree.default_depth, None);
         assert!(cfg.tree.exclude_names.is_empty());
         assert_eq!(cfg.proxy.default_url, None);
@@ -86,6 +138,7 @@ mod tests {
         fs::write(
             &p,
             r#"{
+  "bookmark": { "defaultScope": "child", "dataFile": "C:/bookmark.json" },
   "tree": { "defaultDepth": 3, "excludeNames": ["node_modules"] },
   "proxy": { "defaultUrl": "http://127.0.0.1:7890", "noproxy": "localhost" }
 }"#,
@@ -93,6 +146,8 @@ mod tests {
         .unwrap();
 
         let cfg = load_save::load_config_from_path(&p);
+        assert_eq!(cfg.bookmark.default_scope, "child");
+        assert_eq!(cfg.bookmark.data_file, "C:/bookmark.json");
         assert_eq!(cfg.tree.default_depth, Some(3));
         assert_eq!(cfg.tree.exclude_names, vec!["node_modules"]);
         assert_eq!(
@@ -114,6 +169,62 @@ mod tests {
         let a = AclConfig::default();
         assert_eq!(a.throttle_limit, 16);
         assert_eq!(a.chunk_size, 200);
+    }
+
+    #[test]
+    fn bookmark_env_helpers_prefer_env_over_file() {
+        let dir = tempdir().unwrap();
+        let p = dir.path().join("cfg.json");
+        fs::write(
+            &p,
+            r#"{
+  "bookmark": {
+    "defaultScope": "child",
+    "defaultListLimit": 11,
+    "maxAge": 999,
+    "resolveSymlinks": false,
+    "echo": false,
+    "fzf": { "opts": "--height 40%" }
+  }
+}"#,
+        )
+        .unwrap();
+
+        let cfg = load_save::load_config_from_path(&p);
+        assert_eq!(cfg.bookmark.default_scope, "child");
+        assert_eq!(cfg.bookmark.default_list_limit, 11);
+        assert_eq!(cfg.bookmark.max_age, 999);
+        assert!(!cfg.bookmark.resolve_symlinks);
+        assert!(!cfg.bookmark.echo);
+        assert_eq!(cfg.bookmark.fzf.opts, "--height 40%");
+    }
+
+    #[test]
+    fn bookmark_env_helper_parsers_accept_overrides() {
+        unsafe {
+            std::env::set_var("_BM_DEFAULT_SCOPE", "global");
+            std::env::set_var("_BM_DEFAULT_LIST_LIMIT", "33");
+            std::env::set_var("_BM_MAXAGE", "777");
+            std::env::set_var("_BM_RESOLVE_SYMLINKS", "1");
+            std::env::set_var("_BM_ECHO", "1");
+            std::env::set_var("_BM_FZF_OPTS", "--height 30%");
+        }
+
+        assert_eq!(bookmark_default_scope(), "global");
+        assert_eq!(bookmark_default_list_limit(), 33);
+        assert_eq!(bookmark_max_age(), 777);
+        assert!(bookmark_resolve_symlinks());
+        assert!(bookmark_echo());
+        assert_eq!(bookmark_fzf_opts(), "--height 30%");
+
+        unsafe {
+            std::env::remove_var("_BM_DEFAULT_SCOPE");
+            std::env::remove_var("_BM_DEFAULT_LIST_LIMIT");
+            std::env::remove_var("_BM_MAXAGE");
+            std::env::remove_var("_BM_RESOLVE_SYMLINKS");
+            std::env::remove_var("_BM_ECHO");
+            std::env::remove_var("_BM_FZF_OPTS");
+        }
     }
 
     #[cfg(feature = "protect")]

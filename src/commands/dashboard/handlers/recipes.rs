@@ -570,7 +570,7 @@ pub(in crate::commands::dashboard) async fn execute_workspace_recipe(
 }
 
 fn recipe_store_path() -> PathBuf {
-    let mut path = crate::store::db_path();
+    let mut path = crate::bookmark::storage::db_path();
     path.set_file_name("recipes.json");
     path
 }

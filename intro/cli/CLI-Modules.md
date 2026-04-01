@@ -30,7 +30,7 @@ main.rs
 这一层是 `argh::FromArgs` 定义，回答的是“用户可以输入什么命令、带什么参数”。
 
 - `src/cli.rs`：顶层 `Xun` 与 `SubCommand` 枚举。
-- `src/cli/bookmarks.rs`：书签与导航命令族。
+- `src/bookmark/cli_namespace.rs` + `src/bookmark/cli_commands.rs`：bookmark 命令族。
 - `src/cli/config.rs`：配置命令族。
 - `src/cli/ctx.rs`：上下文切换命令族。
 - `src/cli/proxy.rs`：代理命令族。
@@ -62,7 +62,7 @@ main.rs
 | 命令族 | 主要命令 | 定义层 | 执行层 | 说明 |
 | --- | --- | --- | --- | --- |
 | Shell 集成 | `init` `completion` `__complete` | `src/cli/shell.rs` | `dispatch/core.rs`、`commands/completion.rs` | 输出 shell wrapper、补全脚本、动态补全结果 |
-| 书签 / 导航 | `list` `z` `o` `ws` `sv` `set` `delete` `tag` ... | `src/cli/bookmarks.rs` | `src/commands/bookmarks/*` + `src/commands/delete/*` | `xun` 的传统核心能力 |
+| 书签 / 导航 | `bookmark z` `bookmark zi` `bookmark o` `bookmark oi` `bookmark set` `delete -bm` ... | `src/bookmark/cli_namespace.rs` + `src/bookmark/cli_commands.rs` | `src/bookmark/commands/*` + `src/commands/delete/*` | `xun` 的目录导航与显式书签核心能力 |
 | 配置 | `config get/set/edit` | `src/cli/config.rs` | `src/commands/app_config.rs` | 面向全局 JSON 配置文件 |
 | 上下文 | `ctx set/use/off/list/show/del/rename` | `src/cli/ctx.rs` | `src/commands/ctx.rs` | 项目 / 会话上下文切换 |
 | 代理 | `proxy` `pon` `poff` `pst` `px` | `src/cli/proxy.rs` | `src/commands/proxy/*` | 系统 / 工具链代理状态管理 |
@@ -90,7 +90,7 @@ main.rs
 
 ### 4.1 `init` / `completion` / `__complete`
 
-- `init`：打印 shell 集成脚本。它会注入 wrapper 函数、别名、动态补全以及一些“魔法输出”解释逻辑，例如 `__CD__:`、`__ENV_SET__:`。
+- `init`：打印 shell 集成脚本。它会注入 wrapper 函数、别名、动态补全以及一些“魔法输出”解释逻辑，例如 `__CD__:`、`__BM_CD__`、`__ENV_SET__:`。
 - `completion`：输出 shell 补全脚本，支持 `powershell / bash / zsh / fish`。
 - `__complete`：内部补全入口，接收预分词参数，返回候选项；通常由 shell 补全脚本间接调用，不建议用户直接手敲。
 
@@ -98,13 +98,14 @@ main.rs
 
 ### 4.2 书签 / 导航命令族
 
-定义层在 `src/cli/bookmarks.rs`，执行层拆成：
+定义层现在放在 `src/bookmark/cli_namespace.rs` 与 `src/bookmark/cli_commands.rs`，执行层拆成：
 
-- `list.rs`：`list / recent / stats / all / fuzzy / keys`
-- `navigation.rs`：`z / open(o) / workspace(ws)`
-- `mutate.rs`：`save(sv) / set / touch / rename`
+- `list.rs`：`list / recent / stats / all / keys`
+- `navigation.rs`：`z / zi / o / oi / open`
+- `mutate.rs`：`save / set / touch / rename / pin`
 - `tags.rs`：`tag add/remove/list/rename`
 - `io.rs`：`export / import`
+- `integration.rs`：`learn / init / import --from ...`
 - `maintenance/`：`check / gc / dedup`
 
 这一族是 `xun` 最像“日常效率工具”的部分，既有导航，也有数据维护，还有导入导出和标签体系。
@@ -269,7 +270,7 @@ main.rs
 - `Config` -> `commands/app_config.rs`
 - `Ctx` -> `commands/ctx.rs`
 - `Env` -> `commands/env/*`
-- 书签相关命令 -> `commands/bookmarks/*`
+- 书签相关命令 -> `bookmark/commands/*`
 - `Delete` -> `commands/delete/*`
 - `Proxy` 相关 -> `commands/proxy/*`
 - `Ports/Kill/Ps/Pkill` -> `commands/ports/*`

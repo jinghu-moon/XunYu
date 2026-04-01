@@ -14,10 +14,10 @@ fn del_without_bm_keeps_bookmark() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
     run_ok(env.cmd().args(["del", "home"]));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(v.as_array().unwrap().iter().any(|x| x["name"] == "home"));
 }

@@ -41,11 +41,55 @@ pub struct ListCmd {
 pub struct ZCmd {
     /// fuzzy pattern
     #[argh(positional)]
-    pub pattern: Option<String>,
+    pub patterns: Vec<String>,
 
     /// filter by tag
     #[argh(option, short = 't')]
     pub tag: Option<String>,
+
+    /// list matches instead of executing
+    #[argh(switch, short = 'l')]
+    pub list: bool,
+
+    /// show factor scores
+    #[argh(switch, short = 's')]
+    pub score: bool,
+
+    /// explain top-1 result
+    #[argh(switch)]
+    pub why: bool,
+
+    /// preview only; do not execute
+    #[argh(switch)]
+    pub preview: bool,
+
+    /// limit listed results
+    #[argh(option, short = 'n')]
+    pub limit: Option<usize>,
+
+    /// output json
+    #[argh(switch)]
+    pub json: bool,
+
+    /// output tsv
+    #[argh(switch)]
+    pub tsv: bool,
+
+    /// use global scope
+    #[argh(switch, short = 'g')]
+    pub global: bool,
+
+    /// prefer child scope
+    #[argh(switch, short = 'c')]
+    pub child: bool,
+
+    /// restrict to base dir
+    #[argh(option)]
+    pub base: Option<String>,
+
+    /// workspace scope
+    #[argh(option, short = 'w')]
+    pub workspace: Option<String>,
 }
 
 /// Open in Explorer.
@@ -54,25 +98,60 @@ pub struct ZCmd {
 pub struct OpenCmd {
     /// fuzzy pattern
     #[argh(positional)]
-    pub pattern: Option<String>,
+    pub patterns: Vec<String>,
 
     /// filter by tag
     #[argh(option, short = 't')]
     pub tag: Option<String>,
+
+    /// list matches instead of executing
+    #[argh(switch, short = 'l')]
+    pub list: bool,
+
+    /// show factor scores
+    #[argh(switch, short = 's')]
+    pub score: bool,
+
+    /// explain top-1 result
+    #[argh(switch)]
+    pub why: bool,
+
+    /// preview only; do not execute
+    #[argh(switch)]
+    pub preview: bool,
+
+    /// limit listed results
+    #[argh(option, short = 'n')]
+    pub limit: Option<usize>,
+
+    /// output json
+    #[argh(switch)]
+    pub json: bool,
+
+    /// output tsv
+    #[argh(switch)]
+    pub tsv: bool,
+
+    /// use global scope
+    #[argh(switch, short = 'g')]
+    pub global: bool,
+
+    /// prefer child scope
+    #[argh(switch, short = 'c')]
+    pub child: bool,
+
+    /// restrict to base dir
+    #[argh(option)]
+    pub base: Option<String>,
+
+    /// workspace scope
+    #[argh(option, short = 'w')]
+    pub workspace: Option<String>,
 }
 
-/// Workspace: open all paths under tag in WT tabs.
+/// Save current directory as bookmark.
 #[derive(FromArgs)]
-#[argh(subcommand, name = "ws")]
-pub struct WorkspaceCmd {
-    /// tag name
-    #[argh(positional)]
-    pub tag: String,
-}
-
-/// Save current directory as bookmark (sv).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "sv")]
+#[argh(subcommand, name = "save")]
 pub struct SaveCmd {
     /// bookmark name (optional, defaults to current dir name)
     #[argh(positional)]
@@ -81,6 +160,10 @@ pub struct SaveCmd {
     /// tags (comma separated)
     #[argh(option, short = 't')]
     pub tag: Option<String>,
+
+    /// description
+    #[argh(option)]
+    pub desc: Option<String>,
 }
 
 /// Save current directory or specific path as bookmark.
@@ -98,6 +181,10 @@ pub struct SetCmd {
     /// tags (comma separated)
     #[argh(option, short = 't')]
     pub tag: Option<String>,
+
+    /// description
+    #[argh(option)]
+    pub desc: Option<String>,
 }
 
 /// Force delete files or delete bookmarks with --bookmark (-bm).
@@ -188,6 +275,14 @@ pub struct GcCmd {
     /// delete all dead links without confirmation
     #[argh(switch)]
     pub purge: bool,
+
+    /// preview only; do not delete
+    #[argh(switch)]
+    pub dry_run: bool,
+
+    /// only clean learned/imported records
+    #[argh(switch)]
+    pub learned: bool,
 
     /// output format: auto|table|tsv|json
     #[argh(option, short = 'f', default = "default_output_format()")]
@@ -302,6 +397,14 @@ pub struct RecentCmd {
     #[argh(option, short = 't')]
     pub tag: Option<String>,
 
+    /// filter by workspace
+    #[argh(option, short = 'w')]
+    pub workspace: Option<String>,
+
+    /// only include records since duration (e.g. 7d, 24h, 30m)
+    #[argh(option)]
+    pub since: Option<String>,
+
     /// output format: auto|table|tsv|json
     #[argh(option, short = 'f', default = "default_output_format()")]
     pub format: String,
@@ -354,6 +457,10 @@ pub struct ImportCmd {
     #[argh(option, short = 'f', default = "default_io_format()")]
     pub format: String,
 
+    /// import source: autojump | zoxide | z | fasd | history
+    #[argh(option)]
+    pub from: Option<String>,
+
     /// input file (optional, default stdin)
     #[argh(option, short = 'i')]
     pub input: Option<String>,
@@ -376,19 +483,6 @@ pub struct KeysCmd {}
 #[derive(FromArgs)]
 #[argh(subcommand, name = "all")]
 pub struct AllCmd {
-    /// filter by tag
-    #[argh(positional)]
-    pub tag: Option<String>,
-}
-
-/// Fuzzy search (machine output).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "fuzzy")]
-pub struct FuzzyCmd {
-    /// pattern
-    #[argh(positional)]
-    pub pattern: String,
-
     /// filter by tag
     #[argh(positional)]
     pub tag: Option<String>,

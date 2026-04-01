@@ -3,10 +3,11 @@ pub(crate) fn completion_powershell() -> &'static str {
 $xun = if ($env:XUN_EXE) { $env:XUN_EXE } else { "xun.exe" }
 
 $global:XunSubcommands = @(
-    "init","completion","config","ctx","list","z","open","ws","save","set","del","delete","check","gc","touch","rename","tag",
-    "recent","stats","dedup","export","import","proxy","pon","poff","pst","px","ports","kill","keys","all","fuzzy",
-    "backup","bak","xunbak","tree","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect"
+    "bookmark","init","completion","config","ctx","del","delete",
+    "proxy","pon","poff","pst","px","ports","kill","ps","pkill",
+    "backup","bak","xunbak","tree","find","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","diff","desktop","brn","cstat","img","verify"
 )
+$global:XunBookmarkSubcommands = @("z","zi","o","oi","open","save","set","tag","pin","rename","list","recent","stats","check","gc","dedup","export","import","init","touch","learn","keys","all")
 $global:XunProxySubcommands = @("set","del","get","detect","test")
 $global:XunCtxSubcommands = @("set","use","off","list","show","del","rename")
 $global:XunFormats = @("auto","table","tsv","json")
@@ -18,8 +19,8 @@ function _xun_config_path {
 }
 
 function _xun_db_path {
-    if ($env:XUN_DB) { return $env:XUN_DB }
-    return (Join-Path $env:USERPROFILE ".xun.json")
+    if ($env:_BM_DATA_FILE) { return $env:_BM_DATA_FILE }
+    return (Join-Path $env:USERPROFILE ".xun.bookmark.json")
 }
 
 function _xun_audit_path {
@@ -55,15 +56,6 @@ function _xun_redirect_txs {
     return $txs | Select-Object -Unique
 }
 
-$_xunStaticKeys = {
-    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    if (-not $xun) { return }
-    @(& $xun keys) | Where-Object { $_ -like "$wordToComplete*" } |
-        ForEach-Object {
-            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
-        }
-}
-
 $_xunStaticMain = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
     $elems = $commandAst.CommandElements
@@ -78,6 +70,8 @@ $_xunStaticMain = {
             $list = _xun_redirect_profiles
         } elseif ($sub -eq "redirect" -and ($prev -eq "--undo" -or $prev -eq "--tx")) {
             $list = _xun_redirect_txs
+        } elseif ($sub -eq "bookmark" -and $elems.Count -le 3) {
+            $list = $global:XunBookmarkSubcommands
         } elseif ($sub -eq "ctx" -and $elems.Count -le 3) {
             $list = $global:XunCtxSubcommands
         } elseif ($sub -eq "tree" -and $prev -eq "--sort") {
@@ -157,28 +151,9 @@ $_xunComplete = {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
     $dynamic = & $_xunDynamic $commandName $parameterName $wordToComplete $commandAst $fakeBoundParameters
     if ($null -ne $dynamic) { return $dynamic }
-    if ($commandName -eq "delete") {
-        $hasBookmark = $false
-        foreach ($elem in $commandAst.CommandElements) {
-            if ($elem -and $elem.Extent -and ($elem.Extent.Text -eq "--bookmark" -or $elem.Extent.Text -eq "-bm")) {
-                $hasBookmark = $true
-                break
-            }
-        }
-        if ($hasBookmark) {
-            return & $_xunStaticKeys $commandName $parameterName $wordToComplete $commandAst $fakeBoundParameters
-        }
-    }
-    if ($commandName -eq "z" -or $commandName -eq "o" -or $commandName -eq "rename") {
-        return & $_xunStaticKeys $commandName $parameterName $wordToComplete $commandAst $fakeBoundParameters
-    }
     return & $_xunStaticMain $commandName $parameterName $wordToComplete $commandAst $fakeBoundParameters
 }
 
-Register-ArgumentCompleter -CommandName 'z'      -ScriptBlock $_xunComplete
-Register-ArgumentCompleter -CommandName 'delete' -ScriptBlock $_xunComplete
-Register-ArgumentCompleter -CommandName 'o'      -ScriptBlock $_xunComplete
-Register-ArgumentCompleter -CommandName 'rename' -ScriptBlock $_xunComplete
 Register-ArgumentCompleter -CommandName 'xun'    -ScriptBlock $_xunComplete
 Register-ArgumentCompleter -CommandName 'x'      -ScriptBlock $_xunComplete
 Register-ArgumentCompleter -CommandName 'xyu'    -ScriptBlock $_xunComplete

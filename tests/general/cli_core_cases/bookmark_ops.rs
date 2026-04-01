@@ -9,12 +9,12 @@ fn set_warns_on_missing_path() {
 
     let out = run_ok(
         env.cmd()
-            .args(["set", "missing", missing.to_str().unwrap()]),
+            .args(["bookmark", "set", "missing", missing.to_str().unwrap()]),
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("Warning: Path does not exist"));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -22,7 +22,10 @@ fn set_warns_on_missing_path() {
         .iter()
         .find(|x| x["name"] == "missing")
         .unwrap();
-    assert_eq!(item["path"].as_str().unwrap(), missing.to_str().unwrap());
+    assert_eq!(
+        item["path"].as_str().unwrap(),
+        missing.to_string_lossy().replace('\\', "/")
+    );
 }
 
 #[test]
@@ -31,12 +34,12 @@ fn z_outputs_cd_magic() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
 
-    let output = run_ok(env.cmd().args(["z", "home"]));
+    let output = run_ok(env.cmd().args(["bookmark", "z", "home"]));
     let out = String::from_utf8_lossy(&output.stdout);
-    assert!(out.trim().starts_with("__CD__:"));
-    assert!(out.contains(work.to_str().unwrap()));
+    assert!(out.trim().starts_with("__BM_CD__ "));
+    assert!(out.contains(&work.to_string_lossy().replace('\\', "/")));
 }
 
 #[test]
@@ -48,13 +51,13 @@ fn z_fuzzy_selects_highest_scored_match_in_non_interactive() {
     fs::create_dir_all(&d2).unwrap();
 
     // "ab" is an exact consecutive match for pattern "ab", so it should win vs "axb".
-    run_ok(env.cmd().args(["set", "ab", d1.to_str().unwrap()]));
-    run_ok(env.cmd().args(["set", "axb", d2.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "ab", d1.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "axb", d2.to_str().unwrap()]));
 
-    let out = run_ok(env.cmd().args(["z", "ab"]));
+    let out = run_ok(env.cmd().args(["bookmark", "z", "ab"]));
     let s = String::from_utf8_lossy(&out.stdout);
-    assert!(s.contains(d1.to_str().unwrap()));
-    assert!(!s.contains(d2.to_str().unwrap()));
+    assert!(s.contains(&d1.to_string_lossy().replace('\\', "/")));
+    assert!(!s.contains(&d2.to_string_lossy().replace('\\', "/")));
 }
 
 #[test]
@@ -62,9 +65,9 @@ fn z_no_match_prints_message_and_exits_success() {
     let env = TestEnv::new();
     let work = env.root.join("work2");
     fs::create_dir_all(&work).unwrap();
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
 
-    let out = run_ok(env.cmd().args(["z", "nope-nope-nope"]));
+    let out = run_ok(env.cmd().args(["bookmark", "z", "nope-nope-nope"]));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
         err.contains("No matches found."),
@@ -80,13 +83,13 @@ fn rename_to_existing_fails() {
     fs::create_dir_all(&a).unwrap();
     fs::create_dir_all(&b).unwrap();
 
-    run_ok(env.cmd().args(["set", "old", a.to_str().unwrap()]));
-    run_ok(env.cmd().args(["set", "new", b.to_str().unwrap()]));
-    let out = run_ok(env.cmd().args(["rename", "old", "new"]));
+    run_ok(env.cmd().args(["bookmark", "set", "old", a.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "set", "new", b.to_str().unwrap()]));
+    let out = run_ok(env.cmd().args(["bookmark", "rename", "old", "new"]));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("already exists"));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let arr = v.as_array().unwrap();
     assert!(arr.iter().any(|x| x["name"] == "old"));
@@ -99,10 +102,10 @@ fn touch_increments_visits() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
-    run_ok(env.cmd().args(["touch", "home"]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "touch", "home"]));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -114,14 +117,14 @@ fn touch_increments_visits() {
 }
 
 #[test]
-fn sv_defaults_to_dir_name() {
+fn save_defaults_to_dir_name() {
     let env = TestEnv::new();
     let proj = env.root.join("proj");
     fs::create_dir_all(&proj).unwrap();
 
-    run_ok(env.cmd().current_dir(&proj).args(["sv"]));
+    run_ok(env.cmd().current_dir(&proj).args(["bookmark", "save"]));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -129,7 +132,10 @@ fn sv_defaults_to_dir_name() {
         .iter()
         .find(|x| x["name"] == "proj")
         .unwrap();
-    assert_eq!(item["path"].as_str().unwrap(), proj.to_str().unwrap());
+    assert_eq!(
+        item["path"].as_str().unwrap(),
+        proj.to_string_lossy().replace('\\', "/")
+    );
 }
 
 #[test]
@@ -138,10 +144,10 @@ fn rename_changes_key() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "old", work.to_str().unwrap()]));
-    run_ok(env.cmd().args(["rename", "old", "new"]));
+    run_ok(env.cmd().args(["bookmark", "set", "old", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "rename", "old", "new"]));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let arr = v.as_array().unwrap();
     assert!(arr.iter().any(|x| x["name"] == "new"));
@@ -158,10 +164,10 @@ fn set_relative_path_is_stored_as_absolute() {
     run_ok(
         env.cmd()
             .current_dir(&base)
-            .args(["set", "rel", "subdir"]),
+            .args(["bookmark", "set", "rel", "subdir"]),
     );
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -169,19 +175,51 @@ fn set_relative_path_is_stored_as_absolute() {
         .iter()
         .find(|x| x["name"] == "rel")
         .unwrap();
-    assert_eq!(item["path"].as_str().unwrap(), rel.to_str().unwrap());
+    assert_eq!(
+        item["path"].as_str().unwrap(),
+        rel.to_string_lossy().replace('\\', "/")
+    );
 }
 
 #[test]
 fn set_refuses_to_overwrite_corrupted_bookmark_db() {
     let env = TestEnv::new();
-    let db_path = env.root.join(".xun.json");
+    let db_path = env.root.join(".xun.bookmark.json");
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
     fs::write(&db_path, "{not-json").unwrap();
 
-    let out = run_err(env.cmd().args(["set", "home", work.to_str().unwrap()]));
+    let out = run_err(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("Bookmark db is corrupted"));
+    assert!(err.contains("Failed to load store"));
     assert_eq!(fs::read_to_string(&db_path).unwrap(), "{not-json");
+}
+
+#[test]
+fn set_succeeds_even_when_binary_cache_write_fails() {
+    let env = TestEnv::new();
+    let work = env.root.join("work");
+    fs::create_dir_all(&work).unwrap();
+
+    let cache_path = env.root.join(".xun.bookmark.cache");
+    fs::create_dir_all(&cache_path).unwrap();
+
+    let out = run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "home", work.to_str().unwrap()]),
+    );
+    assert!(out.status.success());
+
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
+    let v: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let item = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["name"] == "home")
+        .unwrap();
+    assert_eq!(
+        item["path"].as_str().unwrap(),
+        work.to_string_lossy().replace('\\', "/")
+    );
 }

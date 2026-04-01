@@ -14,8 +14,28 @@ pub(crate) struct RuntimeOptions {
 static RUNTIME: OnceLock<RuntimeOptions> = OnceLock::new();
 
 pub(crate) fn init(args: &Xun) {
-    let opts = compute_options(
-        args,
+    let opts = compute_options_from_flags(
+        args.no_color,
+        args.quiet,
+        args.verbose,
+        args.non_interactive,
+        env_flag("XUN_QUIET"),
+        env_flag("XUN_VERBOSE"),
+        env_flag("XUN_NON_INTERACTIVE"),
+        env::var_os("NO_COLOR").is_some(),
+    );
+    let _ = RUNTIME.set(opts);
+    if opts.no_color {
+        console::set_colors_enabled(false);
+    }
+}
+
+pub(crate) fn init_direct(no_color: bool, quiet: bool, verbose: bool, non_interactive: bool) {
+    let opts = compute_options_from_flags(
+        no_color,
+        quiet,
+        verbose,
+        non_interactive,
         env_flag("XUN_QUIET"),
         env_flag("XUN_VERBOSE"),
         env_flag("XUN_NON_INTERACTIVE"),
@@ -51,6 +71,7 @@ fn env_flag_value(raw: Option<&str>) -> bool {
     matches!(raw, Some("1") | Some("true") | Some("yes"))
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn compute_options(
     args: &Xun,
     env_quiet: bool,
@@ -58,11 +79,33 @@ fn compute_options(
     env_non_interactive: bool,
     env_no_color: bool,
 ) -> RuntimeOptions {
+    compute_options_from_flags(
+        args.no_color,
+        args.quiet,
+        args.verbose,
+        args.non_interactive,
+        env_quiet,
+        env_verbose,
+        env_non_interactive,
+        env_no_color,
+    )
+}
+
+fn compute_options_from_flags(
+    no_color: bool,
+    quiet: bool,
+    verbose: bool,
+    non_interactive: bool,
+    env_quiet: bool,
+    env_verbose: bool,
+    env_non_interactive: bool,
+    env_no_color: bool,
+) -> RuntimeOptions {
     let mut opts = RuntimeOptions {
-        quiet: args.quiet || env_quiet,
-        verbose: args.verbose || env_verbose,
-        non_interactive: args.non_interactive || env_non_interactive,
-        no_color: args.no_color || env_no_color,
+        quiet: quiet || env_quiet,
+        verbose: verbose || env_verbose,
+        non_interactive: non_interactive || env_non_interactive,
+        no_color: no_color || env_no_color,
     };
     if opts.verbose {
         opts.quiet = false;

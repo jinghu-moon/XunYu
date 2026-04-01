@@ -159,7 +159,7 @@ pub(in crate::commands::dashboard) fn audit_entry_count() -> usize {
 }
 
 fn audit_file_path() -> std::path::PathBuf {
-    let mut p = store::db_path();
+    let mut p = crate::bookmark::storage::db_path();
     p.set_file_name("audit.jsonl");
     p
 }

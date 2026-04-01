@@ -33,28 +33,13 @@ const FILTER_EXT: u32 = 8;
 
 const SUBCOMMANDS: &[&str] = &[
     "acl",
+    "bookmark",
     "init",
     "completion",
     "config",
     "ctx",
-    "list",
-    "z",
-    "open",
-    "ws",
-    "save",
-    "set",
     "del",
     "delete",
-    "check",
-    "gc",
-    "touch",
-    "rename",
-    "tag",
-    "recent",
-    "stats",
-    "dedup",
-    "export",
-    "import",
     "proxy",
     "pon",
     "poff",
@@ -62,13 +47,15 @@ const SUBCOMMANDS: &[&str] = &[
     "px",
     "ports",
     "kill",
-    "keys",
-    "all",
-    "fuzzy",
+    "ps",
+    "pkill",
     "bak",
+    "backup",
     "xunbak",
     "tree",
+    "find",
     "env",
+    "video",
     "lock",
     "rm",
     "mv",
@@ -78,6 +65,17 @@ const SUBCOMMANDS: &[&str] = &[
     "decrypt",
     "serve",
     "redirect",
+    "diff",
+    "desktop",
+    "brn",
+    "cstat",
+    "img",
+    "verify",
+];
+const BOOKMARK_SUBCOMMANDS: &[&str] = &[
+    "z", "zi", "o", "oi", "open", "save", "set", "delete", "tag", "pin", "unpin", "rename",
+    "list", "recent", "stats", "check", "gc", "dedup", "export", "import", "init", "touch",
+    "learn", "undo", "redo", "keys", "all",
 ];
 
 const GLOBAL_FLAGS: &[&str] = &[
@@ -219,29 +217,39 @@ pub(crate) fn cmd_complete(args: CompleteCmd) -> CliResult {
         .position(|t| t == "--")
         .map(|i| i < tokens.len().saturating_sub(1))
         .unwrap_or(false);
-    let bookmark_mode = tokens.iter().any(|t| t == "--bookmark" || t == "-bm");
-
     let Some((subcmd, cmd_start)) = find_subcommand(&tokens) else {
         let items = static_candidates(SUBCOMMANDS, &current_lower);
         return emit_response(items, NO_FILE_COMP, None, value_prefix.as_deref(), &debug);
     };
 
+    let bookmark_mode = tokens.iter().any(|t| t == "--bookmark" || t == "-bm") || subcmd == "bookmark";
+
     let (subsub, subsub_start) = find_subsub(&subcmd, &tokens, cmd_start + 1);
     let cmd_start = subsub_start;
+    let effective_subcmd = if subcmd == "bookmark" {
+        subsub.clone().unwrap_or_else(|| "bookmark".to_string())
+    } else {
+        subcmd.clone()
+    };
+    let effective_subsub = if subcmd == "bookmark" {
+        None
+    } else {
+        subsub.clone()
+    };
 
     if current_is_flag {
         if subcmd == "completion" {
             let items = static_candidates(&["bash", "zsh", "fish", "powershell"], &current_lower);
             return emit_response(items, NO_FILE_COMP | NO_SPACE, None, None, &debug);
         }
-        if subcmd == "keys" || subcmd == "all" || subcmd == "fuzzy" {
-            return emit_response(Vec::new(), NO_FILE_COMP, None, None, &debug);
-        }
         if subcmd == "redirect" && subsub.is_none() {
             let items = static_candidates(GLOBAL_FLAGS, &current_lower);
             return emit_response(items, NO_FILE_COMP | NO_SPACE, None, None, &debug);
         }
-        let items = static_candidates(flags_for(&subcmd, subsub.as_deref()), &current_lower);
+        let items = static_candidates(
+            flags_for(&effective_subcmd, effective_subsub.as_deref()),
+            &current_lower,
+        );
         return emit_response(items, NO_FILE_COMP | NO_SPACE, None, None, &debug);
     }
 
@@ -265,26 +273,34 @@ pub(crate) fn cmd_complete(args: CompleteCmd) -> CliResult {
 
     let value_flag_name = value_flag
         .as_deref()
-        .or_else(|| prev_token.filter(|t| flag_takes_value(&subcmd, subsub.as_deref(), t)));
+        .or_else(|| {
+            prev_token.filter(|t| flag_takes_value(&effective_subcmd, effective_subsub.as_deref(), t))
+        });
 
     if let Some(flag) = value_flag_name {
         debug.log(format!(
             "route=flag_value subcmd={} subsub={} flag={}",
-            subcmd,
-            subsub.as_deref().unwrap_or(""),
+            effective_subcmd,
+            effective_subsub.as_deref().unwrap_or(""),
             flag
         ));
-        let items = value_candidates(&subcmd, subsub.as_deref(), flag, &current_lower);
-        let (directive, ext) = value_directive(&subcmd, subsub.as_deref(), flag);
+        let items = value_candidates(
+            &effective_subcmd,
+            effective_subsub.as_deref(),
+            flag,
+            &current_lower,
+        );
+        let (directive, ext) =
+            value_directive(&effective_subcmd, effective_subsub.as_deref(), flag);
         return emit_response(items, directive, ext, value_prefix.as_deref(), &debug);
     }
 
     let positionals_before =
-        count_positionals(tokens_before_current, cmd_start, &subcmd, subsub.as_deref());
+        count_positionals(tokens_before_current, cmd_start, &effective_subcmd, effective_subsub.as_deref());
     let cwd = env::var("XUN_COMPLETE_CWD").ok();
     let (items, directive) = positional_candidates(
-        &subcmd,
-        subsub.as_deref(),
+        &effective_subcmd,
+        effective_subsub.as_deref(),
         positionals_before,
         &current_lower,
         cwd.as_deref(),
@@ -293,8 +309,8 @@ pub(crate) fn cmd_complete(args: CompleteCmd) -> CliResult {
 
     debug.log(format!(
         "route=positional subcmd={} subsub={} index={}",
-        subcmd,
-        subsub.as_deref().unwrap_or(""),
+        effective_subcmd,
+        effective_subsub.as_deref().unwrap_or(""),
         positionals_before
     ));
 

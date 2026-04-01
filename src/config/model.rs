@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 #[derive(Default, Deserialize, Serialize, Clone)]
 pub(crate) struct GlobalConfig {
     #[serde(default)]
+    pub(crate) bookmark: BookmarkConfig,
+    #[serde(default)]
     pub(crate) tree: TreeConfig,
     #[serde(default)]
     pub(crate) proxy: ProxyConfig,
@@ -19,6 +21,46 @@ pub(crate) struct GlobalConfig {
     #[cfg(feature = "redirect")]
     #[serde(default)]
     pub(crate) redirect: RedirectConfig,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(default)]
+pub(crate) struct BookmarkConfig {
+    pub(crate) version: u32,
+    #[serde(rename = "dataFile")]
+    pub(crate) data_file: String,
+    #[serde(rename = "visitLogFile")]
+    pub(crate) visit_log_file: String,
+    #[serde(rename = "defaultScope")]
+    pub(crate) default_scope: String,
+    #[serde(rename = "defaultListLimit")]
+    pub(crate) default_list_limit: usize,
+    #[serde(rename = "maxAge")]
+    pub(crate) max_age: u64,
+    #[serde(rename = "resolveSymlinks")]
+    pub(crate) resolve_symlinks: bool,
+    pub(crate) echo: bool,
+    #[serde(rename = "excludeDirs")]
+    pub(crate) exclude_dirs: Vec<String>,
+    #[serde(rename = "autoLearn")]
+    pub(crate) auto_learn: BookmarkAutoLearnConfig,
+    pub(crate) fzf: BookmarkFzfConfig,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(default)]
+pub(crate) struct BookmarkAutoLearnConfig {
+    pub(crate) enabled: bool,
+    #[serde(rename = "importHistoryOnFirstInit")]
+    pub(crate) import_history_on_first_init: bool,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(default)]
+pub(crate) struct BookmarkFzfConfig {
+    #[serde(rename = "minVersion")]
+    pub(crate) min_version: String,
+    pub(crate) opts: String,
 }
 
 #[derive(Default, Deserialize, Serialize, Clone)]

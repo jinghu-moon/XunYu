@@ -4,6 +4,9 @@ mod alias;
 mod backup;
 #[cfg(feature = "batch_rename")]
 mod batch_rename;
+#[path = "bookmark/cli_namespace.rs"]
+mod bookmark;
+#[path = "bookmark/cli_commands.rs"]
 mod bookmarks;
 mod config;
 #[cfg(feature = "crypt")]
@@ -62,10 +65,14 @@ pub use backup::{
 };
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
+pub use bookmark::{
+    BookmarkCmd, BookmarkInitCmd, BookmarkSubCommand, LearnCmd, OiCmd, PinCmd, RedoCmd, UndoCmd,
+    UnpinCmd, ZiCmd,
+};
 pub use bookmarks::{
-    AllCmd, CheckCmd, DedupCmd, DeleteCmd, ExportCmd, FuzzyCmd, GcCmd, ImportCmd, KeysCmd, ListCmd,
+    AllCmd, CheckCmd, DedupCmd, DeleteCmd, ExportCmd, GcCmd, ImportCmd, KeysCmd, ListCmd,
     OpenCmd, RecentCmd, RenameCmd, SaveCmd, SetCmd, StatsCmd, TagAddCmd, TagCmd, TagListCmd,
-    TagRemoveCmd, TagRenameCmd, TagSubCommand, TouchCmd, WorkspaceCmd, ZCmd,
+    TagRemoveCmd, TagRenameCmd, TagSubCommand, TouchCmd, ZCmd,
 };
 pub use config::{ConfigCmd, ConfigEditCmd, ConfigGetCmd, ConfigSetCmd, ConfigSubCommand};
 #[cfg(feature = "crypt")]
@@ -168,25 +175,10 @@ pub enum SubCommand {
     Init(InitCmd),
     Completion(CompletionCmd),
     Complete(CompleteCmd),
+    Bookmark(BookmarkCmd),
     Config(ConfigCmd),
     Ctx(CtxCmd),
-    List(ListCmd),
-    Z(ZCmd),
-    Open(OpenCmd),
-    Workspace(WorkspaceCmd),
-    Save(SaveCmd),
-    Set(SetCmd),
     Delete(DeleteCmd),
-    Check(CheckCmd),
-    Gc(GcCmd),
-    Touch(TouchCmd),
-    Rename(RenameCmd),
-    Tag(TagCmd),
-    Recent(RecentCmd),
-    Stats(StatsCmd),
-    Dedup(DedupCmd),
-    Export(ExportCmd),
-    Import(ImportCmd),
     Proxy(ProxyCmd),
     Pon(ProxyOnCmd),
     Poff(ProxyOffCmd),
@@ -196,9 +188,6 @@ pub enum SubCommand {
     Kill(KillCmd),
     Ps(PsCmd),
     Pkill(PkillCmd),
-    Keys(KeysCmd),
-    All(AllCmd),
-    Fuzzy(FuzzyCmd),
     Backup(BackupCmd),
     Tree(TreeCmd),
     Find(FindCmd),

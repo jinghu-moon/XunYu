@@ -29,6 +29,9 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
         ("list", _) => &[
             "-t", "--tag", "-s", "--sort", "-n", "--limit", "--offset", "-f", "--format",
         ],
+        ("z", _) | ("zi", _) | ("o", _) | ("oi", _) | ("open", _) => &[
+            "-t", "--tag", "-n", "--limit", "--base", "-w", "--workspace",
+        ],
         ("acl", Some("view")) => &["--path", "-p", "--export"],
         ("acl", Some("add")) => &[
             "--path",
@@ -51,7 +54,9 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
         ("acl", Some("repair")) => &["--path", "-p"],
         ("acl", Some("audit")) => &["--tail", "--export"],
         ("acl", Some("config")) => &["--set"],
-        ("save", _) | ("set", _) | ("tag", _) | ("rename", _) => &["-t", "--tag"],
+        ("save", _) | ("set", _) => &["-t", "--tag", "--desc"],
+        ("recent", _) => &["-n", "--limit", "-t", "--tag", "-w", "--workspace", "--since", "-f", "--format"],
+        ("gc", _) => &["-f", "--format"],
         ("tree", _) => &[
             "-d",
             "--depth",
@@ -74,7 +79,7 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
             "--format",
         ],
         ("export", _) => &["-f", "--format", "-o", "--out"],
-        ("import", _) => &["-f", "--format", "-i", "--input", "-m", "--mode"],
+        ("import", _) => &["-f", "--format", "--from", "-i", "--input", "-m", "--mode"],
         ("proxy", Some("set")) => &["-n", "--noproxy", "-m", "--msys2", "-o", "--only"],
         ("proxy", Some("del")) => &["-m", "--msys2", "-o", "--only"],
         ("proxy", Some("test")) => &["-t", "--targets", "-w", "--timeout"],
@@ -141,6 +146,9 @@ pub(super) fn value_candidates(
     }
     if subcmd == "import" && (flag == "-m" || flag == "--mode") {
         return static_candidates(IMPORT_MODES, prefix_lower);
+    }
+    if subcmd == "import" && flag == "--from" {
+        return static_candidates(&["autojump", "zoxide", "z", "fasd", "history"], prefix_lower);
     }
     if subcmd == "env" {
         if flag == "--scope" {
@@ -215,6 +223,9 @@ pub(super) fn value_directive(
     }
     if subcmd == "import" && (flag == "-i" || flag == "--input") {
         return (FILTER_EXT, Some("json|tsv"));
+    }
+    if matches!(subcmd, "z" | "zi" | "o" | "oi" | "open") && flag == "--base" {
+        return (FILTER_DIRS, None);
     }
     if subcmd == "export" && (flag == "-o" || flag == "--out") {
         return (FILTER_EXT, Some("json|tsv"));

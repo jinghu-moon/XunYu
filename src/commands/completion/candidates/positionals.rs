@@ -1,7 +1,8 @@
-use super::dynamic_bookmarks::bookmark_candidates;
 use super::dynamic_config::dynamic_config_keys;
 use super::dynamic_profiles::dynamic_ctx_profiles;
 use super::values::value_flags_for;
+use crate::bookmark::completion::bookmark_completion_candidates;
+use crate::commands::completion::BOOKMARK_SUBCOMMANDS;
 use super::*;
 
 pub(super) fn count_positionals(
@@ -49,6 +50,20 @@ pub(super) fn positional_candidates(
     cwd: Option<&str>,
     bookmark_mode: bool,
 ) -> (Vec<CompletionItem>, u32) {
+    const BOOKMARK_TAG_SUBCOMMANDS: &[&str] = &["add", "remove", "list", "rename"];
+
+    if subcmd == "bookmark" && subsub.is_none() && index == 0 {
+        return (
+            static_candidates(BOOKMARK_SUBCOMMANDS, prefix_lower),
+            NO_FILE_COMP,
+        );
+    }
+    if subcmd == "tag" && subsub.is_none() && index == 0 {
+        return (
+            static_candidates(BOOKMARK_TAG_SUBCOMMANDS, prefix_lower),
+            NO_FILE_COMP,
+        );
+    }
     if subcmd == "ctx" && subsub.is_none() && index == 0 {
         return (
             static_candidates(CTX_SUBCOMMANDS, prefix_lower),
@@ -156,12 +171,26 @@ pub(super) fn positional_candidates(
     }
     if matches!(subcmd, "delete" | "del") {
         if bookmark_mode {
-            return (bookmark_candidates(prefix_lower, cwd), NO_FILE_COMP);
+            return (
+                bookmark_completion_candidates(prefix_lower, cwd)
+                    .into_iter()
+                    .map(CompletionItem::new)
+                    .collect(),
+                NO_FILE_COMP,
+            );
         }
         return (Vec::new(), 0);
     }
-    if matches!(subcmd, "z" | "open" | "touch" | "rename") && index == 0 {
-        return (bookmark_candidates(prefix_lower, cwd), NO_FILE_COMP);
+    if matches!(subcmd, "z" | "zi" | "o" | "oi" | "open" | "touch" | "rename" | "pin" | "unpin")
+        && index == 0
+    {
+        return (
+            bookmark_completion_candidates(prefix_lower, cwd)
+                .into_iter()
+                .map(CompletionItem::new)
+                .collect(),
+            NO_FILE_COMP,
+        );
     }
     (Vec::new(), NO_FILE_COMP)
 }

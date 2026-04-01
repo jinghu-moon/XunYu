@@ -7,6 +7,7 @@ pub mod alias;
 pub(crate) mod backup;
 pub(crate) mod backup_export;
 pub(crate) mod backup_formats;
+pub(crate) mod bookmark;
 #[doc(hidden)]
 pub mod bench_support;
 mod cli;
@@ -17,7 +18,6 @@ mod ctx_store;
 mod desktop;
 mod env_core;
 mod find;
-mod fuzzy;
 mod model;
 mod output;
 pub mod path_guard;
@@ -31,6 +31,13 @@ mod util;
 mod windows;
 #[cfg(feature = "xunbak")]
 pub mod xunbak;
+
+#[doc(hidden)]
+pub use bookmark::core as bookmark_core;
+#[doc(hidden)]
+pub use bookmark::query as bookmark_query;
+#[doc(hidden)]
+pub use bookmark::state as bookmark_state;
 
 use std::path::Path;
 use std::time::Instant;
@@ -184,6 +191,10 @@ Run {} --help for more information.",
         output::print_cli_error(&err);
         std::process::exit(err.code);
     }
+}
+
+pub fn run_bookmark_from_env(invoked_name: Option<&str>) {
+    bookmark::standalone::run_from_env(invoked_name);
 }
 
 #[cfg(test)]

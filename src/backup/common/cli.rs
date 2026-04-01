@@ -21,6 +21,7 @@ where
         .collect()
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn resolve_input_path(root: &Path, raw: &str) -> PathBuf {
     let path = PathBuf::from(raw);
     if path.is_absolute() {

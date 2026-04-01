@@ -3,7 +3,7 @@ use super::*;
 // --- Bookmarks ---
 
 pub(in crate::commands::dashboard) async fn list_bookmarks() -> Response {
-    let db = match store::load_strict(&store::db_path()) {
+    let db = match crate::bookmark::storage::load_strict(&crate::bookmark::storage::db_path()) {
         Ok(db) => db,
         Err(err) => return bookmark_db_error_response(err),
     };
@@ -46,7 +46,7 @@ pub(in crate::commands::dashboard) async fn export_bookmarks(
         return (StatusCode::BAD_REQUEST, "invalid format").into_response();
     };
 
-    let db = match store::load_strict(&store::db_path()) {
+    let db = match crate::bookmark::storage::load_strict(&crate::bookmark::storage::db_path()) {
         Ok(db) => db,
         Err(err) => return bookmark_db_error_response(err),
     };
@@ -152,11 +152,11 @@ pub(in crate::commands::dashboard) async fn import_bookmarks(
         .into_response();
     }
 
-    let db_path = store::db_path();
+    let db_path = crate::bookmark::storage::db_path();
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT.into_response();
     };
-    let mut db = match store::load_strict(&db_path) {
+    let mut db = match crate::bookmark::storage::load_strict(&db_path) {
         Ok(db) => db,
         Err(err) => return bookmark_db_error_response(err),
     };
@@ -197,7 +197,7 @@ pub(in crate::commands::dashboard) async fn import_bookmarks(
         }
     }
 
-    match store::save_db(&db_path, &db) {
+    match crate::bookmark::storage::save_db(&db_path, &db) {
         Ok(_) => Json(BookmarksImportResult {
             added,
             updated,
@@ -225,18 +225,18 @@ pub(in crate::commands::dashboard) async fn upsert_bookmark(
     Path(name): Path<String>,
     Json(body): Json<BookmarkBody>,
 ) -> StatusCode {
-    let db_path = store::db_path();
+    let db_path = crate::bookmark::storage::db_path();
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT;
     };
-    let mut db = match store::load_strict(&db_path) {
+    let mut db = match crate::bookmark::storage::load_strict(&db_path) {
         Ok(db) => db,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
     };
     let entry = db.entry(name).or_default();
     entry.path = body.path;
     entry.tags = body.tags;
-    match store::save_db(&db_path, &db) {
+    match crate::bookmark::storage::save_db(&db_path, &db) {
         Ok(_) => StatusCode::OK,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -245,18 +245,18 @@ pub(in crate::commands::dashboard) async fn upsert_bookmark(
 pub(in crate::commands::dashboard) async fn delete_bookmark(
     Path(name): Path<String>,
 ) -> StatusCode {
-    let db_path = store::db_path();
+    let db_path = crate::bookmark::storage::db_path();
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT;
     };
-    let mut db = match store::load_strict(&db_path) {
+    let mut db = match crate::bookmark::storage::load_strict(&db_path) {
         Ok(db) => db,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
     };
     if db.remove(&name).is_none() {
         return StatusCode::NOT_FOUND;
     }
-    match store::save_db(&db_path, &db) {
+    match crate::bookmark::storage::save_db(&db_path, &db) {
         Ok(_) => StatusCode::OK,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -274,11 +274,11 @@ pub(in crate::commands::dashboard) async fn rename_bookmark(
         return (StatusCode::BAD_REQUEST, "newName equals old name").into_response();
     }
 
-    let db_path = store::db_path();
+    let db_path = crate::bookmark::storage::db_path();
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT.into_response();
     };
-    let mut db = match store::load_strict(&db_path) {
+    let mut db = match crate::bookmark::storage::load_strict(&db_path) {
         Ok(db) => db,
         Err(err) => return bookmark_db_error_response(err),
     };
@@ -303,7 +303,7 @@ pub(in crate::commands::dashboard) async fn rename_bookmark(
     };
     db.insert(new_name.to_string(), entry);
 
-    match store::save_db(&db_path, &db) {
+    match crate::bookmark::storage::save_db(&db_path, &db) {
         Ok(_) => Json(item).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
@@ -321,12 +321,12 @@ pub(in crate::commands::dashboard) struct BookmarksBatchRequest {
 pub(in crate::commands::dashboard) async fn bookmarks_batch(
     Json(req): Json<BookmarksBatchRequest>,
 ) -> Response {
-    let db_path = store::db_path();
+    let db_path = crate::bookmark::storage::db_path();
     let Some(_lock) = common::try_acquire_lock(&db_path) else {
         return StatusCode::CONFLICT.into_response();
     };
 
-    let mut db = match store::load_strict(&db_path) {
+    let mut db = match crate::bookmark::storage::load_strict(&db_path) {
         Ok(db) => db,
         Err(err) => return bookmark_db_error_response(err),
     };
@@ -338,7 +338,7 @@ pub(in crate::commands::dashboard) async fn bookmarks_batch(
                 deleted += 1;
             }
         }
-        if let Err(e) = store::save_db(&db_path, &db) {
+        if let Err(e) = crate::bookmark::storage::save_db(&db_path, &db) {
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
         }
         return Json(serde_json::json!({ "deleted": deleted })).into_response();
@@ -371,7 +371,7 @@ pub(in crate::commands::dashboard) async fn bookmarks_batch(
             updated += 1;
         }
 
-        if let Err(e) = store::save_db(&db_path, &db) {
+        if let Err(e) = crate::bookmark::storage::save_db(&db_path, &db) {
             return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
         }
         return Json(serde_json::json!({ "updated": updated })).into_response();

@@ -2,7 +2,7 @@
 
 本文档聚焦另一组很适合从“工程工作流”角度理解的命令：`config`、`ctx`、`find`、`backup`、`delete`。
 
-如果说 `bookmarks / proxy / ports / tree` 更像高频日常工作台，那么这五组命令更像工程支撑链路：
+如果说 `bookmark / proxy / ports / tree` 更像高频日常工作台，那么这五组命令更像工程支撑链路：
 
 - `config`：维护全局配置
 - `ctx`：切换项目上下文与会话状态
@@ -373,7 +373,7 @@ FindCmd
 
 ### 7.1 一个容易让人误判的入口位置
 
-`delete` 这个命令的 CLI 定义目前放在 `src/cli/bookmarks.rs` 里，而不是单独的 `src/cli/delete.rs`。
+`delete` 这个命令的 CLI 定义目前放在 `src/bookmark/cli_commands.rs` 里，而不是单独的 `src/cli/delete.rs`。
 
 这很容易让第一次读代码的人误以为它只是书签附属功能。实际上并不是：
 
@@ -403,7 +403,7 @@ FindCmd
 如果传了 `--bookmark`，命令会转到：
 
 - `src/commands/delete/cmd/bookmark.rs`
-- 最终调用 `bookmarks::delete_bookmark()`
+- 最终调用 `bookmarks::delete_bookmark()`；其实现源码位于 `src/bookmark/commands/mutate.rs`
 
 所以书签删除只是 `delete` 的一条旁路。
 
@@ -474,7 +474,7 @@ run_cli_pipeline
 
 ### 7.6 推荐阅读顺序
 
-1. `src/cli/bookmarks.rs`（先看 `delete` 定义）
+1. `src/bookmark/cli_commands.rs`（先看 `delete` 定义）
 2. `src/commands/dispatch/misc.rs`
 3. `src/commands/delete/mod.rs`
 4. `src/commands/delete/cmd.rs`

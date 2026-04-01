@@ -170,7 +170,7 @@ fn audit_log_to_file_with_serializer(
 }
 
 fn get_audit_file_path() -> PathBuf {
-    audit_file_path_from_db_path(&crate::store::db_path())
+    audit_file_path_from_db_path(&crate::bookmark::storage::db_path())
 }
 
 fn audit_file_path_from_db_path(db_path: &Path) -> PathBuf {

@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# xun.sh — Bookmark Manager (Bash/Zsh/MSYS2 Wrapper)
-# Relies on xun.exe (Pure Rust)
+# xun.sh — Bookmark Shell Wrapper (Bash/Zsh/MSYS2)
+# Relies on `xun bookmark`
 # =============================================================================
 
 XUN_EXE="${XUN_EXE:-xun}"
@@ -11,7 +11,13 @@ _xun_apply_magic() {
     local line
     local out_lines=()
     while IFS= read -r line; do
-        if [[ "$line" == __CD__:* ]]; then
+        if [[ "$line" == __BM_CD__* ]]; then
+            local target="${line#__BM_CD__ }"
+            if command -v cygpath &>/dev/null; then
+                target=$(cygpath -u "$target")
+            fi
+            cd "$target" || return 1
+        elif [[ "$line" == __CD__:* ]]; then
             local target="${line#__CD__:}"
             if command -v cygpath &>/dev/null; then
                 target=$(cygpath -u "$target")
@@ -36,7 +42,6 @@ _xun_apply_magic() {
 
 _xun_wrapper() {
     local out
-    # Capture stdout (machine data), stderr passes through (UI)
     out=$("$XUN_EXE" "$@")
     local ret=$?
     [ -z "$out" ] && return $ret
@@ -44,14 +49,11 @@ _xun_wrapper() {
     return $ret
 }
 
-# Aliases / Functions matching original UX
 alias xun="$XUN_EXE"
-alias sv="$XUN_EXE set"
-alias list="$XUN_EXE list"
-alias delete="$XUN_EXE del"
-alias gc="$XUN_EXE gc"
+bm() {
+    "$XUN_EXE" bookmark "$@"
+}
 
-# Context switch
 ctx() {
     if [ -z "$XUN_CTX_STATE" ]; then
         local tmp="${TEMP:-${TMPDIR:-/tmp}}"
@@ -60,17 +62,18 @@ ctx() {
     _xun_wrapper ctx "$@"
 }
 
-# Jump (z)
 z() {
-    _xun_wrapper z "$@"
+    _xun_wrapper bookmark z "$@"
 }
 
-# Open in Explorer (o) - Reuses 'z' logic but opens instead of cd
+zi() {
+    _xun_wrapper bookmark zi "$@"
+}
+
 o() {
-    local out
-    out=$("$XUN_EXE" z "$@")
-    if [[ "$out" == __CD__:* ]]; then
-        local target="${out#__CD__:}"
-        explorer.exe "$target"
-    fi
+    "$XUN_EXE" bookmark o "$@"
+}
+
+oi() {
+    "$XUN_EXE" bookmark oi "$@"
 }

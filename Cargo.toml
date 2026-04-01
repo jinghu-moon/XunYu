@@ -23,6 +23,10 @@ name = "xyu"
 path = "src/bin/xyu.rs"
 
 [[bin]]
+name = "bm"
+path = "src/bin/bm.rs"
+
+[[bin]]
 name = "acl_test"
 path = "src/bin/acl_test.rs"
 
@@ -87,6 +91,8 @@ desktop = []
 [dependencies]
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
+rkyv = { version = "0.8", features = ["std", "bytecheck"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
 toml = { version = "0.8" }
 anyhow = "1"
 thiserror = "1"
@@ -285,6 +291,10 @@ name = "backup_perf_bench_divan"
 harness = false
 required-features = ["xunbak"]
 
+[[bench]]
+name = "bookmark_bench_divan"
+harness = false
+
 [[test]]
 name = "general_cli_core"
 path = "tests/general/cli_core.rs"
@@ -430,3 +440,39 @@ path = "tests/special/performance.rs"
 name = "special_redirect_watch_core"
 path = "tests/special/redirect_watch_core.rs"
 required-features = ["redirect"]
+
+[[test]]
+name = "bookmark_phase_a"
+path = "tests/bookmark_phase_a.rs"
+
+[[test]]
+name = "bookmark_phase_e"
+path = "tests/bookmark_phase_e.rs"
+
+[[test]]
+name = "bookmark_phase_f"
+path = "tests/bookmark_phase_f.rs"
+
+[[test]]
+name = "bookmark_phase_g"
+path = "tests/bookmark_phase_g.rs"
+
+[[test]]
+name = "bookmark_phase_h"
+path = "tests/bookmark_phase_h.rs"
+
+[[test]]
+name = "bookmark_phase_i"
+path = "tests/bookmark_phase_i.rs"
+
+[[test]]
+name = "bookmark_phase_j"
+path = "tests/bookmark_phase_j.rs"
+
+[[test]]
+name = "bookmark_binary_cache_phase_a"
+path = "tests/bookmark_binary_cache_phase_a.rs"
+
+[[test]]
+name = "special_bookmark_performance"
+path = "tests/special/bookmark_performance.rs"

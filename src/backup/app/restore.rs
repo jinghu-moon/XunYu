@@ -455,6 +455,7 @@ impl<'a> RestoreMode<'a> {
         }
     }
 
+    #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
     fn selected_file(&self) -> Option<&'a str> {
         match self {
             Self::File(path) => Some(*path),
@@ -462,6 +463,7 @@ impl<'a> RestoreMode<'a> {
         }
     }
 
+    #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
     fn selected_glob(&self) -> Option<&'a str> {
         match self {
             Self::Glob(pattern) => Some(*pattern),

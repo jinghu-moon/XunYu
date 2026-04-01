@@ -1,6 +1,4 @@
 use crate::ctx_store::{ctx_store_path, load_store};
-use crate::model::Entry;
-use crate::store::{db_path, load};
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,10 +7,6 @@ use std::time::SystemTime;
 
 #[derive(Default)]
 struct CompletionCache {
-    db_path: Option<PathBuf>,
-    db_mtime: Option<SystemTime>,
-    visits_mtime: Option<SystemTime>,
-    db: Arc<std::collections::BTreeMap<String, Entry>>,
     config_path: Option<PathBuf>,
     config_mtime: Option<SystemTime>,
     config_keys: Arc<Vec<String>>,
@@ -32,25 +26,6 @@ static CACHE: OnceLock<Mutex<CompletionCache>> = OnceLock::new();
 
 fn cache() -> &'static Mutex<CompletionCache> {
     CACHE.get_or_init(|| Mutex::new(CompletionCache::default()))
-}
-
-pub(super) fn cached_db() -> Arc<std::collections::BTreeMap<String, Entry>> {
-    let path = db_path();
-    let visits = visit_log_path(&path);
-    let db_mtime = file_mtime(&path);
-    let visits_mtime = file_mtime(&visits);
-
-    let mut cache = cache().lock().expect("completion cache");
-    let path_changed = cache.db_path.as_ref().map(|p| p != &path).unwrap_or(true);
-    let mtime_changed = cache.db_mtime != db_mtime || cache.visits_mtime != visits_mtime;
-    if path_changed || mtime_changed {
-        let db = load(&path);
-        cache.db = Arc::new(db);
-        cache.db_path = Some(path);
-        cache.db_mtime = db_mtime;
-        cache.visits_mtime = visits_mtime;
-    }
-    cache.db.clone()
 }
 
 pub(super) fn cached_config_keys_and_profiles() -> (Arc<Vec<String>>, Arc<Vec<String>>) {
@@ -157,13 +132,9 @@ fn file_mtime(path: &Path) -> Option<SystemTime> {
     fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
-fn visit_log_path(db_path: &Path) -> PathBuf {
-    db_path.with_extension("visits.jsonl")
-}
-
 #[cfg(feature = "redirect")]
 fn audit_path() -> PathBuf {
-    let db = db_path();
+    let db = crate::bookmark::storage::db_path();
     let dir = db.parent().unwrap_or_else(|| Path::new("."));
     dir.join("audit.jsonl")
 }

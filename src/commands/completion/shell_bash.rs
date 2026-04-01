@@ -4,7 +4,8 @@ _xun_complete_static() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     local sub="${COMP_WORDS[1]}"
-    local subcommands="init completion config ctx list z open ws save set del delete check gc touch rename tag recent stats dedup export import proxy pon poff pst px ports kill keys all fuzzy backup bak xunbak tree env video lock rm mv renfile protect encrypt decrypt serve redirect restore rst"
+    local subcommands="bookmark init completion config ctx del delete proxy pon poff pst px ports kill ps pkill backup bak xunbak tree find env video lock rm mv renfile protect encrypt decrypt serve redirect diff desktop brn cstat img verify"
+    local bookmark_sub="z zi o oi open save set delete tag pin unpin rename list recent stats check gc dedup export import init touch learn keys all"
     local formats="auto table tsv json"
     local proxy_sub="set del get detect test"
     local ctx_sub="set use off list show del rename"
@@ -26,6 +27,10 @@ _xun_complete_static() {
         COMPREPLY=( $(compgen -W "$(_xun_redirect_txs)" -- "$cur") )
         return
     fi
+    if [[ "$sub" == "bookmark" && $COMP_CWORD -eq 2 ]]; then
+        COMPREPLY=( $(compgen -W "$bookmark_sub" -- "$cur") )
+        return
+    fi
     if [[ "$sub" == "ctx" && $COMP_CWORD -eq 2 ]]; then
         COMPREPLY=( $(compgen -W "$ctx_sub" -- "$cur") )
         return
@@ -45,7 +50,7 @@ _xun_config_path() {
 }
 
 _xun_db_path() {
-    if [ -n "$XUN_DB" ]; then echo "$XUN_DB"; else echo "$HOME/.xun.json"; fi
+    if [ -n "$_BM_DATA_FILE" ]; then echo "$_BM_DATA_FILE"; else echo "$HOME/.xun.bookmark.json"; fi
 }
 
 _xun_audit_path() {
@@ -184,6 +189,6 @@ _xun_complete() {
     fi
 }
 
-complete -F _xun_complete xun x xyu xy z o delete rename
+complete -F _xun_complete xun x xyu xy
 "#
 }

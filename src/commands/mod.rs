@@ -3,7 +3,6 @@ pub(crate) mod acl_cmd;
 pub(crate) mod alias;
 pub(crate) mod app_config;
 pub(crate) mod backup;
-pub(crate) mod bookmarks;
 pub(crate) mod completion;
 pub(crate) mod ctx;
 pub(crate) mod delete;
@@ -47,6 +46,8 @@ pub(crate) mod lock;
 pub(crate) mod protect;
 #[cfg(feature = "crypt")]
 pub(crate) mod vault;
+
+pub(crate) use crate::bookmark::commands as bookmarks;
 
 mod dispatch;
 

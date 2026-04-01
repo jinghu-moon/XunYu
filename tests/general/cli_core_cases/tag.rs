@@ -8,10 +8,10 @@ fn tag_add_remove_rename_list() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["set", "home", work.to_str().unwrap()]));
-    run_ok(env.cmd().args(["tag", "add", "home", "dev,cli"]));
+    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+    run_ok(env.cmd().args(["bookmark", "tag", "add", "home", "dev,cli"]));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -27,8 +27,8 @@ fn tag_add_remove_rename_list() {
     assert!(tag_vals.contains(&"dev".to_string()));
     assert!(tag_vals.contains(&"cli".to_string()));
 
-    run_ok(env.cmd().args(["tag", "remove", "home", "cli"]));
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    run_ok(env.cmd().args(["bookmark", "tag", "remove", "home", "cli"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -44,8 +44,8 @@ fn tag_add_remove_rename_list() {
     assert!(tag_vals.contains(&"dev".to_string()));
     assert!(!tag_vals.contains(&"cli".to_string()));
 
-    run_ok(env.cmd().args(["tag", "rename", "dev", "prod"]));
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    run_ok(env.cmd().args(["bookmark", "tag", "rename", "dev", "prod"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()
@@ -61,7 +61,7 @@ fn tag_add_remove_rename_list() {
     assert!(tag_vals.contains(&"prod".to_string()));
     assert!(!tag_vals.contains(&"dev".to_string()));
 
-    let list_out = run_ok(env.cmd().args(["tag", "list"]));
+    let list_out = run_ok(env.cmd().args(["bookmark", "tag", "list"]));
     let s = String::from_utf8_lossy(&list_out.stdout);
     let first = s.lines().next().unwrap_or("");
     assert!(first.starts_with("prod\t1"));
@@ -75,13 +75,13 @@ fn tag_add_does_not_duplicate_existing_tags() {
 
     run_ok(
         env.cmd()
-            .args(["set", "home", work.to_str().unwrap(), "-t", "work"]),
+            .args(["bookmark", "set", "home", work.to_str().unwrap(), "-t", "work"]),
     );
-    let out = run_ok(env.cmd().args(["tag", "add", "home", "work,WORK"]));
+    let out = run_ok(env.cmd().args(["bookmark", "tag", "add", "home", "work,WORK"]));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("No new tags added."));
 
-    let output = run_ok(env.cmd().args(["list", "--format", "json"]));
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let item = v
         .as_array()

@@ -1149,7 +1149,7 @@ fn capabilities() -> WorkspaceCapabilities {
 }
 
 fn audit_entry_count() -> usize {
-    let mut path = store::db_path();
+    let mut path = crate::bookmark::storage::db_path();
     path.set_file_name("audit.jsonl");
     let Ok(content) = std::fs::read_to_string(path) else {
         return 0;
@@ -1185,7 +1185,7 @@ pub(in crate::commands::dashboard) async fn workspace_capabilities() -> Json<Wor
 pub(in crate::commands::dashboard) async fn workspace_overview_summary(
     State(state): State<super::super::DashboardState>,
 ) -> Json<WorkspaceOverviewSummary> {
-    let bookmarks = store::load(&store::db_path()).len();
+    let bookmarks = crate::bookmark::storage::load(&crate::bookmark::storage::db_path()).len();
     let tcp = ports::list_tcp_listeners();
     let udp = ports::list_udp_endpoints();
     let env_status = crate::env_core::EnvManager::new()

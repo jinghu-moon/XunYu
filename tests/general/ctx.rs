@@ -200,26 +200,30 @@ fn default_tag_filters_list_and_z() {
 
     run_ok(
         env.cmd()
-            .args(["set", "proj-work", work.to_str().unwrap(), "-t", "work"]),
+            .args(["bookmark", "set", "proj-work", work.to_str().unwrap(), "-t", "work"]),
     );
     run_ok(
         env.cmd()
-            .args(["set", "proj-home", home.to_str().unwrap(), "-t", "home"]),
+            .args(["bookmark", "set", "proj-home", home.to_str().unwrap(), "-t", "home"]),
     );
 
     let out = run_ok(
         env.cmd()
             .env("XUN_DEFAULT_TAG", "work")
-            .args(["list", "--format", "json"]),
+            .args(["bookmark", "list", "--format", "json"]),
     );
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(v.as_array().unwrap().len(), 1);
     assert_eq!(v[0]["name"], "proj-work");
 
-    let out = run_ok(env.cmd().env("XUN_DEFAULT_TAG", "work").args(["z", "proj"]));
+    let out = run_ok(
+        env.cmd()
+            .env("XUN_DEFAULT_TAG", "work")
+            .args(["bookmark", "z", "proj"]),
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains(work.to_str().unwrap()));
-    assert!(!stdout.contains(home.to_str().unwrap()));
+    assert!(stdout.contains(&work.to_string_lossy().replace('\\', "/")));
+    assert!(!stdout.contains(&home.to_string_lossy().replace('\\', "/")));
 }
 
 #[test]

@@ -2,6 +2,9 @@
 
 本节由脚本生成：`tools/gen_readme_commands.py`。修改 CLI 后请重新生成。
 
+> 注：bookmark 命令已完成命名空间重构，正式入口为 `xun bookmark <sub>`。
+> 在重新生成本文件前，请优先参考 [Commands.md](/D:/100_Projects/110_Daily/XunYu/intro/cli/Commands.md)。
+
 <!-- XUN_COMMANDS_START -->
 
 ### 全局组合（适用于所有命令）

@@ -2,11 +2,16 @@
 
 ```bash
 # 书签
-xun set proj D:\Repo\MyProj -t work,rust
-xun z proj
-xun list --tag work -f table
-xun recent --limit 5 -f tsv
-xun check --days 90 -f json
+xun bookmark set proj D:\Repo\MyProj -t work,rust --desc "主项目"
+xun bookmark z proj
+xun bookmark zi proj
+xun bookmark undo
+xun bookmark redo
+xun bookmark list --tag work -f table
+xun bookmark recent --limit 5 -f tsv
+xun bookmark check --days 90 -f json
+xun bookmark import --from zoxide
+xun bookmark init powershell
 
 # 配置
 xun config get proxy.defaultUrl
