@@ -8,11 +8,11 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
-use rkyv::{from_bytes, to_bytes, rancor::Error as RkyvError, util::AlignedVec};
+use rkyv::{access, from_bytes, to_bytes, rancor::Error as RkyvError, util::AlignedVec};
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::bookmark::index::PersistedBookmarkIndex;
+use crate::bookmark::index::{BookmarkIndex, PersistedBookmarkIndex};
 use crate::bookmark_core::{normalize_name, BookmarkSource};
 use crate::bookmark_state::Bookmark;
 use crate::bookmark::debug::BookmarkLoadTiming;
@@ -305,6 +305,88 @@ pub(crate) fn load_cache_payload_checked(
     }
 }
 
+pub(crate) struct CacheStoreData {
+    pub(crate) bookmarks: Vec<Bookmark>,
+    pub(crate) index: Option<BookmarkIndex>,
+}
+
+pub(crate) fn load_cache_store_data_checked(
+    path: &Path,
+    current_schema_version: u32,
+    fingerprint: &SourceFingerprint,
+    mut timing: Option<&mut BookmarkLoadTiming>,
+) -> io::Result<Option<CacheStoreData>> {
+    if std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some() {
+        return Ok(None);
+    }
+    let header = match read_cache_header(path)? {
+        Some(header) => header,
+        None => return Ok(None),
+    };
+    if validate_cache_header(
+        &header,
+        current_schema_version,
+        fingerprint.len,
+        fingerprint.modified_ms,
+        fingerprint.hash,
+    )
+    .is_err()
+    {
+        return Ok(None);
+    }
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_header");
+    }
+
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(_) => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_file");
+    }
+
+    let payload_end = HEADER_SIZE.saturating_add(header.payload_len as usize);
+    if payload_end > bytes.len() {
+        return Ok(None);
+    }
+    let payload_bytes = &bytes[HEADER_SIZE..payload_end];
+    let mut aligned: AlignedVec<CACHE_PAYLOAD_ALIGNMENT> =
+        AlignedVec::with_capacity(payload_bytes.len());
+    aligned.extend_from_slice(payload_bytes);
+    if let Some(ref mut timing) = timing {
+        timing.mark("align_cache_payload");
+    }
+
+    let archived = match access::<rkyv::Archived<CachePayload>, RkyvError>(&aligned) {
+        Ok(archived) => archived,
+        Err(_) => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("deserialize_cache_payload");
+    }
+
+    let bookmarks: Vec<Bookmark> = archived
+        .bookmarks
+        .as_slice()
+        .iter()
+        .map(materialize_archived_bookmark)
+        .collect();
+    if let Some(ref mut timing) = timing {
+        timing.mark("materialize_cache_payload");
+    }
+
+    let index = archived
+        .index
+        .as_ref()
+        .and_then(|persisted| BookmarkIndex::from_archived_embedded_persisted(persisted, bookmarks.len()));
+    if let Some(ref mut timing) = timing {
+        timing.mark("deserialize_cache_index");
+    }
+
+    Ok(Some(CacheStoreData { bookmarks, index }))
+}
+
 pub(crate) fn write_cache_payload_atomic(
     path: &Path,
     current_schema_version: u32,
@@ -462,6 +544,40 @@ impl CachedBookmark {
             visit_count: self.visit_count,
             frecency_score: self.frecency_score,
         }
+    }
+}
+
+fn materialize_archived_bookmark(
+    archived: &rkyv::Archived<CachedBookmark>,
+) -> Bookmark {
+    let name = archived.name.as_ref().map(|value| value.as_str().to_string());
+    let path = archived.path.as_str().to_string();
+    let name_norm = name.as_deref().map(normalize_name);
+    let path_norm = path.to_ascii_lowercase();
+
+    Bookmark {
+        id: archived.id.as_str().to_string(),
+        name,
+        name_norm,
+        path,
+        path_norm,
+        source: source_from_code(archived.source),
+        pinned: archived.pinned,
+        tags: archived
+            .tags
+            .as_slice()
+            .iter()
+            .map(|tag| tag.as_str().to_string())
+            .collect(),
+        desc: archived.desc.as_str().to_string(),
+        workspace: archived
+            .workspace
+            .as_ref()
+            .map(|value| value.as_str().to_string()),
+        created_at: archived.created_at.to_native(),
+        last_visited: archived.last_visited.as_ref().map(|value| value.to_native()),
+        visit_count: archived.visit_count.as_ref().map(|value| value.to_native()),
+        frecency_score: archived.frecency_score.to_native(),
     }
 }
 

@@ -187,30 +187,30 @@ bookmark timing [z] db_path=0ms store_load=6ms build_spec=0ms build_ctx=0ms quer
 `Store::load` 纯加载对照：
 
 - `Store::load(20_000, compact, cache disabled)`：约 `155ms`
-- `Store::load(20_000, compact, warm binary cache hit)`：约 `34ms`
+- `Store::load(20_000, compact, repeated loads with binary cache)`：约 `22ms`
 - `Store::load(50_000, compact, cache disabled)`：约 `396ms`
-- `Store::load(50_000, compact, warm binary cache hit)`：约 `86ms`
+- `Store::load(50_000, compact, repeated loads with binary cache)`：约 `54ms`
 
 release 命令级对照：
 
 - `xun bookmark z --list`（20k, raw JSON, cache disabled）：约 `252ms`
-- `xun bookmark z --list`（20k, compact JSON, cache disabled）：约 `223~237ms`
-- `xun bookmark z --list`（20k, warm binary cache hit）：约 `65ms`
+- `xun bookmark z --list`（20k, compact JSON, cache disabled）：约 `220~237ms`
+- `xun bookmark z --list`（20k, warm binary cache hit）：约 `52~65ms`
 - `bm z --list`（20k, raw JSON, cache disabled）：约 `235ms`
-- `bm z --list`（20k, compact JSON, cache disabled）：约 `208ms`
-- `bm z --list`（20k, warm binary cache hit）：约 `54ms`
+- `bm z --list`（20k, compact JSON, cache disabled）：约 `209ms`
+- `bm z --list`（20k, warm binary cache hit）：约 `42~67ms`
 - `xun __complete bookmark z`（20k, raw JSON, cache disabled）：约 `258ms`
-- `xun __complete bookmark z`（20k, compact JSON, cache disabled）：约 `255ms`
-- `xun __complete bookmark z`（20k, warm binary cache hit）：约 `73~98ms`
+- `xun __complete bookmark z`（20k, compact JSON, cache disabled）：约 `223~255ms`
+- `xun __complete bookmark z`（20k, warm binary cache hit）：约 `57~98ms`
 - `xun bookmark z --list`（50k, raw JSON, cache disabled）：约 `843ms`
-- `xun bookmark z --list`（50k, compact JSON, cache disabled）：约 `520ms`
-- `xun bookmark z --list`（50k, warm binary cache hit）：约 `119ms`
+- `xun bookmark z --list`（50k, compact JSON, cache disabled）：约 `486~520ms`
+- `xun bookmark z --list`（50k, warm binary cache hit）：约 `83~119ms`
 - `bm z --list`（50k, raw JSON, cache disabled）：约 `504ms`
-- `bm z --list`（50k, compact JSON, cache disabled）：约 `499ms`
-- `bm z --list`（50k, warm binary cache hit）：约 `111ms`
+- `bm z --list`（50k, compact JSON, cache disabled）：约 `480~499ms`
+- `bm z --list`（50k, warm binary cache hit）：约 `74~111ms`
 - `xun __complete bookmark z`（50k, raw JSON, cache disabled）：约 `613ms`
-- `xun __complete bookmark z`（50k, compact JSON, cache disabled）：约 `602ms`
-- `xun __complete bookmark z`（50k, warm binary cache hit）：约 `133~206ms`
+- `xun __complete bookmark z`（50k, compact JSON, cache disabled）：约 `502~602ms`
+- `xun __complete bookmark z`（50k, warm binary cache hit）：约 `97~206ms`
 - `xun __complete bookmark z`（20k, cache-hit owned vs lightweight）：约 `55ms vs 56ms`
 - `xun __complete bookmark z`（50k, cache-hit owned vs lightweight）：约 `94ms vs 98ms`
 - `xun __complete bookmark z`（20k, 串行 warm-hit timing 样本）：约 `owned 25ms vs borrowed 18ms`
@@ -219,11 +219,11 @@ release 命令级对照：
 结论：
 
 - 20k 以上场景当前仍明显受 `store_load` 主导
-- `Store::load` 的主要热点仍然是 JSON 解析本身
+- `Store::load` 的主要热点仍然是 JSON 解析本身，但主线 cache-hit 恢复路径已经显著压缩
 - `rkyv` binary cache 已经把 `Store::load` 压到原 compact JSON 的约 `22%`
 - 命令级收益也已经明确，不再是早期“JSON payload cache”那种无效原型
-- 对 `z --list`，20k 提速约 `3.6x`，50k 提速约 `4.4x`
-- 对 `__complete`，20k 提速约 `2.6x`，50k 提速约 `2.9x`
+- 对 `z --list`，20k 提速约 `4x`，50k 提速约 `5~6x`
+- 对 `__complete`，20k 提速约 `4x`，50k 提速约 `5x`
 - 旧结论“binary cache + JSON payload 不值得默认开启”已经失效；当前应以 `rkyv` payload 结果为准
 - `xun bookmark ...` 已增加前置 fast-path，能绕开顶层大 `argh` 解析；对普通 bookmark 命令有局部收益，但不会改变 `xun` 与 `bm` 的总装载体积差
 - `bookmark completion/query` 已追加一轮轻量优化：
@@ -232,7 +232,7 @@ release 命令级对照：
   `query_recall≈1ms`、`query_rank≈4ms`，其它 query 子阶段接近 `0ms`
 - 这说明 completion 当前剩余主要成本已重新回到 `store_load` 和总入口装载，而不再是 query 内核本身
 - 进一步拆解 cache-hit 的 `store_load` 可见：
-  - 20k 热命中样本：`read_cache_file≈1ms`、`deserialize_cache_payload≈15ms`、`materialize_cache_payload≈2ms`、`deserialize_cache_index≈0ms`
+  - 20k 热命中样本：`read_cache_file≈1ms`、`deserialize_cache_payload≈1ms`、`materialize_cache_payload≈6ms`、`deserialize_cache_index≈2ms`
   - 50k 热命中样本：`read_cache_file≈2~3ms`、`deserialize_cache_payload≈4ms`、`materialize_cache_payload≈12ms`、`deserialize_cache_index≈6ms`
 - 因此下一阶段如果继续打性能，优先级应是：
   `cache payload materialize` > `总入口装载` > `query 内核`

@@ -24,10 +24,10 @@ pub(crate) struct BookmarkIndex {
     rkyv::Deserialize,
 )]
 pub(crate) struct PersistedBookmarkIndex {
-    version: u32,
-    bookmark_count: usize,
-    fingerprint: String,
-    terms: Vec<IndexTermEntry>,
+    pub(crate) version: u32,
+    pub(crate) bookmark_count: usize,
+    pub(crate) fingerprint: String,
+    pub(crate) terms: Vec<IndexTermEntry>,
 }
 
 #[derive(
@@ -42,8 +42,8 @@ pub(crate) struct PersistedBookmarkIndex {
     rkyv::Deserialize,
 )]
 pub(crate) struct IndexTermEntry {
-    term: String,
-    ids: Vec<usize>,
+    pub(crate) term: String,
+    pub(crate) ids: Vec<usize>,
 }
 
 const INDEX_FILE_VERSION: u32 = 1;
@@ -113,6 +113,7 @@ impl BookmarkIndex {
         Some(Self { terms })
     }
 
+    #[cfg(test)]
     pub(crate) fn from_embedded_persisted(
         persisted: PersistedBookmarkIndex,
         bookmark_count: usize,
@@ -123,6 +124,34 @@ impl BookmarkIndex {
         Some(Self {
             terms: sanitize_terms(persisted.terms, persisted.bookmark_count),
         })
+    }
+
+    pub(crate) fn from_archived_embedded_persisted(
+        persisted: &rkyv::Archived<PersistedBookmarkIndex>,
+        bookmark_count: usize,
+    ) -> Option<Self> {
+        if persisted.version.to_native() != INDEX_FILE_VERSION
+            || persisted.bookmark_count.to_native() as usize != bookmark_count
+        {
+            return None;
+        }
+
+        let terms = persisted
+            .terms
+            .as_slice()
+            .iter()
+            .map(|entry| IndexTermEntry {
+                term: entry.term.as_str().to_string(),
+                ids: entry
+                    .ids
+                    .as_slice()
+                    .iter()
+                    .map(|idx| idx.to_native() as usize)
+                    .filter(|idx| *idx < bookmark_count)
+                    .collect(),
+            })
+            .collect();
+        Some(Self { terms })
     }
 
     pub(crate) fn lookup_prefix(&self, token: &str) -> Vec<usize> {
