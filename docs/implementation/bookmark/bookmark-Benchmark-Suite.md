@@ -2,6 +2,8 @@
 
 > 更新时间：2026-04-01
 > 关联文档：bookmark-PRD.md · Bookmarks-Feature-Roadmap.md · bookmark-TDD-TaskList.md
+>
+> 轻量运行时视图状态同步：**实验完成，暂停推进；代码已回退，本文保留基准结果作为记录**
 
 ---
 
@@ -211,6 +213,8 @@ release 命令级对照：
 - `xun __complete bookmark z`（50k, warm binary cache hit）：约 `133~206ms`
 - `xun __complete bookmark z`（20k, cache-hit owned vs lightweight）：约 `55ms vs 56ms`
 - `xun __complete bookmark z`（50k, cache-hit owned vs lightweight）：约 `94ms vs 98ms`
+- `xun __complete bookmark z`（20k, 串行 warm-hit timing 样本）：约 `owned 25ms vs borrowed 18ms`
+- `xun __complete bookmark z`（50k, 串行 warm-hit timing 样本）：约 `owned 60ms vs borrowed 46ms`
 
 结论：
 
@@ -239,9 +243,10 @@ release 命令级对照：
 - lightweight runtime view 的实验性结论：
   - 工程正确性已验证
   - cache-hit 下 borrowed 路径能显著压低 `store_load`
-  - 但会把更多成本转移到 `query_recall / query_rank`
-  - 当前 release 端到端对 `__complete` 没有形成稳定净收益
-  - 因此暂不建议继续默认扩张 lightweight runtime view
+  - 会把更多成本转移到 `query_recall / query_rank`
+  - 在部分样本中 `__complete` release 对照与串行 warm-hit 样本显示净收益
+  - 但收益不够稳定，20k 档位存在波动，当前不足以继续作为主线推进
+  - 当前最终决策是：实验完成，暂停推进，代码已回退，结果保留为记录
 - 已验证无收益并回退的尝试：
   - 将 persisted index 项从 `usize` 压到 `u32`
 

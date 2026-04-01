@@ -4,12 +4,7 @@ use std::process::Command;
 
 use console::Term;
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
-use crate::bookmark::cache::{SourceFingerprint, load_cache_owner_checked, store_cache_path};
 use crate::bookmark::debug::BookmarkTiming;
-use crate::bookmark::lightweight::{
-    classify_query_route, query_context_from_owner, query_lightweight_with_timing,
-    RankedBookmarkView,
-};
 use crate::bookmark::path_probe::{BookmarkPathStatus, path_status};
 use crate::bookmark::storage::db_path;
 use crate::bookmark_core::{QueryContext, QueryScope};
@@ -24,24 +19,11 @@ pub(crate) fn cmd_z(args: ZCmd) -> CliResult {
     let mut timing = BookmarkTiming::new("z");
     let file = db_path();
     timing.mark("db_path");
-    let spec = build_query_spec_for_z(&args)?;
-    timing.mark("build_spec");
-    if let Some(handled) = try_handle_read_only_query_results_borrowed(
-        &file,
-        &spec,
-        ConsumerKind::Jump,
-        &mut timing,
-    )? {
-        timing.finish(&[
-            ("bookmarks", handled.bookmark_count.to_string()),
-            ("results", handled.result_count.to_string()),
-            ("runtime_view", "borrowed".to_string()),
-        ]);
-        return Ok(());
-    }
     let mut store = Store::load_or_default(&file)
         .map_err(|err| CliError::new(1, format!("Failed to load bookmark store: {err}")))?;
     timing.mark("store_load");
+    let spec = build_query_spec_for_z(&args)?;
+    timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
     let ranked = query(&spec, &store, &ctx, now_secs());
@@ -52,7 +34,6 @@ pub(crate) fn cmd_z(args: ZCmd) -> CliResult {
     timing.finish(&[
         ("bookmarks", store.bookmarks.len().to_string()),
         ("results", result_count.to_string()),
-        ("runtime_view", "owned".to_string()),
     ]);
     Ok(())
 }
@@ -99,24 +80,11 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
     let mut timing = BookmarkTiming::new("o");
     let file = db_path();
     timing.mark("db_path");
-    let spec = build_query_spec_for_open(&args)?;
-    timing.mark("build_spec");
-    if let Some(handled) = try_handle_read_only_query_results_borrowed(
-        &file,
-        &spec,
-        ConsumerKind::Open,
-        &mut timing,
-    )? {
-        timing.finish(&[
-            ("bookmarks", handled.bookmark_count.to_string()),
-            ("results", handled.result_count.to_string()),
-            ("runtime_view", "borrowed".to_string()),
-        ]);
-        return Ok(());
-    }
     let mut store = Store::load_or_default(&file)
         .map_err(|err| CliError::new(1, format!("Failed to load bookmark store: {err}")))?;
     timing.mark("store_load");
+    let spec = build_query_spec_for_open(&args)?;
+    timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
     let ranked = query(&spec, &store, &ctx, now_secs());
@@ -127,7 +95,6 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
     timing.finish(&[
         ("bookmarks", store.bookmarks.len().to_string()),
         ("results", result_count.to_string()),
-        ("runtime_view", "owned".to_string()),
     ]);
     Ok(())
 }
@@ -136,24 +103,11 @@ pub(crate) fn cmd_zi(args: ZiCmd) -> CliResult {
     let mut timing = BookmarkTiming::new("zi");
     let file = db_path();
     timing.mark("db_path");
-    let spec = build_query_spec_for_zi(&args)?;
-    timing.mark("build_spec");
-    if let Some(handled) = try_handle_read_only_query_results_borrowed(
-        &file,
-        &spec,
-        ConsumerKind::Jump,
-        &mut timing,
-    )? {
-        timing.finish(&[
-            ("bookmarks", handled.bookmark_count.to_string()),
-            ("results", handled.result_count.to_string()),
-            ("runtime_view", "borrowed".to_string()),
-        ]);
-        return Ok(());
-    }
     let mut store = Store::load_or_default(&file)
         .map_err(|err| CliError::new(1, format!("Failed to load bookmark store: {err}")))?;
     timing.mark("store_load");
+    let spec = build_query_spec_for_zi(&args)?;
+    timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
     let ranked = query(&spec, &store, &ctx, now_secs());
@@ -164,7 +118,6 @@ pub(crate) fn cmd_zi(args: ZiCmd) -> CliResult {
     timing.finish(&[
         ("bookmarks", store.bookmarks.len().to_string()),
         ("results", result_count.to_string()),
-        ("runtime_view", "owned".to_string()),
     ]);
     Ok(())
 }
@@ -173,24 +126,11 @@ pub(crate) fn cmd_oi(args: OiCmd) -> CliResult {
     let mut timing = BookmarkTiming::new("oi");
     let file = db_path();
     timing.mark("db_path");
-    let spec = build_query_spec_for_oi(&args)?;
-    timing.mark("build_spec");
-    if let Some(handled) = try_handle_read_only_query_results_borrowed(
-        &file,
-        &spec,
-        ConsumerKind::Open,
-        &mut timing,
-    )? {
-        timing.finish(&[
-            ("bookmarks", handled.bookmark_count.to_string()),
-            ("results", handled.result_count.to_string()),
-            ("runtime_view", "borrowed".to_string()),
-        ]);
-        return Ok(());
-    }
     let mut store = Store::load_or_default(&file)
         .map_err(|err| CliError::new(1, format!("Failed to load bookmark store: {err}")))?;
     timing.mark("store_load");
+    let spec = build_query_spec_for_oi(&args)?;
+    timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
     let ranked = query(&spec, &store, &ctx, now_secs());
@@ -201,7 +141,6 @@ pub(crate) fn cmd_oi(args: OiCmd) -> CliResult {
     timing.finish(&[
         ("bookmarks", store.bookmarks.len().to_string()),
         ("results", result_count.to_string()),
-        ("runtime_view", "owned".to_string()),
     ]);
     Ok(())
 }
@@ -210,11 +149,6 @@ pub(crate) fn cmd_oi(args: OiCmd) -> CliResult {
 enum ConsumerKind {
     Jump,
     Open,
-}
-
-struct ReadOnlyBorrowedHandled {
-    bookmark_count: usize,
-    result_count: usize,
 }
 
 fn build_query_spec_for_z(args: &ZCmd) -> CliResult<BookmarkQuerySpec> {
@@ -414,82 +348,6 @@ fn handle_query_results(
     Ok(())
 }
 
-fn try_handle_read_only_query_results_borrowed(
-    file: &Path,
-    spec: &BookmarkQuerySpec,
-    kind: ConsumerKind,
-    timing: &mut BookmarkTiming,
-) -> CliResult<Option<ReadOnlyBorrowedHandled>> {
-    if std::env::var_os("XUN_BM_DISABLE_LIGHTWEIGHT_VIEW").is_some() {
-        return Ok(None);
-    }
-    if classify_query_route(spec).is_none() {
-        return Ok(None);
-    }
-    let fingerprint = match SourceFingerprint::from_path(file) {
-        Ok(fingerprint) => fingerprint,
-        Err(_) => return Ok(None),
-    };
-    let owner = match load_cache_owner_checked(
-        &store_cache_path(file),
-        crate::bookmark::migration::CURRENT_SCHEMA_VERSION,
-        &fingerprint,
-        None,
-    ) {
-        Ok(Some(owner)) => owner,
-        Ok(None) => return Ok(None),
-        Err(_) => return Ok(None),
-    };
-    timing.mark("store_load");
-    let ctx = query_context_from_owner(
-        std::env::current_dir().unwrap_or_else(|_| ".".into()),
-        &owner,
-    )
-    .map_err(|err| CliError::new(1, format!("Failed to build lightweight query context: {err}")))?;
-    timing.mark("build_ctx");
-    let ranked = query_lightweight_with_timing(spec, &owner, &ctx, now_secs(), Some(timing))
-        .map_err(|err| CliError::new(1, format!("Failed to run lightweight query: {err}")))?;
-    timing.mark("query");
-    let result_count = ranked.len();
-    let bookmark_count = owner
-        .rows()
-        .map(|rows| rows.len())
-        .unwrap_or_default();
-    handle_query_results_borrowed(spec, ranked, kind)?;
-    timing.mark("handle");
-    Ok(Some(ReadOnlyBorrowedHandled {
-        bookmark_count,
-        result_count,
-    }))
-}
-
-fn handle_query_results_borrowed(
-    spec: &BookmarkQuerySpec,
-    ranked: Vec<RankedBookmarkView<'_>>,
-    _kind: ConsumerKind,
-) -> CliResult {
-    if ranked.is_empty() {
-        ui_println!("No matches found.");
-        return Ok(());
-    }
-
-    if spec.preview {
-        ui_println!("Preview mode: no jump/open will be executed.");
-        print_ranked_results_borrowed(&ranked, spec.output_fmt, true);
-        return Ok(());
-    }
-    if spec.why {
-        print_why_borrowed(&ranked[0]);
-        return Ok(());
-    }
-    if matches!(spec.action, QueryAction::List) || spec.explain {
-        print_ranked_results_borrowed(&ranked, spec.output_fmt, spec.explain);
-        return Ok(());
-    }
-
-    Ok(())
-}
-
 fn select_interactive(ranked: &[RankedBookmark]) -> Option<RankedBookmark> {
     if ranked.is_empty() {
         return None;
@@ -596,94 +454,6 @@ fn print_ranked_results(ranked: &[RankedBookmark], format: QueryFormat, with_sco
 
 fn print_why(item: &RankedBookmark) {
     out_println!("Jump to: {}", item.bookmark.path);
-    out_println!("Reason:");
-    out_println!("  MatchScore   {:.2}", item.factors.match_score);
-    out_println!("  FrecencyMult {:.2}", item.factors.frecency_mult);
-    out_println!("  ScopeMult    {:.2}", item.factors.scope_mult);
-    out_println!("  SourceMult   {:.2}", item.factors.source_mult);
-    out_println!("  PinMult      {:.2}", item.factors.pin_mult);
-    out_println!("  FinalScore   {:.2}", item.final_score);
-}
-
-fn print_ranked_results_borrowed(
-    ranked: &[RankedBookmarkView<'_>],
-    format: QueryFormat,
-    with_scores: bool,
-) {
-    match format {
-        QueryFormat::Json => {
-            let items: Vec<serde_json::Value> = ranked
-                .iter()
-                .map(|item| {
-                    serde_json::json!({
-                        "path": item.row.path(),
-                        "name": item.row.name(),
-                        "score": item.final_score,
-                        "source": format!("{:?}", item.row.source()).to_ascii_lowercase(),
-                        "pinned": item.row.pinned(),
-                        "match": item.factors.match_score,
-                        "frecency": item.factors.frecency_mult,
-                        "scope": item.factors.scope_mult,
-                        "source_mult": item.factors.source_mult,
-                        "pin_mult": item.factors.pin_mult
-                    })
-                })
-                .collect();
-            out_println!("{}", serde_json::Value::Array(items));
-        }
-        QueryFormat::Tsv => {
-            for item in ranked {
-                if with_scores {
-                    out_println!(
-                        "{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}",
-                        item.row.name().unwrap_or(""),
-                        item.row.path(),
-                        item.final_score,
-                        item.factors.match_score,
-                        item.factors.frecency_mult,
-                        item.factors.scope_mult,
-                        item.factors.source_mult,
-                        item.factors.pin_mult
-                    );
-                } else {
-                    out_println!(
-                        "{}\t{}\t{:.2}",
-                        item.row.name().unwrap_or(""),
-                        item.row.path(),
-                        item.final_score
-                    );
-                }
-            }
-        }
-        QueryFormat::Text => {
-            for (idx, item) in ranked.iter().enumerate() {
-                if with_scores {
-                    out_println!(
-                        "{:>2}. {:.2} match={:.2} frecency={:.2} scope={:.2} source={:.2} pin={:.2} {}",
-                        idx + 1,
-                        item.final_score,
-                        item.factors.match_score,
-                        item.factors.frecency_mult,
-                        item.factors.scope_mult,
-                        item.factors.source_mult,
-                        item.factors.pin_mult,
-                        item.row.path()
-                    );
-                } else {
-                    out_println!(
-                        "{:>2}. {:.2} {}",
-                        idx + 1,
-                        item.final_score,
-                        item.row.path()
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn print_why_borrowed(item: &RankedBookmarkView<'_>) {
-    out_println!("Jump to: {}", item.row.path());
     out_println!("Reason:");
     out_println!("  MatchScore   {:.2}", item.factors.match_score);
     out_println!("  FrecencyMult {:.2}", item.factors.frecency_mult);

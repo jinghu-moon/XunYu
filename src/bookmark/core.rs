@@ -62,7 +62,6 @@ pub enum QueryScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueryContext {
     pub cwd: PathBuf,
-    pub cwd_key: String,
     pub workspace: Option<String>,
 }
 
@@ -102,40 +101,46 @@ pub(crate) fn compute_match_score<T: AsRef<str>>(
     tokens: &[T],
     bookmark: &BookmarkRecordView<'_>,
 ) -> f64 {
-    compute_match_score_parts(tokens, bookmark.name_norm, bookmark.path_norm, |token| {
-        bookmark
-            .tags
-            .iter()
-            .any(|tag| tag.eq_ignore_ascii_case(token))
-    })
-}
-
-pub(crate) fn compute_match_score_parts<T: AsRef<str>, F>(
-    tokens: &[T],
-    name_norm: Option<&str>,
-    path_norm: &str,
-    mut has_tag: F,
-) -> f64
-where
-    F: FnMut(&str) -> bool,
-{
     if tokens.is_empty() {
         return 0.0;
     }
 
-    let name_norm = name_norm.unwrap_or("");
-    let basename = path_norm.rsplit('/').next().unwrap_or("");
+    let name_norm = bookmark.name_norm.as_deref().unwrap_or("");
+    let basename = bookmark.path_norm.rsplit('/').next().unwrap_or("");
 
     let mut total = 0.0;
     for (idx, token) in tokens.iter().enumerate() {
         let token_norm = token.as_ref().to_ascii_lowercase();
-        let best = score_token_match(
-            &token_norm,
-            name_norm,
-            basename,
-            path_norm,
-            idx + 1 == tokens.len(),
-        );
+        let is_last = idx + 1 == tokens.len();
+        let mut best: f64 = 0.0;
+
+        if !name_norm.is_empty() {
+            if token_norm == name_norm {
+                best = best.max(100.0);
+            } else if name_norm.starts_with(&token_norm) {
+                best = best.max(80.0);
+            }
+        }
+
+        if token_norm == basename {
+            best = best.max(70.0 + if is_last { 10.0 } else { 0.0 });
+        } else if basename.starts_with(&token_norm) {
+            best = best.max(60.0 + if is_last { 10.0 } else { 0.0 });
+        }
+
+        let ordered = score_segment_ordered(&token_norm, bookmark.path_norm);
+        best = best.max(ordered);
+
+        let fuzzy = subsequence_score(&token_norm, name_norm)
+            .max(subsequence_score(&token_norm, &basename))
+            .max(
+                bookmark
+                    .path_norm
+                    .split('/')
+                    .map(|seg| subsequence_score(&token_norm, seg))
+                    .fold(0.0, f64::max),
+            );
+        best = best.max(fuzzy);
 
         if best <= 0.0 {
             return 0.0;
@@ -143,7 +148,7 @@ where
         total += best;
     }
 
-    total + compute_tag_bonus_with(tokens, &mut has_tag)
+    total + compute_tag_bonus(tokens, bookmark.tags)
 }
 
 pub(crate) fn time_decay(last_visited: u64, now: u64) -> f64 {
@@ -185,54 +190,48 @@ pub(crate) fn compute_scope_mult(
     ctx: &QueryContext,
     scope: &QueryScope,
 ) -> f64 {
-    compute_scope_mult_parts(bookmark.path_norm, bookmark.workspace, ctx, scope)
-}
-
-pub(crate) fn compute_scope_mult_parts(
-    bookmark_key: &str,
-    bookmark_workspace: Option<&str>,
-    ctx: &QueryContext,
-    scope: &QueryScope,
-) -> f64 {
-    let cwd_key = ctx.cwd_key.as_str();
+    let bm = Path::new(&bookmark.path_norm);
+    let cwd = &ctx.cwd;
 
     match scope {
         QueryScope::Global => 1.0,
         QueryScope::BaseDir(base) => {
-            let base_key = path_key(base);
-            if base_key == bookmark_key {
+            if normalize_display_path(&base) == bookmark.path {
                 return 1.0;
             }
-            if is_under_base_key(bookmark_key, &base_key) {
+            if is_under_base(bm, &base) {
                 1.0
             } else {
                 0.0
             }
         }
         QueryScope::Workspace(name) => {
-            if bookmark_workspace == Some(name.as_str()) {
+            if bookmark.workspace.as_deref() == Some(name.as_str()) {
                 1.3
             } else {
                 0.0
             }
         }
         QueryScope::Child => {
-            if paths_equal_key(cwd_key, bookmark_key) {
+            if paths_equal(cwd, bm) {
                 2.5
-            } else if is_under_base_key(bookmark_key, cwd_key) {
+            } else if is_under_base(bm, cwd) {
                 3.0
             } else {
                 0.5
             }
         }
         QueryScope::Auto => {
-            if paths_equal_key(cwd_key, bookmark_key) {
+            if paths_equal(cwd, bm) {
                 2.5
-            } else if is_under_base_key(cwd_key, bookmark_key) {
+            } else if is_under_base(cwd, bm) {
                 2.0
-            } else if is_under_base_key(bookmark_key, cwd_key) {
+            } else if is_under_base(bm, cwd) {
                 1.8
-            } else if bookmark_workspace.is_some() && bookmark_workspace == ctx.workspace.as_deref() {
+            } else if bookmark.workspace.is_some()
+                && bookmark.workspace == ctx.workspace.as_deref()
+                && bookmark.workspace.is_some()
+            {
                 1.3
             } else {
                 1.0
@@ -340,52 +339,6 @@ fn score_segment_ordered(token: &str, path_norm: &str) -> f64 {
     }
 }
 
-fn score_token_match(
-    token_norm: &str,
-    name_norm: &str,
-    basename: &str,
-    path_norm: &str,
-    is_last: bool,
-) -> f64 {
-    let mut best: f64 = 0.0;
-
-    if !name_norm.is_empty() {
-        if token_norm == name_norm {
-            best = 100.0;
-        } else if name_norm.starts_with(token_norm) {
-            best = 80.0;
-        }
-    }
-
-    if token_norm == basename {
-        best = best.max(70.0 + if is_last { 10.0 } else { 0.0 });
-    } else if basename.starts_with(token_norm) {
-        best = best.max(60.0 + if is_last { 10.0 } else { 0.0 });
-    }
-
-    // Ordered path-segment and subsequence scoring can never exceed
-    // name/basename prefix hits, so skip them once we already have a strong hit.
-    if best >= 60.0 {
-        return best;
-    }
-
-    best = best.max(score_segment_ordered(token_norm, path_norm));
-    if best >= 45.0 {
-        return best;
-    }
-
-    best.max(
-        subsequence_score(token_norm, name_norm)
-            .max(subsequence_score(token_norm, basename))
-            .max(
-                path_norm
-                    .split('/')
-                    .map(|seg| subsequence_score(token_norm, seg))
-                    .fold(0.0, f64::max),
-            ),
-    )
-}
-
 fn subsequence_score(token: &str, text: &str) -> f64 {
     if token.is_empty() || text.is_empty() {
         return 0.0;
@@ -404,14 +357,14 @@ fn subsequence_score(token: &str, text: &str) -> f64 {
     (10.0 + density * 25.0).clamp(10.0, 35.0)
 }
 
-fn compute_tag_bonus_with<T: AsRef<str>, F>(tokens: &[T], mut has_tag: F) -> f64
-where
-    F: FnMut(&str) -> bool,
-{
+fn compute_tag_bonus<T: AsRef<str>>(tokens: &[T], tags: &[String]) -> f64 {
     let mut bonus: f64 = 0.0;
     for token in tokens {
         let token_norm = token.as_ref();
-        if has_tag(token_norm) {
+        if tags
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case(token_norm))
+        {
             bonus += 10.0;
         }
     }
@@ -425,16 +378,14 @@ fn normalize_to_unit(value: f64, max: f64) -> f64 {
     (value / max).clamp(0.0, 1.0)
 }
 
-fn path_key(path: &Path) -> String {
-    comparison_key(&normalize_display_path(path))
+fn paths_equal(a: &Path, b: &Path) -> bool {
+    comparison_key(&normalize_display_path(a)) == comparison_key(&normalize_display_path(b))
 }
 
-fn paths_equal_key(a: &str, b: &str) -> bool {
-    a == b
-}
-
-fn is_under_base_key(path: &str, base: &str) -> bool {
-    path == base || path.starts_with(&(base.to_string() + "/"))
+fn is_under_base(path: &Path, base: &Path) -> bool {
+    let path_s = comparison_key(&normalize_display_path(path));
+    let base_s = comparison_key(&normalize_display_path(base));
+    path_s == base_s || path_s.starts_with(&(base_s + "/"))
 }
 
 #[cfg(test)]
@@ -558,7 +509,6 @@ mod tests {
         let b = record(Some("my-project"), "C:/dev/my-project");
         let ctx = QueryContext {
             cwd: PathBuf::from("C:/dev"),
-            cwd_key: "c:/dev".to_string(),
             workspace: Some("xunyu".to_string()),
         };
         assert_eq!(compute_scope_mult(&b.view(), &ctx, &QueryScope::Global), 1.0);

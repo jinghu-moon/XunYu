@@ -2,6 +2,7 @@
 
 > **版本**：1.0 · **日期**：2026-04-01  
 > **关联文档**：bookmark-Lightweight-Runtime-View-Evaluation.md · bookmark-Benchmark-Suite.md · bookmark-Binary-Cache-Design.md  
+> **状态**：实验完成，暂停推进；代码已回退，本文保留任务轨迹作为记录  
 > **范围声明**：
 >
 > 1. 本清单**只覆盖 lightweight runtime view 第一阶段**

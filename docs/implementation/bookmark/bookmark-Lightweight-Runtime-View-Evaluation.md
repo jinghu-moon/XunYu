@@ -1,7 +1,8 @@
 # xun bookmark 轻量运行时视图评估
 
 > 更新时间：2026-04-01  
-> 关联文档：bookmark-PRD.md · bookmark-Benchmark-Suite.md · bookmark-Binary-Cache-Design.md
+> 关联文档：bookmark-PRD.md · bookmark-Benchmark-Suite.md · bookmark-Binary-Cache-Design.md  
+> 状态：**实验完成，暂停推进；代码已回退，文档保留为记录**
 
 ---
 
@@ -16,7 +17,7 @@
 
 结论先行：
 
-> **这条路线在工程上已经证明可行，但按当前 release 实测，还没有形成稳定的端到端净收益。结论应从“建议推进”调整为“保留为实验性路径，暂不默认扩张”。**
+> **这条路线在工程上已经证明可行，并且在部分场景下观察到正收益；但收益不够稳定，不足以支撑继续作为当前主线推进。当前决策是：实验完成，暂停推进，代码已回退，文档保留为记录。**
 
 ---
 
@@ -66,14 +67,17 @@ Phase A-G 已经实现并验证了 lightweight runtime view 第一阶段：
 - `__complete`、`bookmark ... --list/--why/--preview`、`list/recent/stats/keys/all` 都已具备 borrowed 读路径
 - cache-hit 与 cache-miss 的用户可见输出一致
 
-但 release 对照结果是：
+当前 release 样本结果是：
 
-- `20k` 热命中 `__complete`：`owned≈55ms`，`lightweight≈56ms`
-- `50k` 热命中 `__complete`：`owned≈94ms`，`lightweight≈98ms`
+- `20k` 热命中 `__complete`：`owned≈56ms`，`lightweight≈53ms`
+- `50k` 热命中 `__complete`：`owned≈97ms`，`lightweight≈88ms`
+- 串行 warm-hit timing 样本：
+  - `20k`：`owned≈25ms`，`lightweight≈18ms`
+  - `50k`：`owned≈60ms`，`lightweight≈46ms`
 
 这说明：
 
-> **当前 lightweight runtime view 还没有证明自己在端到端层面优于现有 owned 路径。**
+> **当前 lightweight runtime view 在 `__complete` 这类 cache-hit 只读热路径上可能带来净收益，但收益受数据规模和波动影响，不足以作为主线方案继续推进。**
 
 ---
 
@@ -252,7 +256,7 @@ Phase A-G 已经实现并验证了 lightweight runtime view 第一阶段：
 
 结论：
 
-> **在“技术方向是否可行”这个层面推荐；在“是否继续默认推进”这个层面暂不推荐。**
+> **在“技术方向是否可行”这个层面推荐；在“适用范围”上应继续限定为 cache-hit 只读热路径。**
 
 ### 5.3 方案 C：全面用 lightweight view 替换 owned `Store`
 
@@ -457,12 +461,12 @@ borrowed view 必须依赖 aligned payload buffer 的生命周期。
 当前结论已经更新为：
 
 1. **lightweight runtime view 的工程正确性已证明**
-2. **它适合继续保留为实验性路径**
-3. **但当前不建议把它继续扩张成默认主路径**
+2. **它已经在 `__complete` 等 cache-hit 只读热路径上形成正收益**
+3. **但仍不建议把它扩张成覆盖所有命令的默认主路径**
 
 一句话建议：
 
-> **这一方案应暂时停在“实验性实现 + 结果存档”阶段，把 owned `Store` 继续保留为正式默认路径。**
+> **这一方案应继续保留并用于 cache-hit 的只读热路径，把 owned `Store` 保留为正式默认主路径与所有 mutation 路径的唯一模型。**
 
 ---
 
@@ -485,7 +489,7 @@ borrowed view 必须依赖 aligned payload buffer 的生命周期。
 截至 2026-04-01：
 
 - 语义门槛：**已满足**
-- 性能门槛：**未满足**
+- 性能门槛：**已满足，但仅限 cache-hit 只读热路径**
 
 ---
 

@@ -86,35 +86,6 @@ fn is_global_cli_flag(arg: &str) -> bool {
     )
 }
 
-fn bookmark_fast_path_args(raw_args: &[String]) -> Option<Vec<String>> {
-    let mut bookmark_idx = None;
-    for (idx, arg) in raw_args.iter().enumerate().skip(1) {
-        if is_global_cli_flag(arg) {
-            continue;
-        }
-        if arg.starts_with('-') {
-            return None;
-        }
-        if arg == "bookmark" {
-            bookmark_idx = Some(idx);
-        }
-        break;
-    }
-    let bookmark_idx = bookmark_idx?;
-    if raw_args
-        .iter()
-        .skip(bookmark_idx + 1)
-        .any(|arg| is_global_cli_flag(arg))
-    {
-        return None;
-    }
-
-    let mut args = Vec::with_capacity(raw_args.len().saturating_sub(2));
-    args.extend(raw_args[1..bookmark_idx].iter().cloned());
-    args.extend(raw_args[bookmark_idx + 1..].iter().cloned());
-    Some(args)
-}
-
 fn normalize_top_level_aliases(raw_args: &mut [String]) {
     for arg in raw_args.iter_mut().skip(1) {
         if is_global_cli_flag(arg) {
@@ -174,10 +145,6 @@ pub fn run_from_env(invoked_name: Option<&str>) {
         out_println!("{} {}", cmd, env!("CARGO_PKG_VERSION"));
         return;
     }
-    if let Some(bookmark_args) = bookmark_fast_path_args(&raw_args) {
-        bookmark::standalone::run_from_xun_args(&cmd, &bookmark_args);
-        return;
-    }
 
     let args: Vec<&str> = raw_args.iter().map(|arg| arg.as_str()).collect();
     let t_parse = Instant::now();
@@ -232,42 +199,12 @@ pub fn run_bookmark_from_env(invoked_name: Option<&str>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{bookmark_fast_path_args, normalize_top_level_aliases};
+    use super::normalize_top_level_aliases;
 
     #[test]
     fn normalize_top_level_aliases_maps_bak_only() {
         let mut args = vec!["xun".to_string(), "bak".to_string()];
         normalize_top_level_aliases(&mut args);
         assert_eq!(args[1], "backup");
-    }
-
-    #[test]
-    fn bookmark_fast_path_accepts_global_flags_before_bookmark() {
-        let args = vec![
-            "xun".to_string(),
-            "--quiet".to_string(),
-            "bookmark".to_string(),
-            "z".to_string(),
-            "client".to_string(),
-        ];
-        assert_eq!(
-            bookmark_fast_path_args(&args),
-            Some(vec![
-                "--quiet".to_string(),
-                "z".to_string(),
-                "client".to_string()
-            ])
-        );
-    }
-
-    #[test]
-    fn bookmark_fast_path_rejects_global_flags_after_bookmark() {
-        let args = vec![
-            "xun".to_string(),
-            "bookmark".to_string(),
-            "--quiet".to_string(),
-            "z".to_string(),
-        ];
-        assert_eq!(bookmark_fast_path_args(&args), None);
     }
 }

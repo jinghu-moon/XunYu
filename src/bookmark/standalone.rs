@@ -57,10 +57,11 @@ fn is_global_flag(arg: &str) -> bool {
     )
 }
 
-fn wants_version_only(cli_args: &[String]) -> bool {
-    if cli_args.is_empty() {
-        return false;
-    }
+fn wants_version_only(args: &[String]) -> bool {
+    let cli_args = match args.get(1..) {
+        Some(value) if !value.is_empty() => value,
+        _ => return false,
+    };
     cli_args.iter().all(|arg| is_global_flag(arg))
         && cli_args.iter().any(|arg| arg == "--version")
 }
@@ -71,41 +72,40 @@ fn timing_enabled() -> bool {
         .any(|name| std::env::var_os(name).is_some())
 }
 
-fn run_with_args(
-    command_name: &[&str],
-    display_name: &str,
-    timing_label: &str,
-    cli_args: &[String],
-) {
+pub(crate) fn run_from_env(invoked_name: Option<&str>) {
     let total = Instant::now();
-    if wants_version_only(cli_args) {
-        out_println!("{} {}", display_name, env!("CARGO_PKG_VERSION"));
+    let raw_args: Vec<String> = std::env::args().collect();
+    let cmd = resolve_command_name(&raw_args, invoked_name);
+    if wants_version_only(&raw_args) {
+        out_println!("{} {}", cmd, env!("CARGO_PKG_VERSION"));
         return;
     }
 
-    let args: Vec<&str> = cli_args.iter().map(|arg| arg.as_str()).collect();
+    let args: Vec<&str> = raw_args.iter().map(|arg| arg.as_str()).collect();
     let parse_start = Instant::now();
-    let parsed: BookmarkCli = <BookmarkCli as argh::FromArgs>::from_args(command_name, &args)
-        .unwrap_or_else(|early_exit| {
-            std::process::exit(match early_exit.status {
-                Ok(()) => {
-                    println!("{}", early_exit.output);
-                    0
-                }
-                Err(()) => {
-                    eprintln!(
-                        "{}\nRun {} --help for more information.",
-                        early_exit.output, display_name
-                    );
-                    1
-                }
-            })
-        });
+    let parsed: BookmarkCli =
+        <BookmarkCli as argh::FromArgs>::from_args(&[cmd.as_str()], &args[1..]).unwrap_or_else(
+            |early_exit| {
+                std::process::exit(match early_exit.status {
+                    Ok(()) => {
+                        println!("{}", early_exit.output);
+                        0
+                    }
+                    Err(()) => {
+                        eprintln!(
+                            "{}\nRun {} --help for more information.",
+                            early_exit.output, cmd
+                        );
+                        1
+                    }
+                })
+            },
+        );
     let parse_ms = parse_start.elapsed().as_millis();
     let timing = timing_enabled();
 
     if parsed.version {
-        out_println!("{} {}", display_name, env!("CARGO_PKG_VERSION"));
+        out_println!("{} {}", cmd, env!("CARGO_PKG_VERSION"));
         return;
     }
 
@@ -123,7 +123,7 @@ fn run_with_args(
     let dispatch_ms = dispatch_start.elapsed().as_millis();
 
     if timing {
-        eprintln!("{timing_label} timing:");
+        eprintln!("bm timing:");
         eprintln!("  [parse]   {:>5}ms", parse_ms);
         eprintln!("  [runtime] {:>5}ms", runtime_ms);
         eprintln!("  [dispatch]{:>5}ms", dispatch_ms);
@@ -134,17 +134,4 @@ fn run_with_args(
         output::print_cli_error(&err);
         std::process::exit(err.code);
     }
-}
-
-pub(crate) fn run_from_env(invoked_name: Option<&str>) {
-    let raw_args: Vec<String> = std::env::args().collect();
-    let cmd = resolve_command_name(&raw_args, invoked_name);
-    let command = [cmd.as_str()];
-    run_with_args(&command, &cmd, "bm", &raw_args[1..]);
-}
-
-pub(crate) fn run_from_xun_args(invoked_name: &str, cli_args: &[String]) {
-    let display_name = format!("{invoked_name} bookmark");
-    let command = [invoked_name, "bookmark"];
-    run_with_args(&command, &display_name, invoked_name, cli_args);
 }
