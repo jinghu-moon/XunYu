@@ -9,7 +9,7 @@ use crate::bookmark_state::Bookmark;
 
 #[derive(Debug, Clone)]
 pub(crate) struct BookmarkIndex {
-    terms: BTreeMap<String, Vec<usize>>,
+    terms: Vec<IndexTermEntry>,
 }
 
 #[derive(
@@ -27,7 +27,23 @@ pub(crate) struct PersistedBookmarkIndex {
     version: u32,
     bookmark_count: usize,
     fingerprint: String,
-    terms: BTreeMap<String, Vec<usize>>,
+    terms: Vec<IndexTermEntry>,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    rkyv::Archive,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+)]
+pub(crate) struct IndexTermEntry {
+    term: String,
+    ids: Vec<usize>,
 }
 
 const INDEX_FILE_VERSION: u32 = 1;
@@ -47,7 +63,12 @@ impl BookmarkIndex {
             ids.sort_unstable();
             ids.dedup();
         }
-        Self { terms }
+        Self {
+            terms: terms
+                .into_iter()
+                .map(|(term, ids)| IndexTermEntry { term, ids })
+                .collect(),
+        }
     }
 
     pub(crate) fn index_min_items() -> usize {
@@ -88,25 +109,35 @@ impl BookmarkIndex {
         {
             return None;
         }
-        let mut terms = persisted.terms;
-        for ids in terms.values_mut() {
-            ids.retain(|idx| *idx < persisted.bookmark_count);
-            ids.sort_unstable();
-            ids.dedup();
-        }
+        let terms = sanitize_terms(persisted.terms, persisted.bookmark_count);
         Some(Self { terms })
+    }
+
+    pub(crate) fn from_embedded_persisted(
+        persisted: PersistedBookmarkIndex,
+        bookmark_count: usize,
+    ) -> Option<Self> {
+        if persisted.version != INDEX_FILE_VERSION || persisted.bookmark_count != bookmark_count {
+            return None;
+        }
+        Some(Self {
+            terms: sanitize_terms(persisted.terms, persisted.bookmark_count),
+        })
     }
 
     pub(crate) fn lookup_prefix(&self, token: &str) -> Vec<usize> {
         if token.is_empty() {
             return Vec::new();
         }
+        let start = self
+            .terms
+            .partition_point(|entry| entry.term.as_str() < token);
         let mut hits = Vec::new();
-        for (term, ids) in self.terms.range(token.to_string()..) {
-            if !term.starts_with(token) {
+        for entry in self.terms.iter().skip(start) {
+            if !entry.term.starts_with(token) {
                 break;
             }
-            hits.extend_from_slice(ids);
+            hits.extend_from_slice(&entry.ids);
         }
         if hits.len() > 1 {
             hits.sort_unstable();
@@ -204,6 +235,25 @@ fn fingerprint(bookmarks: &[Bookmark]) -> String {
         hasher.update(&[0xff]);
     }
     hasher.finalize().to_hex().to_string()
+}
+
+fn sanitize_terms(terms: Vec<IndexTermEntry>, bookmark_count: usize) -> Vec<IndexTermEntry> {
+    let mut decoded = Vec::with_capacity(terms.len());
+    for entry in terms {
+        let mut ids: Vec<usize> = entry
+            .ids
+            .into_iter()
+            .filter(|idx| *idx < bookmark_count)
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        decoded.push(IndexTermEntry {
+            term: entry.term,
+            ids,
+        });
+    }
+    decoded.sort_by(|left, right| left.term.cmp(&right.term));
+    decoded
 }
 
 #[cfg(test)]

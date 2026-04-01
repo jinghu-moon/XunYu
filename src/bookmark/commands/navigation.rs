@@ -8,7 +8,7 @@ use crate::bookmark::debug::BookmarkTiming;
 use crate::bookmark::path_probe::{BookmarkPathStatus, path_status};
 use crate::bookmark::storage::db_path;
 use crate::bookmark_core::{QueryContext, QueryScope};
-use crate::bookmark_query::{query, BookmarkQuerySpec, QueryAction, QueryFormat, RankedBookmark};
+use crate::bookmark_query::{query_with_timing, BookmarkQuerySpec, QueryAction, QueryFormat, RankedBookmark};
 use crate::bookmark_state::Store;
 use crate::cli::{OiCmd, OpenCmd, ZCmd, ZiCmd};
 use crate::config;
@@ -26,8 +26,7 @@ pub(crate) fn cmd_z(args: ZCmd) -> CliResult {
     timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
-    let ranked = query(&spec, &store, &ctx, now_secs());
-    timing.mark("query");
+    let ranked = query_with_timing(&spec, &store, &ctx, now_secs(), Some(&mut timing));
     let result_count = ranked.len();
     handle_query_results(&file, &mut store, spec, ranked, ConsumerKind::Jump)?;
     timing.mark("handle");
@@ -87,8 +86,7 @@ pub(crate) fn cmd_open(args: OpenCmd) -> CliResult {
     timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
-    let ranked = query(&spec, &store, &ctx, now_secs());
-    timing.mark("query");
+    let ranked = query_with_timing(&spec, &store, &ctx, now_secs(), Some(&mut timing));
     let result_count = ranked.len();
     handle_query_results(&file, &mut store, spec, ranked, ConsumerKind::Open)?;
     timing.mark("handle");
@@ -110,8 +108,7 @@ pub(crate) fn cmd_zi(args: ZiCmd) -> CliResult {
     timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
-    let ranked = query(&spec, &store, &ctx, now_secs());
-    timing.mark("query");
+    let ranked = query_with_timing(&spec, &store, &ctx, now_secs(), Some(&mut timing));
     let result_count = ranked.len();
     handle_query_results(&file, &mut store, spec, ranked, ConsumerKind::Jump)?;
     timing.mark("handle");
@@ -133,8 +130,7 @@ pub(crate) fn cmd_oi(args: OiCmd) -> CliResult {
     timing.mark("build_spec");
     let ctx = QueryContext::from_env_and_store(&store);
     timing.mark("build_ctx");
-    let ranked = query(&spec, &store, &ctx, now_secs());
-    timing.mark("query");
+    let ranked = query_with_timing(&spec, &store, &ctx, now_secs(), Some(&mut timing));
     let result_count = ranked.len();
     handle_query_results(&file, &mut store, spec, ranked, ConsumerKind::Open)?;
     timing.mark("handle");

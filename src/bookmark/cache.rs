@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::bookmark::index::PersistedBookmarkIndex;
-use crate::bookmark_core::BookmarkSource;
+use crate::bookmark_core::{normalize_name, BookmarkSource};
 use crate::bookmark_state::Bookmark;
 use crate::bookmark::debug::BookmarkLoadTiming;
 
@@ -76,9 +76,7 @@ impl CacheHeader {
 pub(crate) struct CachedBookmark {
     pub(crate) id: String,
     pub(crate) name: Option<String>,
-    pub(crate) name_norm: Option<String>,
     pub(crate) path: String,
-    pub(crate) path_norm: String,
     pub(crate) source: u8,
     pub(crate) pinned: bool,
     pub(crate) tags: Vec<String>,
@@ -432,9 +430,7 @@ impl CachedBookmark {
         Self {
             id: bookmark.id.clone(),
             name: bookmark.name.clone(),
-            name_norm: bookmark.name_norm.clone(),
             path: bookmark.path.clone(),
-            path_norm: bookmark.path_norm.clone(),
             source: source_code(bookmark.source),
             pinned: bookmark.pinned,
             tags: bookmark.tags.clone(),
@@ -448,12 +444,14 @@ impl CachedBookmark {
     }
 
     pub(crate) fn into_bookmark(self) -> Bookmark {
+        let name_norm = self.name.as_deref().map(normalize_name);
+        let path_norm = self.path.to_ascii_lowercase();
         Bookmark {
             id: self.id,
             name: self.name,
-            name_norm: self.name_norm,
+            name_norm,
             path: self.path,
-            path_norm: self.path_norm,
+            path_norm,
             source: source_from_code(self.source),
             pinned: self.pinned,
             tags: self.tags,
@@ -779,9 +777,7 @@ mod tests {
 
         assert_eq!(cached.id, bookmark.id);
         assert_eq!(cached.name, bookmark.name);
-        assert_eq!(cached.name_norm, bookmark.name_norm);
         assert_eq!(cached.path, bookmark.path);
-        assert_eq!(cached.path_norm, bookmark.path_norm);
         assert_eq!(cached.tags, bookmark.tags);
         assert_eq!(cached.desc, bookmark.desc);
         assert_eq!(cached.workspace, bookmark.workspace);
@@ -809,9 +805,7 @@ mod tests {
         let cached = CachedBookmark {
             id: "1".to_string(),
             name: Some("home".to_string()),
-            name_norm: Some("home".to_string()),
             path: "C:/work/home".to_string(),
-            path_norm: "c:/work/home".to_string(),
             source: 1,
             pinned: true,
             tags: vec!["work".to_string()],

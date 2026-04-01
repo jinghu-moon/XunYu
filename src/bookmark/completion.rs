@@ -1,7 +1,7 @@
 use crate::bookmark::debug::BookmarkTiming;
 use crate::bookmark::storage::db_path;
 use crate::bookmark_core::{QueryContext, QueryScope};
-use crate::bookmark_query::{BookmarkQuerySpec, QueryAction, QueryFormat, query};
+use crate::bookmark_query::{BookmarkQuerySpec, QueryAction, QueryFormat, query_with_timing};
 use crate::bookmark_state::Store;
 
 pub(crate) fn bookmark_completion_candidates(
@@ -23,8 +23,8 @@ pub(crate) fn bookmark_completion_candidates(
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into())),
         &store,
         crate::store::now_secs(),
+        Some(&mut timing),
     );
-    timing.mark("query");
     let count = items.len();
     timing.mark("map");
     timing.finish(&[
@@ -40,6 +40,7 @@ fn completion_candidates_from_store(
     cwd: std::path::PathBuf,
     store: &Store,
     now: u64,
+    timing: Option<&mut BookmarkTiming>,
 ) -> Vec<String> {
     let ctx = QueryContext::from_cwd_and_store(cwd, &store);
 
@@ -59,7 +60,7 @@ fn completion_candidates_from_store(
         output_fmt: QueryFormat::Tsv,
     };
 
-    query(&spec, &store, &ctx, now)
+    query_with_timing(&spec, &store, &ctx, now, timing)
         .into_iter()
         .map(|item| item.bookmark.name.unwrap_or(item.bookmark.path))
         .collect()
@@ -88,6 +89,7 @@ mod tests {
             std::path::PathBuf::from("C:/dev/client-api/src"),
             &store,
             20,
+            None,
         );
 
         assert_eq!(items.first().map(String::as_str), Some("client-api"));

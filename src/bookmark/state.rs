@@ -189,7 +189,7 @@ impl Store {
             };
             if let Some(index) = payload
                 .index
-                .and_then(|persisted| BookmarkIndex::from_persisted(persisted, &store.bookmarks))
+                .and_then(|persisted| BookmarkIndex::from_embedded_persisted(persisted, bookmark_count))
             {
                 let _ = store.index.set(index);
             }
