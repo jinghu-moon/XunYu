@@ -515,6 +515,21 @@ impl Store {
         Ok(())
     }
 
+    pub(crate) fn set_explicit_workspace(
+        &mut self,
+        name: &str,
+        workspace: Option<String>,
+    ) -> Result<(), StoreError> {
+        let bookmark = self.find_explicit_mut(name)?;
+        if bookmark.workspace == workspace {
+            return Ok(());
+        }
+        bookmark.workspace = workspace;
+        self.dirty_count += 1;
+        self.invalidate_index();
+        Ok(())
+    }
+
     pub(crate) fn touch_explicit(&mut self, name: &str, now: u64) -> Result<(), StoreError> {
         let bookmark = self.find_explicit_mut(name)?;
         let current = bookmark.visit_count.unwrap_or(0);
@@ -1218,6 +1233,20 @@ mod tests {
         assert_eq!(store.bookmarks.len(), 1);
         assert_eq!(store.bookmarks[0].source, BookmarkSource::Explicit);
         assert_eq!(store.bookmarks[0].visit_count, Some(1));
+    }
+
+    #[test]
+    fn set_explicit_workspace_updates_and_clears_workspace() {
+        let mut store = Store::new();
+        store.set("foo", "C:/work/foo", &cwd(), None, 10).unwrap();
+
+        store
+            .set_explicit_workspace("foo", Some("xunyu".to_string()))
+            .unwrap();
+        assert_eq!(store.bookmarks[0].workspace.as_deref(), Some("xunyu"));
+
+        store.set_explicit_workspace("foo", None).unwrap();
+        assert_eq!(store.bookmarks[0].workspace, None);
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub(in crate::commands::dashboard) async fn list_bookmarks() -> Response {
             tags: e.tags,
             visits: e.visit_count,
             last_visited: e.last_visited,
+            workspace: None,
         })
         .collect();
     Json(items).into_response()
@@ -58,6 +59,7 @@ pub(in crate::commands::dashboard) async fn export_bookmarks(
             tags: entry.tags.clone(),
             visits: entry.visit_count,
             last_visited: entry.last_visited,
+            workspace: None,
         })
         .collect();
     items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -68,12 +70,13 @@ pub(in crate::commands::dashboard) async fn export_bookmarks(
             let mut out = String::new();
             for item in items {
                 out.push_str(&format!(
-                    "{}\t{}\t{}\t{}\t{}\n",
+                    "{}\t{}\t{}\t{}\t{}\t{}\n",
                     item.name,
                     item.path,
                     item.tags.join(","),
                     item.visits,
-                    item.last_visited
+                    item.last_visited,
+                    item.workspace.unwrap_or_default()
                 ));
             }
             ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], out).into_response()
@@ -138,6 +141,11 @@ pub(in crate::commands::dashboard) async fn import_bookmarks(
                     tags,
                     visits,
                     last_visited,
+                    workspace: cols
+                        .get(5)
+                        .map(|value| value.trim())
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string),
                 });
             }
         }
@@ -300,6 +308,7 @@ pub(in crate::commands::dashboard) async fn rename_bookmark(
         tags: entry.tags.clone(),
         visits: entry.visit_count,
         last_visited: entry.last_visited,
+        workspace: None,
     };
     db.insert(new_name.to_string(), entry);
 

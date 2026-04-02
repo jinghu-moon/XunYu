@@ -8,7 +8,10 @@ fn list_tsv_has_fields() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+    run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "home", work.to_str().unwrap()]),
+    );
 
     let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "tsv"]));
     let line = String::from_utf8_lossy(&output.stdout);
@@ -25,7 +28,10 @@ fn list_auto_outputs_tsv() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(env.cmd().args(["bookmark", "set", "home", work.to_str().unwrap()]));
+    run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "home", work.to_str().unwrap()]),
+    );
 
     let output = run_ok(env.cmd().args(["bookmark", "list"]));
     let line = String::from_utf8_lossy(&output.stdout);
@@ -40,10 +46,14 @@ fn list_json_contains_tags() {
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
 
-    run_ok(
-        env.cmd()
-            .args(["bookmark", "set", "home", work.to_str().unwrap(), "-t", "dev,cli"]),
-    );
+    run_ok(env.cmd().args([
+        "bookmark",
+        "set",
+        "home",
+        work.to_str().unwrap(),
+        "-t",
+        "dev,cli",
+    ]));
 
     let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -56,6 +66,24 @@ fn list_json_contains_tags() {
         .collect();
     assert!(tag_vals.contains(&"dev".to_string()));
     assert!(tag_vals.contains(&"cli".to_string()));
+}
+
+#[test]
+fn save_with_workspace_is_visible_in_json_list() {
+    let env = TestEnv::new();
+    let work = env.root.join("saved");
+    fs::create_dir_all(&work).unwrap();
+
+    let mut cmd = env.cmd();
+    cmd.current_dir(&work)
+        .args(["bookmark", "save", "saved", "--workspace", "xunyu"]);
+    run_ok(&mut cmd);
+
+    let output = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
+    let v: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let arr = v.as_array().unwrap();
+    let item = arr.iter().find(|x| x["name"] == "saved").unwrap();
+    assert_eq!(item["workspace"].as_str(), Some("xunyu"));
 }
 
 #[test]
@@ -102,7 +130,10 @@ fn list_tag_filters_results() {
             .args(["bookmark", "set", "b", b.to_str().unwrap(), "-t", "t2"]),
     );
 
-    let output = run_ok(env.cmd().args(["bookmark", "list", "-t", "t1", "--format", "json"]));
+    let output = run_ok(
+        env.cmd()
+            .args(["bookmark", "list", "-t", "t1", "--format", "json"]),
+    );
     let v: Value = serde_json::from_slice(&output.stdout).unwrap();
     let arr = v.as_array().unwrap();
     assert!(arr.iter().any(|x| x["name"] == "a"));
@@ -117,15 +148,24 @@ fn list_sort_visits_descending() {
     fs::create_dir_all(&a).unwrap();
     fs::create_dir_all(&b).unwrap();
 
-    run_ok(env.cmd().args(["bookmark", "set", "a", a.to_str().unwrap()]));
-    run_ok(env.cmd().args(["bookmark", "set", "b", b.to_str().unwrap()]));
+    run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "a", a.to_str().unwrap()]),
+    );
+    run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "b", b.to_str().unwrap()]),
+    );
 
     run_ok(env.cmd().args(["bookmark", "touch", "a"]));
     run_ok(env.cmd().args(["bookmark", "touch", "a"]));
     run_ok(env.cmd().args(["bookmark", "touch", "a"]));
     run_ok(env.cmd().args(["bookmark", "touch", "b"]));
 
-    let output = run_ok(env.cmd().args(["bookmark", "list", "-s", "visits", "--format", "tsv"]));
+    let output = run_ok(
+        env.cmd()
+            .args(["bookmark", "list", "-s", "visits", "--format", "tsv"]),
+    );
     let s = String::from_utf8_lossy(&output.stdout);
     let first = s.lines().next().unwrap_or("");
     assert!(first.starts_with("a\t"));
@@ -139,8 +179,14 @@ fn keys_outputs_all_bookmark_names() {
     fs::create_dir_all(&a).unwrap();
     fs::create_dir_all(&b).unwrap();
 
-    run_ok(env.cmd().args(["bookmark", "set", "b", b.to_str().unwrap()]));
-    run_ok(env.cmd().args(["bookmark", "set", "a", a.to_str().unwrap()]));
+    run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "b", b.to_str().unwrap()]),
+    );
+    run_ok(
+        env.cmd()
+            .args(["bookmark", "set", "a", a.to_str().unwrap()]),
+    );
 
     let output = run_ok(env.cmd().args(["bookmark", "keys"]));
     let s = String::from_utf8_lossy(&output.stdout);

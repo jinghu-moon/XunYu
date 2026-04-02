@@ -21,6 +21,8 @@ pub(crate) struct ListItem {
     pub(crate) visits: u32,
     #[serde(default)]
     pub(crate) last_visited: u64,
+    #[serde(default)]
+    pub(crate) workspace: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

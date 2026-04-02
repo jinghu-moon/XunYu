@@ -22,6 +22,16 @@ Windows 路径在 PowerShell/CMD 中不需要转义反斜杠：`xun bookmark set
 - `ports` 默认展示常见开发端口（3000-3999/5000-5999/8000-8999/4173/5173）；查看全部请加 `--all`
 - `ps`/`pkill` 用于进程检索与终止；支持按名称、PID 或窗口标题（`-w`）
 
+## Bookmark Scope 与交换格式
+
+- `z / zi / o / oi` 默认使用 `Auto` scope：优先当前目录附近的候选；若当前目录命中某个带 `workspace` 的显式书签路径，也会带入该 workspace 上下文。
+- `-g/--global`：忽略当前目录上下文，按全局候选排序。
+- `-c/--child`：优先当前目录及其子目录下的候选。
+- `--base <path>`：只看指定基路径下的候选。
+- `-w/--workspace <name>`：只看 `workspace` 等于该值的候选；`recent` 也支持同样过滤。
+- `save/set` 支持 `-w/--workspace <name>` 写入 workspace 标签；传空字符串可清空，例如 `xun bookmark set api D:\Repo\Api -w ""`。
+- `export/import` 的 `json/tsv` 是轻量交换格式，不是全量备份；当前会保留 `workspace`，但不承诺保留 `desc`、`pinned`、`created_at` 等全部元数据。
+
 ## 数据与配置文件
 
 | 名称 | 默认路径 | 用途 |

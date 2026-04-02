@@ -24,11 +24,16 @@ pub(crate) fn cmd_learn(args: LearnCmd) -> CliResult {
     }
 
     let file = db_path();
-    let mut store =
-        Store::load_or_default(&file).map_err(|err| CliError::new(1, format!("load failed: {err}")))?;
+    let mut store = Store::load_or_default(&file)
+        .map_err(|err| CliError::new(1, format!("load failed: {err}")))?;
     let home = home_dir();
     store
-        .learn(&args.path, &current_dir_fallback(), home.as_deref(), crate::store::now_secs())
+        .learn(
+            &args.path,
+            &current_dir_fallback(),
+            home.as_deref(),
+            crate::store::now_secs(),
+        )
         .map_err(|err| CliError::new(1, format!("learn failed: {err}")))?;
     store
         .save(&file, crate::store::now_secs())
@@ -38,8 +43,8 @@ pub(crate) fn cmd_learn(args: LearnCmd) -> CliResult {
 
 pub(crate) fn cmd_bookmark_import(args: ImportCmd) -> CliResult {
     let file = db_path();
-    let mut store =
-        Store::load_or_default(&file).map_err(|err| CliError::new(1, format!("load failed: {err}")))?;
+    let mut store = Store::load_or_default(&file)
+        .map_err(|err| CliError::new(1, format!("load failed: {err}")))?;
     let before = store.clone();
     let now = crate::store::now_secs();
     let cwd = current_dir_fallback();
@@ -91,10 +96,7 @@ pub(crate) fn cmd_bookmark_import(args: ImportCmd) -> CliResult {
         .map_err(|err| CliError::new(1, format!("save failed: {err}")))?;
     let after = store.clone();
     if let Err(err) = record_undo_batch(&file, "import", &before, &after) {
-        crate::output::emit_warning(
-            format!("Undo history not recorded: {}", err.message),
-            &[],
-        );
+        crate::output::emit_warning(format!("Undo history not recorded: {}", err.message), &[]);
     }
     ui_println!("Imported {} item(s).", imported_count);
     Ok(())
@@ -151,11 +153,15 @@ fn apply_native_import(
                 (None, Some(right)) => Some(right),
                 (None, None) => None,
             };
+            if bookmark.workspace.is_none() && seed.workspace.is_some() {
+                bookmark.workspace = seed.workspace.clone();
+            }
         }
         ImportMode::Overwrite => {
             bookmark.tags = dedup_case_insensitive(&seed.tags);
             bookmark.visit_count = Some(seed.visits.unwrap_or(0));
             bookmark.last_visited = seed.last_visited;
+            bookmark.workspace = seed.workspace.clone();
         }
     }
 
@@ -185,7 +191,7 @@ pub(crate) fn render_bookmark_init(shell: &str, prefix: &str) -> CliResult<Strin
             return Err(CliError::new(
                 2,
                 format!("Unsupported bookmark shell: {other}."),
-            ))
+            ));
         }
     };
     Ok(script)
@@ -198,6 +204,7 @@ struct ImportSeed {
     tags: Vec<String>,
     visits: Option<u32>,
     last_visited: Option<u64>,
+    workspace: Option<String>,
     score: f64,
     source: BookmarkSource,
 }
@@ -230,6 +237,7 @@ fn import_from_native(args: &ImportCmd) -> CliResult<Vec<ImportSeed>> {
                     tags: item.tags,
                     visits: Some(item.visits),
                     last_visited: Some(item.last_visited),
+                    workspace: normalize_workspace(item.workspace),
                     score: item.visits.max(1) as f64,
                     source: BookmarkSource::Explicit,
                 })
@@ -257,7 +265,9 @@ fn import_from_external(from: &str, input: Option<&str>, now: u64) -> CliResult<
             if !output.status.success() {
                 return Err(CliError::new(1, "zoxide query --list --score failed"));
             }
-            Ok(parse_zoxide_output(&String::from_utf8_lossy(&output.stdout)))
+            Ok(parse_zoxide_output(&String::from_utf8_lossy(
+                &output.stdout,
+            )))
         }
         "z" => {
             let path = input.map(PathBuf::from).unwrap_or_else(default_z_path);
@@ -287,12 +297,16 @@ fn import_from_external(from: &str, input: Option<&str>, now: u64) -> CliResult<
                     tags: Vec::new(),
                     visits: None,
                     last_visited: None,
+                    workspace: None,
                     score: seed_score,
                     source: BookmarkSource::Imported,
                 })
                 .collect())
         }
-        other => Err(CliError::new(2, format!("unsupported import source: {other}"))),
+        other => Err(CliError::new(
+            2,
+            format!("unsupported import source: {other}"),
+        )),
     }
 }
 
@@ -342,6 +356,9 @@ fn parse_native_tsv(content: &str) -> Vec<ImportSeed> {
             last_visited: cols
                 .get(4)
                 .and_then(|value| value.trim().parse::<u64>().ok()),
+            workspace: cols
+                .get(5)
+                .and_then(|value| normalize_workspace(Some((*value).to_string()))),
             score,
             source: BookmarkSource::Explicit,
         });
@@ -365,6 +382,7 @@ fn parse_autojump(content: &str) -> Vec<ImportSeed> {
                     tags: Vec::new(),
                     visits: None,
                     last_visited: None,
+                    workspace: None,
                     score,
                     source: BookmarkSource::Imported,
                 });
@@ -396,6 +414,7 @@ fn parse_z_family(content: &str) -> Vec<ImportSeed> {
                 tags: Vec::new(),
                 visits: None,
                 last_visited: None,
+                workspace: None,
                 score,
                 source: BookmarkSource::Imported,
             });
@@ -421,6 +440,7 @@ fn parse_fasd(content: &str) -> Vec<ImportSeed> {
                 tags: Vec::new(),
                 visits: None,
                 last_visited: None,
+                workspace: None,
                 score,
                 source: BookmarkSource::Imported,
             });
@@ -437,8 +457,12 @@ fn parse_zoxide_output(content: &str) -> Vec<ImportSeed> {
             continue;
         }
         let mut parts = trimmed.splitn(2, char::is_whitespace);
-        let Some(score_raw) = parts.next() else { continue };
-        let Some(path_raw) = parts.next() else { continue };
+        let Some(score_raw) = parts.next() else {
+            continue;
+        };
+        let Some(path_raw) = parts.next() else {
+            continue;
+        };
         if let Ok(score) = score_raw.trim().parse::<f64>() {
             let path = path_raw.trim();
             if !path.is_empty() {
@@ -448,6 +472,7 @@ fn parse_zoxide_output(content: &str) -> Vec<ImportSeed> {
                     tags: Vec::new(),
                     visits: None,
                     last_visited: None,
+                    workspace: None,
                     score,
                     source: BookmarkSource::Imported,
                 });
@@ -491,15 +516,27 @@ fn merge_tags(existing: &mut Vec<String>, incoming: &[String]) {
 fn dedup_case_insensitive(tags: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     for tag in tags {
-        if !out.iter().any(|current: &String| current.eq_ignore_ascii_case(tag)) {
+        if !out
+            .iter()
+            .any(|current: &String| current.eq_ignore_ascii_case(tag))
+        {
             out.push(tag.clone());
         }
     }
     out
 }
 
+fn normalize_workspace(workspace: Option<String>) -> Option<String> {
+    workspace
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 fn effective_excludes(config_excludes: &[String]) -> Vec<String> {
-    if let Some(raw) = env::var("_BM_EXCLUDE_DIRS").ok().filter(|v| !v.trim().is_empty()) {
+    if let Some(raw) = env::var("_BM_EXCLUDE_DIRS")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
         let separator = if cfg!(windows) { ';' } else { ':' };
         return raw
             .split(separator)

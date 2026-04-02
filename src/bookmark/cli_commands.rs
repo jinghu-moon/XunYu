@@ -164,6 +164,10 @@ pub struct SaveCmd {
     /// description
     #[argh(option)]
     pub desc: Option<String>,
+
+    /// workspace label
+    #[argh(option, short = 'w')]
+    pub workspace: Option<String>,
 }
 
 /// Save current directory or specific path as bookmark.
@@ -185,6 +189,10 @@ pub struct SetCmd {
     /// description
     #[argh(option)]
     pub desc: Option<String>,
+
+    /// workspace label
+    #[argh(option, short = 'w')]
+    pub workspace: Option<String>,
 }
 
 /// Force delete files or delete bookmarks with --bookmark (-bm).

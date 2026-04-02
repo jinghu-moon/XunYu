@@ -3,16 +3,12 @@
 #[path = "support/mod.rs"]
 mod common;
 
-use common::{run_ok, TestEnv};
+use common::{TestEnv, run_ok};
 use serde_json::Value;
 use std::fs;
 
 fn stdout_text(out: &std::process::Output) -> String {
     String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n")
-}
-
-fn write_store(env: &TestEnv, body: &str) {
-    fs::write(env.root.join(".xun.bookmark.json"), body).unwrap();
 }
 
 #[test]
@@ -39,7 +35,10 @@ fn pinned_bookmark_wins_same_query_in_list_order() {
     );
     let stdout = stdout_text(&out);
     let first = stdout.lines().next().unwrap_or("");
-    assert!(first.starts_with("client-main\t"), "unexpected first line: {first}");
+    assert!(
+        first.starts_with("client-main\t"),
+        "unexpected first line: {first}"
+    );
 }
 
 #[test]
@@ -61,18 +60,15 @@ fn base_scope_filters_outside_matches() {
             .args(["bookmark", "set", "client-web", outside.to_str().unwrap()]),
     );
 
-    let out = run_ok(
-        env.cmd()
-            .args([
-                "bookmark",
-                "z",
-                "client",
-                "--list",
-                "--tsv",
-                "--base",
-                base.to_str().unwrap(),
-            ]),
-    );
+    let out = run_ok(env.cmd().args([
+        "bookmark",
+        "z",
+        "client",
+        "--list",
+        "--tsv",
+        "--base",
+        base.to_str().unwrap(),
+    ]));
     let stdout = stdout_text(&out);
     assert!(stdout.contains("client-api"));
     assert!(!stdout.contains("client-web"));
@@ -81,24 +77,29 @@ fn base_scope_filters_outside_matches() {
 #[test]
 fn workspace_scope_filters_results() {
     let env = TestEnv::new();
-    write_store(
-        &env,
-        r#"{
-  "schema_version": 1,
-  "bookmarks": [
-    {
-      "id":"1","name":"api","name_norm":"api","path":"C:/work/api","path_norm":"c:/work/api",
-      "source":"Explicit","pinned":false,"tags":[],"desc":"","workspace":"xunyu","created_at":1,
-      "last_visited":1700000100,"visit_count":2,"frecency_score":2.0
-    },
-    {
-      "id":"2","name":"web","name_norm":"web","path":"C:/work/web","path_norm":"c:/work/web",
-      "source":"Explicit","pinned":false,"tags":[],"desc":"","workspace":"other","created_at":1,
-      "last_visited":1700000000,"visit_count":2,"frecency_score":2.0
-    }
-  ]
-}"#,
-    );
+    let api = env.root.join("api");
+    let web = env.root.join("web");
+    fs::create_dir_all(&api).unwrap();
+    fs::create_dir_all(&web).unwrap();
+
+    run_ok(env.cmd().args([
+        "bookmark",
+        "set",
+        "api",
+        api.to_str().unwrap(),
+        "--workspace",
+        "xunyu",
+    ]));
+    run_ok(env.cmd().args([
+        "bookmark",
+        "set",
+        "web",
+        web.to_str().unwrap(),
+        "--workspace",
+        "other",
+    ]));
+    run_ok(env.cmd().args(["bookmark", "touch", "api"]));
+    run_ok(env.cmd().args(["bookmark", "touch", "web"]));
 
     let out = run_ok(
         env.cmd()
@@ -131,24 +132,23 @@ fn native_json_import_merge_preserves_tags_and_visits() {
     "path":"",
     "tags":["b"],
     "visits":1,
-    "last_visited":100
+    "last_visited":100,
+    "workspace":"xunyu"
   }
 ]"#,
     )
     .unwrap();
 
-    run_ok(
-        env.cmd().args([
-            "bookmark",
-            "import",
-            "--format",
-            "json",
-            "--input",
-            import_path.to_str().unwrap(),
-            "--mode",
-            "merge",
-        ]),
-    );
+    run_ok(env.cmd().args([
+        "bookmark",
+        "import",
+        "--format",
+        "json",
+        "--input",
+        import_path.to_str().unwrap(),
+        "--mode",
+        "merge",
+    ]));
 
     let out = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -167,6 +167,7 @@ fn native_json_import_merge_preserves_tags_and_visits() {
     assert!(tags.contains(&"a"));
     assert!(tags.contains(&"b"));
     assert!(item["visits"].as_u64().unwrap_or(0) >= 2);
+    assert_eq!(item["workspace"].as_str(), Some("xunyu"));
 }
 
 #[test]
@@ -177,10 +178,16 @@ fn native_json_import_overwrite_replaces_tags_and_visits() {
     fs::create_dir_all(&work).unwrap();
     fs::create_dir_all(&other).unwrap();
 
-    run_ok(
-        env.cmd()
-            .args(["bookmark", "set", "home", work.to_str().unwrap(), "-t", "a"]),
-    );
+    run_ok(env.cmd().args([
+        "bookmark",
+        "set",
+        "home",
+        work.to_str().unwrap(),
+        "-t",
+        "a",
+        "--workspace",
+        "legacy",
+    ]));
     run_ok(env.cmd().args(["bookmark", "touch", "home"]));
 
     let import_path = env.root.join("overwrite.json");
@@ -193,7 +200,8 @@ fn native_json_import_overwrite_replaces_tags_and_visits() {
     "path":"{}",
     "tags":["b"],
     "visits":1,
-    "last_visited":99
+    "last_visited":99,
+    "workspace":"xunyu"
   }}
 ]"#,
             other.to_string_lossy().replace('\\', "/")
@@ -201,19 +209,17 @@ fn native_json_import_overwrite_replaces_tags_and_visits() {
     )
     .unwrap();
 
-    run_ok(
-        env.cmd().args([
-            "bookmark",
-            "import",
-            "--format",
-            "json",
-            "--input",
-            import_path.to_str().unwrap(),
-            "--mode",
-            "overwrite",
-            "--yes",
-        ]),
-    );
+    run_ok(env.cmd().args([
+        "bookmark",
+        "import",
+        "--format",
+        "json",
+        "--input",
+        import_path.to_str().unwrap(),
+        "--mode",
+        "overwrite",
+        "--yes",
+    ]));
 
     let out = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -229,9 +235,13 @@ fn native_json_import_overwrite_replaces_tags_and_visits() {
         .iter()
         .filter_map(|tag| tag.as_str())
         .collect();
-    assert_eq!(item["path"].as_str().unwrap(), other.to_string_lossy().replace('\\', "/"));
+    assert_eq!(
+        item["path"].as_str().unwrap(),
+        other.to_string_lossy().replace('\\', "/")
+    );
     assert_eq!(tags, vec!["b"]);
     assert_eq!(item["visits"].as_u64(), Some(1));
+    assert_eq!(item["workspace"].as_str(), Some("xunyu"));
 }
 
 #[test]
@@ -244,16 +254,14 @@ fn history_import_creates_imported_entries() {
     )
     .unwrap();
 
-    run_ok(
-        env.cmd().args([
-            "bookmark",
-            "import",
-            "--from",
-            "history",
-            "-i",
-            history.to_str().unwrap(),
-        ]),
-    );
+    run_ok(env.cmd().args([
+        "bookmark",
+        "import",
+        "--from",
+        "history",
+        "-i",
+        history.to_str().unwrap(),
+    ]));
 
     let out = run_ok(env.cmd().args(["bookmark", "list", "--format", "json"]));
     let stdout = stdout_text(&out);

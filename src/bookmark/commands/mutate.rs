@@ -43,6 +43,11 @@ pub(crate) fn cmd_save(args: SaveCmd) -> CliResult {
     store
         .set_explicit_metadata(&name, tags, args.desc.unwrap_or_default())
         .map_err(|e| CliError::new(1, format!("Failed to update bookmark metadata: {e}")))?;
+    if args.workspace.is_some() {
+        store
+            .set_explicit_workspace(&name, normalize_workspace_arg(args.workspace.as_deref()))
+            .map_err(|e| CliError::new(1, format!("Failed to update bookmark workspace: {e}")))?;
+    }
     store
         .save(&file, now_secs())
         .map_err(|e| CliError::new(1, format!("Failed to save store: {e}")))?;
@@ -90,6 +95,14 @@ pub(crate) fn cmd_set(args: SetCmd) -> CliResult {
     store
         .set_explicit_metadata(&args.name, tags, args.desc.unwrap_or_default())
         .map_err(|e| CliError::new(1, format!("Failed to update bookmark metadata: {e}")))?;
+    if args.workspace.is_some() {
+        store
+            .set_explicit_workspace(
+                &args.name,
+                normalize_workspace_arg(args.workspace.as_deref()),
+            )
+            .map_err(|e| CliError::new(1, format!("Failed to update bookmark workspace: {e}")))?;
+    }
     store
         .save(&file, now_secs())
         .map_err(|e| CliError::new(1, format!("Failed to save store: {e}")))?;
@@ -249,4 +262,10 @@ fn home_dir() -> Option<PathBuf> {
         .ok()
         .or_else(|| env::var("HOME").ok())
         .map(PathBuf::from)
+}
+
+fn normalize_workspace_arg(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }

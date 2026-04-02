@@ -30,7 +30,13 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
             "-t", "--tag", "-s", "--sort", "-n", "--limit", "--offset", "-f", "--format",
         ],
         ("z", _) | ("zi", _) | ("o", _) | ("oi", _) | ("open", _) => &[
-            "-t", "--tag", "-n", "--limit", "--base", "-w", "--workspace",
+            "-t",
+            "--tag",
+            "-n",
+            "--limit",
+            "--base",
+            "-w",
+            "--workspace",
         ],
         ("acl", Some("view")) => &["--path", "-p", "--export"],
         ("acl", Some("add")) => &[
@@ -54,8 +60,18 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
         ("acl", Some("repair")) => &["--path", "-p"],
         ("acl", Some("audit")) => &["--tail", "--export"],
         ("acl", Some("config")) => &["--set"],
-        ("save", _) | ("set", _) => &["-t", "--tag", "--desc"],
-        ("recent", _) => &["-n", "--limit", "-t", "--tag", "-w", "--workspace", "--since", "-f", "--format"],
+        ("save", _) | ("set", _) => &["-t", "--tag", "--desc", "-w", "--workspace"],
+        ("recent", _) => &[
+            "-n",
+            "--limit",
+            "-t",
+            "--tag",
+            "-w",
+            "--workspace",
+            "--since",
+            "-f",
+            "--format",
+        ],
         ("gc", _) => &["-f", "--format"],
         ("tree", _) => &[
             "-d",
@@ -148,7 +164,10 @@ pub(super) fn value_candidates(
         return static_candidates(IMPORT_MODES, prefix_lower);
     }
     if subcmd == "import" && flag == "--from" {
-        return static_candidates(&["autojump", "zoxide", "z", "fasd", "history"], prefix_lower);
+        return static_candidates(
+            &["autojump", "zoxide", "z", "fasd", "history"],
+            prefix_lower,
+        );
     }
     if subcmd == "env" {
         if flag == "--scope" {

@@ -28,6 +28,7 @@ pub(crate) fn cmd_export(args: ExportCmd) -> CliResult {
                 tags: bookmark.tags.clone(),
                 visits: bookmark.visit_count.unwrap_or(0),
                 last_visited: bookmark.last_visited.unwrap_or(0),
+                workspace: bookmark.workspace.clone(),
             })
         })
         .collect();
@@ -40,12 +41,13 @@ pub(crate) fn cmd_export(args: ExportCmd) -> CliResult {
             let mut s = String::new();
             for i in items {
                 s.push_str(&format!(
-                    "{}\t{}\t{}\t{}\t{}\n",
+                    "{}\t{}\t{}\t{}\t{}\t{}\n",
                     i.name,
                     i.path,
                     i.tags.join(","),
                     i.visits,
-                    i.last_visited
+                    i.last_visited,
+                    i.workspace.unwrap_or_default()
                 ));
             }
             s

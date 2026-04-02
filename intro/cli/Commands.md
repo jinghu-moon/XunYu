@@ -61,8 +61,8 @@
 | `xun bookmark o [keywords...]` | 用文件管理器打开 Top-1。 | 与 `z` 共享 query 选项 |
 | `xun bookmark oi [keywords...]` | 交互式打开。 | 与 `zi` 共享行为 |
 | `xun bookmark open [keywords...]` | `o` 的长命令形式。 | 与 `o` 等价 |
-| `xun bookmark save [name]` | 保存当前目录为显式书签。 | `--tag <tag>`；`--desc <text>` |
-| `xun bookmark set <name> [path]` | 保存当前目录或指定路径为显式书签。 | `--tag <tag>`；`--desc <text>` |
+| `xun bookmark save [name]` | 保存当前目录为显式书签。 | `--tag <tag>`；`--desc <text>`；`-w/--workspace <name>` |
+| `xun bookmark set <name> [path]` | 保存当前目录或指定路径为显式书签。 | `--tag <tag>`；`--desc <text>`；`-w/--workspace <name>` |
 | `xun bookmark tag add|remove|list|rename ...` | 书签标签管理。 | - |
 | `xun bookmark pin <name>` | 置顶显式书签。 | - |
 | `xun bookmark undo` | 撤销最近的书签变更。 | `--steps <n>` |
@@ -74,8 +74,8 @@
 | `xun bookmark check` | 检查书签健康（缺失/重复/过期）。 | `--days <days>`；`--format <auto|table|tsv|json>` |
 | `xun bookmark gc` | 清理无效路径。 | `--purge`；`--dry-run`；`--learned`；`--format <auto|table|tsv|json>` |
 | `xun bookmark dedup` | 书签去重。 | `--mode <path|name>`；`--format <auto|table|tsv|json>`；`--yes` |
-| `xun bookmark export` | 导出书签。 | `--format <json|tsv>`；`--out <path>` |
-| `xun bookmark import` | 导入书签或外部导航数据。 | `--format <json|tsv>`；`--from <autojump|zoxide|z|fasd|history>`；`--input <path>`；`--mode <merge|overwrite>`；`--yes` |
+| `xun bookmark export` | 导出书签。 | `--format <json|tsv>`；`--out <path>`；轻量交换格式，保留 `workspace`，不是全量备份 |
+| `xun bookmark import` | 导入书签或外部导航数据。 | `--format <json|tsv>`；`--from <autojump|zoxide|z|fasd|history>`；`--input <path>`；`--mode <merge|overwrite>`；`--yes`；原生 `json/tsv` 会读取 `workspace` |
 | `xun bookmark learn --path <path>` | 手动记录一次目录访问。 | 受 `bookmark.autoLearn.enabled` 与 `_BM_EXCLUDE_DIRS` 控制 |
 | `xun bookmark init <shell>` | 生成 bookmark shell 集成脚本。 | `--cmd <prefix>` |
 | `xun bookmark touch <name>` | 更新显式书签访问频次。 | - |
@@ -83,6 +83,12 @@
 | `xun bookmark all [tag]` | 机器输出所有书签。 | - |
 
 删除书签请使用 `xun del -bm <name>` 或 `xun delete -bm <name>`。
+
+Scope 说明：
+- `-g/--global`：全局候选，不参考当前目录上下文。
+- `-c/--child`：优先当前目录及其子目录。
+- `--base <path>`：限制到指定基路径下。
+- `-w/--workspace <name>`：限制到指定 workspace。
 
 ---
 
