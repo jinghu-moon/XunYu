@@ -113,19 +113,6 @@ impl BookmarkIndex {
         Some(Self { terms })
     }
 
-    #[cfg(test)]
-    pub(crate) fn from_embedded_persisted(
-        persisted: PersistedBookmarkIndex,
-        bookmark_count: usize,
-    ) -> Option<Self> {
-        if persisted.version != INDEX_FILE_VERSION || persisted.bookmark_count != bookmark_count {
-            return None;
-        }
-        Some(Self {
-            terms: sanitize_terms(persisted.terms, persisted.bookmark_count),
-        })
-    }
-
     pub(crate) fn from_archived_embedded_persisted(
         persisted: &rkyv::Archived<PersistedBookmarkIndex>,
         bookmark_count: usize,
@@ -355,7 +342,8 @@ mod tests {
 
         BookmarkIndex::sync_persisted_with_threshold(&db, &store.bookmarks, 0).unwrap();
         assert!(
-            BookmarkIndex::maybe_load_persisted_with_threshold(&db, &changed.bookmarks, 0).is_none()
+            BookmarkIndex::maybe_load_persisted_with_threshold(&db, &changed.bookmarks, 0)
+                .is_none()
         );
     }
 }
