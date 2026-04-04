@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 #[cfg(feature = "redirect")]
 use std::collections::BTreeMap;
 
@@ -45,6 +46,18 @@ pub(crate) struct BookmarkConfig {
     #[serde(rename = "autoLearn")]
     pub(crate) auto_learn: BookmarkAutoLearnConfig,
     pub(crate) fzf: BookmarkFzfConfig,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub(crate) presets: HashMap<String, PresetConfig>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub(crate) struct PresetConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) workspace: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) tag: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

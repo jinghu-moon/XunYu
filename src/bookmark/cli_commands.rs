@@ -90,6 +90,10 @@ pub struct ZCmd {
     /// workspace scope
     #[argh(option, short = 'w')]
     pub workspace: Option<String>,
+
+    /// use config preset
+    #[argh(option)]
+    pub preset: Option<String>,
 }
 
 /// Open in Explorer.
@@ -147,6 +151,10 @@ pub struct OpenCmd {
     /// workspace scope
     #[argh(option, short = 'w')]
     pub workspace: Option<String>,
+
+    /// use config preset
+    #[argh(option)]
+    pub preset: Option<String>,
 }
 
 /// Save current directory as bookmark.
@@ -344,6 +352,7 @@ pub struct TagCmd {
 #[argh(subcommand)]
 pub enum TagSubCommand {
     Add(TagAddCmd),
+    AddBatch(TagAddBatchCmd),
     Remove(TagRemoveCmd),
     List(TagListCmd),
     Rename(TagRenameCmd),
@@ -360,6 +369,19 @@ pub struct TagAddCmd {
     /// tags (comma separated)
     #[argh(positional)]
     pub tags: String,
+}
+
+/// Add tags to multiple bookmarks.
+#[derive(FromArgs)]
+#[argh(subcommand, name = "add-batch")]
+pub struct TagAddBatchCmd {
+    /// tags (comma separated)
+    #[argh(positional)]
+    pub tags: String,
+
+    /// bookmark names
+    #[argh(positional)]
+    pub names: Vec<String>,
 }
 
 /// Remove tags from a bookmark.
@@ -425,6 +447,10 @@ pub struct StatsCmd {
     /// output format: auto|table|tsv|json
     #[argh(option, short = 'f', default = "default_output_format()")]
     pub format: String,
+
+    /// show usage insights and suggestions
+    #[argh(switch)]
+    pub insights: bool,
 }
 
 /// Deduplicate bookmarks.

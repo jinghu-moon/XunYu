@@ -3,7 +3,7 @@ use crate::bookmark::storage::db_path;
 use crate::bookmark_state::Store;
 use comfy_table::{Attribute, Cell, Color, Table};
 
-use crate::cli::{TagAddCmd, TagCmd, TagListCmd, TagRemoveCmd, TagRenameCmd, TagSubCommand};
+use crate::cli::{TagAddCmd, TagAddBatchCmd, TagCmd, TagListCmd, TagRemoveCmd, TagRenameCmd, TagSubCommand};
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, prefer_table_output, print_table};
 use crate::store::now_secs;
@@ -12,6 +12,7 @@ use crate::util::parse_tags;
 pub(crate) fn cmd_tag(args: TagCmd) -> CliResult {
     match args.cmd {
         TagSubCommand::Add(a) => cmd_tag_add(a),
+        TagSubCommand::AddBatch(a) => cmd_tag_add_batch(a),
         TagSubCommand::Remove(a) => cmd_tag_remove(a),
         TagSubCommand::List(a) => cmd_tag_list(a),
         TagSubCommand::Rename(a) => cmd_tag_rename(a),
@@ -46,6 +47,51 @@ pub(crate) fn cmd_tag_add(args: TagAddCmd) -> CliResult {
         crate::output::emit_warning(format!("Undo history not recorded: {}", err.message), &[]);
     }
     ui_println!("Added {} tag(s) to '{}'.", added, args.name);
+    Ok(())
+}
+
+pub(crate) fn cmd_tag_add_batch(args: TagAddBatchCmd) -> CliResult {
+    let tags = parse_tags(&args.tags);
+    if tags.is_empty() {
+        ui_println!("No tags to add.");
+        return Ok(());
+    }
+    if args.names.is_empty() {
+        ui_println!("No bookmarks specified.");
+        return Ok(());
+    }
+
+    let file = db_path();
+    let mut store = Store::load_or_default(&file)
+        .map_err(|e| CliError::new(1, format!("Failed to load store: {e}")))?;
+    let before = store.clone();
+
+    let mut total_added = 0;
+    let mut success_count = 0;
+    for name in &args.names {
+        match store.add_tags(name, &tags) {
+            Ok(added) => {
+                if added > 0 {
+                    total_added += added;
+                    success_count += 1;
+                }
+            }
+            Err(e) => ui_println!("⚠️  Failed to add tags to '{}': {}", name, e),
+        }
+    }
+
+    if total_added == 0 {
+        ui_println!("No new tags added.");
+        return Ok(());
+    }
+
+    store.save(&file, now_secs())
+        .map_err(|e| CliError::new(1, format!("Failed to save store: {e}")))?;
+    let after = store.clone();
+    if let Err(err) = record_undo_batch(&file, "tag:add-batch", &before, &after) {
+        crate::output::emit_warning(format!("Undo history not recorded: {}", err.message), &[]);
+    }
+    ui_println!("✅ Added tags to {} bookmark(s) ({} total tag additions).", success_count, total_added);
     Ok(())
 }
 

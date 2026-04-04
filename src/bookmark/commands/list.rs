@@ -367,7 +367,6 @@ pub(crate) fn cmd_stats(args: StatsCmd) -> CliResult {
             out_println!("visited\t{}", visited);
             out_println!("total_visits\t{}", total_visits);
             out_println!("last_visit\t{}", last_visit);
-            Ok(())
         }
         ListFormat::Json => {
             out_println!(
@@ -381,7 +380,6 @@ pub(crate) fn cmd_stats(args: StatsCmd) -> CliResult {
                     "last_visit": last_visit
                 })
             );
-            Ok(())
         }
         ListFormat::Table => {
             let mut table = Table::new();
@@ -401,9 +399,56 @@ pub(crate) fn cmd_stats(args: StatsCmd) -> CliResult {
             table.add_row(vec![Cell::new("total_visits"), Cell::new(total_visits)]);
             table.add_row(vec![Cell::new("last_visit"), Cell::new(format_age(last_visit))]);
             print_table(&table);
-            Ok(())
         }
         ListFormat::Auto => unreachable!(),
+    }
+
+    if args.insights {
+        print_insights(&store);
+    }
+    Ok(())
+}
+
+fn print_insights(store: &Store) {
+    let now = now_secs();
+    let stale_threshold = 90 * 86_400u64;
+    let never_visited: Vec<_> = store.bookmarks.iter()
+        .filter(|b| b.visit_count.unwrap_or(0) == 0)
+        .collect();
+    let stale: Vec<_> = store.bookmarks.iter()
+        .filter(|b| b.visit_count.unwrap_or(0) > 0)
+        .filter(|b| b.last_visited.map_or(true, |t| now.saturating_sub(t) > stale_threshold))
+        .collect();
+    let mut top: Vec<_> = store.bookmarks.iter()
+        .filter(|b| b.visit_count.unwrap_or(0) > 0)
+        .collect();
+    top.sort_by(|a, b| b.visit_count.unwrap_or(0).cmp(&a.visit_count.unwrap_or(0)));
+
+    ui_println!("\n📊 Usage Insights:");
+    if !top.is_empty() {
+        ui_println!("  🔥 Top bookmarks:");
+        for b in top.iter().take(5) {
+            ui_println!("     {:>4}x  {}", b.visit_count.unwrap_or(0),
+                b.name.as_deref().unwrap_or(&b.path));
+        }
+    }
+    if !never_visited.is_empty() {
+        ui_println!("  💤 Never visited ({}):", never_visited.len());
+        for b in never_visited.iter().take(5) {
+            ui_println!("     {}", b.name.as_deref().unwrap_or(&b.path));
+        }
+        if never_visited.len() > 5 {
+            ui_println!("     ... and {} more", never_visited.len() - 5);
+        }
+        ui_println!("  💡 Tip: Run `bm gc` to clean up unused bookmarks.");
+    }
+    if !stale.is_empty() {
+        ui_println!("  ⏰ Stale (>90d, {} total):", stale.len());
+        for b in stale.iter().take(3) {
+            let days = b.last_visited.map_or(0, |t| now.saturating_sub(t) / 86_400);
+            ui_println!("     {}d  {}", days, b.name.as_deref().unwrap_or(&b.path));
+        }
+        ui_println!("  💡 Tip: Run `bm check` to review stale bookmarks.");
     }
 }
 

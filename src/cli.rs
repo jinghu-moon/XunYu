@@ -71,7 +71,7 @@ pub use bookmark::{
 };
 pub use bookmarks::{
     AllCmd, CheckCmd, DedupCmd, DeleteCmd, ExportCmd, GcCmd, ImportCmd, KeysCmd, ListCmd,
-    OpenCmd, RecentCmd, RenameCmd, SaveCmd, SetCmd, StatsCmd, TagAddCmd, TagCmd, TagListCmd,
+    OpenCmd, RecentCmd, RenameCmd, SaveCmd, SetCmd, StatsCmd, TagAddCmd, TagAddBatchCmd, TagCmd, TagListCmd,
     TagRemoveCmd, TagRenameCmd, TagSubCommand, TouchCmd, ZCmd,
 };
 pub use config::{ConfigCmd, ConfigEditCmd, ConfigGetCmd, ConfigSetCmd, ConfigSubCommand};

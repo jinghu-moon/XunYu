@@ -12,6 +12,7 @@ use crate::bookmark_query::{query_with_timing, BookmarkQuerySpec, QueryAction, Q
 use crate::bookmark_state::Store;
 use crate::cli::{OiCmd, OpenCmd, ZCmd, ZiCmd};
 use crate::config;
+use crate::config::PresetConfig;
 use crate::output::{CliError, CliResult, can_interact};
 use crate::store::now_secs;
 
@@ -148,16 +149,29 @@ enum ConsumerKind {
 }
 
 fn build_query_spec_for_z(args: &ZCmd) -> CliResult<BookmarkQuerySpec> {
+    let preset = args.preset.as_deref().and_then(load_preset);
     let list_mode = args.list || args.score || args.why || args.preview || args.json || args.tsv;
+    let tag = args.tag.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.tag.clone()))
+        .or_else(default_tag_from_env);
+    let workspace = args.workspace.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.workspace.clone()));
+    let scope_str = preset.as_ref().and_then(|p| p.scope.as_deref());
+    let scope = resolve_scope(args.global, args.child, args.base.as_deref(), workspace.as_deref())?;
+    let scope = if scope == resolve_scope(false, false, None, None)? && scope_str.is_some() {
+        match scope_str.unwrap() {
+            "global" => QueryScope::Global,
+            "child" => QueryScope::Child,
+            _ => scope,
+        }
+    } else {
+        scope
+    };
     Ok(BookmarkQuerySpec {
         keywords: args.patterns.clone(),
-        tag: args.tag.clone().or_else(default_tag_from_env),
-        scope: resolve_scope(args.global, args.child, args.base.as_deref(), args.workspace.as_deref())?,
-        action: if list_mode {
-            QueryAction::List
-        } else {
-            QueryAction::JumpFirst
-        },
+        tag,
+        scope,
+        action: if list_mode { QueryAction::List } else { QueryAction::JumpFirst },
         limit: args.limit.or_else(|| default_query_limit(list_mode)),
         explain: args.score || args.why,
         why: args.why,
@@ -167,16 +181,29 @@ fn build_query_spec_for_z(args: &ZCmd) -> CliResult<BookmarkQuerySpec> {
 }
 
 fn build_query_spec_for_open(args: &OpenCmd) -> CliResult<BookmarkQuerySpec> {
+    let preset = args.preset.as_deref().and_then(load_preset);
     let list_mode = args.list || args.score || args.why || args.preview || args.json || args.tsv;
+    let tag = args.tag.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.tag.clone()))
+        .or_else(default_tag_from_env);
+    let workspace = args.workspace.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.workspace.clone()));
+    let scope_str = preset.as_ref().and_then(|p| p.scope.as_deref());
+    let scope = resolve_scope(args.global, args.child, args.base.as_deref(), workspace.as_deref())?;
+    let scope = if scope == resolve_scope(false, false, None, None)? && scope_str.is_some() {
+        match scope_str.unwrap() {
+            "global" => QueryScope::Global,
+            "child" => QueryScope::Child,
+            _ => scope,
+        }
+    } else {
+        scope
+    };
     Ok(BookmarkQuerySpec {
         keywords: args.patterns.clone(),
-        tag: args.tag.clone().or_else(default_tag_from_env),
-        scope: resolve_scope(args.global, args.child, args.base.as_deref(), args.workspace.as_deref())?,
-        action: if list_mode {
-            QueryAction::List
-        } else {
-            QueryAction::OpenFirst
-        },
+        tag,
+        scope,
+        action: if list_mode { QueryAction::List } else { QueryAction::OpenFirst },
         limit: args.limit.or_else(|| default_query_limit(list_mode)),
         explain: args.score || args.why,
         why: args.why,
@@ -186,16 +213,29 @@ fn build_query_spec_for_open(args: &OpenCmd) -> CliResult<BookmarkQuerySpec> {
 }
 
 fn build_query_spec_for_zi(args: &ZiCmd) -> CliResult<BookmarkQuerySpec> {
+    let preset = args.preset.as_deref().and_then(load_preset);
     let list_mode = args.list || args.score || args.why || args.preview || args.json || args.tsv;
+    let tag = args.tag.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.tag.clone()))
+        .or_else(default_tag_from_env);
+    let workspace = args.workspace.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.workspace.clone()));
+    let scope_str = preset.as_ref().and_then(|p| p.scope.as_deref());
+    let scope = resolve_scope(args.global, args.child, args.base.as_deref(), workspace.as_deref())?;
+    let scope = if scope == resolve_scope(false, false, None, None)? && scope_str.is_some() {
+        match scope_str.unwrap() {
+            "global" => QueryScope::Global,
+            "child" => QueryScope::Child,
+            _ => scope,
+        }
+    } else {
+        scope
+    };
     Ok(BookmarkQuerySpec {
         keywords: args.patterns.clone(),
-        tag: args.tag.clone().or_else(default_tag_from_env),
-        scope: resolve_scope(args.global, args.child, args.base.as_deref(), args.workspace.as_deref())?,
-        action: if list_mode {
-            QueryAction::List
-        } else {
-            QueryAction::Interactive
-        },
+        tag,
+        scope,
+        action: if list_mode { QueryAction::List } else { QueryAction::Interactive },
         limit: args.limit.or_else(|| default_query_limit(list_mode)),
         explain: args.score || args.why,
         why: args.why,
@@ -205,16 +245,29 @@ fn build_query_spec_for_zi(args: &ZiCmd) -> CliResult<BookmarkQuerySpec> {
 }
 
 fn build_query_spec_for_oi(args: &OiCmd) -> CliResult<BookmarkQuerySpec> {
+    let preset = args.preset.as_deref().and_then(load_preset);
     let list_mode = args.list || args.score || args.why || args.preview || args.json || args.tsv;
+    let tag = args.tag.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.tag.clone()))
+        .or_else(default_tag_from_env);
+    let workspace = args.workspace.clone()
+        .or_else(|| preset.as_ref().and_then(|p| p.workspace.clone()));
+    let scope_str = preset.as_ref().and_then(|p| p.scope.as_deref());
+    let scope = resolve_scope(args.global, args.child, args.base.as_deref(), workspace.as_deref())?;
+    let scope = if scope == resolve_scope(false, false, None, None)? && scope_str.is_some() {
+        match scope_str.unwrap() {
+            "global" => QueryScope::Global,
+            "child" => QueryScope::Child,
+            _ => scope,
+        }
+    } else {
+        scope
+    };
     Ok(BookmarkQuerySpec {
         keywords: args.patterns.clone(),
-        tag: args.tag.clone().or_else(default_tag_from_env),
-        scope: resolve_scope(args.global, args.child, args.base.as_deref(), args.workspace.as_deref())?,
-        action: if list_mode {
-            QueryAction::List
-        } else {
-            QueryAction::OpenInteractive
-        },
+        tag,
+        scope,
+        action: if list_mode { QueryAction::List } else { QueryAction::OpenInteractive },
         limit: args.limit.or_else(|| default_query_limit(list_mode)),
         explain: args.score || args.why,
         why: args.why,
@@ -227,6 +280,10 @@ fn default_tag_from_env() -> Option<String> {
     env::var("XUN_DEFAULT_TAG")
         .ok()
         .filter(|v| !v.trim().is_empty())
+}
+
+fn load_preset(name: &str) -> Option<PresetConfig> {
+    config::load_config().bookmark.presets.get(name).cloned()
 }
 
 fn resolve_scope(
@@ -276,7 +333,22 @@ fn handle_query_results(
     kind: ConsumerKind,
 ) -> CliResult {
     if ranked.is_empty() {
-        ui_println!("No matches found.");
+        if store.bookmarks.is_empty() {
+            ui_println!("📌 First time using bookmark?");
+            ui_println!("  1. Save current directory: bm save <name>");
+            ui_println!("  2. Setup shell integration: xun bookmark init <shell>");
+            ui_println!("  3. Import from zoxide: bm import --from zoxide");
+            return Ok(());
+        }
+        if !spec.keywords.is_empty() {
+            ui_println!("No matches found for: {}", spec.keywords.join(" "));
+            if !matches!(spec.scope, QueryScope::Global) {
+                ui_println!("Try: bm z {} -g  (search globally)", spec.keywords.join(" "));
+            }
+        } else {
+            ui_println!("No matches found.");
+            ui_println!("Try: bm list  (show all bookmarks)");
+        }
         return Ok(());
     }
 
@@ -326,7 +398,22 @@ fn handle_query_results(
     if ranked.len() > 1 && ranked[1].final_score > 0.0 {
         let gap = 1.0 - (ranked[1].final_score / ranked[0].final_score.max(1.0));
         if gap < 0.15 {
-            ui_println!("Hint: close matches available, use `xun bookmark zi ...` to inspect.");
+            ui_println!(
+                "💡 Found {} matches, top-2 are close (scores: {:.1} vs {:.1})",
+                ranked.len(),
+                ranked[0].final_score,
+                ranked[1].final_score
+            );
+            ui_println!("   Tip: Use 'bm zi {}' to review all matches", spec.keywords.join(" "));
+        }
+    }
+
+    // 检查长期未访问
+    if let Some(last_visited) = top.bookmark.last_visited {
+        let days_ago = (now_secs() - last_visited) / 86_400;
+        if days_ago > 180 {
+            ui_println!("⚠️  This bookmark hasn't been visited in {} days", days_ago);
+            ui_println!("   Tip: Run 'bm check' to find stale bookmarks");
         }
     }
 

@@ -75,7 +75,7 @@ impl BookmarkIndex {
         std::env::var("_BM_INDEX_MIN_ITEMS")
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(20_000)
+            .unwrap_or(1_000)
     }
 
     pub(crate) fn index_file_path(db_path: &Path) -> PathBuf {

@@ -40,6 +40,7 @@ impl Default for BookmarkConfig {
             ],
             auto_learn: BookmarkAutoLearnConfig::default(),
             fzf: BookmarkFzfConfig::default(),
+            presets: std::collections::HashMap::new(),
         }
     }
 }

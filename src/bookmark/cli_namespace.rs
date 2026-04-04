@@ -100,6 +100,10 @@ pub struct ZiCmd {
     /// workspace scope
     #[argh(option, short = 'w')]
     pub workspace: Option<String>,
+
+    /// use config preset
+    #[argh(option)]
+    pub preset: Option<String>,
 }
 
 /// Open a bookmark with interactive selection.
@@ -157,6 +161,10 @@ pub struct OiCmd {
     /// workspace scope
     #[argh(option, short = 'w')]
     pub workspace: Option<String>,
+
+    /// use config preset
+    #[argh(option)]
+    pub preset: Option<String>,
 }
 
 /// Open in file manager.
@@ -214,6 +222,10 @@ pub struct OpenLongCmd {
     /// workspace scope
     #[argh(option, short = 'w')]
     pub workspace: Option<String>,
+
+    /// use config preset
+    #[argh(option)]
+    pub preset: Option<String>,
 }
 
 /// Pin a bookmark.

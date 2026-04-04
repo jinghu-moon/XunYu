@@ -127,15 +127,15 @@ pub(crate) fn compute_match_score<T: AsRef<str>>(
 pub(crate) fn time_decay(last_visited: u64, now: u64) -> f64 {
     let elapsed = now.saturating_sub(last_visited);
     if elapsed < 3_600 {
-        4.0
+        6.0  // 1小时内：提升权重
     } else if elapsed < 86_400 {
-        2.0
+        3.0  // 1天内：提升权重
     } else if elapsed < 604_800 {
-        1.0
+        1.0  // 1周内：保持
     } else if elapsed < 2_592_000 {
-        0.5
+        0.3  // 30天内：降低权重
     } else {
-        0.2
+        0.1  // 30天以上：大幅降低权重
     }
 }
 

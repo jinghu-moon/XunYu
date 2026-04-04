@@ -42,6 +42,7 @@ pub(crate) fn cmd_bookmark(args: BookmarkCmd) -> CliResult {
             child: a.child,
             base: a.base,
             workspace: a.workspace,
+            preset: a.preset,
         }),
         BookmarkSubCommand::Save(a) => cmd_save(a),
         BookmarkSubCommand::Set(a) => cmd_set(a),

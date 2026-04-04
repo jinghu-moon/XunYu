@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 #[allow(unused_imports)]
 pub(crate) use model::{
-    AclConfig, BookmarkAutoLearnConfig, BookmarkConfig, BookmarkFzfConfig, GlobalConfig, ProxyConfig,
+    AclConfig, BookmarkAutoLearnConfig, BookmarkConfig, BookmarkFzfConfig, GlobalConfig, PresetConfig, ProxyConfig,
     TreeConfig,
 };
 #[cfg(feature = "desktop")]
