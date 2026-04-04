@@ -54,9 +54,6 @@ pub(crate) mod filevault;
 #[cfg(feature = "diff")]
 mod diff;
 
-#[cfg(feature = "cstat")]
-mod cstat;
-
 #[cfg(feature = "batch_rename")]
 pub mod batch_rename;
 

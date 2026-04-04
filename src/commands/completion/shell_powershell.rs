@@ -5,7 +5,7 @@ $xun = if ($env:XUN_EXE) { $env:XUN_EXE } else { "xun.exe" }
 $global:XunSubcommands = @(
     "bookmark","init","completion","config","ctx","del","delete",
     "proxy","pon","poff","pst","px","ports","kill","ps","pkill",
-    "backup","bak","xunbak","tree","find","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","diff","desktop","brn","cstat","img","verify"
+    "backup","bak","xunbak","tree","find","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","diff","desktop","brn","img","verify"
 )
 $global:XunBookmarkSubcommands = @("z","zi","o","oi","open","save","set","tag","pin","rename","list","recent","stats","check","gc","dedup","export","import","init","touch","learn","keys","all")
 $global:XunProxySubcommands = @("set","del","get","detect","test")

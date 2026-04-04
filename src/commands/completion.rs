@@ -68,7 +68,6 @@ const SUBCOMMANDS: &[&str] = &[
     "diff",
     "desktop",
     "brn",
-    "cstat",
     "img",
     "verify",
 ];

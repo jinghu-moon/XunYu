@@ -11,8 +11,7 @@ mod bookmarks;
 mod config;
 #[cfg(feature = "crypt")]
 mod crypt;
-#[cfg(feature = "cstat")]
-mod cstat;
+
 mod ctx;
 #[cfg(feature = "dashboard")]
 mod dashboard;
@@ -77,8 +76,7 @@ pub use bookmarks::{
 pub use config::{ConfigCmd, ConfigEditCmd, ConfigGetCmd, ConfigSetCmd, ConfigSubCommand};
 #[cfg(feature = "crypt")]
 pub use crypt::{DecryptCmd, EncryptCmd};
-#[cfg(feature = "cstat")]
-pub use cstat::CstatCmd;
+
 pub use ctx::{
     CtxCmd, CtxDelCmd, CtxListCmd, CtxOffCmd, CtxRenameCmd, CtxSetCmd, CtxShowCmd, CtxSubCommand,
     CtxUseCmd,
@@ -218,8 +216,7 @@ pub enum SubCommand {
     Redirect(RedirectCmd),
     #[cfg(feature = "desktop")]
     Desktop(DesktopCmd),
-    #[cfg(feature = "cstat")]
-    Cstat(CstatCmd),
+
     #[cfg(feature = "batch_rename")]
     Brn(BrnCmd),
     #[cfg(feature = "img")]

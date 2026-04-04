@@ -23,8 +23,6 @@ pub(crate) mod xunbak;
 #[cfg(feature = "redirect")]
 pub(crate) mod redirect;
 
-#[cfg(feature = "cstat")]
-pub(crate) mod cstat;
 
 #[cfg(feature = "batch_rename")]
 pub(crate) mod batch_rename;

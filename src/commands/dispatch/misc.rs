@@ -90,8 +90,7 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Init(_) | SubCommand::Ctx(_) | SubCommand::Env(_) => unreachable!(),
         #[cfg(feature = "dashboard")]
         SubCommand::Serve(_) => unreachable!(),
-        #[cfg(feature = "cstat")]
-        SubCommand::Cstat(_) => unreachable!(),
+
         #[cfg(feature = "img")]
         SubCommand::Img(_) => unreachable!(),
     }
