@@ -4,9 +4,13 @@
 // All checks run to completion — no short-circuit — so the user sees all issues at once.
 
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 
 use crate::batch_rename::types::RenameOp;
+use crate::path_guard::string_check;
+use crate::path_guard::PathIssueKind;
 
 // ─── Error types ─────────────────────────────────────────────────────────────
 
@@ -39,8 +43,6 @@ pub fn preflight_check(ops: &[RenameOp], check_existing: bool) -> Vec<PreflightE
 
 // ─── ILLEGAL_CHAR ─────────────────────────────────────────────────────────────
 
-const ILLEGAL: &[char] = &['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-
 fn check_illegal_chars(ops: &[RenameOp], errors: &mut Vec<PreflightError>) {
     for op in ops {
         // Use the raw file_name string; fall back to full path string on Windows
@@ -58,39 +60,43 @@ fn check_illegal_chars(ops: &[RenameOp], errors: &mut Vec<PreflightError>) {
         } else {
             &name
         };
-        let found: Vec<char> = ILLEGAL
-            .iter()
-            .copied()
-            .filter(|&c| check.contains(c))
-            .collect();
-        if !found.is_empty() {
-            errors.push(PreflightError::IllegalChar {
-                target: op.to.clone(),
-                chars: found,
-            });
+
+        // Use path_guard's check_chars() for validation
+        let wide: Vec<u16> = OsStr::new(check).encode_wide().collect();
+        if let Some(kind) = string_check::check_chars(&wide) {
+            if kind == PathIssueKind::InvalidChar {
+                // Extract the invalid characters for error reporting
+                let found: Vec<char> = check
+                    .chars()
+                    .filter(|&c| matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+                    .collect();
+                errors.push(PreflightError::IllegalChar {
+                    target: op.to.clone(),
+                    chars: found,
+                });
+            }
         }
     }
 }
 
 // ─── RESERVED_NAME ────────────────────────────────────────────────────────────
 
-/// Windows reserved device names (case-insensitive, match stem only).
-const RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-];
-
 fn check_reserved_names(ops: &[RenameOp], errors: &mut Vec<PreflightError>) {
     for op in ops {
         let stem = match op.to.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_ascii_uppercase(),
+            Some(s) => s,
             None => continue,
         };
-        if RESERVED.contains(&stem.as_str()) {
-            errors.push(PreflightError::ReservedName {
-                target: op.to.clone(),
-                name: stem,
-            });
+
+        // Use path_guard's check_component() for validation
+        let wide: Vec<u16> = OsStr::new(stem).encode_wide().collect();
+        if let Some(kind) = string_check::check_component(&wide, false) {
+            if kind == PathIssueKind::ReservedName {
+                errors.push(PreflightError::ReservedName {
+                    target: op.to.clone(),
+                    name: stem.to_ascii_uppercase(),
+                });
+            }
         }
     }
 }

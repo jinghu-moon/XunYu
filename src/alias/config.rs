@@ -1,10 +1,15 @@
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
+use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+
+use crate::path_guard::string_check;
+use crate::path_guard::PathIssueKind;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -74,19 +79,24 @@ impl ShellAlias {
     }
 }
 
-/// Windows 文件名非法字符
-const INVALID_NAME_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+/// Windows 文件名非法字符（文件名场景，比路径更严格）
+/// 注：path_guard 的 check_chars() 只检查 < > " | * 和控制字符，
+/// 因为 / \ : 在完整路径中是合法的。文件名场景需要额外检查。
+const INVALID_FILENAME_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
 /// 校验别名名称合法性：
 /// - 不能为空
 /// - 不能包含 Windows 文件名非法字符（/ \ : * ? " < > |）
 /// - 不能包含空格（shim 文件名和 shell profile 中均有歧义）
 /// - 不能以点开头或结尾（Windows 保留）
+/// - 不能是 Windows 保留设备名（使用 path_guard 检查）
 pub fn validate_alias_name(name: &str) -> Result<()> {
     if name.is_empty() {
         bail!("Alias name cannot be empty.");
     }
-    if let Some(ch) = name.chars().find(|c| INVALID_NAME_CHARS.contains(c)) {
+
+    // Check for invalid filename characters
+    if let Some(ch) = name.chars().find(|c| INVALID_FILENAME_CHARS.contains(c)) {
         bail!(
             "Alias name {:?} contains invalid character {:?}. \
              Characters / \\ : * ? \" < > | are not allowed.",
@@ -94,15 +104,34 @@ pub fn validate_alias_name(name: &str) -> Result<()> {
             ch
         );
     }
+
+    // Alias-specific check: no spaces allowed (shim filename and shell profile ambiguity)
     if name.contains(' ') {
         bail!(
             "Alias name {:?} contains a space. Spaces are not allowed in alias names.",
             name
         );
     }
-    if name.starts_with('.') || name.ends_with('.') {
-        bail!("Alias name {:?} cannot start or end with a dot.", name);
+
+    // Use path_guard's check_component() for trailing dot/space and reserved name detection
+    let wide: Vec<u16> = OsStr::new(name).encode_wide().collect();
+    if let Some(kind) = string_check::check_component(&wide, false) {
+        match kind {
+            PathIssueKind::TrailingDotSpace => {
+                bail!("Alias name {:?} cannot end with a dot or space.", name);
+            }
+            PathIssueKind::ReservedName => {
+                bail!("Alias name {:?} is a reserved Windows device name.", name);
+            }
+            _ => {}
+        }
     }
+
+    // Alias-specific check: cannot start with a dot
+    if name.starts_with('.') {
+        bail!("Alias name {:?} cannot start with a dot.", name);
+    }
+
     Ok(())
 }
 

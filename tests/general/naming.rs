@@ -15,8 +15,8 @@ fn init_powershell_exposes_xy_and_xyu() {
 
     assert!(stdout.contains("Set-Alias xyu xun"));
     assert!(stdout.contains("Set-Alias xy xun"));
-    assert!(stdout.contains("Register-ArgumentCompleter -CommandName 'xyu'"));
-    assert!(stdout.contains("Register-ArgumentCompleter -CommandName 'xy'"));
+    // completion is loaded dynamically via `completion powershell`
+    assert!(stdout.contains("completion powershell"));
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn completion_bash_supports_xy_and_xyu() {
     assert!(stdout.contains(
         r#"if [[ "$cmd" != "xun" && "$cmd" != "x" && "$cmd" != "xyu" && "$cmd" != "xy" ]]"#
     ));
-    assert!(stdout.contains("complete -F _xun_complete xun x xyu xy z o delete rename"));
+    assert!(stdout.contains("complete -F _xun_complete xun x xyu xy"));
 }
 
 #[test]

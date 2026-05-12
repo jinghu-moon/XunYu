@@ -70,7 +70,7 @@ fn z_no_match_prints_message_and_exits_success() {
     let out = run_ok(env.cmd().args(["bookmark", "z", "nope-nope-nope"]));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.contains("No matches found."),
+        err.contains("No matches found"),
         "unexpected stderr: {err}"
     );
 }
