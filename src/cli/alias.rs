@@ -1,24 +1,23 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 /// Alias management for commands and applications.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "alias")]
+#[derive(Parser, Debug, Clone)]
 pub struct AliasCmd {
     /// alias config file path (default: %APPDATA%/xun/aliases.toml)
-    #[argh(option)]
+    #[arg(long)]
     pub config: Option<String>,
 
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: AliasSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum AliasSubCommand {
     Setup(AliasSetupCmd),
     Add(AliasAddCmd),
     Rm(AliasRmCmd),
-    Ls(AliasLsCmd),
+    #[command(name = "list", alias = "ls")]
+    List(AliasLsCmd),
     Find(AliasFindCmd),
     Which(AliasWhichCmd),
     Sync(AliasSyncCmd),
@@ -28,239 +27,213 @@ pub enum AliasSubCommand {
 }
 
 /// Setup alias runtime (shim template + shells).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "setup")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasSetupCmd {
     /// skip cmd backend
-    #[argh(switch)]
+    #[arg(long)]
     pub no_cmd: bool,
 
     /// skip powershell backend
-    #[argh(switch)]
+    #[arg(long)]
     pub no_ps: bool,
 
     /// skip bash backend
-    #[argh(switch)]
+    #[arg(long)]
     pub no_bash: bool,
 
     /// skip nushell backend
-    #[argh(switch)]
+    #[arg(long)]
     pub no_nu: bool,
 
     /// only setup core shells (cmd + powershell)
-    #[argh(switch)]
+    #[arg(long)]
     pub core_only: bool,
 }
 
 /// Add shell alias.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAddCmd {
     /// alias name
-    #[argh(positional)]
     pub name: String,
 
     /// command string
-    #[argh(positional)]
     pub command: String,
 
     /// alias mode: auto|exe|cmd
-    #[argh(option, default = "String::from(\"auto\")")]
+    #[arg(long, default_value = "auto")]
     pub mode: String,
 
     /// description
-    #[argh(option)]
+    #[arg(long)]
     pub desc: Option<String>,
 
     /// tags (comma-separated, repeatable)
-    #[argh(option)]
+    #[arg(long)]
     pub tag: Vec<String>,
 
     /// limit to shells: cmd|ps|bash|nu (comma-separated, repeatable)
-    #[argh(option)]
+    #[arg(long)]
     pub shell: Vec<String>,
 
     /// overwrite existing alias
-    #[argh(switch)]
+    #[arg(long)]
     pub force: bool,
 }
 
 /// Remove aliases.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rm")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasRmCmd {
     /// alias names
-    #[argh(positional)]
     pub names: Vec<String>,
 }
 
 /// List aliases.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "ls")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasLsCmd {
     /// filter: cmd|app
-    #[argh(option)]
+    #[arg(long)]
     pub r#type: Option<String>,
 
     /// filter by tag
-    #[argh(option)]
+    #[arg(long)]
     pub tag: Option<String>,
 
     /// json output
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
 /// Find aliases with fuzzy match.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "find")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasFindCmd {
     /// keyword
-    #[argh(positional)]
     pub keyword: String,
 }
 
 /// Show alias target and shim info.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "which")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasWhichCmd {
     /// alias name
-    #[argh(positional)]
     pub name: String,
 }
 
 /// Sync shim + app paths + shells.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "sync")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasSyncCmd {}
 
 /// Export aliases config.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "export")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasExportCmd {
     /// output file path (stdout when omitted)
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub output: Option<String>,
 }
 
 /// Import aliases config.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "import")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasImportCmd {
     /// source toml file
-    #[argh(positional)]
     pub file: String,
 
     /// overwrite conflicts
-    #[argh(switch)]
+    #[arg(long)]
     pub force: bool,
 }
 
 /// App alias operations.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "app")]
+#[derive(Parser, Debug, Clone)]
 pub struct AliasAppCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: AliasAppSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum AliasAppSubCommand {
     Add(AliasAppAddCmd),
     Rm(AliasAppRmCmd),
-    Ls(AliasAppLsCmd),
+    #[command(name = "list", alias = "ls")]
+    List(AliasAppLsCmd),
     Scan(AliasAppScanCmd),
     Which(AliasAppWhichCmd),
     Sync(AliasAppSyncCmd),
 }
 
 /// Add application alias.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAppAddCmd {
     /// alias name
-    #[argh(positional)]
     pub name: String,
 
     /// executable path
-    #[argh(positional)]
     pub exe: String,
 
     /// fixed args
-    #[argh(option)]
+    #[arg(long)]
     pub args: Option<String>,
 
     /// description
-    #[argh(option)]
+    #[arg(long)]
     pub desc: Option<String>,
 
     /// tags
-    #[argh(option)]
+    #[arg(long)]
     pub tag: Vec<String>,
 
     /// disable app paths registration
-    #[argh(switch)]
+    #[arg(long)]
     pub no_apppaths: bool,
 
     /// overwrite conflicts
-    #[argh(switch)]
+    #[arg(long)]
     pub force: bool,
 }
 
 /// Remove app aliases.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rm")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAppRmCmd {
     /// app alias names
-    #[argh(positional)]
     pub names: Vec<String>,
 }
 
 /// List app aliases.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "ls")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAppLsCmd {
     /// json output
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
 /// Scan installed applications.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "scan")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAppScanCmd {
     /// source: reg|startmenu|path|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub source: String,
 
     /// keyword filter
-    #[argh(option)]
+    #[arg(long)]
     pub filter: Option<String>,
 
     /// output json only
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 
     /// add all scanned entries
-    #[argh(switch)]
+    #[arg(long)]
     pub all: bool,
 
     /// bypass cache
-    #[argh(switch)]
+    #[arg(long)]
     pub no_cache: bool,
 }
 
 /// Show application alias target.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "which")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAppWhichCmd {
     /// app alias name
-    #[argh(positional)]
     pub name: String,
 }
 
 /// Sync app aliases only.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "sync")]
+#[derive(Args, Debug, Clone)]
 pub struct AliasAppSyncCmd {}

@@ -1,79 +1,78 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 /// Incremental project backup. Alias: `bak`.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "backup")]
+#[derive(Parser, Debug, Clone, PartialEq, Eq)]
 pub struct BackupCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: Option<BackupSubCommand>,
 
     /// backup description
-    #[argh(option, short = 'm')]
+    #[arg(short = 'm', long)]
     pub msg: Option<String>,
+
     /// working directory (default: cwd)
-    #[argh(option, short = 'C')]
+    #[arg(short = 'C', long)]
     pub dir: Option<String>,
 
     /// write to a single-file .xunbak container
-    #[argh(option)]
+    #[arg(long)]
     pub container: Option<String>,
 
-    /// compression profile for xunbak mode:
-    /// zstd (default) | zstd:N | none | auto | lz4 (fast) | ppmd (text-heavy) | lzma2 (slow archive) | deflate/bzip2 (compatibility)
-    #[argh(option)]
+    /// compression profile for xunbak mode
+    #[arg(long)]
     #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
     pub compression: Option<String>,
 
     /// split xunbak output into numbered volumes, e.g. 64M / 2G
-    #[argh(option)]
+    #[arg(long)]
     #[cfg_attr(not(feature = "xunbak"), allow(dead_code))]
     pub split_size: Option<String>,
 
     /// dry run (no copy/zip/cleanup)
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// list selected source files without writing output
-    #[argh(switch)]
+    #[arg(long)]
     pub list: bool,
 
     /// skip compression for this run
-    #[argh(switch)]
+    #[arg(long)]
     pub no_compress: bool,
 
     /// override max backups
-    #[argh(option)]
+    #[arg(long)]
     pub retain: Option<usize>,
 
     /// add include path (repeatable or comma separated)
-    #[argh(option)]
+    #[arg(long)]
     pub include: Vec<String>,
 
     /// add exclude path (repeatable or comma separated)
-    #[argh(option)]
+    #[arg(long)]
     pub exclude: Vec<String>,
 
     /// incremental backup: only copy new/modified files
-    #[argh(switch)]
+    #[arg(long)]
     pub incremental: bool,
 
     /// skip creating a new backup when no changes are detected
-    #[argh(switch)]
+    #[arg(long)]
     pub skip_if_unchanged: bool,
 
     /// diff mode for traditional backup: auto | hash | meta
-    #[argh(option)]
+    #[arg(long)]
     pub diff_mode: Option<String>,
 
     /// output machine-readable JSON summary
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
 pub enum BackupSubCommand {
-    Create(BackupCreateCmd),
+    #[command(name = "add", alias = "create")]
+    Add(BackupCreateCmd),
     Restore(BackupRestoreCmd),
     Convert(BackupConvertCmd),
     List(BackupListCmd),
@@ -82,280 +81,272 @@ pub enum BackupSubCommand {
 }
 
 /// List available backups.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct BackupListCmd {
     /// output machine-readable JSON
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
 /// Verify integrity of a directory backup.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "verify")]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct BackupVerifyCmd {
     /// backup name
-    #[argh(positional)]
     pub name: String,
 
     /// output machine-readable JSON
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
 /// Find backups by tag or other metadata filters.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "find")]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct BackupFindCmd {
     /// tag filter
-    #[argh(positional)]
     pub tag: Option<String>,
 
     /// lower bound time filter: RFC3339 | YYYY-MM-DD | YYYY-MM-DD HH:MM:SS
-    #[argh(option)]
+    #[arg(long)]
     pub since: Option<String>,
 
     /// upper bound time filter: RFC3339 | YYYY-MM-DD | YYYY-MM-DD HH:MM:SS
-    #[argh(option)]
+    #[arg(long)]
     pub until: Option<String>,
 
     /// output machine-readable JSON
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
 /// Create a new backup artifact.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "create")]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct BackupCreateCmd {
     /// backup description
-    #[argh(option, short = 'm')]
+    #[arg(short = 'm', long)]
     pub msg: Option<String>,
 
     /// working directory (default: cwd)
-    #[argh(option, short = 'C')]
+    #[arg(short = 'C', long)]
     pub dir: Option<String>,
 
     /// target artifact format: dir | xunbak | zip | 7z
-    #[argh(option)]
+    #[arg(long)]
     pub format: Option<String>,
 
     /// output target path or base name for artifact formats that require it
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub output: Option<String>,
 
-    /// compression profile for xunbak mode:
-    /// zstd (default) | zstd:N | none | auto | lz4 (fast) | ppmd (text-heavy) | lzma2 (slow archive) | deflate/bzip2 (compatibility)
-    #[argh(option)]
+    /// compression profile for xunbak mode
+    #[arg(long)]
     pub compression: Option<String>,
 
     /// split output into numbered volumes, e.g. 64M / 2G
-    #[argh(option)]
+    #[arg(long)]
     pub split_size: Option<String>,
 
     /// enable solid compression for 7z
-    #[argh(switch)]
+    #[arg(long)]
     pub solid: bool,
 
     /// output method, interpreted by target format
-    #[argh(option)]
+    #[arg(long)]
     pub method: Option<String>,
 
     /// compression level
-    #[argh(option)]
+    #[arg(long)]
     pub level: Option<u32>,
 
     /// dry run (no copy/zip/cleanup)
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// list selected source files without writing output
-    #[argh(switch)]
+    #[arg(long)]
     pub list: bool,
 
     /// skip compression for this run
-    #[argh(switch)]
+    #[arg(long)]
     pub no_compress: bool,
 
     /// override max backups
-    #[argh(option)]
+    #[arg(long)]
     pub retain: Option<usize>,
 
     /// add include path (repeatable or comma separated)
-    #[argh(option)]
+    #[arg(long)]
     pub include: Vec<String>,
 
     /// add exclude path (repeatable or comma separated)
-    #[argh(option)]
+    #[arg(long)]
     pub exclude: Vec<String>,
 
     /// incremental backup: only copy new/modified files
-    #[argh(switch)]
+    #[arg(long)]
     pub incremental: bool,
 
     /// skip creating a new backup when no changes are detected
-    #[argh(switch)]
+    #[arg(long)]
     pub skip_if_unchanged: bool,
 
     /// diff mode for traditional backup: auto | hash | meta
-    #[argh(option)]
+    #[arg(long)]
     pub diff_mode: Option<String>,
 
     /// progress mode: auto | always | off
-    #[argh(option)]
+    #[arg(long)]
     pub progress: Option<String>,
 
     /// output machine-readable JSON summary
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 
     /// disable writing __xunyu__/export_manifest.json sidecar for dir/zip/7z outputs
-    #[argh(switch)]
+    #[arg(long)]
     pub no_sidecar: bool,
 }
 
 /// Restore files from a backup artifact.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "restore")]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct BackupRestoreCmd {
     /// backup artifact path or backup name
-    #[argh(positional)]
     pub name_or_path: String,
 
     /// restore a single file (relative path, e.g. src/main.rs)
-    #[argh(option)]
+    #[arg(long)]
     pub file: Option<String>,
 
     /// restore files matching glob pattern (e.g. '**/*.ts')
-    #[argh(option)]
+    #[arg(long)]
     pub glob: Option<String>,
 
     /// restore to this directory instead of the project root
-    #[argh(option)]
+    #[arg(long)]
     pub to: Option<String>,
 
     /// snapshot current state before restoring (creates a pre_restore backup)
-    #[argh(switch)]
+    #[arg(long)]
     pub snapshot: bool,
 
     /// project root (default: cwd)
-    #[argh(option, short = 'C')]
+    #[arg(short = 'C', long)]
     pub dir: Option<String>,
 
     /// dry run: show what would be restored without writing files
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// skip confirmation prompt
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 
     /// output machine-readable JSON summary
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }
 
 /// Convert one backup artifact into another artifact format.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "convert")]
+#[derive(Args, Debug, Clone, PartialEq, Eq)]
 pub struct BackupConvertCmd {
     /// input backup artifact path
-    #[argh(positional)]
     pub artifact: String,
 
     /// target artifact format: dir | xunbak | zip | 7z
-    #[argh(option)]
+    #[arg(long)]
     pub format: String,
 
     /// output target path or base name
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub output: String,
 
     /// include a single relative path from the source artifact
-    #[argh(option)]
+    #[arg(long)]
     pub file: Vec<String>,
 
     /// include paths matching glob patterns from the source artifact
-    #[argh(option)]
+    #[arg(long)]
     pub glob: Vec<String>,
 
     /// read additional glob patterns from files
-    #[argh(option)]
+    #[arg(long)]
     pub patterns_from: Vec<String>,
 
     /// split output into numbered volumes, e.g. 64M / 2G
-    #[argh(option)]
+    #[arg(long)]
     pub split_size: Option<String>,
 
     /// enable solid compression for 7z
-    #[argh(switch)]
+    #[arg(long)]
     pub solid: bool,
 
     /// output method, interpreted by target format
-    #[argh(option)]
+    #[arg(long)]
     pub method: Option<String>,
 
     /// compression level
-    #[argh(option)]
+    #[arg(long)]
     pub level: Option<u32>,
 
     /// compression threads
-    #[argh(option)]
+    #[arg(long)]
     pub threads: Option<u32>,
 
     /// password for 7z encryption
-    #[argh(option)]
+    #[arg(long)]
     pub password: Option<String>,
 
     /// encrypt 7z header
-    #[argh(switch)]
+    #[arg(long)]
     pub encrypt_header: bool,
 
     /// overwrite policy: ask | replace | fail
-    #[argh(option)]
+    #[arg(long)]
     pub overwrite: Option<String>,
 
     /// dry run: show what would be converted without writing files
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// list selected items without writing output
-    #[argh(switch)]
+    #[arg(long)]
     pub list: bool,
 
     /// verify source mode: quick | full | manifest-only | existence-only | paranoid | off
-    #[argh(option)]
+    #[arg(long)]
     pub verify_source: Option<String>,
 
     /// verify output mode: on | off
-    #[argh(option)]
+    #[arg(long)]
     pub verify_output: Option<String>,
 
     /// progress mode: auto | always | off
-    #[argh(option)]
+    #[arg(long)]
     pub progress: Option<String>,
 
     /// output machine-readable JSON summary
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 
     /// disable writing __xunyu__/export_manifest.json sidecar for dir/zip/7z outputs
-    #[argh(switch)]
+    #[arg(long)]
     pub no_sidecar: bool,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
 
     fn parse(args: &[&str]) -> BackupCmd {
-        <BackupCmd as argh::FromArgs>::from_args(&["backup"], args).expect("parse backup cmd")
+        let mut full_args = vec!["backup"];
+        full_args.extend_from_slice(args);
+        BackupCmd::try_parse_from(&full_args).expect("parse backup cmd")
     }
 
     #[test]
     fn parse_backup_create_subcommand() {
         let cmd = parse(&["create", "-C", "src", "--format", "zip", "-o", "out.zip"]);
-        assert!(matches!(cmd.cmd, Some(BackupSubCommand::Create(_))));
+        assert!(matches!(cmd.cmd, Some(BackupSubCommand::Add(_))));
     }
 
     #[test]

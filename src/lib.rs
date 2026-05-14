@@ -1,6 +1,10 @@
 #[macro_use]
 mod macros;
 
+use clap::Parser;
+
+pub mod xun_core;
+
 pub mod acl;
 #[cfg(feature = "alias")]
 pub mod alias;
@@ -17,6 +21,8 @@ mod ctx_store;
 #[cfg(feature = "desktop")]
 mod desktop;
 mod env_core;
+
+pub use env_core::types::EnvScope;
 mod find;
 mod model;
 mod output;
@@ -143,32 +149,14 @@ pub fn run_from_env(invoked_name: Option<&str>) {
         return;
     }
 
-    let args: Vec<&str> = raw_args.iter().map(|arg| arg.as_str()).collect();
     let t_parse = Instant::now();
-    let args: cli::Xun = <cli::Xun as argh::FromArgs>::from_args(&[cmd.as_str()], &args[1..])
-        .unwrap_or_else(|early_exit| {
-            std::process::exit(match early_exit.status {
-                Ok(()) => {
-                    println!("{}", early_exit.output);
-                    0
-                }
-                Err(()) => {
-                    eprintln!(
-                        "{}
-Run {} --help for more information.",
-                        early_exit.output, cmd
-                    );
-                    1
-                }
-            })
+    let args: cli::Xun = cli::Xun::try_parse_from(&raw_args)
+        .unwrap_or_else(|e| {
+            let _ = e.print();
+            std::process::exit(if e.use_stderr() { 1 } else { 0 })
         });
     let elapsed_parse = t_parse.elapsed();
     let timing = command_timing_enabled(&args.cmd);
-
-    if args.version {
-        out_println!("{} {}", cmd, env!("CARGO_PKG_VERSION"));
-        return;
-    }
 
     let t_runtime = Instant::now();
     runtime::init(&args);

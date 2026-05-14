@@ -121,7 +121,6 @@ mod tests {
     fn base_args() -> Xun {
         Xun {
             no_color: false,
-            version: false,
             quiet: false,
             verbose: false,
             non_interactive: false,

@@ -1,3 +1,5 @@
+#![allow(hidden_glob_reexports)]
+
 pub mod annotations;
 pub mod audit;
 pub mod batch;
@@ -35,10 +37,12 @@ use std::sync::Arc;
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 
+#[allow(hidden_glob_reexports)]
 use config::{
     EnvCoreConfig, config_file_path, get_config_value, load_env_config, reset_env_config,
     save_env_config, set_config_value,
 };
+#[allow(hidden_glob_reexports)]
 use types::{
     AnnotationEntry, BatchResult, DoctorFixResult, DoctorReport, EnvAuditEntry, EnvDiff, EnvError,
     EnvEvent, EnvEventType, EnvProfileMeta, EnvResult, EnvSchema, EnvScope, EnvStatusSummary,

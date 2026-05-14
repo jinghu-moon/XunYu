@@ -3,7 +3,7 @@ use super::*;
 pub(super) fn cmd_batch(manager: &EnvManager, args: EnvBatchCmd) -> CliResult {
     match args.cmd {
         EnvBatchSubCommand::Set(a) => cmd_batch_set(manager, a),
-        EnvBatchSubCommand::Delete(a) => cmd_batch_delete(manager, a),
+        EnvBatchSubCommand::Rm(a) => cmd_batch_delete(manager, a),
         EnvBatchSubCommand::Rename(a) => cmd_batch_rename(manager, a),
     }
 }

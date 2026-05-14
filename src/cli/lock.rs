@@ -1,109 +1,99 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 use super::defaults::default_output_format;
 
 #[cfg(feature = "lock")]
 /// File locking and unlocking.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "lock")]
+#[derive(Parser, Debug, Clone)]
 pub struct LockCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: LockSubCommand,
 }
 
 #[cfg(feature = "lock")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum LockSubCommand {
     Who(LockWhoCmd),
 }
 
 #[cfg(feature = "lock")]
 /// Show processes locking a file.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "who")]
+#[derive(Args, Debug, Clone)]
 pub struct LockWhoCmd {
     /// target path
-    #[argh(positional)]
     pub path: String,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 }
 
 #[cfg(feature = "lock")]
 /// Move a file or directory.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "mv")]
+#[derive(Args, Debug, Clone)]
 pub struct MvCmd {
     /// source path
-    #[argh(positional)]
     pub src: String,
 
     /// destination path
-    #[argh(positional)]
     pub dst: String,
 
     /// unlock file if locked
-    #[argh(switch)]
+    #[arg(long)]
     pub unlock: bool,
 
     /// force kill blocking processes
-    #[argh(switch)]
+    #[arg(long)]
     pub force_kill: bool,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 
     /// force operation bypass protection
-    #[argh(switch)]
+    #[arg(long)]
     pub force: bool,
 
     /// reason for bypass protection
-    #[argh(option)]
+    #[arg(long)]
     pub reason: Option<String>,
 }
 
 #[cfg(feature = "lock")]
 /// Rename a file or directory.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "ren")]
+#[derive(Args, Debug, Clone)]
 pub struct RenFileCmd {
     /// source path
-    #[argh(positional)]
     pub src: String,
 
     /// destination path
-    #[argh(positional)]
     pub dst: String,
 
     /// unlock file if locked
-    #[argh(switch)]
+    #[arg(long)]
     pub unlock: bool,
 
     /// force kill blocking processes
-    #[argh(switch)]
+    #[arg(long)]
     pub force_kill: bool,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 
     /// force operation bypass protection
-    #[argh(switch)]
+    #[arg(long)]
     pub force: bool,
 
     /// reason for bypass protection
-    #[argh(option)]
+    #[arg(long)]
     pub reason: Option<String>,
 }

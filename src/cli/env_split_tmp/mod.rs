@@ -1,6 +1,4 @@
-use argh::FromArgs;
-
-use super::defaults::default_output_format;
+use clap::{Args, Parser, Subcommand};
 
 mod annotations;
 mod batch;
@@ -30,16 +28,14 @@ pub use snapshot::*;
 pub use status::*;
 pub use vars::*;
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "env")]
-/// Environment variable management.
+#[derive(Parser, Debug, Clone)]
+/// Environment variable management (split tmp).
 pub struct EnvCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvSubCommand {
     Status(EnvStatusCmd),
     List(EnvListCmd),

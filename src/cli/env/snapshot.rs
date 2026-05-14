@@ -1,16 +1,14 @@
 use super::super::defaults::default_output_format;
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "snapshot")]
+#[derive(Parser, Debug, Clone)]
 /// Snapshot operations.
 pub struct EnvSnapshotCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvSnapshotSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvSnapshotSubCommand {
     Create(EnvSnapshotCreateCmd),
     List(EnvSnapshotListCmd),
@@ -18,50 +16,46 @@ pub enum EnvSnapshotSubCommand {
     Prune(EnvSnapshotPruneCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "create")]
+#[derive(Args, Debug, Clone)]
 /// Create a snapshot.
 pub struct EnvSnapshotCreateCmd {
     /// snapshot description
-    #[argh(option)]
+    #[arg(long)]
     pub desc: Option<String>,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 /// List snapshots.
 pub struct EnvSnapshotListCmd {
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "restore")]
+#[derive(Args, Debug, Clone)]
 /// Restore a snapshot.
 pub struct EnvSnapshotRestoreCmd {
     /// snapshot id
-    #[argh(option)]
+    #[arg(long)]
     pub id: Option<String>,
 
     /// restore latest snapshot
-    #[argh(switch)]
+    #[arg(long)]
     pub latest: bool,
 
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub scope: String,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "prune")]
+#[derive(Args, Debug, Clone)]
 /// Prune old snapshots, keep latest N.
 pub struct EnvSnapshotPruneCmd {
     /// how many latest snapshots to keep
-    #[argh(option, default = "50")]
+    #[arg(long, default_value_t = 50)]
     pub keep: usize,
 }

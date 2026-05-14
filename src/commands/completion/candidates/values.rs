@@ -14,7 +14,7 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
             "--env-file",
         ],
         ("ctx", Some("list")) | ("ctx", Some("show")) => &["-f", "--format"],
-        ("delete", _) | ("del", _) => &[
+        ("rm", _) => &[
             "--name",
             "-e",
             "--exclude",
@@ -38,7 +38,7 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
             "-w",
             "--workspace",
         ],
-        ("acl", Some("view")) => &["--path", "-p", "--export"],
+        ("acl", Some("show")) => &["--path", "-p", "--export"],
         ("acl", Some("add")) => &[
             "--path",
             "-p",
@@ -97,13 +97,13 @@ pub(super) fn value_flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&
         ("export", _) => &["-f", "--format", "-o", "--out"],
         ("import", _) => &["-f", "--format", "--from", "-i", "--input", "-m", "--mode"],
         ("proxy", Some("set")) => &["-n", "--noproxy", "-m", "--msys2", "-o", "--only"],
-        ("proxy", Some("del")) => &["-m", "--msys2", "-o", "--only"],
+        ("proxy", Some("rm")) => &["-m", "--msys2", "-o", "--only"],
         ("proxy", Some("test")) => &["-t", "--targets", "-w", "--timeout"],
         ("env", Some("list")) => &["--scope", "-f", "--format"],
         ("env", Some("search")) => &["--scope", "-f", "--format"],
-        ("env", Some("get")) => &["--scope", "-f", "--format"],
+        ("env", Some("show")) => &["--scope", "-f", "--format"],
         ("env", Some("set")) => &["--scope"],
-        ("env", Some("del")) => &["--scope"],
+        ("env", Some("rm")) => &["--scope"],
         ("env", Some("check")) => &["--scope", "--format"],
         ("env", Some("doctor")) => &["--scope", "--format"],
         ("env", Some("path-dedup")) => &["--scope"],
@@ -174,7 +174,7 @@ pub(super) fn value_candidates(
             if matches!(
                 subsub,
                 Some("set")
-                    | Some("del")
+                    | Some("rm")
                     | Some("import")
                     | Some("path")
                     | Some("path-dedup")

@@ -14,7 +14,6 @@ mod ports_handlers;
 mod proxy_handlers;
 mod recipes;
 mod workspaces;
-#[cfg(feature = "diff")]
 mod ws;
 
 pub(in crate::commands::dashboard) use audit::*;
@@ -27,7 +26,6 @@ pub(in crate::commands::dashboard) use ports_handlers::*;
 pub(in crate::commands::dashboard) use proxy_handlers::*;
 pub(in crate::commands::dashboard) use recipes::*;
 pub(in crate::commands::dashboard) use workspaces::*;
-#[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) use ws::*;
 
 use axum::Json;

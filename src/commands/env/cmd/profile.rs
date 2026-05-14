@@ -6,7 +6,7 @@ pub(super) fn cmd_profile(manager: &EnvManager, args: EnvProfileCmd) -> CliResul
         EnvProfileSubCommand::Capture(a) => cmd_profile_capture(manager, a),
         EnvProfileSubCommand::Apply(a) => cmd_profile_apply(manager, a),
         EnvProfileSubCommand::Diff(a) => cmd_profile_diff(manager, a),
-        EnvProfileSubCommand::Delete(a) => cmd_profile_delete(manager, a),
+        EnvProfileSubCommand::Rm(a) => cmd_profile_delete(manager, a),
     }
 }
 

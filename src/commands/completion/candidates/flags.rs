@@ -10,7 +10,7 @@ pub(super) fn flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&'stati
             "--env-file",
         ],
         ("ctx", Some("list")) | ("ctx", Some("show")) => &["-f", "--format"],
-        ("delete", _) | ("del", _) => &[
+        ("rm", _) => &[
             "--bookmark",
             "-bm",
             "--reserved",
@@ -125,7 +125,7 @@ pub(super) fn flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&'stati
             "-f",
             "--format",
         ],
-        ("acl", Some("view")) => &["--path", "-p", "--detail", "--export"],
+        ("acl", Some("show")) => &["--path", "-p", "--detail", "--export"],
         ("acl", Some("add")) => &[
             "--path",
             "-p",
@@ -138,7 +138,7 @@ pub(super) fn flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&'stati
             "-y",
             "--yes",
         ],
-        ("acl", Some("remove")) => &["--path", "-p"],
+        ("acl", Some("rm")) => &["--path", "-p"],
         ("acl", Some("purge")) => &["--path", "-p", "--principal", "-y", "--yes"],
         ("acl", Some("diff")) => &["--path", "-p", "--reference", "-r", "--output", "-o"],
         ("acl", Some("batch")) => &["--file", "--paths", "--action", "--output", "-y", "--yes"],
@@ -163,9 +163,9 @@ pub(super) fn flags_for(subcmd: &str, subsub: Option<&str>) -> &'static [&'stati
         ("export", _) => &["-f", "--format", "-o", "--out"],
         ("env", Some("list")) => &["--scope", "-f", "--format"],
         ("env", Some("search")) => &["--scope", "-f", "--format"],
-        ("env", Some("get")) => &["--scope", "-f", "--format"],
+        ("env", Some("show")) => &["--scope", "-f", "--format"],
         ("env", Some("set")) => &["--scope", "--no-snapshot"],
-        ("env", Some("del")) => &["--scope", "-y", "--yes"],
+        ("env", Some("rm")) => &["--scope", "-y", "--yes"],
         ("env", Some("check")) => &["--scope", "--fix", "--format"],
         ("env", Some("doctor")) => &["--scope", "--fix", "--format"],
         ("env", Some("path-dedup")) => &["--scope", "--remove-missing", "--dry-run"],

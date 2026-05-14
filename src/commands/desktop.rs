@@ -192,7 +192,7 @@ fn cmd_hotkey_list(_args: DesktopHotkeyListCmd) -> CliResult {
 fn cmd_remap(args: DesktopRemapCmd) -> CliResult {
     match args.cmd {
         DesktopRemapSubCommand::Add(a) => cmd_remap_add(a),
-        DesktopRemapSubCommand::Remove(a) => cmd_remap_remove(a),
+        DesktopRemapSubCommand::Rm(a) => cmd_remap_remove(a),
         DesktopRemapSubCommand::List(a) => cmd_remap_list(a),
         DesktopRemapSubCommand::Clear(a) => cmd_remap_clear(a),
     }
@@ -392,7 +392,7 @@ fn cmd_remap_clear(args: DesktopRemapClearCmd) -> CliResult {
 fn cmd_snippet(args: DesktopSnippetCmd) -> CliResult {
     match args.cmd {
         DesktopSnippetSubCommand::Add(a) => cmd_snippet_add(a),
-        DesktopSnippetSubCommand::Remove(a) => cmd_snippet_remove(a),
+        DesktopSnippetSubCommand::Rm(a) => cmd_snippet_remove(a),
         DesktopSnippetSubCommand::List(a) => cmd_snippet_list(a),
         DesktopSnippetSubCommand::Clear(a) => cmd_snippet_clear(a),
     }
@@ -566,11 +566,11 @@ fn option_eq(left: &Option<String>, right: &Option<String>) -> bool {
 
 fn cmd_layout(args: DesktopLayoutCmd) -> CliResult {
     match args.cmd {
-        DesktopLayoutSubCommand::New(a) => cmd_layout_new(a),
+        DesktopLayoutSubCommand::Add(a) => cmd_layout_new(a),
         DesktopLayoutSubCommand::Apply(a) => cmd_layout_apply(a),
         DesktopLayoutSubCommand::Preview(a) => cmd_layout_preview(a),
         DesktopLayoutSubCommand::List(a) => cmd_layout_list(a),
-        DesktopLayoutSubCommand::Remove(a) => cmd_layout_remove(a),
+        DesktopLayoutSubCommand::Rm(a) => cmd_layout_remove(a),
     }
 }
 
@@ -846,7 +846,7 @@ fn cmd_workspace(args: DesktopWorkspaceCmd) -> CliResult {
         DesktopWorkspaceSubCommand::Save(a) => cmd_workspace_save(a),
         DesktopWorkspaceSubCommand::Launch(a) => cmd_workspace_launch(a),
         DesktopWorkspaceSubCommand::List(a) => cmd_workspace_list(a),
-        DesktopWorkspaceSubCommand::Remove(a) => cmd_workspace_remove(a),
+        DesktopWorkspaceSubCommand::Rm(a) => cmd_workspace_remove(a),
     }
 }
 
@@ -1167,7 +1167,7 @@ fn cmd_color(args: DesktopColorCmd) -> CliResult {
 fn cmd_hosts(args: DesktopHostsCmd) -> CliResult {
     match args.cmd {
         DesktopHostsSubCommand::Add(a) => cmd_hosts_add(a),
-        DesktopHostsSubCommand::Remove(a) => cmd_hosts_remove(a),
+        DesktopHostsSubCommand::Rm(a) => cmd_hosts_remove(a),
         DesktopHostsSubCommand::List(a) => cmd_hosts_list(a),
     }
 }

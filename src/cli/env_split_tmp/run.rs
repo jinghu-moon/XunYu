@@ -1,92 +1,55 @@
-use super::*;
+use clap::Args;
 
-pub struct EnvAuditCmd {
-    /// max rows, 0 for all
-    #[argh(option, default = "50")]
-    pub limit: usize,
-
-    /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
-    pub format: String,
-}
-
-#[derive(FromArgs)]
-#[argh(subcommand, name = "watch")]
-/// Watch env variable changes by polling.
-pub struct EnvWatchCmd {
-    /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
-    pub scope: String,
-
-    /// poll interval in milliseconds
-    #[argh(option, default = "2000")]
-    pub interval_ms: u64,
-
-    /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
-    pub format: String,
-
-    /// run one poll cycle and exit
-    #[argh(switch)]
-    pub once: bool,
-}
-
-#[derive(FromArgs)]
-#[argh(subcommand, name = "template")]
+#[derive(Args, Debug, Clone)]
 /// Expand one %VAR% template string.
 pub struct EnvTemplateCmd {
     /// template text, e.g. "Path=%PATH%"
-    #[argh(positional)]
     pub input: String,
 
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub scope: String,
 
     /// check references and cycles only
-    #[argh(switch)]
+    #[arg(long)]
     pub validate_only: bool,
 
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "run")]
+#[derive(Args, Debug, Clone)]
 /// Run command with merged/expanded environment.
 pub struct EnvRunCmd {
     /// optional env file(s), repeatable
-    #[argh(option, long = "env")]
+    #[arg(long = "env")]
     pub env_files: Vec<String>,
 
     /// inline overrides, repeatable KEY=VALUE
-    #[argh(option)]
+    #[arg(long)]
     pub set: Vec<String>,
 
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub scope: String,
 
     /// print exports for shell: bash|powershell|cmd
-    #[argh(option)]
+    #[arg(long)]
     pub shell: Option<String>,
 
     /// validate schema before running command
-    #[argh(switch)]
+    #[arg(long)]
     pub schema_check: bool,
 
     /// send desktop notification on command finish
-    #[argh(switch)]
+    #[arg(long)]
     pub notify: bool,
 
     /// command + args (recommended after --)
-    #[argh(positional)]
     pub command: Vec<String>,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "tui")]
+#[derive(Args, Debug, Clone)]
 /// Launch the Env TUI panel.
 pub struct EnvTuiCmd {}
-

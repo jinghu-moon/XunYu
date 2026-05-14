@@ -1,29 +1,25 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 /// Xunbak container and 7-Zip plugin tooling.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "xunbak")]
+#[derive(Parser, Clone, Debug, PartialEq, Eq)]
 pub struct XunbakCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: XunbakSubCommand,
 }
 
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand)]
+#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
 pub enum XunbakSubCommand {
     Plugin(XunbakPluginCmd),
 }
 
 /// Manage the xunbak 7-Zip plugin.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "plugin")]
+#[derive(Parser, Clone, Debug, PartialEq, Eq)]
 pub struct XunbakPluginCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: XunbakPluginSubCommand,
 }
 
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand)]
+#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
 pub enum XunbakPluginSubCommand {
     Install(XunbakPluginInstallCmd),
     Uninstall(XunbakPluginUninstallCmd),
@@ -31,54 +27,54 @@ pub enum XunbakPluginSubCommand {
 }
 
 /// Install xunbak.dll into an existing 7-Zip installation.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "install")]
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct XunbakPluginInstallCmd {
     /// explicit 7-Zip home, e.g. C:/Program Files/7-Zip
-    #[argh(option)]
+    #[arg(long)]
     pub sevenzip_home: Option<String>,
 
     /// plugin build config: debug | release
-    #[argh(option)]
+    #[arg(long)]
     pub config: Option<String>,
 
     /// refuse to replace an existing xunbak.dll
-    #[argh(switch)]
+    #[arg(long)]
     pub no_overwrite: bool,
 
     /// also associate .xunbak with 7zFM.exe under the current user
-    #[argh(switch)]
+    #[arg(long)]
     pub associate: bool,
 }
 
 /// Remove xunbak.dll from an existing 7-Zip installation.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "uninstall")]
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct XunbakPluginUninstallCmd {
     /// explicit 7-Zip home, e.g. C:/Program Files/7-Zip
-    #[argh(option)]
+    #[arg(long)]
     pub sevenzip_home: Option<String>,
 
     /// also remove the current-user .xunbak association when it points to 7-Zip
-    #[argh(switch)]
+    #[arg(long)]
     pub remove_association: bool,
 }
 
 /// Diagnose xunbak 7-Zip plugin readiness.
-#[derive(FromArgs, Clone, Debug, PartialEq, Eq)]
-#[argh(subcommand, name = "doctor")]
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct XunbakPluginDoctorCmd {
     /// explicit 7-Zip home, e.g. C:/Program Files/7-Zip
-    #[argh(option)]
+    #[arg(long)]
     pub sevenzip_home: Option<String>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
 
     fn parse(args: &[&str]) -> XunbakCmd {
-        <XunbakCmd as argh::FromArgs>::from_args(&["xunbak"], args).expect("parse xunbak cmd")
+        let mut raw = vec!["xunbak"];
+        raw.extend_from_slice(args);
+        XunbakCmd::try_parse_from(&raw).expect("parse xunbak cmd")
     }
 
     #[test]

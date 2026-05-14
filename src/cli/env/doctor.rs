@@ -1,69 +1,65 @@
-use argh::FromArgs;
+use clap::Args;
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "check")]
+#[derive(Args, Debug, Clone)]
 /// Run environment checks (alias of doctor).
 pub struct EnvCheckCmd {
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub scope: String,
 
     /// apply fixes
-    #[argh(switch)]
+    #[arg(long)]
     pub fix: bool,
 
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "doctor")]
+#[derive(Args, Debug, Clone)]
 /// Run environment health checks.
 pub struct EnvDoctorCmd {
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// apply fixes
-    #[argh(switch)]
+    #[arg(long)]
     pub fix: bool,
 
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "audit")]
+#[derive(Args, Debug, Clone)]
 /// Show env audit log entries.
 pub struct EnvAuditCmd {
     /// max rows, 0 for all
-    #[argh(option, default = "50")]
+    #[arg(long, default_value_t = 50)]
     pub limit: usize,
 
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "watch")]
+#[derive(Args, Debug, Clone)]
 /// Watch env variable changes by polling.
 pub struct EnvWatchCmd {
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub scope: String,
 
     /// poll interval in milliseconds
-    #[argh(option, default = "2000")]
+    #[arg(long, default_value_t = 2000)]
     pub interval_ms: u64,
 
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 
     /// run one poll cycle and exit
-    #[argh(switch)]
+    #[arg(long)]
     pub once: bool,
 }

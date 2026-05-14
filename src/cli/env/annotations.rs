@@ -1,38 +1,32 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "annotate")]
+#[derive(Parser, Debug, Clone)]
 /// Manage variable annotations.
 pub struct EnvAnnotateCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvAnnotateSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvAnnotateSubCommand {
     Set(EnvAnnotateSetCmd),
     List(EnvAnnotateListCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 /// Set annotation for one variable.
 pub struct EnvAnnotateSetCmd {
     /// variable name
-    #[argh(positional)]
     pub name: String,
 
     /// annotation text
-    #[argh(positional)]
     pub note: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 /// List all annotations.
 pub struct EnvAnnotateListCmd {
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }

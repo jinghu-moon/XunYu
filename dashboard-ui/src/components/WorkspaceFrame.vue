@@ -1,8 +1,12 @@
 ﻿<script setup lang="ts">
-const props = defineProps<{
-  title: string
-  description: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    title: string
+    description: string
+    grid?: boolean
+  }>(),
+  { grid: true },
+)
 </script>
 
 <template>
@@ -16,7 +20,7 @@ const props = defineProps<{
         <slot name="summary" />
       </div>
     </header>
-    <div class="workspace-frame__body">
+    <div class="workspace-frame__body" :class="{ 'workspace-frame__body--grid': grid }">
       <slot />
     </div>
   </section>
@@ -55,6 +59,12 @@ const props = defineProps<{
 .workspace-frame__body {
   display: flex;
   flex-direction: column;
+  gap: var(--space-5);
+}
+
+.workspace-frame__body--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
   gap: var(--space-5);
 }
 </style>

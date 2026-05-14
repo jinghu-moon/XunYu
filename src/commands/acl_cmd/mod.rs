@@ -31,9 +31,9 @@ use comfy_table::{Attribute, Cell, Color, Table};
 
 pub(crate) fn cmd_acl(args: AclCmd) -> CliResult {
     match args.cmd {
-        AclSubCommand::View(a) => view::cmd_view(a),
+        AclSubCommand::Show(a) => view::cmd_view(a),
         AclSubCommand::Add(a) => edit::cmd_add(a),
-        AclSubCommand::Remove(a) => edit::cmd_remove(a),
+        AclSubCommand::Rm(a) => edit::cmd_remove(a),
         AclSubCommand::Purge(a) => edit::cmd_purge(a),
         AclSubCommand::Diff(a) => view::cmd_diff(a),
         AclSubCommand::Batch(a) => batch::cmd_batch(a),

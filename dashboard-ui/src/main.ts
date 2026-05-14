@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import './styles/variable.css'
 import App from './App.vue'
 
@@ -124,7 +125,9 @@ const NoirExt = definePreset(Aura, {
 } as any) // Type override for extended tokens not strictly typed by PrimeUIX
 
 const app = createApp(App)
+const pinia = createPinia()
 
+app.use(pinia)
 app.use(PrimeVue, {
   theme: {
     preset: NoirExt,

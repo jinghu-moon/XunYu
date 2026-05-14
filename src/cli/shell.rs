@@ -1,28 +1,23 @@
-use argh::FromArgs;
+use clap::Args;
 
 /// Initialize shell integration (print wrapper function).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "init")]
+#[derive(Args, Debug, Clone)]
 pub struct InitCmd {
     /// shell type: powershell | bash | zsh
-    #[argh(positional)]
     pub shell: String,
 }
 
 /// Generate shell completion script.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "completion")]
+#[derive(Args, Debug, Clone)]
 pub struct CompletionCmd {
     /// shell type: powershell | bash | zsh | fish
-    #[argh(positional)]
     pub shell: String,
 }
 
 /// Internal completion entry (shell-pre-tokenized args).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "__complete")]
+#[derive(Args, Debug, Clone)]
 pub struct CompleteCmd {
     /// pre-tokenized args after command name
-    #[argh(positional, greedy)]
+    #[arg(trailing_var_arg = true)]
     pub args: Vec<String>,
 }

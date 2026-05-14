@@ -21,7 +21,7 @@ fn bookmark_subcommand_is_registered() {
         "oi",
         "set",
         "save",
-        "delete",
+        "rm",
         "tag",
         "pin",
         "unpin",

@@ -1,47 +1,45 @@
-use argh::FromArgs;
+use clap::Args;
 
 use super::defaults::default_output_format;
 
 #[cfg(feature = "fs")]
 /// Delete a file or directory.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rm")]
+#[derive(Args, Debug, Clone)]
 pub struct RmCmd {
     /// target path
-    #[argh(positional)]
     pub path: String,
 
     /// unlock file if locked
     #[cfg(feature = "lock")]
-    #[argh(switch)]
+    #[arg(long)]
     pub unlock: bool,
 
     /// force kill blocking processes
     #[cfg(feature = "lock")]
-    #[argh(switch)]
+    #[arg(long)]
     pub force_kill: bool,
 
     /// schedule deletion on reboot
-    #[argh(switch)]
+    #[arg(long)]
     pub on_reboot: bool,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 
     /// force operation bypass protection
-    #[argh(switch)]
+    #[arg(long)]
     pub force: bool,
 
     /// reason for bypass protection
-    #[argh(option)]
+    #[arg(long)]
     pub reason: Option<String>,
 }

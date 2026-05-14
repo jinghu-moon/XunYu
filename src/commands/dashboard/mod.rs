@@ -322,6 +322,8 @@ fn build_router(state: DashboardState) -> Router {
             post(handlers::workspace_execute_guarded_task),
         );
 
+    let r = r.route("/ws", get(handlers::ws_handler));
+
     #[cfg(feature = "diff")]
     let r = r
         .route("/api/files", get(handlers::list_files))
@@ -330,8 +332,7 @@ fn build_router(state: DashboardState) -> Router {
         .route("/api/content", get(handlers::get_file_content))
         .route("/api/diff", post(handlers::diff_handler))
         .route("/api/convert", post(handlers::convert_file))
-        .route("/api/validate", post(handlers::validate_file))
-        .route("/ws", get(handlers::ws_handler));
+        .route("/api/validate", post(handlers::validate_file));
 
     with_static_fallback(r).with_state(state)
 }

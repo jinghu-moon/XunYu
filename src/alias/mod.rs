@@ -38,7 +38,7 @@ pub(crate) fn cmd_alias(args: AliasCmd) -> Result<()> {
         AliasSubCommand::Setup(cmd) => shell_alias_cmd::cmd_setup(&ctx, cmd),
         AliasSubCommand::Add(cmd) => shell_alias_cmd::cmd_add(&ctx, cmd),
         AliasSubCommand::Rm(cmd) => shell_alias_cmd::cmd_rm(&ctx, cmd),
-        AliasSubCommand::Ls(cmd) => query::cmd_ls(&ctx, cmd),
+        AliasSubCommand::List(cmd) => query::cmd_ls(&ctx, cmd),
         AliasSubCommand::Find(cmd) => query::cmd_find(&ctx, cmd),
         AliasSubCommand::Which(cmd) => query::cmd_which(&ctx, &cmd.name, false),
         AliasSubCommand::Sync(_) => sync::cmd_sync(&ctx),
@@ -47,7 +47,7 @@ pub(crate) fn cmd_alias(args: AliasCmd) -> Result<()> {
         AliasSubCommand::App(cmd) => match cmd.cmd {
             AliasAppSubCommand::Add(c) => app_alias_cmd::cmd_app_add(&ctx, c),
             AliasAppSubCommand::Rm(c) => app_alias_cmd::cmd_app_rm(&ctx, c),
-            AliasAppSubCommand::Ls(c) => app_alias_cmd::cmd_app_ls(&ctx, c),
+            AliasAppSubCommand::List(c) => app_alias_cmd::cmd_app_ls(&ctx, c),
             AliasAppSubCommand::Scan(c) => app_alias_cmd::cmd_app_scan(&ctx, c),
             AliasAppSubCommand::Which(c) => query::cmd_which(&ctx, &c.name, true),
             AliasAppSubCommand::Sync(_) => sync::cmd_app_sync(&ctx),

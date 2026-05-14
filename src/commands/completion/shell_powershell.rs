@@ -3,13 +3,13 @@ pub(crate) fn completion_powershell() -> &'static str {
 $xun = if ($env:XUN_EXE) { $env:XUN_EXE } else { "xun.exe" }
 
 $global:XunSubcommands = @(
-    "bookmark","init","completion","config","ctx","del","delete",
+    "bookmark","init","completion","config","ctx",
     "proxy","pon","poff","pst","px","ports","kill","ps","pkill",
-    "backup","bak","xunbak","tree","find","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","diff","desktop","brn","img","verify"
+    "backup","xunbak","tree","find","env","video","lock","rm","mv","renfile","protect","encrypt","decrypt","serve","redirect","diff","desktop","brn","img","verify"
 )
 $global:XunBookmarkSubcommands = @("z","zi","o","oi","open","save","set","tag","pin","rename","list","recent","stats","check","gc","dedup","export","import","init","touch","learn","keys","all")
-$global:XunProxySubcommands = @("set","del","get","detect","test")
-$global:XunCtxSubcommands = @("set","use","off","list","show","del","rename")
+$global:XunProxySubcommands = @("set","rm","show","detect","test")
+$global:XunCtxSubcommands = @("set","use","off","list","show","rm","rename")
 $global:XunFormats = @("auto","table","tsv","json")
 $global:XunTreeSort = @("name","mtime","size")
 

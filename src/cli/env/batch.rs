@@ -1,72 +1,64 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "batch")]
+#[derive(Parser, Debug, Clone)]
 /// Batch operations.
 pub struct EnvBatchCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvBatchSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvBatchSubCommand {
     Set(EnvBatchSetCmd),
-    Delete(EnvBatchDeleteCmd),
+    #[command(name = "rm", alias = "delete")]
+    Rm(EnvBatchDeleteCmd),
     Rename(EnvBatchRenameCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 /// Batch set KEY=VALUE pairs.
 pub struct EnvBatchSetCmd {
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// preview only, do not write
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// items like KEY=VALUE
-    #[argh(positional)]
     pub items: Vec<String>,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "delete")]
+#[derive(Args, Debug, Clone)]
 /// Batch delete names.
 pub struct EnvBatchDeleteCmd {
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// preview only, do not write
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// variable names
-    #[argh(positional)]
     pub names: Vec<String>,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rename")]
+#[derive(Args, Debug, Clone)]
 /// Rename one variable.
 pub struct EnvBatchRenameCmd {
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// preview only, do not write
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 
     /// old variable name
-    #[argh(positional)]
     pub old: String,
 
     /// new variable name
-    #[argh(positional)]
     pub new: String,
 }

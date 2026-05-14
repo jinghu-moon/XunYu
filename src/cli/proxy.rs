@@ -1,154 +1,134 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 use super::defaults::default_output_format;
 
 /// Proxy management.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "proxy")]
+#[derive(Parser, Debug, Clone)]
 pub struct ProxyCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: ProxySubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum ProxySubCommand {
     Set(ProxySetCmd),
-    Del(ProxyDelCmd),
-    Get(ProxyGetCmd),
+    #[command(name = "rm", alias = "del")]
+    Rm(ProxyDelCmd),
+    #[command(name = "show", alias = "get")]
+    Show(ProxyGetCmd),
     Detect(ProxyDetectCmd),
     Test(ProxyTestCmd),
 }
 
 /// Proxy On (pon)
-#[derive(FromArgs)]
-#[argh(subcommand, name = "pon")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyOnCmd {
     /// proxy url (optional, auto-detect system proxy)
-    #[argh(positional)]
     pub url: Option<String>,
 
     /// skip connectivity test after enabling proxy
-    #[argh(switch)]
+    #[arg(long)]
     pub no_test: bool,
 
     /// no_proxy list
-    #[argh(
-        option,
-        short = 'n',
-        default = "String::from(\"localhost,127.0.0.1,::1,.local\")"
-    )]
+    #[arg(short = 'n', long, default_value = "localhost,127.0.0.1,::1,.local")]
     pub noproxy: String,
 
     /// msys2 root override
-    #[argh(option, short = 'm')]
+    #[arg(short = 'm', long)]
     pub msys2: Option<String>,
 }
 
 /// Proxy Off (poff)
-#[derive(FromArgs)]
-#[argh(subcommand, name = "poff")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyOffCmd {
     /// msys2 root override
-    #[argh(option, short = 'm')]
+    #[arg(short = 'm', long)]
     pub msys2: Option<String>,
 }
 
 /// Proxy Status (pst)
-#[derive(FromArgs)]
-#[argh(subcommand, name = "pst")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyStatusCmd {
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 }
 
 /// Proxy Exec (px)
-#[derive(FromArgs)]
-#[argh(subcommand, name = "px")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyExecCmd {
     /// proxy url (optional)
-    #[argh(option, short = 'u')]
+    #[arg(short = 'u', long)]
     pub url: Option<String>,
 
     /// no_proxy list
-    #[argh(
-        option,
-        short = 'n',
-        default = "String::from(\"localhost,127.0.0.1,::1,.local\")"
-    )]
+    #[arg(short = 'n', long, default_value = "localhost,127.0.0.1,::1,.local")]
     pub noproxy: String,
 
     /// command and args
-    #[argh(positional)]
+    #[arg(trailing_var_arg = true)]
     pub cmd: Vec<String>,
 }
 
 /// Set proxy.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxySetCmd {
     /// proxy url (e.g. http://127.0.0.1:7890)
-    #[argh(positional)]
     pub url: String,
 
     /// no_proxy list (default: localhost,127.0.0.1)
-    #[argh(option, default = "String::from(\"localhost,127.0.0.1\")", short = 'n')]
+    #[arg(short = 'n', long, default_value = "localhost,127.0.0.1")]
     pub noproxy: String,
 
     /// msys2 root override
-    #[argh(option, short = 'm')]
+    #[arg(short = 'm', long)]
     pub msys2: Option<String>,
 
     /// only set for: cargo,git,npm,msys2 (comma separated)
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub only: Option<String>,
 }
 
 /// Delete proxy.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "del")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyDelCmd {
     /// msys2 root override
-    #[argh(option, short = 'm')]
+    #[arg(short = 'm', long)]
     pub msys2: Option<String>,
 
     /// only delete for: cargo,git,npm,msys2 (comma separated)
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub only: Option<String>,
 }
 
 /// Get current git proxy config.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "get")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyGetCmd {}
 
 /// Detect system proxy.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "detect")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyDetectCmd {
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 }
 
 /// Test proxy latency.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "test")]
+#[derive(Args, Debug, Clone)]
 pub struct ProxyTestCmd {
     /// proxy url
-    #[argh(positional)]
     pub url: String,
 
     /// targets (comma separated), use "proxy" to test proxy itself
-    #[argh(option, short = 't')]
+    #[arg(short = 't', long)]
     pub targets: Option<String>,
 
     /// timeout seconds
-    #[argh(option, short = 'w', default = "5")]
+    #[arg(short = 'w', long, default_value_t = 5)]
     pub timeout: u64,
 
     /// max concurrent probes
-    #[argh(option, short = 'j', default = "3")]
+    #[arg(short = 'j', long, default_value_t = 3)]
     pub jobs: usize,
 }

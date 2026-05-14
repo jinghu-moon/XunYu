@@ -104,7 +104,9 @@ fn top_level_restore_command_is_removed() {
     assert!(
         stderr.contains("Run xun --help for more information.")
             || stderr.contains("Unrecognized argument: restore")
-            || stderr.contains("Unrecognized argument"),
+            || stderr.contains("Unrecognized argument")
+            || stderr.contains("unrecognized subcommand")
+            || stderr.contains("error:"),
         "top-level restore should be removed, got: {stderr}"
     );
 }

@@ -34,6 +34,10 @@ path = "src/bin/acl_test.rs"
 name = "path_guard_bench"
 path = "src/bin/path_guard_bench.rs"
 
+[[bin]]
+name = "generate_types"
+path = "src/bin/generate_types.rs"
+
 [features]
 default = ["fs"]
 fs = []
@@ -91,6 +95,7 @@ desktop = []
 [dependencies]
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
+specta     = { version = "1", features = ["serde"] }
 rkyv = { version = "0.8", features = ["std", "bytecheck"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 toml = { version = "0.8" }
@@ -100,7 +105,8 @@ csv = "1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 dunce = "1"
-argh       = "0.1"
+clap       = { version = "=4.5.55", features = ["derive"] }
+clap_complete = "4"
 dialoguer  = { version = "0.11", default-features = false, features = ["fuzzy-select", "password"] }
 console    = "0.15"
 comfy-table = { version = "7.1", default-features = false, features = ["tty"] }
@@ -292,6 +298,10 @@ required-features = ["xunbak"]
 [[bench]]
 name = "bookmark_bench_divan"
 harness = false
+
+[[test]]
+name = "core_integration"
+path = "tests/core_integration.rs"
 
 [[test]]
 name = "general_cli_core"

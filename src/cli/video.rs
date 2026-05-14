@@ -1,15 +1,13 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 /// video operations: probe / compress / remux
-#[derive(FromArgs)]
-#[argh(subcommand, name = "video")]
+#[derive(Parser, Debug, Clone)]
 pub struct VideoCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: VideoSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum VideoSubCommand {
     Probe(VideoProbeCmd),
     Compress(VideoCompressCmd),
@@ -17,72 +15,69 @@ pub enum VideoSubCommand {
 }
 
 /// inspect media metadata via ffprobe
-#[derive(FromArgs)]
-#[argh(subcommand, name = "probe")]
+#[derive(Args, Debug, Clone)]
 pub struct VideoProbeCmd {
     /// input media file path
-    #[argh(option, short = 'i')]
+    #[arg(short = 'i', long)]
     pub input: String,
 
     /// ffprobe executable path override
-    #[argh(option)]
+    #[arg(long)]
     pub ffprobe: Option<String>,
 }
 
 /// compress video (lossy transcode)
-#[derive(FromArgs)]
-#[argh(subcommand, name = "compress")]
+#[derive(Args, Debug, Clone)]
 pub struct VideoCompressCmd {
     /// input media file path
-    #[argh(option, short = 'i')]
+    #[arg(short = 'i', long)]
     pub input: String,
 
     /// output media file path
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub output: String,
 
     /// mode: fastest|balanced|smallest
-    #[argh(option, default = "String::from(\"balanced\")")]
+    #[arg(long, default_value = "balanced")]
     pub mode: String,
 
     /// engine: auto|cpu|gpu
-    #[argh(option, default = "String::from(\"auto\")")]
+    #[arg(long, default_value = "auto")]
     pub engine: String,
 
     /// overwrite output if exists
-    #[argh(switch)]
+    #[arg(long)]
     pub overwrite: bool,
 
     /// ffmpeg executable path override
-    #[argh(option)]
+    #[arg(long)]
     pub ffmpeg: Option<String>,
 }
 
 /// remux container (lossless stream copy)
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remux")]
+#[derive(Args, Debug, Clone)]
 pub struct VideoRemuxCmd {
     /// input media file path
-    #[argh(option, short = 'i')]
+    #[arg(short = 'i', long)]
     pub input: String,
 
     /// output media file path
-    #[argh(option, short = 'o')]
+    #[arg(short = 'o', long)]
     pub output: String,
 
     /// strict mode: true means incompatible streams fail directly
-    #[argh(option, default = "true")]
+    #[arg(long, default_value_t = true)]
     pub strict: bool,
 
     /// overwrite output if exists
-    #[argh(switch)]
+    #[arg(long)]
     pub overwrite: bool,
 
     /// ffmpeg executable path override
-    #[argh(option)]
+    #[arg(long)]
     pub ffmpeg: Option<String>,
 
     /// ffprobe executable path override
-    #[argh(option)]
+    #[arg(long)]
     pub ffprobe: Option<String>,
 }

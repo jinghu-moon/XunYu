@@ -8,22 +8,24 @@
     "build": "vue-tsc -b && vite build",
     "test": "vitest run",
     "test:smoke": "vitest run src/smoke/dashboard-smoke.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "gen:types": "cargo run --bin generate_types > src/generated/types.ts"
   },
   "dependencies": {
     "@primeuix/themes": "^2.0.3",
     "@tabler/icons-vue": "^3.37.1",
     "@tanstack/vue-virtual": "^3.13.19",
+    "pinia": "^3.0.4",
     "primevue": "^4.5.4",
     "vue": "^3.5.28"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "vue-tsc": "^3.2.4",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^26.1.0",
-    "vitest": "^3.2.4"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.2.4"
   }
 }

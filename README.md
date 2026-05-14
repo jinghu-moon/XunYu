@@ -24,7 +24,7 @@
 
 ## 主要能力
 
-- 默认 CLI 能力：书签、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`bak`、`tree`、`find`、`delete/del`、`rm`、`env`、`video`、`acl`
+- 默认 CLI 能力：书签、`config`、`ctx`、`proxy`、`ports/kill/ps/pkill`、`backup`、`tree`、`find`、`rm`、`env`、`video`、`acl`
 - 可选 feature：`alias`、`lock`、`protect`、`crypt`、`redirect`、`dashboard`、`diff`、`batch_rename`、`cstat`、`img`
 - Dashboard 工作台：总览、路径与上下文、网络与代理、环境与配置、文件与安全、集成与自动化、媒体与转换、统计与诊断；若启用 `diff`，文件浏览、转换、校验与 Diff 可视化能力会收口到“文件与安全”工作台
 
@@ -78,19 +78,19 @@ cargo build --release --features "dashboard,diff"
 
 ```bash
 # 删除书签（别名）
-xun delete -bm <name>
+xun rm -bm <name>
 
 # 删除 Windows 保留名文件（默认只匹配保留名）
-xun delete <path>
+xun rm <path>
 
 # 允许删除任意文件名
-xun delete --any <path>
+xun rm --any <path>
 
 # 模拟运行（不实际删除）
-xun delete --any --what-if <path>
+xun rm --any --what-if <path>
 
 # 删除失败后登记重启删除
-xun delete --any --on-reboot <path>
+xun rm --any --on-reboot <path>
 ```
 
 ## 文档入口

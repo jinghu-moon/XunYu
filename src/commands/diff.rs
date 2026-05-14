@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use argh::FromArgs;
+use clap::Args;
 use console::Style;
 
 use crate::diff;
@@ -11,58 +11,55 @@ use crate::path_guard::{PathIssueKind, PathPolicy, validate_paths};
 
 // ── CLI 子命令定义 ──────────────────────────────────────────────────────────
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "diff")]
+#[derive(Args, Debug, Clone)]
 /// 比较两个文件的差异
 pub struct DiffCmd {
     /// 旧文件路径
-    #[argh(positional)]
     pub old: String,
 
     /// 新文件路径
-    #[argh(positional)]
     pub new: String,
 
     /// diff 模式：auto（默认）| line | ast
-    #[argh(option, default = "\"auto\".to_string()")]
+    #[arg(long, default_value = "auto")]
     pub mode: String,
 
     /// diff 算法：histogram（默认）| myers | minimal | patience
-    #[argh(option, default = "\"histogram\".to_string()")]
+    #[arg(long, default_value = "histogram")]
     pub diff_algorithm: String,
 
     /// 输出格式：text（默认）| json
-    #[argh(option, default = "\"text\".to_string()")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 
     /// 上下文行数（默认 3，对齐 GNU diff -U）
-    #[argh(option, default = "3")]
+    #[arg(long, default_value_t = 3)]
     pub context: usize,
 
     /// 文件大小上限，如 512K、1M（默认 512K）
-    #[argh(option, default = "\"512K\".to_string()")]
+    #[arg(long, default_value = "512K")]
     pub max_size: String,
 
     // ── 空白处理选项（对齐 GNU diff） ──
     /// 忽略行内空白量变化（类似 -b）
-    #[argh(switch)]
+    #[arg(long)]
     pub ignore_space_change: bool,
 
     /// 忽略所有空白（类似 -w）
-    #[argh(switch)]
+    #[arg(long)]
     pub ignore_all_space: bool,
 
     /// 忽略空行差异（类似 -B）
-    #[argh(switch)]
+    #[arg(long)]
     pub ignore_blank_lines: bool,
 
     /// 剥离行尾 CR，消除 CRLF/LF 噪声
-    #[argh(switch)]
+    #[arg(long)]
     pub strip_trailing_cr: bool,
 
     // ── 二进制处理 ──
     /// 强制按文本处理二进制文件（类似 GNU diff --text / -a）
-    #[argh(switch)]
+    #[arg(long)]
     pub text: bool,
 }
 

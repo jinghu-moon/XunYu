@@ -50,7 +50,7 @@ pub(super) fn positional_candidates(
     cwd: Option<&str>,
     bookmark_mode: bool,
 ) -> (Vec<CompletionItem>, u32) {
-    const BOOKMARK_TAG_SUBCOMMANDS: &[&str] = &["add", "remove", "list", "rename"];
+    const BOOKMARK_TAG_SUBCOMMANDS: &[&str] = &["add", "rm", "list", "rename"];
 
     if subcmd == "bookmark" && subsub.is_none() && index == 0 {
         return (
@@ -136,7 +136,7 @@ pub(super) fn positional_candidates(
     if subcmd == "ctx"
         && matches!(
             subsub,
-            Some("use") | Some("del") | Some("show") | Some("rename") | Some("set")
+            Some("use") | Some("rm") | Some("show") | Some("rename") | Some("set")
         )
         && index == 0
     {
@@ -169,7 +169,7 @@ pub(super) fn positional_candidates(
             NO_FILE_COMP,
         );
     }
-    if matches!(subcmd, "delete" | "del") {
+    if subcmd == "rm" {
         if bookmark_mode {
             return (
                 bookmark_completion_candidates(prefix_lower, cwd)

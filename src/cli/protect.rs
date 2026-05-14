@@ -1,19 +1,17 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 use super::defaults::default_output_format;
 
 #[cfg(feature = "protect")]
 /// Manage protection rules.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "protect")]
+#[derive(Parser, Debug, Clone)]
 pub struct ProtectCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: ProtectSubCommand,
 }
 
 #[cfg(feature = "protect")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum ProtectSubCommand {
     Set(ProtectSetCmd),
     Clear(ProtectClearCmd),
@@ -22,50 +20,44 @@ pub enum ProtectSubCommand {
 
 #[cfg(feature = "protect")]
 /// Set a protection rule.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 pub struct ProtectSetCmd {
     /// path to protect
-    #[argh(positional)]
     pub path: String,
 
     /// actions to deny (e.g. delete,move,rename)
-    #[argh(option, default = "String::from(\"delete,move,rename\")")]
+    #[arg(long, default_value = "delete,move,rename")]
     pub deny: String,
 
     /// requirements to bypass (e.g. force,reason)
-    #[argh(option, default = "String::from(\"force,reason\")")]
+    #[arg(long, default_value = "force,reason")]
     pub require: String,
 
     /// apply NTFS ACL Deny Delete rule (deep Windows protection)
-    #[argh(switch)]
+    #[arg(long)]
     pub system_acl: bool,
 }
 
 #[cfg(feature = "protect")]
 /// Clear a protection rule.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "clear")]
+#[derive(Args, Debug, Clone)]
 pub struct ProtectClearCmd {
     /// path to clear protection
-    #[argh(positional)]
     pub path: String,
 
     /// remove NTFS ACL Deny Delete rule as well
-    #[argh(switch)]
+    #[arg(long)]
     pub system_acl: bool,
 }
 
 #[cfg(feature = "protect")]
 /// Show protection status.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "status")]
+#[derive(Args, Debug, Clone)]
 pub struct ProtectStatusCmd {
     /// filter by path prefix
-    #[argh(positional)]
     pub path: Option<String>,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 }

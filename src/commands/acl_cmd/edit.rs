@@ -675,7 +675,7 @@ pub(super) fn cmd_inherit(args: AclInheritCmd) -> CliResult {
     );
 
     let (break_it, preserve_copies) = if args.disable {
-        (true, args.preserve)
+        (true, args.preserve == "true")
     } else if args.enable {
         (false, false)
     } else {

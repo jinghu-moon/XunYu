@@ -5,17 +5,31 @@ import {
   bookmarksBatchAddTags,
   bookmarksBatchDelete,
   bookmarksBatchRemoveTags,
-  fetchBookmarks,
   upsertBookmark,
-  deleteBookmark,
   renameBookmark,
 } from '../api'
+import { queryCommand } from '../api/commands'
+import { useOperation } from '../composables/useOperation'
+import OperationDialog from './shared/OperationDialog.vue'
 import { IconPlus, IconX, IconTrash, IconSearch } from '@tabler/icons-vue'
 import { Button } from './button'
 import { pushToast } from '../ui/feedback'
 import { tagCategoryClass } from '../ui/tags'
 import { downloadCsv, downloadJson } from '../ui/export'
 import SkeletonTable from './SkeletonTable.vue'
+
+/** 将 WS Table 行转换为 Bookmark */
+function wsRowToBookmark(row: Record<string, unknown>): Bookmark {
+  return {
+    name: String(row.name ?? ''),
+    path: String(row.path ?? ''),
+    tags: typeof row.tags === 'string' && row.tags
+      ? row.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+      : [],
+    visits: Number(row.visits ?? 0),
+    last_visited: Number(row.last_visited ?? 0),
+  }
+}
 
 const bookmarks = ref<Bookmark[]>([])
 const search = ref('')
@@ -36,13 +50,43 @@ const editingTagsKey = ref<string | null>(null)
 const editingTagsValue = ref('')
 const deleteBusyName = ref<string | null>(null)
 const batchDeleteBusy = ref(false)
+
+// ── useOperation：单条删除走 Operation 协议 ──
+const deleteOp = useOperation()
+const pendingDeleteName = ref<string | null>(null)
+
+async function onDelete(name: string) {
+  pendingDeleteName.value = name
+  await deleteOp.requestPreview('bookmark.delete', [name])
+}
+
+async function onDeleteConfirm() {
+  const name = pendingDeleteName.value
+  if (!name) return
+  deleteBusyName.value = name
+  try {
+    await deleteOp.confirm()
+    await load()
+  } finally {
+    deleteBusyName.value = null
+    pendingDeleteName.value = null
+    deleteOp.reset()
+  }
+}
+
+function onDeleteCancel() {
+  deleteOp.cancel()
+  pendingDeleteName.value = null
+  deleteOp.reset()
+}
+
+// ── 批量删除保留旧确认计时器 ──
 const confirmKey = ref<string | null>(null)
 const confirmRemaining = ref(0)
 let confirmTimer: number | null = null
 
 const CONFIRM_WINDOW_SEC = 3
 const batchConfirmKey = 'batch-delete'
-const deleteConfirmKey = (name: string) => `bookmark:${name}`
 
 function stopConfirmTimer() {
   if (confirmTimer != null) {
@@ -177,7 +221,8 @@ const sorted = computed(() => {
 async function load() {
   busy.value = true
   try {
-    bookmarks.value = await fetchBookmarks()
+    const table = await queryCommand('bookmark.list')
+    bookmarks.value = table.rows.map(wsRowToBookmark)
     selected.value = {}
     resetInlineEdit()
   } finally {
@@ -192,22 +237,6 @@ async function onAdd() {
   form.value = { name: '', path: '', tags: '' }
   showForm.value = false
   await load()
-}
-
-async function onDelete(name: string) {
-  const key = deleteConfirmKey(name)
-  if (!isConfirmArmed(key)) {
-    armConfirm(key)
-    return
-  }
-  resetConfirm()
-  deleteBusyName.value = name
-  try {
-    await deleteBookmark(name)
-    await load()
-  } finally {
-    deleteBusyName.value = null
-  }
 }
 
 const selectedNames = computed(() => {
@@ -532,16 +561,12 @@ onBeforeUnmount(stopConfirmTimer)
                   size="sm"
                   preset="danger"
                   square
-                  class="btn--confirm"
                   :loading="deleteBusyName === b.name"
                   :disabled="deleteBusyName === b.name"
-                  :title="isConfirmArmed(deleteConfirmKey(b.name)) ? `Confirm (${confirmRemaining}s)` : 'Delete'"
+                  title="Delete"
                   @click="onDelete(b.name)"
                 >
                   <IconTrash :size="16" />
-                  <span v-if="isConfirmArmed(deleteConfirmKey(b.name))" class="btn__confirm-badge">
-                    {{ confirmRemaining }}
-                  </span>
                 </Button>
               </div>
             </td>
@@ -627,17 +652,13 @@ onBeforeUnmount(stopConfirmTimer)
                   size="sm"
                   preset="danger"
                   square
-                  class="btn--confirm"
-                      :loading="deleteBusyName === b.name"
-                      :disabled="deleteBusyName === b.name"
-                      :title="isConfirmArmed(deleteConfirmKey(b.name)) ? `Confirm (${confirmRemaining}s)` : 'Delete'"
-                      @click="onDelete(b.name)"
-                    >
-                      <IconTrash :size="16" />
-                      <span v-if="isConfirmArmed(deleteConfirmKey(b.name))" class="btn__confirm-badge">
-                        {{ confirmRemaining }}
-                      </span>
-                    </Button>
+                  :loading="deleteBusyName === b.name"
+                  :disabled="deleteBusyName === b.name"
+                  title="Delete"
+                  @click="onDelete(b.name)"
+                >
+                  <IconTrash :size="16" />
+                </Button>
                   </div>
                 </td>
               </tr>
@@ -646,6 +667,14 @@ onBeforeUnmount(stopConfirmTimer)
         </details>
       </div>
     </template>
+
+    <OperationDialog
+      v-if="deleteOp.state.value === 'confirming' && deleteOp.preview.value"
+      :preview="deleteOp.preview.value"
+      data-testid="delete-operation-dialog"
+      @confirm="onDeleteConfirm"
+      @cancel="onDeleteCancel"
+    />
   </div>
 </template>
 

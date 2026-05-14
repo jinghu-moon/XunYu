@@ -38,8 +38,6 @@ const SUBCOMMANDS: &[&str] = &[
     "completion",
     "config",
     "ctx",
-    "del",
-    "delete",
     "proxy",
     "pon",
     "poff",
@@ -49,7 +47,6 @@ const SUBCOMMANDS: &[&str] = &[
     "kill",
     "ps",
     "pkill",
-    "bak",
     "backup",
     "xunbak",
     "tree",
@@ -72,7 +69,7 @@ const SUBCOMMANDS: &[&str] = &[
     "verify",
 ];
 const BOOKMARK_SUBCOMMANDS: &[&str] = &[
-    "z", "zi", "o", "oi", "open", "save", "set", "delete", "tag", "pin", "unpin", "rename",
+    "z", "zi", "o", "oi", "open", "save", "set", "rm", "tag", "pin", "unpin", "rename",
     "list", "recent", "stats", "check", "gc", "dedup", "export", "import", "init", "touch",
     "learn", "undo", "redo", "keys", "all",
 ];
@@ -92,14 +89,14 @@ const FORMATS: &[&str] = &["auto", "table", "tsv", "json"];
 const LIST_SORTS: &[&str] = &["name", "last", "visits"];
 const TREE_SORTS: &[&str] = &["name", "mtime", "size"];
 const CONFIG_SUBCOMMANDS: &[&str] = &["get", "set", "edit"];
-const CTX_SUBCOMMANDS: &[&str] = &["set", "use", "off", "list", "show", "del", "rename"];
-const PROXY_SUBCOMMANDS: &[&str] = &["set", "del", "get", "detect", "test"];
+const CTX_SUBCOMMANDS: &[&str] = &["set", "use", "off", "list", "show", "rm", "rename"];
+const PROXY_SUBCOMMANDS: &[&str] = &["set", "rm", "show", "detect", "test"];
 const ENV_SUBCOMMANDS: &[&str] = &[
     "list",
     "search",
-    "get",
+    "show",
     "set",
-    "del",
+    "rm",
     "check",
     "path",
     "path-dedup",
@@ -125,8 +122,8 @@ const ENV_SUBCOMMANDS: &[&str] = &[
 ];
 const ENV_PATH_SUBCOMMANDS: &[&str] = &["add", "rm"];
 const ENV_SNAPSHOT_SUBCOMMANDS: &[&str] = &["create", "list", "restore"];
-const ENV_PROFILE_SUBCOMMANDS: &[&str] = &["list", "capture", "apply", "diff", "delete"];
-const ENV_BATCH_SUBCOMMANDS: &[&str] = &["set", "delete", "rename"];
+const ENV_PROFILE_SUBCOMMANDS: &[&str] = &["list", "capture", "apply", "diff", "rm"];
+const ENV_BATCH_SUBCOMMANDS: &[&str] = &["set", "rm", "rename"];
 const ENV_SCHEMA_SUBCOMMANDS: &[&str] = &[
     "show",
     "add-required",
@@ -144,9 +141,9 @@ const ENV_WRITE_SCOPES: &[&str] = &["user", "system"];
 const ENV_EXPORT_FORMATS: &[&str] = &["json", "env", "reg", "csv"];
 const ENV_IMPORT_MODES: &[&str] = &["merge", "overwrite"];
 const ACL_SUBCOMMANDS: &[&str] = &[
-    "view",
+    "show",
     "add",
-    "remove",
+    "rm",
     "purge",
     "diff",
     "batch",

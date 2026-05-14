@@ -1,17 +1,15 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 #[cfg(feature = "desktop")]
 /// Desktop control commands.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "desktop")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopSubCommand {
     Daemon(DesktopDaemonCmd),
     Hotkey(DesktopHotkeyCmd),
@@ -31,16 +29,14 @@ pub enum DesktopSubCommand {
 
 #[cfg(feature = "desktop")]
 /// Manage desktop daemon.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "daemon")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopDaemonCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopDaemonSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopDaemonSubCommand {
     Start(DesktopDaemonStartCmd),
     Stop(DesktopDaemonStopCmd),
@@ -50,52 +46,46 @@ pub enum DesktopDaemonSubCommand {
 
 #[cfg(feature = "desktop")]
 /// Start desktop daemon.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "start")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopDaemonStartCmd {
     /// suppress UI output
-    #[argh(switch, short = 'q')]
+    #[arg(short = 'q', long)]
     pub quiet: bool,
 
     /// disable tray icon
-    #[argh(switch)]
+    #[arg(long)]
     pub no_tray: bool,
 
     /// run elevated if needed
-    #[argh(switch)]
+    #[arg(long)]
     pub elevated: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Stop desktop daemon.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "stop")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopDaemonStopCmd {}
 
 #[cfg(feature = "desktop")]
 /// Show desktop daemon status.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "status")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopDaemonStatusCmd {}
 
 #[cfg(feature = "desktop")]
 /// Reload desktop daemon config.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "reload")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopDaemonReloadCmd {}
 
 #[cfg(feature = "desktop")]
 /// Manage hotkey bindings.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "hotkey")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopHotkeyCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopHotkeySubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopHotkeySubCommand {
     Bind(DesktopHotkeyBindCmd),
     Unbind(DesktopHotkeyUnbindCmd),
@@ -104,349 +94,307 @@ pub enum DesktopHotkeySubCommand {
 
 #[cfg(feature = "desktop")]
 /// Bind a global hotkey to an action.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "bind")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopHotkeyBindCmd {
     /// hotkey string, e.g. ctrl+alt+t
-    #[argh(positional)]
     pub hotkey: String,
 
     /// action, e.g. run:wt.exe
-    #[argh(positional)]
     pub action: String,
 
     /// app filter
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Unbind a hotkey.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "unbind")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopHotkeyUnbindCmd {
     /// hotkey string
-    #[argh(positional)]
     pub hotkey: String,
 }
 
 #[cfg(feature = "desktop")]
 /// List hotkey bindings.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopHotkeyListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Manage key remaps.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remap")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopRemapCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopRemapSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopRemapSubCommand {
     Add(DesktopRemapAddCmd),
-    Remove(DesktopRemapRemoveCmd),
+    #[command(name = "rm", alias = "remove")]
+    Rm(DesktopRemapRemoveCmd),
     List(DesktopRemapListCmd),
     Clear(DesktopRemapClearCmd),
 }
 
 #[cfg(feature = "desktop")]
 /// Add a remap rule.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopRemapAddCmd {
     /// from hotkey
-    #[argh(positional)]
     pub from: String,
 
     /// to target
-    #[argh(positional)]
     pub to: String,
 
     /// app filter
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 
     /// match exact app name
-    #[argh(switch)]
+    #[arg(long)]
     pub exact: bool,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Remove a remap rule.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopRemapRemoveCmd {
     /// from hotkey
-    #[argh(positional)]
     pub from: String,
 
     /// to target
-    #[argh(positional)]
     pub to: Option<String>,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// List remap rules.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopRemapListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Clear remap rules.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "clear")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopRemapClearCmd {
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Manage snippets.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "snippet")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopSnippetCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopSnippetSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopSnippetSubCommand {
     Add(DesktopSnippetAddCmd),
-    Remove(DesktopSnippetRemoveCmd),
+    #[command(name = "rm", alias = "remove")]
+    Rm(DesktopSnippetRemoveCmd),
     List(DesktopSnippetListCmd),
     Clear(DesktopSnippetClearCmd),
 }
 
 #[cfg(feature = "desktop")]
 /// Add a snippet.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopSnippetAddCmd {
     /// trigger text
-    #[argh(positional)]
     pub trigger: String,
 
     /// expansion text
-    #[argh(positional)]
     pub expand: String,
 
     /// app filter
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 
     /// trigger immediately
-    #[argh(switch)]
+    #[arg(long)]
     pub immediate: bool,
 
     /// paste via clipboard
-    #[argh(switch)]
+    #[arg(long)]
     pub clipboard: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Remove a snippet.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopSnippetRemoveCmd {
     /// trigger text
-    #[argh(positional)]
     pub trigger: String,
 }
 
 #[cfg(feature = "desktop")]
 /// List snippets.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopSnippetListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Clear snippets.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "clear")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopSnippetClearCmd {}
 
 #[cfg(feature = "desktop")]
 /// Manage layouts.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "layout")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopLayoutCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopLayoutSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopLayoutSubCommand {
-    New(DesktopLayoutNewCmd),
+    #[command(name = "add", alias = "new")]
+    Add(DesktopLayoutNewCmd),
     Apply(DesktopLayoutApplyCmd),
     Preview(DesktopLayoutPreviewCmd),
     List(DesktopLayoutListCmd),
-    Remove(DesktopLayoutRemoveCmd),
+    #[command(name = "rm", alias = "remove")]
+    Rm(DesktopLayoutRemoveCmd),
 }
 
 #[cfg(feature = "desktop")]
 /// Create a layout template.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "new")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopLayoutNewCmd {
     /// layout name
-    #[argh(positional)]
     pub name: String,
 
     /// layout type
-    #[argh(option, short = 't')]
+    #[arg(short = 't', long)]
     pub layout_type: String,
 
     /// rows count
-    #[argh(option)]
+    #[arg(long)]
     pub rows: Option<u32>,
 
     /// cols count
-    #[argh(option)]
+    #[arg(long)]
     pub cols: Option<u32>,
 
     /// gap size
-    #[argh(option)]
+    #[arg(long)]
     pub gap: Option<u32>,
 }
 
 #[cfg(feature = "desktop")]
 /// Apply a layout.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "apply")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopLayoutApplyCmd {
     /// layout name
-    #[argh(positional)]
     pub name: String,
 
     /// move existing windows
-    #[argh(switch)]
+    #[arg(long)]
     pub move_existing: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Preview a layout.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "preview")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopLayoutPreviewCmd {
     /// layout name
-    #[argh(positional)]
     pub name: String,
 }
 
 #[cfg(feature = "desktop")]
 /// List layouts.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopLayoutListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Remove a layout.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopLayoutRemoveCmd {
     /// layout name
-    #[argh(positional)]
     pub name: String,
 }
 
 #[cfg(feature = "desktop")]
 /// Manage workspaces.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "workspace")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopWorkspaceCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopWorkspaceSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopWorkspaceSubCommand {
     Save(DesktopWorkspaceSaveCmd),
     Launch(DesktopWorkspaceLaunchCmd),
     List(DesktopWorkspaceListCmd),
-    Remove(DesktopWorkspaceRemoveCmd),
+    #[command(name = "rm", alias = "remove")]
+    Rm(DesktopWorkspaceRemoveCmd),
 }
 
 #[cfg(feature = "desktop")]
 /// Save current workspace.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "save")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWorkspaceSaveCmd {
     /// workspace name
-    #[argh(positional)]
     pub name: String,
 
     /// record name only
-    #[argh(switch)]
+    #[arg(long)]
     pub name_only: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Launch a workspace.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "launch")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWorkspaceLaunchCmd {
     /// workspace name
-    #[argh(positional)]
     pub name: String,
 
     /// move existing windows
-    #[argh(switch)]
+    #[arg(long)]
     pub move_existing: bool,
 
     /// monitor offset
-    #[argh(option)]
+    #[arg(long)]
     pub monitor_offset: Option<i32>,
 }
 
 #[cfg(feature = "desktop")]
 /// List workspaces.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWorkspaceListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Remove a workspace.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWorkspaceRemoveCmd {
     /// workspace name
-    #[argh(positional)]
     pub name: String,
 }
 
 #[cfg(feature = "desktop")]
 /// Manage windows.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "window")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopWindowCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopWindowSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopWindowSubCommand {
     Focus(DesktopWindowFocusCmd),
     Move(DesktopWindowMoveCmd),
@@ -457,98 +405,91 @@ pub enum DesktopWindowSubCommand {
 
 #[cfg(feature = "desktop")]
 /// Focus a window.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "focus")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWindowFocusCmd {
     /// app name
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 
     /// window title
-    #[argh(option)]
+    #[arg(long)]
     pub title: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Move a window.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "move")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWindowMoveCmd {
     /// x position
-    #[argh(option)]
+    #[arg(long)]
     pub x: i32,
 
     /// y position
-    #[argh(option)]
+    #[arg(long)]
     pub y: i32,
 
     /// app name
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Resize a window.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "resize")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWindowResizeCmd {
     /// width
-    #[argh(option)]
+    #[arg(long)]
     pub width: i32,
 
     /// height
-    #[argh(option)]
+    #[arg(long)]
     pub height: i32,
 
     /// app name
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Set window transparency.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "transparent")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWindowTransparentCmd {
     /// alpha value
-    #[argh(option)]
+    #[arg(long)]
     pub alpha: u8,
 
     /// app name
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Toggle window always-on-top.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "top")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopWindowTopCmd {
     /// enable topmost
-    #[argh(switch)]
+    #[arg(long)]
     pub enable: bool,
 
     /// disable topmost
-    #[argh(switch)]
+    #[arg(long)]
     pub disable: bool,
 
     /// app name
-    #[argh(option)]
+    #[arg(long)]
     pub app: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Manage theme.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "theme")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopThemeCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopThemeSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopThemeSubCommand {
     Set(DesktopThemeSetCmd),
     Toggle(DesktopThemeToggleCmd),
@@ -558,52 +499,45 @@ pub enum DesktopThemeSubCommand {
 
 #[cfg(feature = "desktop")]
 /// Set theme.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopThemeSetCmd {
     /// theme mode: light|dark
-    #[argh(positional)]
     pub mode: String,
 }
 
 #[cfg(feature = "desktop")]
 /// Toggle theme.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "toggle")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopThemeToggleCmd {}
 
 #[cfg(feature = "desktop")]
 /// Schedule theme.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "schedule")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopThemeScheduleCmd {
     /// light time
-    #[argh(option)]
+    #[arg(long)]
     pub light: Option<String>,
 
     /// dark time
-    #[argh(option)]
+    #[arg(long)]
     pub dark: Option<String>,
 }
 
 #[cfg(feature = "desktop")]
 /// Show theme status.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "status")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopThemeStatusCmd {}
 
 #[cfg(feature = "desktop")]
 /// Manage awake mode.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "awake")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopAwakeCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopAwakeSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopAwakeSubCommand {
     On(DesktopAwakeOnCmd),
     Off(DesktopAwakeOffCmd),
@@ -612,134 +546,117 @@ pub enum DesktopAwakeSubCommand {
 
 #[cfg(feature = "desktop")]
 /// Enable awake mode.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "on")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopAwakeOnCmd {
     /// duration string
-    #[argh(option)]
+    #[arg(long)]
     pub duration: Option<String>,
 
     /// expire at time
-    #[argh(option)]
+    #[arg(long)]
     pub expire_at: Option<String>,
 
     /// keep display on
-    #[argh(switch)]
+    #[arg(long)]
     pub display_on: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Disable awake mode.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "off")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopAwakeOffCmd {}
 
 #[cfg(feature = "desktop")]
 /// Show awake status.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "status")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopAwakeStatusCmd {}
 
 #[cfg(feature = "desktop")]
 /// Pick a color.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "color")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopColorCmd {
     /// copy to clipboard
-    #[argh(switch)]
+    #[arg(long)]
     pub copy: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Manage hosts file.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "hosts")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopHostsCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopHostsSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopHostsSubCommand {
     Add(DesktopHostsAddCmd),
-    Remove(DesktopHostsRemoveCmd),
+    #[command(name = "rm", alias = "remove")]
+    Rm(DesktopHostsRemoveCmd),
     List(DesktopHostsListCmd),
 }
 
 #[cfg(feature = "desktop")]
 /// Add a hosts entry.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopHostsAddCmd {
     /// hostname
-    #[argh(positional)]
     pub host: String,
 
     /// ip address
-    #[argh(positional)]
     pub ip: String,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// Remove a hosts entry.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopHostsRemoveCmd {
     /// hostname
-    #[argh(positional)]
     pub host: String,
 
     /// dry run
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 }
 
 #[cfg(feature = "desktop")]
 /// List hosts entries.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopHostsListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Manage installed apps.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "app")]
+#[derive(Parser, Debug, Clone)]
 pub struct DesktopAppCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: DesktopAppSubCommand,
 }
 
 #[cfg(feature = "desktop")]
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DesktopAppSubCommand {
     List(DesktopAppListCmd),
 }
 
 #[cfg(feature = "desktop")]
 /// List installed apps.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopAppListCmd {}
 
 #[cfg(feature = "desktop")]
 /// Launch desktop TUI.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "tui")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopTuiCmd {}
 
 #[cfg(feature = "desktop")]
 /// Run a command.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "run")]
+#[derive(Args, Debug, Clone)]
 pub struct DesktopRunCmd {
     /// command line
-    #[argh(positional)]
     pub command: String,
 }

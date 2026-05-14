@@ -1,12 +1,13 @@
-use super::*;
+use clap::{Args, Parser, Subcommand};
 
+#[derive(Parser, Debug, Clone)]
+/// Profile operations.
 pub struct EnvProfileCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvProfileSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvProfileSubCommand {
     List(EnvProfileListCmd),
     Capture(EnvProfileCaptureCmd),
@@ -15,94 +16,62 @@ pub enum EnvProfileSubCommand {
     Delete(EnvProfileDeleteCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
+#[derive(Args, Debug, Clone)]
 /// List profiles.
 pub struct EnvProfileListCmd {
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "capture")]
+#[derive(Args, Debug, Clone)]
 /// Capture current scope vars into a profile.
 pub struct EnvProfileCaptureCmd {
     /// profile name
-    #[argh(positional)]
     pub name: String,
 
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "apply")]
+#[derive(Args, Debug, Clone)]
 /// Apply one profile.
 pub struct EnvProfileApplyCmd {
     /// profile name
-    #[argh(positional)]
     pub name: String,
 
     /// optional target scope override: user|system
-    #[argh(option)]
+    #[arg(long)]
     pub scope: Option<String>,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "diff")]
+#[derive(Args, Debug, Clone)]
 /// Diff profile against live scope.
 pub struct EnvProfileDiffCmd {
     /// profile name
-    #[argh(positional)]
     pub name: String,
 
     /// optional target scope override: user|system
-    #[argh(option)]
+    #[arg(long)]
     pub scope: Option<String>,
 
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "delete")]
+#[derive(Args, Debug, Clone)]
 /// Delete one profile.
 pub struct EnvProfileDeleteCmd {
     /// profile name
-    #[argh(positional)]
     pub name: String,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }
-
-#[derive(FromArgs)]
-#[argh(subcommand, name = "batch")]
-/// Batch operations.
-
-pub struct EnvApplyCmd {
-    /// profile name
-    #[argh(positional)]
-    pub name: String,
-
-    /// optional target scope override: user|system
-    #[argh(option)]
-    pub scope: Option<String>,
-
-    /// skip confirmation
-    #[argh(switch, short = 'y')]
-    pub yes: bool,
-}
-
-#[derive(FromArgs)]
-#[argh(subcommand, name = "export")]
-/// Export environment variables.
-

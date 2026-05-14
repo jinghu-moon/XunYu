@@ -1,18 +1,16 @@
-use argh::FromArgs;
+use clap::Args;
 
 /// Verify an xunbak container.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "verify")]
+#[derive(Args, Debug, Clone)]
 pub struct VerifyCmd {
     /// xunbak container path
-    #[argh(positional)]
     pub path: String,
 
     /// verify level: quick | full | manifest-only | existence-only | paranoid
-    #[argh(option)]
+    #[arg(long)]
     pub level: Option<String>,
 
     /// output machine-readable JSON
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 }

@@ -1,87 +1,80 @@
-use argh::FromArgs;
+use clap::Args;
 
 use super::defaults::default_output_format;
 
 /// List listening ports (TCP by default).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "ports")]
+#[derive(Args, Debug, Clone)]
 pub struct PortsCmd {
     /// show all TCP listening ports
-    #[argh(switch)]
+    #[arg(long)]
     pub all: bool,
 
     /// show UDP bound ports
-    #[argh(switch)]
+    #[arg(long)]
     pub udp: bool,
 
     /// filter port range (e.g. 3000-3999)
-    #[argh(option)]
+    #[arg(long)]
     pub range: Option<String>,
 
     /// filter by pid
-    #[argh(option)]
+    #[arg(long)]
     pub pid: Option<u32>,
 
     /// filter by process name (substring)
-    #[argh(option)]
+    #[arg(long)]
     pub name: Option<String>,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value_t = default_output_format())]
     pub format: String,
 }
 
 /// Kill processes that occupy ports.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "kill")]
+#[derive(Args, Debug, Clone)]
 pub struct KillCmd {
     /// port list, e.g. 3000,8080,5173
-    #[argh(positional)]
     pub ports: String,
 
     /// skip confirmation
-    #[argh(switch, short = 'f')]
+    #[arg(short = 'f', long)]
     pub force: bool,
 
     /// tcp only
-    #[argh(switch)]
+    #[arg(long)]
     pub tcp: bool,
 
     /// udp only
-    #[argh(switch)]
+    #[arg(long)]
     pub udp: bool,
 }
 
 /// List running processes by name, PID, or window title.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "ps")]
+#[derive(Args, Debug, Clone)]
 pub struct PsCmd {
     /// fuzzy match by process name
-    #[argh(positional)]
     pub pattern: Option<String>,
 
     /// exact PID lookup
-    #[argh(option)]
+    #[arg(long)]
     pub pid: Option<u32>,
 
     /// fuzzy match by window title
-    #[argh(option, short = 'w')]
+    #[arg(short = 'w', long)]
     pub win: Option<String>,
 }
 
 /// Kill processes by name, PID, or window title.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "pkill")]
+#[derive(Args, Debug, Clone)]
 pub struct PkillCmd {
     /// process name, PID, or window title when --window is set
-    #[argh(positional)]
     pub target: String,
 
     /// treat target as window title
-    #[argh(switch, short = 'w')]
+    #[arg(short = 'w', long)]
     pub window: bool,
 
     /// skip interactive confirmation
-    #[argh(switch, short = 'f')]
+    #[arg(short = 'f', long)]
     pub force: bool,
 }

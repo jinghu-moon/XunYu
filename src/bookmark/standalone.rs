@@ -1,36 +1,36 @@
 use std::path::Path;
 use std::time::Instant;
 
-use argh::FromArgs;
+use clap::Parser;
 
 use crate::bookmark::commands;
 use crate::cli::BookmarkSubCommand;
 use crate::output;
 
-#[derive(FromArgs)]
-#[argh(description = "bm - bookmark CLI")]
+#[derive(Parser, Debug, Clone)]
+#[command(name = "bm", about = "bm - bookmark CLI")]
 struct BookmarkCli {
     /// disable ANSI colors
-    #[argh(switch)]
+    #[arg(long)]
     no_color: bool,
 
     /// show version and exit
-    #[argh(switch)]
+    #[arg(long)]
     version: bool,
 
     /// suppress UI output
-    #[argh(switch, short = 'q')]
+    #[arg(short = 'q', long)]
     quiet: bool,
 
     /// verbose output
-    #[argh(switch, short = 'v')]
+    #[arg(short = 'v', long)]
     verbose: bool,
 
     /// force non-interactive mode
-    #[argh(switch)]
+    #[arg(long)]
     non_interactive: bool,
 
-    #[argh(subcommand)]
+    #[command(subcommand)]
     cmd: BookmarkSubCommand,
 }
 
@@ -62,8 +62,7 @@ fn wants_version_only(args: &[String]) -> bool {
         Some(value) if !value.is_empty() => value,
         _ => return false,
     };
-    cli_args.iter().all(|arg| is_global_flag(arg))
-        && cli_args.iter().any(|arg| arg == "--version")
+    cli_args.iter().all(|arg| is_global_flag(arg)) && cli_args.iter().any(|arg| arg == "--version")
 }
 
 fn timing_enabled() -> bool {
@@ -81,26 +80,17 @@ pub(crate) fn run_from_env(invoked_name: Option<&str>) {
         return;
     }
 
-    let args: Vec<&str> = raw_args.iter().map(|arg| arg.as_str()).collect();
     let parse_start = Instant::now();
-    let parsed: BookmarkCli =
-        <BookmarkCli as argh::FromArgs>::from_args(&[cmd.as_str()], &args[1..]).unwrap_or_else(
-            |early_exit| {
-                std::process::exit(match early_exit.status {
-                    Ok(()) => {
-                        println!("{}", early_exit.output);
-                        0
-                    }
-                    Err(()) => {
-                        eprintln!(
-                            "{}\nRun {} --help for more information.",
-                            early_exit.output, cmd
-                        );
-                        1
-                    }
-                })
+    let parsed = BookmarkCli::try_parse_from(&raw_args).unwrap_or_else(|e| {
+        e.print().expect("failed to print clap error");
+        std::process::exit(
+            if e.use_stderr() {
+                1
+            } else {
+                0
             },
-        );
+        )
+    });
     let parse_ms = parse_start.elapsed().as_millis();
     let timing = timing_enabled();
 

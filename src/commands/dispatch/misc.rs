@@ -43,7 +43,7 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         SubCommand::Complete(a) => completion::cmd_complete(a),
         SubCommand::Bookmark(a) => bookmarks::cmd_bookmark(a),
         SubCommand::Config(a) => app_config::cmd_config(a),
-        SubCommand::Delete(a) => delete::cmd_delete(a),
+        SubCommand::Rm(a) => delete::cmd_delete(a),
         SubCommand::Proxy(a) => proxy::cmd_proxy(a),
         SubCommand::Pon(a) => proxy::cmd_proxy_on(a),
         SubCommand::Poff(a) => proxy::cmd_proxy_off(a),
@@ -61,7 +61,7 @@ pub(super) fn dispatch(cmd: SubCommand) -> CliResult {
         #[cfg(feature = "lock")]
         SubCommand::Lock(a) => lock::cmd_lock(a),
         #[cfg(feature = "fs")]
-        SubCommand::Rm(a) => fs::cmd_rm(a),
+        SubCommand::FsRm(a) => fs::cmd_rm(a),
         #[cfg(feature = "lock")]
         SubCommand::Mv(a) => lock::cmd_mv(a),
         #[cfg(feature = "lock")]

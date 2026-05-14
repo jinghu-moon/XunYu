@@ -9,6 +9,7 @@ import ThemeToggle from './components/ThemeToggle.vue'
 import { fetchWorkspaceCapabilities } from './api'
 import type { StatisticsWorkspaceLinkPayload, WorkspaceCapabilities, WorkspaceKey } from './types'
 import { workspaceTabs } from './features/tasks'
+import { useKeyboardNav } from './composables/useKeyboardNav'
 import { isToastMarked, notifyError } from './ui/feedback'
 
 const workspace = ref<WorkspaceKey>('overview')
@@ -43,6 +44,8 @@ const workspaceComponentMap: Record<WorkspaceKey, Component> = {
 }
 
 const tabItems: CapsuleTabItem[] = workspaceTabs.map((item) => ({ value: item.value, label: item.label }))
+
+useKeyboardNav(workspace, workspaceTabs, paletteOpen)
 
 const activeComponent = computed(() => workspaceComponentMap[workspace.value])
 

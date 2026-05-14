@@ -1,67 +1,60 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "path")]
+#[derive(Parser, Debug, Clone)]
 /// PATH operations.
 pub struct EnvPathCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvPathSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "path-dedup")]
+#[derive(Args, Debug, Clone)]
 /// Deduplicate PATH entries.
 pub struct EnvPathDedupCmd {
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// remove missing directories while deduping
-    #[argh(switch)]
+    #[arg(long)]
     pub remove_missing: bool,
 
     /// preview only, do not write
-    #[argh(switch)]
+    #[arg(long)]
     pub dry_run: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvPathSubCommand {
     Add(EnvPathAddCmd),
     Rm(EnvPathRmCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
+#[derive(Args, Debug, Clone)]
 /// Add one PATH entry.
 pub struct EnvPathAddCmd {
     /// path entry
-    #[argh(positional)]
     pub entry: String,
 
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// insert at the front
-    #[argh(switch)]
+    #[arg(long)]
     pub head: bool,
 
     /// insert at the end
-    #[argh(switch)]
+    #[arg(long)]
     pub tail: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rm")]
+#[derive(Args, Debug, Clone)]
 /// Remove one PATH entry.
 pub struct EnvPathRmCmd {
     /// path entry
-    #[argh(positional)]
     pub entry: String,
 
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 }

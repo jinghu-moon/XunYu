@@ -4,11 +4,11 @@ _xun_complete_static() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     local sub="${COMP_WORDS[1]}"
-    local subcommands="bookmark init completion config ctx del delete proxy pon poff pst px ports kill ps pkill backup bak xunbak tree find env video lock rm mv renfile protect encrypt decrypt serve redirect diff desktop brn img verify"
-    local bookmark_sub="z zi o oi open save set delete tag pin unpin rename list recent stats check gc dedup export import init touch learn keys all"
+    local subcommands="bookmark init completion config ctx proxy pon poff pst px ports kill ps pkill backup xunbak tree find env video lock rm mv renfile protect encrypt decrypt serve redirect diff desktop brn img verify"
+    local bookmark_sub="z zi o oi open save set rm tag pin unpin rename list recent stats check gc dedup export import init touch learn keys all"
     local formats="auto table tsv json"
-    local proxy_sub="set del get detect test"
-    local ctx_sub="set use off list show del rename"
+    local proxy_sub="set rm show detect test"
+    local ctx_sub="set use off list show rm rename"
     local tree_sort="name mtime size"
 
     if [[ $COMP_CWORD -eq 1 ]]; then

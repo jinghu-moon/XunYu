@@ -113,7 +113,7 @@ fn complete_bookmark_z_uses_query_core_order() {
 }
 
 #[test]
-fn complete_bookmark_delete_and_unpin_suggest_bookmark_names() {
+fn complete_bookmark_rm_and_unpin_suggest_bookmark_names() {
     let env = TestEnv::new();
     let work = env.root.join("work");
     fs::create_dir_all(&work).unwrap();
@@ -130,15 +130,15 @@ fn complete_bookmark_delete_and_unpin_suggest_bookmark_names() {
         ),
     );
 
-    let delete_out = run_ok(
+    let rm_out = run_ok(
         env.cmd()
             .arg("__complete")
             .arg("bookmark")
-            .arg("delete")
+            .arg("rm")
             .arg("ho"),
     );
-    let delete_stdout = stdout_text(&delete_out);
-    assert!(delete_stdout.contains("home"));
+    let rm_stdout = stdout_text(&rm_out);
+    assert!(rm_stdout.contains("home"));
 
     let unpin_out = run_ok(
         env.cmd()

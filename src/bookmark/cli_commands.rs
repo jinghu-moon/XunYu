@@ -1,523 +1,282 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-use super::defaults::{default_io_format, default_output_format};
+use super::bookmark::{
+    AllCmd, CheckCmd, DedupCmd, ExportCmd, GcCmd, ImportCmd, KeysCmd, ListCmd, OpenCmd, RecentCmd,
+    RenameCmd, SaveCmd, SetCmd, StatsCmd, TagCmd, TouchCmd, ZCmd,
+};
 
-/// List all bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
-pub struct ListCmd {
-    /// filter by tag
-    #[argh(option, short = 't')]
-    pub tag: Option<String>,
-
-    /// sort by: name | last | visits
-    #[argh(option, short = 's', default = "String::from(\"name\")")]
-    pub sort: String,
-
-    /// limit results
-    #[argh(option, short = 'n')]
-    pub limit: Option<usize>,
-
-    /// offset results
-    #[argh(option)]
-    pub offset: Option<usize>,
-
-    /// reverse sort order
-    #[argh(switch)]
-    pub reverse: bool,
-
-    /// output as TSV (Fast Path)
-    #[argh(switch)]
-    pub tsv: bool,
-
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
+/// Bookmark management and navigation.
+#[derive(Parser, Debug, Clone)]
+pub struct BookmarkCmd {
+    #[command(subcommand)]
+    pub cmd: BookmarkSubCommand,
 }
 
-/// Jump to a bookmark (fuzzy match).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "z")]
-pub struct ZCmd {
+#[derive(Subcommand, Debug, Clone)]
+pub enum BookmarkSubCommand {
+    Z(ZCmd),
+    Zi(ZiCmd),
+    O(OpenCmd),
+    Oi(OiCmd),
+    Open(OpenLongCmd),
+    Save(SaveCmd),
+    Set(SetCmd),
+    #[command(name = "rm", alias = "delete")]
+    Rm(BookmarkDeleteCmd),
+    Tag(TagCmd),
+    Pin(PinCmd),
+    Unpin(UnpinCmd),
+    Undo(UndoCmd),
+    Redo(RedoCmd),
+    Rename(RenameCmd),
+    List(ListCmd),
+    Recent(RecentCmd),
+    Stats(StatsCmd),
+    Check(CheckCmd),
+    Gc(GcCmd),
+    Dedup(DedupCmd),
+    Export(ExportCmd),
+    Import(ImportCmd),
+    Init(BookmarkInitCmd),
+    Learn(LearnCmd),
+    Touch(TouchCmd),
+    Keys(KeysCmd),
+    All(AllCmd),
+}
+
+/// Jump to a bookmark with interactive selection.
+#[derive(Args, Debug, Clone)]
+pub struct ZiCmd {
     /// fuzzy pattern
-    #[argh(positional)]
     pub patterns: Vec<String>,
 
     /// filter by tag
-    #[argh(option, short = 't')]
+    #[arg(short = 't', long)]
     pub tag: Option<String>,
 
     /// list matches instead of executing
-    #[argh(switch, short = 'l')]
+    #[arg(short = 'l', long)]
     pub list: bool,
 
     /// show factor scores
-    #[argh(switch, short = 's')]
+    #[arg(short = 's', long)]
     pub score: bool,
 
     /// explain top-1 result
-    #[argh(switch)]
+    #[arg(long)]
     pub why: bool,
 
     /// preview only; do not execute
-    #[argh(switch)]
+    #[arg(long)]
     pub preview: bool,
 
     /// limit listed results
-    #[argh(option, short = 'n')]
+    #[arg(short = 'n', long)]
     pub limit: Option<usize>,
 
     /// output json
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 
     /// output tsv
-    #[argh(switch)]
+    #[arg(long)]
     pub tsv: bool,
 
     /// use global scope
-    #[argh(switch, short = 'g')]
+    #[arg(short = 'g', long)]
     pub global: bool,
 
     /// prefer child scope
-    #[argh(switch, short = 'c')]
+    #[arg(short = 'c', long)]
     pub child: bool,
 
     /// restrict to base dir
-    #[argh(option)]
+    #[arg(long)]
     pub base: Option<String>,
 
     /// workspace scope
-    #[argh(option, short = 'w')]
+    #[arg(short = 'w', long)]
     pub workspace: Option<String>,
 
     /// use config preset
-    #[argh(option)]
+    #[arg(long)]
     pub preset: Option<String>,
 }
 
-/// Open in Explorer.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "o")]
-pub struct OpenCmd {
+/// Open a bookmark with interactive selection.
+#[derive(Args, Debug, Clone)]
+pub struct OiCmd {
     /// fuzzy pattern
-    #[argh(positional)]
     pub patterns: Vec<String>,
 
     /// filter by tag
-    #[argh(option, short = 't')]
+    #[arg(short = 't', long)]
     pub tag: Option<String>,
 
     /// list matches instead of executing
-    #[argh(switch, short = 'l')]
+    #[arg(short = 'l', long)]
     pub list: bool,
 
     /// show factor scores
-    #[argh(switch, short = 's')]
+    #[arg(short = 's', long)]
     pub score: bool,
 
     /// explain top-1 result
-    #[argh(switch)]
+    #[arg(long)]
     pub why: bool,
 
     /// preview only; do not execute
-    #[argh(switch)]
+    #[arg(long)]
     pub preview: bool,
 
     /// limit listed results
-    #[argh(option, short = 'n')]
+    #[arg(short = 'n', long)]
     pub limit: Option<usize>,
 
     /// output json
-    #[argh(switch)]
+    #[arg(long)]
     pub json: bool,
 
     /// output tsv
-    #[argh(switch)]
+    #[arg(long)]
     pub tsv: bool,
 
     /// use global scope
-    #[argh(switch, short = 'g')]
+    #[arg(short = 'g', long)]
     pub global: bool,
 
     /// prefer child scope
-    #[argh(switch, short = 'c')]
+    #[arg(short = 'c', long)]
     pub child: bool,
 
     /// restrict to base dir
-    #[argh(option)]
+    #[arg(long)]
     pub base: Option<String>,
 
     /// workspace scope
-    #[argh(option, short = 'w')]
+    #[arg(short = 'w', long)]
     pub workspace: Option<String>,
 
     /// use config preset
-    #[argh(option)]
+    #[arg(long)]
     pub preset: Option<String>,
 }
 
-/// Save current directory as bookmark.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "save")]
-pub struct SaveCmd {
-    /// bookmark name (optional, defaults to current dir name)
-    #[argh(positional)]
-    pub name: Option<String>,
-
-    /// tags (comma separated)
-    #[argh(option, short = 't')]
-    pub tag: Option<String>,
-
-    /// description
-    #[argh(option)]
-    pub desc: Option<String>,
-
-    /// workspace label
-    #[argh(option, short = 'w')]
-    pub workspace: Option<String>,
-}
-
-/// Save current directory or specific path as bookmark.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
-pub struct SetCmd {
-    /// bookmark name
-    #[argh(positional)]
-    pub name: String,
-
-    /// path (optional, defaults to current dir)
-    #[argh(positional)]
-    pub path: Option<String>,
-
-    /// tags (comma separated)
-    #[argh(option, short = 't')]
-    pub tag: Option<String>,
-
-    /// description
-    #[argh(option)]
-    pub desc: Option<String>,
-
-    /// workspace label
-    #[argh(option, short = 'w')]
-    pub workspace: Option<String>,
-}
-
-/// Force delete files or delete bookmarks with --bookmark (-bm).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "delete")]
-pub struct DeleteCmd {
-    /// delete bookmark instead of files
-    #[argh(switch, long = "bookmark")]
-    pub bookmark: bool,
-
-    /// target paths (files or directories)
-    #[argh(positional, greedy)]
-    pub paths: Vec<String>,
-
-    /// only delete Windows reserved names (default)
-    #[argh(switch)]
-    pub reserved: bool,
-
-    /// allow deleting non-reserved names (dangerous)
-    #[argh(switch)]
-    pub any: bool,
-
-    /// match file names (comma separated, repeatable)
-    #[argh(option)]
-    pub name: Vec<String>,
-
-    /// exclude directory names (comma separated, repeatable)
-    #[argh(option, short = 'e')]
-    pub exclude: Vec<String>,
-
-    /// exclude path glob pattern (repeatable)
-    #[argh(option, short = 'p')]
-    pub pattern: Vec<String>,
-
-    /// skip built-in default excludes
-    #[argh(switch)]
-    pub no_default_excludes: bool,
-
-    /// skip TUI and run CLI pipeline directly
-    #[argh(switch)]
-    pub no_tui: bool,
-
-    /// simulate run without deleting
-    #[argh(switch)]
-    pub dry_run: bool,
-
-    /// alias for --dry-run
-    #[argh(switch, long = "what-if")]
-    pub what_if: bool,
-
-    /// collect file info (sha256 + kind) before delete
-    #[argh(switch)]
-    pub collect_info: bool,
-
-    /// write results to CSV log file
-    #[argh(option)]
-    pub log: Option<String>,
-
-    /// max delete level (1-6), default 2
-    #[argh(option, default = "2")]
-    pub level: u8,
-
-    /// schedule delete on reboot (requires admin)
-    #[argh(switch)]
-    pub on_reboot: bool,
-
-    /// skip confirmations
-    #[argh(switch, short = 'y')]
-    pub yes: bool,
-
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
-
-    /// force operation bypass protection
-    #[argh(switch)]
-    pub force: bool,
-
-    /// reason for bypass protection
-    #[argh(option)]
-    pub reason: Option<String>,
-}
-
-/// Clean up dead links.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "gc")]
-pub struct GcCmd {
-    /// delete all dead links without confirmation
-    #[argh(switch)]
-    pub purge: bool,
-
-    /// preview only; do not delete
-    #[argh(switch)]
-    pub dry_run: bool,
-
-    /// only clean learned/imported records
-    #[argh(switch)]
-    pub learned: bool,
-
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
-}
-
-/// Check bookmark health (missing paths, duplicates, stale).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "check")]
-pub struct CheckCmd {
-    /// stale threshold in days
-    #[argh(option, short = 'd', default = "90")]
-    pub days: u64,
-
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
-}
-
-/// Update frecency (touch).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "touch")]
-pub struct TouchCmd {
-    /// bookmark name
-    #[argh(positional)]
-    pub name: String,
-}
-
-/// Rename a bookmark.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rename")]
-pub struct RenameCmd {
-    /// old name
-    #[argh(positional)]
-    pub old: String,
-
-    /// new name
-    #[argh(positional)]
-    pub new: String,
-}
-
-/// Tag management.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "tag")]
-pub struct TagCmd {
-    #[argh(subcommand)]
-    pub cmd: TagSubCommand,
-}
-
-#[derive(FromArgs)]
-#[argh(subcommand)]
-pub enum TagSubCommand {
-    Add(TagAddCmd),
-    AddBatch(TagAddBatchCmd),
-    Remove(TagRemoveCmd),
-    List(TagListCmd),
-    Rename(TagRenameCmd),
-}
-
-/// Add tags to a bookmark.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add")]
-pub struct TagAddCmd {
-    /// bookmark name
-    #[argh(positional)]
-    pub name: String,
-
-    /// tags (comma separated)
-    #[argh(positional)]
-    pub tags: String,
-}
-
-/// Add tags to multiple bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add-batch")]
-pub struct TagAddBatchCmd {
-    /// tags (comma separated)
-    #[argh(positional)]
-    pub tags: String,
-
-    /// bookmark names
-    #[argh(positional)]
-    pub names: Vec<String>,
-}
-
-/// Remove tags from a bookmark.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
-pub struct TagRemoveCmd {
-    /// bookmark name
-    #[argh(positional)]
-    pub name: String,
-
-    /// tags (comma separated)
-    #[argh(positional)]
-    pub tags: String,
-}
-
-/// List all tags and counts.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "list")]
-pub struct TagListCmd {}
-
-/// Rename a tag across all bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "rename")]
-pub struct TagRenameCmd {
-    /// old tag
-    #[argh(positional)]
-    pub old: String,
-
-    /// new tag
-    #[argh(positional)]
-    pub new: String,
-}
-
-/// Show recent bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "recent")]
-pub struct RecentCmd {
-    /// limit results
-    #[argh(option, short = 'n', default = "10")]
-    pub limit: usize,
+/// Open in file manager.
+#[derive(Args, Debug, Clone)]
+pub struct OpenLongCmd {
+    /// fuzzy pattern
+    pub patterns: Vec<String>,
 
     /// filter by tag
-    #[argh(option, short = 't')]
+    #[arg(short = 't', long)]
     pub tag: Option<String>,
 
-    /// filter by workspace
-    #[argh(option, short = 'w')]
+    /// list matches instead of executing
+    #[arg(short = 'l', long)]
+    pub list: bool,
+
+    /// show factor scores
+    #[arg(short = 's', long)]
+    pub score: bool,
+
+    /// explain top-1 result
+    #[arg(long)]
+    pub why: bool,
+
+    /// preview only; do not execute
+    #[arg(long)]
+    pub preview: bool,
+
+    /// limit listed results
+    #[arg(short = 'n', long)]
+    pub limit: Option<usize>,
+
+    /// output json
+    #[arg(long)]
+    pub json: bool,
+
+    /// output tsv
+    #[arg(long)]
+    pub tsv: bool,
+
+    /// use global scope
+    #[arg(short = 'g', long)]
+    pub global: bool,
+
+    /// prefer child scope
+    #[arg(short = 'c', long)]
+    pub child: bool,
+
+    /// restrict to base dir
+    #[arg(long)]
+    pub base: Option<String>,
+
+    /// workspace scope
+    #[arg(short = 'w', long)]
     pub workspace: Option<String>,
 
-    /// only include records since duration (e.g. 7d, 24h, 30m)
-    #[argh(option)]
-    pub since: Option<String>,
-
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
+    /// use config preset
+    #[arg(long)]
+    pub preset: Option<String>,
 }
 
-/// Show statistics.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "stats")]
-pub struct StatsCmd {
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
-
-    /// show usage insights and suggestions
-    #[argh(switch)]
-    pub insights: bool,
+/// Pin a bookmark.
+#[derive(Args, Debug, Clone)]
+pub struct PinCmd {
+    /// bookmark name
+    pub name: String,
 }
 
-/// Deduplicate bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "dedup")]
-pub struct DedupCmd {
-    /// mode: path | name
-    #[argh(option, short = 'm', default = "String::from(\"path\")")]
-    pub mode: String,
-
-    /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
-    pub format: String,
-
-    /// skip confirmation (interactive mode only)
-    #[argh(switch, short = 'y')]
-    pub yes: bool,
+/// Remove pin from a bookmark.
+#[derive(Args, Debug, Clone)]
+pub struct UnpinCmd {
+    /// bookmark name
+    pub name: String,
 }
 
-/// Export bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "export")]
-pub struct ExportCmd {
-    /// format: json | tsv
-    #[argh(option, short = 'f', default = "default_io_format()")]
-    pub format: String,
-
-    /// output file (optional)
-    #[argh(option, short = 'o')]
-    pub out: Option<String>,
-}
-
-/// Import bookmarks.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "import")]
-pub struct ImportCmd {
-    /// format: json | tsv
-    #[argh(option, short = 'f', default = "default_io_format()")]
-    pub format: String,
-
-    /// import source: autojump | zoxide | z | fasd | history
-    #[argh(option)]
-    pub from: Option<String>,
-
-    /// input file (optional, default stdin)
-    #[argh(option, short = 'i')]
-    pub input: Option<String>,
-
-    /// mode: merge | overwrite
-    #[argh(option, short = 'm', default = "String::from(\"merge\")")]
-    pub mode: String,
+/// Delete a bookmark.
+#[derive(Args, Debug, Clone)]
+pub struct BookmarkDeleteCmd {
+    /// bookmark name
+    pub name: String,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }
 
-/// List all keys (for tab completion).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "keys")]
-pub struct KeysCmd {}
+/// Undo previous bookmark mutations.
+#[derive(Args, Debug, Clone)]
+pub struct UndoCmd {
+    /// number of undo steps
+    #[arg(short = 'n', long, default_value_t = 1)]
+    pub steps: usize,
+}
 
-/// All bookmarks (machine output).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "all")]
-pub struct AllCmd {
-    /// filter by tag
-    #[argh(positional)]
-    pub tag: Option<String>,
+/// Redo previously undone bookmark mutations.
+#[derive(Args, Debug, Clone)]
+pub struct RedoCmd {
+    /// number of redo steps
+    #[arg(short = 'n', long, default_value_t = 1)]
+    pub steps: usize,
+}
+
+/// Generate bookmark shell integration.
+#[derive(Args, Debug, Clone)]
+pub struct BookmarkInitCmd {
+    /// shell type: powershell | bash | zsh | fish
+    pub shell: String,
+
+    /// custom command prefix (e.g. j -> j/ji/jo/joi)
+    #[arg(long)]
+    pub cmd: Option<String>,
+}
+
+/// Record a visited directory for auto-learn.
+#[derive(Args, Debug, Clone)]
+pub struct LearnCmd {
+    /// path to learn
+    #[arg(long)]
+    pub path: String,
 }

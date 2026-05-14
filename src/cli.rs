@@ -40,7 +40,7 @@ mod video;
 #[cfg(feature = "xunbak")]
 mod xunbak;
 
-use argh::FromArgs;
+use clap::{Parser, Subcommand};
 
 #[cfg(feature = "diff")]
 pub use crate::commands::diff::DiffCmd;
@@ -65,13 +65,13 @@ pub use backup::{
 #[cfg(feature = "batch_rename")]
 pub use batch_rename::BrnCmd;
 pub use bookmark::{
-    BookmarkCmd, BookmarkInitCmd, BookmarkSubCommand, LearnCmd, OiCmd, PinCmd, RedoCmd, UndoCmd,
-    UnpinCmd, ZiCmd,
+    AllCmd, CheckCmd, DedupCmd, DeleteCmd, ExportCmd, GcCmd, ImportCmd, KeysCmd, ListCmd, OpenCmd,
+    RecentCmd, RenameCmd, SaveCmd, SetCmd, StatsCmd, TagAddCmd, TagAddBatchCmd, TagCmd,
+    TagListCmd, TagRemoveCmd, TagRenameCmd, TagSubCommand, TouchCmd, ZCmd,
 };
 pub use bookmarks::{
-    AllCmd, CheckCmd, DedupCmd, DeleteCmd, ExportCmd, GcCmd, ImportCmd, KeysCmd, ListCmd,
-    OpenCmd, RecentCmd, RenameCmd, SaveCmd, SetCmd, StatsCmd, TagAddCmd, TagAddBatchCmd, TagCmd, TagListCmd,
-    TagRemoveCmd, TagRenameCmd, TagSubCommand, TouchCmd, ZCmd,
+    BookmarkCmd, BookmarkInitCmd, BookmarkSubCommand, LearnCmd, OiCmd,
+    PinCmd, RedoCmd, UndoCmd, UnpinCmd, ZiCmd,
 };
 pub use config::{ConfigCmd, ConfigEditCmd, ConfigGetCmd, ConfigSetCmd, ConfigSubCommand};
 #[cfg(feature = "crypt")]
@@ -138,53 +138,54 @@ pub use xunbak::{
     XunbakPluginSubCommand, XunbakPluginUninstallCmd, XunbakSubCommand,
 };
 
-#[derive(FromArgs)]
-#[argh(description = "xun - bookmark + proxy CLI")]
+#[derive(Parser, Debug, Clone)]
+#[command(name = "xun", about = "xun - bookmark + proxy CLI", version)]
 pub struct Xun {
     /// disable ANSI colors (or set NO_COLOR=1)
-    #[argh(switch)]
+    #[arg(long)]
     pub no_color: bool,
 
-    /// show version and exit
-    #[argh(switch)]
-    pub version: bool,
-
     /// suppress UI output
-    #[argh(switch, short = 'q')]
+    #[arg(short = 'q', long)]
     pub quiet: bool,
 
     /// verbose output
-    #[argh(switch, short = 'v')]
+    #[arg(short = 'v', long)]
     pub verbose: bool,
 
     /// force non-interactive mode
-    #[argh(switch)]
+    #[arg(long)]
     pub non_interactive: bool,
 
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: SubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
-#[allow(clippy::large_enum_variant, clippy::result_large_err)]
+#[derive(Subcommand, Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum SubCommand {
     Acl(AclCmd),
     Init(InitCmd),
     Completion(CompletionCmd),
+    #[command(alias = "__complete")]
     Complete(CompleteCmd),
     Bookmark(BookmarkCmd),
     Config(ConfigCmd),
     Ctx(CtxCmd),
-    Delete(DeleteCmd),
+    #[command(name = "rm", alias = "delete", alias = "del")]
+    Rm(DeleteCmd),
     Proxy(ProxyCmd),
     Pon(ProxyOnCmd),
     Poff(ProxyOffCmd),
     Pst(ProxyStatusCmd),
     Px(ProxyExecCmd),
+    #[command(hide = true)]
     Ports(PortsCmd),
+    #[command(hide = true)]
     Kill(KillCmd),
+    #[command(hide = true)]
     Ps(PsCmd),
+    #[command(hide = true)]
     Pkill(PkillCmd),
     Backup(BackupCmd),
     Tree(TreeCmd),
@@ -195,7 +196,7 @@ pub enum SubCommand {
     #[cfg(feature = "lock")]
     Lock(LockCmd),
     #[cfg(feature = "fs")]
-    Rm(RmCmd),
+    FsRm(RmCmd),
     #[cfg(feature = "lock")]
     Mv(MvCmd),
     #[cfg(feature = "lock")]

@@ -20,7 +20,7 @@ pub(super) fn cmd_orphans(args: AclOrphansCmd) -> CliResult {
     bar.set_message(format!("Scanning orphans... {}", path.display()));
     bar.enable_steady_tick(std::time::Duration::from_millis(80));
 
-    let orphans = acl::orphan::scan_orphans(path, args.recursive, &cfg.cfg).map_err(map_acl_err)?;
+    let orphans = acl::orphan::scan_orphans(path, args.recursive == "true", &cfg.cfg).map_err(map_acl_err)?;
     bar.finish_and_clear();
 
     if orphans.is_empty() {

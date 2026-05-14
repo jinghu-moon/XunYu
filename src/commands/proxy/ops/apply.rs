@@ -134,12 +134,12 @@ pub(crate) fn cmd_proxy(args: ProxyCmd) -> CliResult {
             save_proxy_state(&a.url, &a.noproxy);
             Ok(())
         }
-        ProxySubCommand::Del(a) => {
+        ProxySubCommand::Rm(a) => {
             let only = parse_proxy_only(a.only.as_deref()).map_err(|e| CliError::new(2, e))?;
             del_proxy(a.msys2.as_deref(), only.as_ref());
             Ok(())
         }
-        ProxySubCommand::Get(_a) => {
+        ProxySubCommand::Show(_a) => {
             if has_cmd("git") {
                 if let Ok(o) = Command::new("git")
                     .args(["config", "--global", "--get", "http.proxy"])

@@ -126,7 +126,7 @@ pub(super) fn cmd_profile_list(manager: &EnvManager, args: EnvProfileListCmd) ->
 
 }
     }
-        EnvProfileSubCommand::Delete(a) => cmd_profile_delete(manager, a),
+        EnvProfileSubCommand::Rm(a) => cmd_profile_delete(manager, a),
         EnvProfileSubCommand::Diff(a) => cmd_profile_diff(manager, a),
         EnvProfileSubCommand::Apply(a) => cmd_profile_apply(manager, a),
         EnvProfileSubCommand::Capture(a) => cmd_profile_capture(manager, a),
@@ -574,9 +574,9 @@ pub(super) fn cmd_status(manager: &EnvManager, args: EnvStatusCmd) -> CliResult 
         EnvSubCommand::PathDedup(a) => cmd_path_dedup(&manager, a),
         EnvSubCommand::Path(a) => cmd_path(&manager, a),
         EnvSubCommand::Check(a) => cmd_check(&manager, a),
-        EnvSubCommand::Del(a) => cmd_del(&manager, a),
+        EnvSubCommand::Rm(a) => cmd_del(&manager, a),
         EnvSubCommand::Set(a) => cmd_set(&manager, a),
-        EnvSubCommand::Get(a) => cmd_get(&manager, a),
+        EnvSubCommand::Show(a) => cmd_get(&manager, a),
         EnvSubCommand::Search(a) => cmd_search(&manager, a),
         EnvSubCommand::List(a) => cmd_list(&manager, a),
         EnvSubCommand::Status(a) => cmd_status(&manager, a),
@@ -694,7 +694,7 @@ pub(super) fn cmd_batch_set(manager: &EnvManager, args: EnvBatchSetCmd) -> CliRe
 }
     }
         EnvBatchSubCommand::Rename(a) => cmd_batch_rename(manager, a),
-        EnvBatchSubCommand::Delete(a) => cmd_batch_delete(manager, a),
+        EnvBatchSubCommand::Rm(a) => cmd_batch_delete(manager, a),
         EnvBatchSubCommand::Set(a) => cmd_batch_set(manager, a),
     match args.cmd {
 pub(super) fn cmd_batch(manager: &EnvManager, args: EnvBatchCmd) -> CliResult {
@@ -823,7 +823,7 @@ pub(super) fn cmd_profile_list(manager: &EnvManager, args: EnvProfileListCmd) ->
 
 }
     }
-        EnvProfileSubCommand::Delete(a) => cmd_profile_delete(manager, a),
+        EnvProfileSubCommand::Rm(a) => cmd_profile_delete(manager, a),
         EnvProfileSubCommand::Diff(a) => cmd_profile_diff(manager, a),
         EnvProfileSubCommand::Apply(a) => cmd_profile_apply(manager, a),
         EnvProfileSubCommand::Capture(a) => cmd_profile_capture(manager, a),
@@ -1271,9 +1271,9 @@ pub(super) fn cmd_status(manager: &EnvManager, args: EnvStatusCmd) -> CliResult 
         EnvSubCommand::PathDedup(a) => cmd_path_dedup(&manager, a),
         EnvSubCommand::Path(a) => cmd_path(&manager, a),
         EnvSubCommand::Check(a) => cmd_check(&manager, a),
-        EnvSubCommand::Del(a) => cmd_del(&manager, a),
+        EnvSubCommand::Rm(a) => cmd_del(&manager, a),
         EnvSubCommand::Set(a) => cmd_set(&manager, a),
-        EnvSubCommand::Get(a) => cmd_get(&manager, a),
+        EnvSubCommand::Show(a) => cmd_get(&manager, a),
         EnvSubCommand::Search(a) => cmd_search(&manager, a),
         EnvSubCommand::List(a) => cmd_list(&manager, a),
         EnvSubCommand::Status(a) => cmd_status(&manager, a),

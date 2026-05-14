@@ -42,7 +42,7 @@
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
-| `xun ctx del <name>` | 删除 profile。 | - |
+| `xun ctx rm <name>` | 删除 profile。 | - |
 | `xun ctx list` | 列出 profile 列表。 | `--format <auto|table|tsv|json>` |
 | `xun ctx off` | 停用当前 profile。 | - |
 | `xun ctx rename <old> <new>` | 重命名 profile。 | - |
@@ -63,7 +63,7 @@
 | `xun bookmark open [keywords...]` | `o` 的长命令形式。 | 与 `o` 等价 |
 | `xun bookmark save [name]` | 保存当前目录为显式书签。 | `--tag <tag>`；`--desc <text>`；`-w/--workspace <name>` |
 | `xun bookmark set <name> [path]` | 保存当前目录或指定路径为显式书签。 | `--tag <tag>`；`--desc <text>`；`-w/--workspace <name>` |
-| `xun bookmark tag add|remove|list|rename ...` | 书签标签管理。 | - |
+| `xun bookmark tag add|rm|list|rename ...` | 书签标签管理。 | - |
 | `xun bookmark pin <name>` | 置顶显式书签。 | - |
 | `xun bookmark undo` | 撤销最近的书签变更。 | `--steps <n>` |
 | `xun bookmark redo` | 重做最近撤销的书签变更。 | `--steps <n>` |
@@ -82,7 +82,7 @@
 | `xun bookmark keys` | 输出所有具名书签名（补全用）。 | - |
 | `xun bookmark all [tag]` | 机器输出所有书签。 | - |
 
-删除书签请使用 `xun del -bm <name>` 或 `xun delete -bm <name>`。
+删除书签请使用 `xun rm -bm <name>`。
 
 Scope 说明：
 - `-g/--global`：全局候选，不参考当前目录上下文。
@@ -98,9 +98,9 @@ Scope 说明：
 | --- | --- | --- |
 | `xun poff` | 关闭代理（poff）。 | `--msys2 <msys2>` |
 | `xun pon [url]` | 开启代理（pon）。 | `--no-test`；`--noproxy <url>`；`--msys2 <msys2>` |
-| `xun proxy del` | 删除代理。 | `--msys2 <msys2>`；`--only <only>` |
+| `xun proxy rm` | 删除代理。 | `--msys2 <msys2>`；`--only <only>` |
 | `xun proxy detect` | 检测系统代理。 | `--format <auto|table|tsv|json>` |
-| `xun proxy get` | 读取当前 git 代理配置。 | - |
+| `xun proxy show` | 读取当前 git 代理配置。 | - |
 | `xun proxy set <url>` | 设置代理。 | `--noproxy <url>`；`--msys2 <msys2>`；`--only <only>` |
 | `xun proxy test <url>` | 测试代理延迟。 | `--targets <targets>`；`--timeout <timeout>`；`--jobs <jobs>` |
 | `xun pst` | 代理状态（pst）。 | `--format <auto|table|tsv|json>` |
@@ -130,7 +130,7 @@ Scope 说明：
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
-| `xun backup <op-args...>` | 增量项目备份。`xun bak` 为别名。 | `list`；`verify <name>`；`find [tag]`；`--msg <msg>`；`--dir <path>`；`--dry-run`；`--no-compress`；`--retain <retain>`；`--include <include>`；`--exclude <exclude>`；`--incremental`；`--skip-if-unchanged`；配置项 `skipIfUnchanged` |
+| `xun backup <op-args...>` | 增量项目备份。 | `list`；`verify <name>`；`find [tag]`；`--msg <msg>`；`--dir <path>`；`--dry-run`；`--no-compress`；`--retain <retain>`；`--include <include>`；`--exclude <exclude>`；`--incremental`；`--skip-if-unchanged`；配置项 `skipIfUnchanged` |
 | `xun restore <name-or-path>` | 从备份恢复文件。`xun rst` 为别名。 | `--file <path>`；`--glob <pattern>`；`--to <path>`；`--snapshot`；`--dir <path>`；`--dry-run`；`-y/--yes` |
 
 ---
@@ -155,9 +155,9 @@ Scope 说明：
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
-| `xun acl view -p <path>` | 查看 ACL 摘要/明细。 | `--detail`；`--export <csv>` |
+| `xun acl show -p <path>` | 查看 ACL 摘要/明细。 | `--detail`；`--export <csv>` |
 | `xun acl add -p <path>` | 添加 ACL 规则。 | `--principal`；`--rights`；`--ace-type`；`--inherit`；`-y/--yes` |
-| `xun acl remove -p <path>` | 删除显式 ACL 规则（交互多选）。 | - |
+| `xun acl rm -p <path>` | 删除显式 ACL 规则（交互多选）。 | - |
 | `xun acl purge -p <path>` | 清理某主体的全部显式规则。 | `--principal`；`-y/--yes` |
 | `xun acl diff -p <path> -r <ref>` | 比较两路径 ACL 差异。 | `-o/--output <csv>` |
 | `xun acl batch` | 批量 ACL 操作。 | `--file`；`--paths`；`--action <repair|backup|orphans|inherit-reset>`；`--output`；`-y/--yes` |
@@ -174,12 +174,11 @@ Scope 说明：
 
 ---
 
-## 文件删除（delete/del）
+## 文件删除（rm）
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
-| `xun delete [path]` | 删除文件（默认仅匹配 Windows 保留名）。 | `--any` 允许任意文件名；`--dry-run/--what-if`；`--on-reboot`；`--format <auto|table|tsv|json>` |
-| `xun del [path]` | `delete` 的别名。 | 同上 |
+| `xun rm [path]` | 删除文件（默认仅匹配 Windows 保留名）。 | `--any` 允许任意文件名；`--dry-run/--what-if`；`--on-reboot`；`--format <auto|table|tsv|json>` |
 
 删除书签请使用 `-bm/--bookmark`。
 
@@ -199,7 +198,7 @@ Watch 调优环境变量：`XUN_REDIRECT_WATCH_DEBOUNCE_MS`、`XUN_REDIRECT_WATC
 
 ## 文件解锁与操作（feature: `lock`）
 
-> 需 `--features lock` 编译。`rm`/`mv`/`ren` 为文件系统操作；`delete`/`del` 默认仅处理保留名（`--any` 允许任意文件名），书签删除请用 `-bm/--bookmark`。
+> 需 `--features lock` 编译。`rm`/`mv`/`ren` 为文件系统操作；`rm` 默认仅处理保留名（`--any` 允许任意文件名），书签删除请用 `-bm/--bookmark`。
 
 | 命令 | 说明 | 选项/备注 |
 | --- | --- | --- |
@@ -268,7 +267,7 @@ Watch 调优环境变量：`XUN_REDIRECT_WATCH_DEBOUNCE_MS`、`XUN_REDIRECT_WATC
 | `xun alias setup` | 安装 alias 运行时（shim + shell）。 | `--no-cmd`；`--no-ps`；`--no-bash`；`--no-nu`；`--core-only` |
 | `xun alias add <name> <command>` | 添加命令别名。 | `--mode <auto|exe|cmd>`；`--desc`；`--tag`；`--shell`；`--force` |
 | `xun alias rm <names...>` | 删除命令别名。 | - |
-| `xun alias ls` | 列别名。 | `--type <cmd|app>`；`--tag`；`--json` |
+| `xun alias list` | 列别名。 | `--type <cmd|app>`；`--tag`；`--json` |
 | `xun alias find <keyword>` | 模糊查找别名。 | - |
 | `xun alias which <name>` | 查看别名目标与 shim 信息。 | - |
 | `xun alias sync` | 同步 shim / app paths / shell。 | - |
@@ -313,5 +312,5 @@ Watch 调优环境变量：`XUN_REDIRECT_WATCH_DEBOUNCE_MS`、`XUN_REDIRECT_WATC
 ## Shell wrapper 别名
 
 `xun init` 输出的脚本中包含：
-`x`、`ctx`、`bm`、`z`、`zi`、`o`、`oi`、`delete`、`pon`、`poff`、`pst`、`px`、`bak`、`xtree`、`xr`、`redir`。
+`x`、`ctx`、`bm`、`z`、`zi`、`o`、`oi`、`pon`、`poff`、`pst`、`px`、`xtree`、`xr`、`redir`。
 其中 `xtree` 用于避免覆盖系统 `tree` 命令；`z / zi / o / oi` 由 bookmark wrapper 提供，等价于 `xun bookmark ...`。

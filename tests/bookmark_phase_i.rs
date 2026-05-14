@@ -275,7 +275,7 @@ fn completion_script_lists_new_bookmark_subcommands() {
     let env = TestEnv::new();
     let out = run_ok(env.cmd().args(["completion", "bash"]));
     let stdout = stdout_text(&out);
-    for name in ["zi", "oi", "learn", "pin", "unpin", "delete", "keys", "all"] {
+    for name in ["zi", "oi", "learn", "pin", "unpin", "rm", "keys", "all"] {
         assert!(
             stdout.contains(&format!(" {name}")) || stdout.contains(&format!("\"{name}\"")),
             "missing completion item: {name}\n{stdout}"

@@ -1,15 +1,13 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "config")]
+#[derive(Parser, Debug, Clone)]
 /// Manage env core config.
 pub struct EnvConfigCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvConfigSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvConfigSubCommand {
     Show(EnvConfigShowCmd),
     Path(EnvConfigPathCmd),
@@ -18,47 +16,39 @@ pub enum EnvConfigSubCommand {
     Set(EnvConfigSetCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "show")]
+#[derive(Args, Debug, Clone)]
 /// Show current env config.
 pub struct EnvConfigShowCmd {
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "path")]
+#[derive(Args, Debug, Clone)]
 /// Print env config file path.
 pub struct EnvConfigPathCmd {}
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "reset")]
+#[derive(Args, Debug, Clone)]
 /// Reset env config to defaults.
 pub struct EnvConfigResetCmd {
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "get")]
+#[derive(Args, Debug, Clone)]
 /// Get one env config value.
 pub struct EnvConfigGetCmd {
     /// key
-    #[argh(positional)]
     pub key: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 /// Set one env config value.
 pub struct EnvConfigSetCmd {
     /// key
-    #[argh(positional)]
     pub key: String,
 
     /// value
-    #[argh(positional)]
     pub value: String,
 }

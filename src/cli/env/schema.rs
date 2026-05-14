@@ -1,15 +1,13 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "schema")]
+#[derive(Parser, Debug, Clone)]
 /// Manage env schema rules.
 pub struct EnvSchemaCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: EnvSchemaSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum EnvSchemaSubCommand {
     Show(EnvSchemaShowCmd),
     AddRequired(EnvSchemaAddRequiredCmd),
@@ -19,76 +17,64 @@ pub enum EnvSchemaSubCommand {
     Reset(EnvSchemaResetCmd),
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "show")]
+#[derive(Args, Debug, Clone)]
 /// Show current schema.
 pub struct EnvSchemaShowCmd {
     /// output format: text|json
-    #[argh(option, default = "String::from(\"text\")")]
+    #[arg(long, default_value = "text")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add-required")]
+#[derive(Args, Debug, Clone)]
 /// Add or replace required rule.
 pub struct EnvSchemaAddRequiredCmd {
     /// variable pattern, supports * and ?
-    #[argh(positional)]
     pub pattern: String,
 
     /// mark as warning when not strict
-    #[argh(switch)]
+    #[arg(long)]
     pub warn_only: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add-regex")]
+#[derive(Args, Debug, Clone)]
 /// Add or replace regex rule.
 pub struct EnvSchemaAddRegexCmd {
     /// variable pattern, supports * and ?
-    #[argh(positional)]
     pub pattern: String,
 
     /// regex expression
-    #[argh(positional)]
     pub regex: String,
 
     /// mark as warning when not strict
-    #[argh(switch)]
+    #[arg(long)]
     pub warn_only: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "add-enum")]
+#[derive(Args, Debug, Clone)]
 /// Add or replace enum rule.
 pub struct EnvSchemaAddEnumCmd {
     /// variable pattern, supports * and ?
-    #[argh(positional)]
     pub pattern: String,
 
     /// allowed values, one or more
-    #[argh(positional)]
     pub values: Vec<String>,
 
     /// mark as warning when not strict
-    #[argh(switch)]
+    #[arg(long)]
     pub warn_only: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "remove")]
+#[derive(Args, Debug, Clone)]
 /// Remove one rule by pattern.
 pub struct EnvSchemaRemoveCmd {
     /// rule pattern
-    #[argh(positional)]
     pub pattern: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "reset")]
+#[derive(Args, Debug, Clone)]
 /// Reset schema to empty.
 pub struct EnvSchemaResetCmd {
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }

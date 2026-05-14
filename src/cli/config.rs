@@ -1,15 +1,13 @@
-use argh::FromArgs;
+use clap::{Args, Parser, Subcommand};
 
 /// Manage ~/.xun.config.json.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "config")]
+#[derive(Parser, Debug, Clone)]
 pub struct ConfigCmd {
-    #[argh(subcommand)]
+    #[command(subcommand)]
     pub cmd: ConfigSubCommand,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum ConfigSubCommand {
     Get(ConfigGetCmd),
     Set(ConfigSetCmd),
@@ -17,28 +15,22 @@ pub enum ConfigSubCommand {
 }
 
 /// Get a config value by dot path (e.g. proxy.defaultUrl).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "get")]
+#[derive(Args, Debug, Clone)]
 pub struct ConfigGetCmd {
     /// key path (dot separated)
-    #[argh(positional)]
     pub key: String,
 }
 
 /// Set a config value by dot path (e.g. tree.defaultDepth 3).
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 pub struct ConfigSetCmd {
     /// key path (dot separated)
-    #[argh(positional)]
     pub key: String,
 
     /// value (JSON if possible, otherwise string)
-    #[argh(positional)]
     pub value: String,
 }
 
 /// Open config file in an editor.
-#[derive(FromArgs)]
-#[argh(subcommand, name = "edit")]
+#[derive(Args, Debug, Clone)]
 pub struct ConfigEditCmd {}

@@ -1,88 +1,76 @@
-use super::*;
+use clap::Args;
 
+#[derive(Args, Debug, Clone)]
+/// List environment variables.
 pub struct EnvListCmd {
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "search")]
+#[derive(Args, Debug, Clone)]
 /// Search environment variables by name/value.
 pub struct EnvSearchCmd {
     /// keyword query
-    #[argh(positional)]
     pub query: String,
 
     /// scope: user|system|all
-    #[argh(option, default = "String::from(\"all\")")]
+    #[arg(long, default_value = "all")]
     pub scope: String,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "get")]
+#[derive(Args, Debug, Clone)]
 /// Get one environment variable.
 pub struct EnvGetCmd {
     /// variable name
-    #[argh(positional)]
     pub name: String,
 
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// output format: auto|table|tsv|json
-    #[argh(option, short = 'f', default = "default_output_format()")]
+    #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "set")]
+#[derive(Args, Debug, Clone)]
 /// Set one environment variable.
 pub struct EnvSetCmd {
     /// variable name
-    #[argh(positional)]
     pub name: String,
 
     /// variable value
-    #[argh(positional)]
     pub value: String,
 
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// disable automatic pre-write snapshot
-    #[argh(switch)]
+    #[arg(long)]
     pub no_snapshot: bool,
 }
 
-#[derive(FromArgs)]
-#[argh(subcommand, name = "del")]
+#[derive(Args, Debug, Clone)]
 /// Delete one environment variable.
 pub struct EnvDelCmd {
     /// variable name
-    #[argh(positional)]
     pub name: String,
 
     /// scope: user|system
-    #[argh(option, default = "String::from(\"user\")")]
+    #[arg(long, default_value = "user")]
     pub scope: String,
 
     /// skip confirmation
-    #[argh(switch, short = 'y')]
+    #[arg(short = 'y', long)]
     pub yes: bool,
 }
-
-#[derive(FromArgs)]
-#[argh(subcommand, name = "check")]
-/// Run environment checks (alias of doctor).
-

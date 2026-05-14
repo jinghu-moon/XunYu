@@ -163,7 +163,7 @@ fn derive_backup_stats(
 pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     if let Some(subcommand) = args.cmd.clone() {
         match subcommand {
-            BackupSubCommand::Create(cmd) => {
+            BackupSubCommand::Add(cmd) => {
                 return crate::backup::app::create::cmd_backup_create(cmd);
             }
             BackupSubCommand::Restore(cmd) => {
@@ -215,7 +215,7 @@ pub(crate) fn cmd_backup(args: BackupCmd) -> CliResult {
     if let Some(subcommand) = args.cmd {
         let t_sub = Instant::now();
         let (label, result) = match subcommand {
-            BackupSubCommand::Create(_)
+            BackupSubCommand::Add(_)
             | BackupSubCommand::Restore(_)
             | BackupSubCommand::Convert(_) => unreachable!("handled earlier"),
             BackupSubCommand::List(cmd) => ("list", list::cmd_backup_list(&root, &cfg, cmd.json)),

@@ -46,7 +46,7 @@ pub(crate) fn cmd_bookmark(args: BookmarkCmd) -> CliResult {
         }),
         BookmarkSubCommand::Save(a) => cmd_save(a),
         BookmarkSubCommand::Set(a) => cmd_set(a),
-        BookmarkSubCommand::Delete(a) => delete_bookmark(&a.name, a.yes),
+        BookmarkSubCommand::Rm(a) => delete_bookmark(&a.name, a.yes),
         BookmarkSubCommand::Tag(a) => cmd_tag(a),
         BookmarkSubCommand::Pin(a) => cmd_pin(a),
         BookmarkSubCommand::Unpin(a) => cmd_unpin(a),
