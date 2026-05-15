@@ -59,3 +59,25 @@ pub struct TreeCmd {
     #[arg(long)]
     pub exclude: Vec<String>,
 }
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+use crate::xun_core::command::CommandSpec;
+use crate::xun_core::context::CmdContext;
+use crate::xun_core::error::XunError;
+use crate::xun_core::value::Value;
+
+/// tree 命令。
+pub struct TreeCmdSpec {
+    pub args: TreeCmd,
+}
+
+impl CommandSpec for TreeCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::tree::cmd_tree(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}

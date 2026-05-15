@@ -52,13 +52,14 @@ pub enum WsResponse {
     /// 操作执行结果。
     OpResult { result: OperationResult },
     /// 错误。
-    Error { message: String, code: String },
+    Error { message: String, code: WsErrorCode },
     /// 连接确认。
     Connected,
 }
 
 /// 错误码。
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WsErrorCode {
     /// 命令未找到。
     NotFound,
@@ -104,7 +105,7 @@ impl WsResponse {
     pub fn error(message: impl Into<String>, code: WsErrorCode) -> Self {
         Self::Error {
             message: message.into(),
-            code: code.as_str().to_string(),
+            code,
         }
     }
 

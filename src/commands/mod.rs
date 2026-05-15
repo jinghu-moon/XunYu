@@ -1,5 +1,6 @@
 pub(crate) mod acl_cmd;
 #[cfg(feature = "alias")]
+#[allow(dead_code)]
 pub(crate) mod alias;
 pub(crate) mod app_config;
 pub(crate) mod backup;
@@ -11,7 +12,6 @@ pub(crate) mod desktop;
 #[cfg(all(feature = "desktop", feature = "tui"))]
 pub(crate) mod desktop_tui;
 pub(crate) mod env;
-pub(crate) mod find;
 pub(crate) mod ports;
 pub(crate) mod proxy;
 pub(crate) mod restore_core;
@@ -35,6 +35,7 @@ pub(crate) mod crypt;
 #[cfg(feature = "dashboard")]
 pub(crate) mod dashboard;
 #[cfg(feature = "diff")]
+#[allow(dead_code)]
 pub(crate) mod diff;
 #[cfg(feature = "fs")]
 pub(crate) mod fs;
@@ -46,7 +47,3 @@ pub(crate) mod protect;
 pub(crate) mod vault;
 
 pub(crate) use crate::bookmark::commands as bookmarks;
-
-mod dispatch;
-
-pub(crate) use dispatch::dispatch;

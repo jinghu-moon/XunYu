@@ -15,35 +15,35 @@ use super::value::{ColumnDef, Value, ValueKind};
 #[command(name = "vault", about = "FileVault v13 management")]
 pub struct VaultCmd {
     #[command(subcommand)]
-    pub sub: VaultSubCommand,
+    pub cmd: VaultSubCommand,
 }
 
 /// Vault 子命令枚举（8 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum VaultSubCommand {
     /// Encrypt a file into FileVault v13 format
-    Enc(VaultEncArgs),
+    Enc(VaultEncCmd),
     /// Decrypt a FileVault v13 ciphertext
-    Dec(VaultDecArgs),
+    Dec(VaultDecCmd),
     /// Inspect FileVault v13 structure and slot metadata
-    Inspect(VaultInspectArgs),
+    Inspect(VaultInspectCmd),
     /// Verify FileVault v13 integrity without exporting plaintext
-    Verify(VaultVerifyArgs),
+    Verify(VaultVerifyCmd),
     /// Resume an interrupted encryption task from its journal
-    Resume(VaultResumeArgs),
+    Resume(VaultResumeCmd),
     /// Remove FileVault temporary artifacts
-    Cleanup(VaultCleanupArgs),
+    Cleanup(VaultCleanupCmd),
     /// Replace wrapped slots without re-encrypting payload
-    Rewrap(VaultRewrapArgs),
+    Rewrap(VaultRewrapCmd),
     /// Rebuild a recovery-key slot from another legal unlock path
-    RecoverKey(VaultRecoverKeyArgs),
+    RecoverKey(VaultRecoverKeyCmd),
 }
 
 // ── 子命令参数 ──────────────────────────────────────────────────
 
 /// Encrypt a file into FileVault v13 format.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultEncArgs {
+pub struct VaultEncCmd {
     /// source plaintext path
     pub input: String,
 
@@ -90,7 +90,7 @@ pub struct VaultEncArgs {
 
 /// Decrypt a FileVault v13 ciphertext.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultDecArgs {
+pub struct VaultDecCmd {
     /// source ciphertext path
     pub input: String,
 
@@ -121,7 +121,7 @@ pub struct VaultDecArgs {
 
 /// Inspect FileVault v13 structure and slot metadata.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultInspectArgs {
+pub struct VaultInspectCmd {
     /// ciphertext path
     pub path: String,
 
@@ -132,7 +132,7 @@ pub struct VaultInspectArgs {
 
 /// Verify FileVault v13 integrity without exporting plaintext.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultVerifyArgs {
+pub struct VaultVerifyCmd {
     /// ciphertext path
     pub path: String,
 
@@ -159,7 +159,7 @@ pub struct VaultVerifyArgs {
 
 /// Resume an interrupted encryption task from its journal.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultResumeArgs {
+pub struct VaultResumeCmd {
     /// intended final ciphertext path
     pub path: String,
 
@@ -186,7 +186,7 @@ pub struct VaultResumeArgs {
 
 /// Remove FileVault temporary artifacts.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultCleanupArgs {
+pub struct VaultCleanupCmd {
     /// intended final ciphertext path
     pub path: String,
 
@@ -197,7 +197,7 @@ pub struct VaultCleanupArgs {
 
 /// Replace wrapped slots without re-encrypting payload.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultRewrapArgs {
+pub struct VaultRewrapCmd {
     /// ciphertext path
     pub path: String,
 
@@ -252,7 +252,7 @@ pub struct VaultRewrapArgs {
 
 /// Rebuild a recovery-key slot from another legal unlock path.
 #[derive(Parser, Debug, Clone)]
-pub struct VaultRecoverKeyArgs {
+pub struct VaultRecoverKeyCmd {
     /// ciphertext path
     pub path: String,
 
@@ -324,5 +324,31 @@ impl TableRow for VaultEntry {
             Value::Int(self.slots as i64),
             Value::Int(self.size as i64),
         ]
+    }
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "crypt")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "crypt")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "crypt")]
+use crate::xun_core::error::XunError;
+
+/// vault 命令。
+#[cfg(feature = "crypt")]
+pub struct VaultCmdSpec {
+    pub args: VaultCmd,
+}
+
+#[cfg(feature = "crypt")]
+impl CommandSpec for VaultCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::vault::cmd_vault(self.args.clone())
+            ?;
+        Ok(Value::Null)
     }
 }

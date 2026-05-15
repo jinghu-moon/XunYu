@@ -1,4 +1,5 @@
 #![allow(hidden_glob_reexports)]
+#![allow(dead_code)]
 
 pub mod annotations;
 pub mod audit;

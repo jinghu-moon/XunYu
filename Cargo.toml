@@ -119,7 +119,7 @@ imagequant = { version = "4", optional = true }
 lodepng    = { version = "3", optional = true }
 oxipng     = { version = "9", optional = true }
 webp       = { version = "0.3", optional = true }
-ravif      = { version = "0.11", optional = true, features = ["asm"] }
+ravif      = { version = "0.12", optional = true, features = ["asm"] }
 visioncortex = { version = "0.8", optional = true }
 mozjpeg    = { version = "0.10", optional = true }
 age        = { version = "0.11", optional = true }

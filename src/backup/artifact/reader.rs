@@ -867,7 +867,7 @@ fn entry_identity(entry: &SourceEntry) -> (String, String) {
     )
 }
 
-fn xunbak_entry_read_order(_entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
+fn xunbak_entry_read_order(entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
     #[cfg(feature = "xunbak")]
     {
         if let Some(path) = entry.source_path.as_deref() {

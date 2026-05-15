@@ -2,40 +2,111 @@
 //!
 //! 新架构的 find 命令定义，替代 argh 版本。
 
-use clap::Parser;
+use clap::Args;
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
 use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
-/// 查找文件和目录。
-#[derive(Parser, Debug, Clone)]
-#[command(name = "find", about = "Find files and directories by pattern")]
+/// Find files and directories by pattern and metadata.
+#[derive(Args, Debug, Clone)]
 pub struct FindCmd {
-    /// 基础目录（默认当前目录）
+    /// base directories (default: cwd)
     pub paths: Vec<String>,
 
-    /// 包含 glob 模式
+    /// include glob pattern (repeatable or comma separated)
     #[arg(short = 'i', long)]
     pub include: Vec<String>,
 
-    /// 排除 glob 模式
+    /// exclude glob pattern (repeatable or comma separated)
     #[arg(short = 'e', long)]
     pub exclude: Vec<String>,
 
-    /// 包含扩展名（逗号分隔）
+    /// include regex pattern (repeatable)
+    #[arg(long)]
+    pub regex_include: Vec<String>,
+
+    /// exclude regex pattern (repeatable)
+    #[arg(long)]
+    pub regex_exclude: Vec<String>,
+
+    /// include extensions (comma separated, repeatable)
     #[arg(long)]
     pub extension: Vec<String>,
 
-    /// 深度过滤
+    /// exclude extensions (comma separated, repeatable)
+    #[arg(long)]
+    pub not_extension: Vec<String>,
+
+    /// include names (comma separated, repeatable)
+    #[arg(long)]
+    pub name: Vec<String>,
+
+    /// load rules from file (glob, default exclude)
+    #[arg(short = 'F', long)]
+    pub filter_file: Option<String>,
+
+    /// size filter (repeatable)
+    #[arg(short = 's', long)]
+    pub size: Vec<String>,
+
+    /// fuzzy size filter
+    #[arg(long)]
+    pub fuzzy_size: Option<String>,
+
+    /// mtime filter (repeatable)
+    #[arg(long)]
+    pub mtime: Vec<String>,
+
+    /// ctime filter (repeatable)
+    #[arg(long)]
+    pub ctime: Vec<String>,
+
+    /// atime filter (repeatable)
+    #[arg(long)]
+    pub atime: Vec<String>,
+
+    /// depth filter
     #[arg(short = 'd', long)]
     pub depth: Option<String>,
 
-    /// 仅计数
+    /// attribute filter (e.g. +h,-r)
+    #[arg(long)]
+    pub attribute: Option<String>,
+
+    /// only empty files
+    #[arg(long)]
+    pub empty_files: bool,
+
+    /// exclude empty files
+    #[arg(long)]
+    pub not_empty_files: bool,
+
+    /// only empty directories
+    #[arg(long)]
+    pub empty_dirs: bool,
+
+    /// exclude empty directories
+    #[arg(long)]
+    pub not_empty_dirs: bool,
+
+    /// case sensitive matching
+    #[arg(long)]
+    pub case: bool,
+
+    /// count only
     #[arg(short = 'c', long)]
     pub count: bool,
 
-    /// 输出格式
+    /// dry run (no filesystem scan)
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// test path for dry run
+    #[arg(long)]
+    pub test_path: Option<String>,
+
+    /// output format: auto|table|tsv|json
     #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
@@ -80,5 +151,25 @@ impl TableRow for FindResult {
             Value::String(self.kind.clone()),
             Value::Filesize(self.size),
         ]
+    }
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+use crate::xun_core::command::CommandSpec;
+use crate::xun_core::context::CmdContext;
+use crate::xun_core::error::XunError;
+
+/// find 命令。
+pub struct FindCmdSpec {
+    pub args: FindCmd,
+}
+
+impl CommandSpec for FindCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::find::cmd_find(self.args.clone())?;
+        Ok(Value::Null)
     }
 }

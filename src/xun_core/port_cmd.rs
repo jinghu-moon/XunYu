@@ -1,65 +1,54 @@
-//! Port CLI 定义（clap derive）
-//!
-//! 新架构的 port 命令定义，替代 argh 版本。
+//! Port CLI 定义（clap derive）+ PortInfo 输出类型
 
-use clap::{Parser, Subcommand};
+use clap::Args;
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
 use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
-/// 端口管理命令。
-#[derive(Parser, Debug, Clone)]
-#[command(name = "port", about = "Port management")]
-pub struct PortCmd {
-    #[command(subcommand)]
-    pub sub: PortSubCommand,
-}
-
-/// Port 子命令枚举。
-#[derive(Subcommand, Debug, Clone)]
-pub enum PortSubCommand {
-    /// 列出监听端口
-    List(PortListArgs),
-    /// 杀死占用指定端口的进程
-    Kill(PortKillArgs),
-}
-
-/// port list 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct PortListArgs {
-    /// 显示所有 TCP 监听端口
+/// List listening ports (TCP by default).
+#[derive(Args, Debug, Clone)]
+pub struct PortsCmd {
+    /// show all TCP listening ports
     #[arg(long)]
     pub all: bool,
-    /// 显示 UDP 绑定端口
+
+    /// show UDP bound ports
     #[arg(long)]
     pub udp: bool,
-    /// 端口范围过滤（如 3000-3999）
+
+    /// filter port range (e.g. 3000-3999)
     #[arg(long)]
     pub range: Option<String>,
-    /// 按 PID 过滤
+
+    /// filter by pid
     #[arg(long)]
     pub pid: Option<u32>,
-    /// 按进程名过滤（子串匹配）
+
+    /// filter by process name (substring)
     #[arg(long)]
     pub name: Option<String>,
-    /// 输出格式
+
+    /// output format: auto|table|tsv|json
     #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
 
-/// port kill 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct PortKillArgs {
-    /// 端口列表（逗号分隔，如 3000,8080,5173）
+/// Kill processes that occupy ports.
+#[derive(Args, Debug, Clone)]
+pub struct KillCmd {
+    /// port list, e.g. 3000,8080,5173
     pub ports: String,
-    /// 跳过确认
+
+    /// skip confirmation
     #[arg(short = 'f', long)]
     pub force: bool,
-    /// 仅 TCP
+
+    /// tcp only
     #[arg(long)]
     pub tcp: bool,
-    /// 仅 UDP
+
+    /// udp only
     #[arg(long)]
     pub udp: bool,
 }
@@ -120,5 +109,37 @@ impl TableRow for PortInfo {
             Value::String(self.process_name.clone()),
             Value::String(self.local_addr.clone()),
         ]
+    }
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+use crate::xun_core::command::CommandSpec;
+use crate::xun_core::context::CmdContext;
+use crate::xun_core::error::XunError;
+
+/// ports 命令。
+pub struct PortsCmdSpec {
+    pub args: PortsCmd,
+}
+
+impl CommandSpec for PortsCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::ports::cmd_ports(self.args.clone())?;
+        Ok(Value::Null)
+    }
+}
+
+/// kill 命令。
+pub struct KillCmdSpec {
+    pub args: KillCmd,
+}
+
+impl CommandSpec for KillCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::ports::cmd_kill(self.args.clone())?;
+        Ok(Value::Null)
     }
 }

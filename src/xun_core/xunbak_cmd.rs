@@ -12,39 +12,39 @@ use clap::{Parser, Subcommand};
 #[command(name = "xunbak", about = "Xunbak container and 7-Zip plugin tooling")]
 pub struct XunbakCmd {
     #[command(subcommand)]
-    pub sub: XunbakSubCommand,
+    pub cmd: XunbakSubCommand,
 }
 
 /// Xunbak 子命令枚举。
 #[derive(Subcommand, Debug, Clone)]
 pub enum XunbakSubCommand {
     /// Manage the xunbak 7-Zip plugin
-    Plugin(XunbakPluginArgs),
+    Plugin(XunbakPluginCmd),
 }
 
 // ── Plugin 嵌套子命令 ────────────────────────────────────────────
 
 /// Manage the xunbak 7-Zip plugin.
 #[derive(Parser, Debug, Clone)]
-pub struct XunbakPluginArgs {
+pub struct XunbakPluginCmd {
     #[command(subcommand)]
-    pub sub: XunbakPluginSubCommand,
+    pub cmd: XunbakPluginSubCommand,
 }
 
 /// Plugin 子命令枚举（3 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum XunbakPluginSubCommand {
     /// Install xunbak.dll into an existing 7-Zip installation
-    Install(XunbakPluginInstallArgs),
+    Install(XunbakPluginInstallCmd),
     /// Remove xunbak.dll from an existing 7-Zip installation
-    Uninstall(XunbakPluginUninstallArgs),
+    Uninstall(XunbakPluginUninstallCmd),
     /// Diagnose xunbak 7-Zip plugin readiness
-    Doctor(XunbakPluginDoctorArgs),
+    Doctor(XunbakPluginDoctorCmd),
 }
 
 /// Install xunbak.dll into an existing 7-Zip installation.
 #[derive(Parser, Debug, Clone)]
-pub struct XunbakPluginInstallArgs {
+pub struct XunbakPluginInstallCmd {
     /// explicit 7-Zip home, e.g. C:/Program Files/7-Zip
     #[arg(long)]
     pub sevenzip_home: Option<String>,
@@ -64,7 +64,7 @@ pub struct XunbakPluginInstallArgs {
 
 /// Remove xunbak.dll from an existing 7-Zip installation.
 #[derive(Parser, Debug, Clone)]
-pub struct XunbakPluginUninstallArgs {
+pub struct XunbakPluginUninstallCmd {
     /// explicit 7-Zip home, e.g. C:/Program Files/7-Zip
     #[arg(long)]
     pub sevenzip_home: Option<String>,
@@ -76,8 +76,36 @@ pub struct XunbakPluginUninstallArgs {
 
 /// Diagnose xunbak 7-Zip plugin readiness.
 #[derive(Parser, Debug, Clone)]
-pub struct XunbakPluginDoctorArgs {
+pub struct XunbakPluginDoctorCmd {
     /// explicit 7-Zip home, e.g. C:/Program Files/7-Zip
     #[arg(long)]
     pub sevenzip_home: Option<String>,
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "xunbak")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "xunbak")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "xunbak")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "xunbak")]
+use crate::xun_core::value::Value;
+
+/// xunbak 命令。
+#[cfg(feature = "xunbak")]
+pub struct XunbakCmdSpec {
+    pub args: XunbakCmd,
+}
+
+#[cfg(feature = "xunbak")]
+impl CommandSpec for XunbakCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::xunbak::cmd_xunbak(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
 }

@@ -16,6 +16,17 @@ use crate::{
     path_guard::{PathIssueKind, PathPolicy, validate_paths},
 };
 
+fn parse_bool_flag(value: &str, field_name: &str) -> Result<bool, CliError> {
+    match value.to_ascii_lowercase().as_str() {
+        "true" | "1" | "yes" | "on" => Ok(true),
+        "false" | "0" | "no" | "off" => Ok(false),
+        _ => Err(CliError::new(
+            1,
+            format!("Invalid boolean value for {field_name}: '{value}' (expected true/false)"),
+        )),
+    }
+}
+
 pub(crate) fn cmd_img(args: ImgCmd) -> CliResult {
     if args.quality == 0 || args.quality > 100 {
         return Err(CliError::new(
@@ -175,6 +186,9 @@ pub(crate) fn cmd_img(args: ImgCmd) -> CliResult {
     }
     ui_println!("发现 {} 个文件，开始处理...", files.len());
 
+    let png_lossy = parse_bool_flag(&args.png_lossy, "png_lossy")?;
+    let webp_lossy = parse_bool_flag(&args.webp_lossy, "webp_lossy")?;
+
     let params = ProcessParams {
         format,
         svg_method,
@@ -182,9 +196,9 @@ pub(crate) fn cmd_img(args: ImgCmd) -> CliResult {
         svg_diffvg_strokes: args.svg_diffvg_strokes,
         jpeg_backend,
         quality: args.quality,
-        png_lossy: args.png_lossy,
+        png_lossy,
         png_dither_level: args.png_dither_level,
-        webp_lossy: args.webp_lossy,
+        webp_lossy,
         max_width: args.mw,
         max_height: args.mh,
         avif_threads: args.avif_threads,

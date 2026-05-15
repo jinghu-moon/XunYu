@@ -15,7 +15,7 @@ use super::value::{ColumnDef, Value, ValueKind};
 #[command(name = "acl", about = "Windows ACL management")]
 pub struct AclCmd {
     #[command(subcommand)]
-    pub sub: AclSubCommand,
+    pub cmd: AclSubCommand,
 }
 
 /// ACL 子命令枚举（16 个变体）。
@@ -23,45 +23,45 @@ pub struct AclCmd {
 pub enum AclSubCommand {
     /// View ACL summary or detailed entries for a path
     #[command(name = "show", alias = "view")]
-    Show(AclViewArgs),
+    Show(AclViewCmd),
     /// Add a permission entry
-    Add(AclAddArgs),
+    Add(AclAddCmd),
     /// Remove explicit ACE entries
     #[command(name = "rm", alias = "remove")]
-    Rm(AclRemoveArgs),
+    Rm(AclRemoveCmd),
     /// Remove ALL explicit rules for a specific principal
-    Purge(AclPurgeArgs),
+    Purge(AclPurgeCmd),
     /// Compare the ACLs of two paths
-    Diff(AclDiffArgs),
+    Diff(AclDiffCmd),
     /// Process multiple paths from a file or comma-separated list
-    Batch(AclBatchArgs),
+    Batch(AclBatchCmd),
     /// Show the effective access a user has on a path
-    Effective(AclEffectiveArgs),
+    Effective(AclEffectiveCmd),
     /// Copy the entire ACL from a reference path onto the target
-    Copy(AclCopyArgs),
+    Copy(AclCopyCmd),
     /// Backup the ACL of a path to a JSON file
-    Backup(AclBackupArgs),
+    Backup(AclBackupCmd),
     /// Restore an ACL from a previously created JSON backup
-    Restore(AclRestoreArgs),
+    Restore(AclRestoreCmd),
     /// Enable or disable DACL inheritance on a path
-    Inherit(AclInheritArgs),
+    Inherit(AclInheritCmd),
     /// Change the owner of a path
-    Owner(AclOwnerArgs),
+    Owner(AclOwnerCmd),
     /// Scan for (and optionally clean up) orphaned SIDs in ACLs
-    Orphans(AclOrphansArgs),
+    Orphans(AclOrphansCmd),
     /// Forced ACL repair: take ownership + grant FullControl
-    Repair(AclRepairArgs),
+    Repair(AclRepairCmd),
     /// View or export the audit log
-    Audit(AclAuditArgs),
+    Audit(AclAuditCmd),
     /// View or edit ACL configuration
-    Config(AclConfigArgs),
+    Config(AclConfigCmd),
 }
 
 // ── 子命令参数 ──────────────────────────────────────────────────
 
 /// View ACL summary or detailed entries for a path.
 #[derive(Parser, Debug, Clone)]
-pub struct AclViewArgs {
+pub struct AclViewCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -77,7 +77,7 @@ pub struct AclViewArgs {
 
 /// Add a permission entry.
 #[derive(Parser, Debug, Clone)]
-pub struct AclAddArgs {
+pub struct AclAddCmd {
     /// target path (single)
     #[arg(short = 'p', long)]
     pub path: Option<String>,
@@ -113,7 +113,7 @@ pub struct AclAddArgs {
 
 /// Remove explicit ACE entries.
 #[derive(Parser, Debug, Clone)]
-pub struct AclRemoveArgs {
+pub struct AclRemoveCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -141,7 +141,7 @@ pub struct AclRemoveArgs {
 
 /// Remove ALL explicit rules for a specific principal.
 #[derive(Parser, Debug, Clone)]
-pub struct AclPurgeArgs {
+pub struct AclPurgeCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -157,7 +157,7 @@ pub struct AclPurgeArgs {
 
 /// Compare the ACLs of two paths.
 #[derive(Parser, Debug, Clone)]
-pub struct AclDiffArgs {
+pub struct AclDiffCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -173,7 +173,7 @@ pub struct AclDiffArgs {
 
 /// Process multiple paths from a file or comma-separated list.
 #[derive(Parser, Debug, Clone)]
-pub struct AclBatchArgs {
+pub struct AclBatchCmd {
     /// TXT file with one path per line
     #[arg(long)]
     pub file: Option<String>,
@@ -197,7 +197,7 @@ pub struct AclBatchArgs {
 
 /// Show the effective access a user has on a path.
 #[derive(Parser, Debug, Clone)]
-pub struct AclEffectiveArgs {
+pub struct AclEffectiveCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -209,7 +209,7 @@ pub struct AclEffectiveArgs {
 
 /// Copy the entire ACL from a reference path onto the target.
 #[derive(Parser, Debug, Clone)]
-pub struct AclCopyArgs {
+pub struct AclCopyCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -225,7 +225,7 @@ pub struct AclCopyArgs {
 
 /// Backup the ACL of a path to a JSON file.
 #[derive(Parser, Debug, Clone)]
-pub struct AclBackupArgs {
+pub struct AclBackupCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -237,7 +237,7 @@ pub struct AclBackupArgs {
 
 /// Restore an ACL from a previously created JSON backup.
 #[derive(Parser, Debug, Clone)]
-pub struct AclRestoreArgs {
+pub struct AclRestoreCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -256,7 +256,7 @@ pub struct AclRestoreArgs {
 /// `preserve` 使用 String 类型，因为 argh 的 `default = "true"` 布尔参数
 /// 在 clap 中需要显式传值（`--preserve false`），不能用 bool SetTrue。
 #[derive(Parser, Debug, Clone)]
-pub struct AclInheritArgs {
+pub struct AclInheritCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -276,7 +276,7 @@ pub struct AclInheritArgs {
 
 /// Change the owner of a path.
 #[derive(Parser, Debug, Clone)]
-pub struct AclOwnerArgs {
+pub struct AclOwnerCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -294,7 +294,7 @@ pub struct AclOwnerArgs {
 ///
 /// `recursive` 使用 String 类型（同 `preserve`）。
 #[derive(Parser, Debug, Clone)]
-pub struct AclOrphansArgs {
+pub struct AclOrphansCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -318,7 +318,7 @@ pub struct AclOrphansArgs {
 
 /// Forced ACL repair: take ownership + grant FullControl.
 #[derive(Parser, Debug, Clone)]
-pub struct AclRepairArgs {
+pub struct AclRepairCmd {
     /// target path
     #[arg(short = 'p', long)]
     pub path: String,
@@ -342,7 +342,7 @@ pub struct AclRepairArgs {
 
 /// View or export the audit log.
 #[derive(Parser, Debug, Clone)]
-pub struct AclAuditArgs {
+pub struct AclAuditCmd {
     /// show last N entries
     #[arg(long, default_value_t = 30)]
     pub tail: usize,
@@ -354,7 +354,7 @@ pub struct AclAuditArgs {
 
 /// View or edit ACL configuration.
 #[derive(Parser, Debug, Clone)]
-pub struct AclConfigArgs {
+pub struct AclConfigCmd {
     /// set a key-value pair: --set KEY VALUE
     #[arg(long, num_args = 2)]
     pub set: Vec<String>,
@@ -409,5 +409,26 @@ impl TableRow for AclEntry {
             Value::String(self.ace_type.clone()),
             Value::Bool(self.inherited),
         ]
+    }
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+use crate::xun_core::command::CommandSpec;
+use crate::xun_core::context::CmdContext;
+use crate::xun_core::error::XunError;
+
+/// acl 命令（桥接旧 cli 类型 + 业务逻辑）。
+pub struct AclCmdSpec {
+    pub args: AclCmd,
+}
+
+impl CommandSpec for AclCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::acl_cmd::cmd_acl(self.args.clone())
+            ?;
+        Ok(Value::Null)
     }
 }

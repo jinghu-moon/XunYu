@@ -99,6 +99,15 @@ impl From<std::io::Error> for XunError {
     }
 }
 
+impl From<crate::output::CliError> for XunError {
+    fn from(e: crate::output::CliError) -> Self {
+        Self::User {
+            message: e.message,
+            hints: e.details,
+        }
+    }
+}
+
 // 编译期保证 Send + Sync
 #[cfg(test)]
 mod _send_sync_check {

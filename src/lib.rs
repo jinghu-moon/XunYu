@@ -7,6 +7,7 @@ pub mod xun_core;
 
 pub mod acl;
 #[cfg(feature = "alias")]
+#[allow(dead_code)]
 pub mod alias;
 pub(crate) mod backup;
 pub(crate) mod backup_export;
@@ -109,12 +110,14 @@ fn env_flag_present(names: &[&str]) -> bool {
     names.iter().any(|name| std::env::var_os(name).is_some())
 }
 
-fn command_timing_enabled(cmd: &cli::SubCommand) -> bool {
+fn command_timing_enabled(cmd: &xun_core::dispatch::SubCommand) -> bool {
     if env_flag_present(&["XUN_CMD_TIMING"]) {
         return true;
     }
     match cmd {
-        cli::SubCommand::Backup(_) => env_flag_present(&["XUN_BACKUP_TIMING", "XUN_BAK_TIMING"]),
+        xun_core::dispatch::SubCommand::Backup(_) => {
+            env_flag_present(&["XUN_BACKUP_TIMING", "XUN_BAK_TIMING"])
+        }
         _ => false,
     }
 }
@@ -150,7 +153,7 @@ pub fn run_from_env(invoked_name: Option<&str>) {
     }
 
     let t_parse = Instant::now();
-    let args: cli::Xun = cli::Xun::try_parse_from(&raw_args)
+    let args: xun_core::dispatch::Xun = xun_core::dispatch::Xun::try_parse_from(&raw_args)
         .unwrap_or_else(|e| {
             let _ = e.print();
             std::process::exit(if e.use_stderr() { 1 } else { 0 })
@@ -159,10 +162,11 @@ pub fn run_from_env(invoked_name: Option<&str>) {
     let timing = command_timing_enabled(&args.cmd);
 
     let t_runtime = Instant::now();
-    runtime::init(&args);
+    runtime::init_from_flags(args.no_color, args.quiet, args.verbose, args.non_interactive);
     let elapsed_runtime = t_runtime.elapsed();
+
     let t_dispatch = Instant::now();
-    let result = commands::dispatch(args);
+    let result = xun_core::dispatch::run_from_args(args);
     let elapsed_dispatch = t_dispatch.elapsed();
     if timing {
         eprintln!("xun timing:");
@@ -173,8 +177,12 @@ pub fn run_from_env(invoked_name: Option<&str>) {
         eprintln!("  [total]   {:>5}ms", t_total.elapsed().as_millis());
     }
     if let Err(err) = result {
-        output::print_cli_error(&err);
-        std::process::exit(err.code);
+        let code = err.exit_code();
+        eprintln!("Error: {err}");
+        for hint in err.hints() {
+            eprintln!("{hint}");
+        }
+        std::process::exit(code);
     }
 }
 

@@ -3,27 +3,7 @@ use super::*;
 pub(super) fn cmd_config(args: AclConfigCmd) -> CliResult {
     let mut cfg = load_config();
 
-    let mut set_parts = args.set.clone();
-    if !args.set_value.is_empty() {
-        if args.set.is_empty() {
-            return Err(CliError::with_details(
-                2,
-                "--set requires KEY VALUE".to_string(),
-                &["Fix: Use `xun acl config --set throttle_limit 8`."],
-            ));
-        }
-        if args.set.len() != 1 {
-            return Err(CliError::with_details(
-                2,
-                "--set requires KEY VALUE".to_string(),
-                &[
-                    "Fix: Use `xun acl config --set throttle_limit 8`.",
-                    "Alt: Use `xun acl config --set throttle_limit --set 8`.",
-                ],
-            ));
-        }
-        set_parts.extend(args.set_value);
-    }
+    let set_parts = args.set.clone();
 
     if !set_parts.is_empty() {
         if set_parts.len() != 2 {

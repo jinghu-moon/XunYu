@@ -1,55 +1,37 @@
-//! Proc CLI 定义（clap derive）
-//!
-//! 新架构的 proc 命令定义，替代 argh 版本。
+//! Proc CLI 定义（clap derive）+ ProcInfo 输出类型
 
-use clap::{Parser, Subcommand};
+use clap::Args;
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
 use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
-/// 进程管理命令。
-#[derive(Parser, Debug, Clone)]
-#[command(name = "proc", about = "Process management")]
-pub struct ProcCmd {
-    #[command(subcommand)]
-    pub sub: ProcSubCommand,
-}
-
-/// Proc 子命令枚举。
-#[derive(Subcommand, Debug, Clone)]
-pub enum ProcSubCommand {
-    /// 列出进程
-    List(ProcListArgs),
-    /// 杀死进程
-    Kill(ProcKillArgs),
-}
-
-/// proc list 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct ProcListArgs {
-    /// 模糊匹配进程名
+/// List running processes by name, PID, or window title.
+#[derive(Args, Debug, Clone)]
+pub struct PsCmd {
+    /// fuzzy match by process name
     pub pattern: Option<String>,
-    /// 精确 PID 查找
+
+    /// exact PID lookup
     #[arg(long)]
     pub pid: Option<u32>,
-    /// 模糊匹配窗口标题
+
+    /// fuzzy match by window title
     #[arg(short = 'w', long)]
     pub win: Option<String>,
-    /// 输出格式
-    #[arg(short = 'f', long, default_value = "auto")]
-    pub format: String,
 }
 
-/// proc kill 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct ProcKillArgs {
-    /// 目标：进程名、PID 或窗口标题（配合 --window）
+/// Kill processes by name, PID, or window title.
+#[derive(Args, Debug, Clone)]
+pub struct PkillCmd {
+    /// process name, PID, or window title when --window is set
     pub target: String,
-    /// 将 target 视为窗口标题
+
+    /// treat target as window title
     #[arg(short = 'w', long)]
     pub window: bool,
-    /// 跳过确认
+
+    /// skip interactive confirmation
     #[arg(short = 'f', long)]
     pub force: bool,
 }
@@ -116,5 +98,37 @@ impl TableRow for ProcInfo {
             Value::Int(self.thread_count as i64),
             Value::String(self.window_title.clone()),
         ]
+    }
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+use crate::xun_core::command::CommandSpec;
+use crate::xun_core::context::CmdContext;
+use crate::xun_core::error::XunError;
+
+/// ps 命令。
+pub struct PsCmdSpec {
+    pub args: PsCmd,
+}
+
+impl CommandSpec for PsCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::ports::cmd_ps(self.args.clone())?;
+        Ok(Value::Null)
+    }
+}
+
+/// pkill 命令。
+pub struct PkillCmdSpec {
+    pub args: PkillCmd,
+}
+
+impl CommandSpec for PkillCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::ports::cmd_pkill(self.args.clone())?;
+        Ok(Value::Null)
     }
 }

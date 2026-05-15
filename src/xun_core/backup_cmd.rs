@@ -13,7 +13,7 @@ use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 #[command(name = "backup", about = "Incremental project backup")]
 pub struct BackupCmd {
     #[command(subcommand)]
-    pub sub: Option<BackupSubCommand>,
+    pub cmd: Option<BackupSubCommand>,
 
     /// 备份描述
     #[arg(short = 'm', long)]
@@ -26,6 +26,14 @@ pub struct BackupCmd {
     /// 写入单文件 .xunbak 容器
     #[arg(long)]
     pub container: Option<String>,
+
+    /// 压缩配置
+    #[arg(long)]
+    pub compression: Option<String>,
+
+    /// 分卷大小（如 64M / 2G）
+    #[arg(long)]
+    pub split_size: Option<String>,
 
     /// 干运行（不实际复制/压缩/清理）
     #[arg(long)]
@@ -73,22 +81,22 @@ pub struct BackupCmd {
 pub enum BackupSubCommand {
     /// 创建新备份
     #[command(name = "add", alias = "create")]
-    Add(BackupCreateArgs),
+    Add(BackupCreateCmd),
     /// 从备份恢复
-    Restore(BackupRestoreArgs),
+    Restore(BackupRestoreCmd),
     /// 转换备份格式
-    Convert(BackupConvertArgs),
+    Convert(BackupConvertCmd),
     /// 列出可用备份
-    List(BackupListArgs),
+    List(BackupListCmd),
     /// 验证备份完整性
-    Verify(BackupVerifyArgs),
+    Verify(BackupVerifyCmd),
     /// 按标签查找备份
-    Find(BackupFindArgs),
+    Find(BackupFindCmd),
 }
 
 /// backup create 参数。
 #[derive(Parser, Debug, Clone)]
-pub struct BackupCreateArgs {
+pub struct BackupCreateCmd {
     /// 备份描述
     #[arg(short = 'm', long)]
     pub msg: Option<String>,
@@ -107,6 +115,15 @@ pub struct BackupCreateArgs {
     /// 分卷大小（如 64M / 2G）
     #[arg(long)]
     pub split_size: Option<String>,
+    /// 固实压缩
+    #[arg(long)]
+    pub solid: bool,
+    /// 压缩方法
+    #[arg(long)]
+    pub method: Option<String>,
+    /// 压缩级别
+    #[arg(long)]
+    pub level: Option<u32>,
     /// 干运行
     #[arg(long)]
     pub dry_run: bool,
@@ -147,7 +164,7 @@ pub struct BackupCreateArgs {
 
 /// backup restore 参数。
 #[derive(Parser, Debug, Clone)]
-pub struct BackupRestoreArgs {
+pub struct BackupRestoreCmd {
     /// 备份名或路径
     pub name_or_path: String,
     /// 恢复单个文件
@@ -178,7 +195,7 @@ pub struct BackupRestoreArgs {
 
 /// backup convert 参数。
 #[derive(Parser, Debug, Clone)]
-pub struct BackupConvertArgs {
+pub struct BackupConvertCmd {
     /// 输入备份路径
     pub artifact: String,
     /// 目标格式
@@ -193,26 +210,59 @@ pub struct BackupConvertArgs {
     /// 包含 glob
     #[arg(long)]
     pub glob: Vec<String>,
+    /// 从文件读取包含模式
+    #[arg(long)]
+    pub patterns_from: Vec<String>,
     /// 分卷大小
     #[arg(long)]
     pub split_size: Option<String>,
+    /// 固实压缩
+    #[arg(long)]
+    pub solid: bool,
+    /// 压缩方法
+    #[arg(long)]
+    pub method: Option<String>,
     /// 压缩级别
     #[arg(long)]
     pub level: Option<u32>,
+    /// 线程数
+    #[arg(long)]
+    pub threads: Option<u32>,
+    /// 密码
+    #[arg(long)]
+    pub password: Option<String>,
+    /// 加密头部
+    #[arg(long)]
+    pub encrypt_header: bool,
+    /// 覆盖模式
+    #[arg(long)]
+    pub overwrite: Option<String>,
     /// 干运行
     #[arg(long)]
     pub dry_run: bool,
     /// 列出文件
     #[arg(long)]
     pub list: bool,
+    /// 验证源
+    #[arg(long)]
+    pub verify_source: Option<String>,
+    /// 验证输出
+    #[arg(long)]
+    pub verify_output: Option<String>,
+    /// 进度模式
+    #[arg(long)]
+    pub progress: Option<String>,
     /// 输出 JSON
     #[arg(long)]
     pub json: bool,
+    /// 禁用 sidecar
+    #[arg(long)]
+    pub no_sidecar: bool,
 }
 
 /// backup list 参数。
 #[derive(Parser, Debug, Clone)]
-pub struct BackupListArgs {
+pub struct BackupListCmd {
     /// 输出 JSON
     #[arg(long)]
     pub json: bool,
@@ -220,7 +270,7 @@ pub struct BackupListArgs {
 
 /// backup verify 参数。
 #[derive(Parser, Debug, Clone)]
-pub struct BackupVerifyArgs {
+pub struct BackupVerifyCmd {
     /// 备份名
     pub name: String,
     /// 输出 JSON
@@ -230,7 +280,7 @@ pub struct BackupVerifyArgs {
 
 /// backup find 参数。
 #[derive(Parser, Debug, Clone)]
-pub struct BackupFindArgs {
+pub struct BackupFindCmd {
     /// 标签过滤
     pub tag: Option<String>,
     /// 起始时间过滤
@@ -311,11 +361,11 @@ use super::error::XunError;
 use super::services::backup as backup_svc;
 
 /// backup create（传统模式，无子命令）
-pub struct BackupCreateCmd {
-    pub args: BackupCreateArgs,
+pub struct BackupCreateCmdSpec {
+    pub args: BackupCreateCmd,
 }
 
-impl CommandSpec for BackupCreateCmd {
+impl CommandSpec for BackupCreateCmdSpec {
     fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
         backup_svc::create_backup_artifact(
             self.args.msg.as_deref(),
@@ -341,11 +391,11 @@ impl CommandSpec for BackupCreateCmd {
 }
 
 /// backup restore
-pub struct BackupRestoreCmd {
-    pub args: BackupRestoreArgs,
+pub struct BackupRestoreCmdSpec {
+    pub args: BackupRestoreCmd,
 }
 
-impl CommandSpec for BackupRestoreCmd {
+impl CommandSpec for BackupRestoreCmdSpec {
     fn validate(&self, _ctx: &CmdContext) -> Result<(), XunError> {
         if self.args.name_or_path.is_empty() {
             return Err(XunError::user("backup name or path is required"));
@@ -369,11 +419,11 @@ impl CommandSpec for BackupRestoreCmd {
 }
 
 /// backup convert
-pub struct BackupConvertCmd {
-    pub args: BackupConvertArgs,
+pub struct BackupConvertCmdSpec {
+    pub args: BackupConvertCmd,
 }
 
-impl CommandSpec for BackupConvertCmd {
+impl CommandSpec for BackupConvertCmdSpec {
     fn validate(&self, _ctx: &CmdContext) -> Result<(), XunError> {
         if self.args.artifact.is_empty() {
             return Err(XunError::user("artifact path is required"));
@@ -404,24 +454,24 @@ impl CommandSpec for BackupConvertCmd {
 }
 
 /// backup list
-pub struct BackupListCmd {
-    pub args: BackupListArgs,
+pub struct BackupListCmdSpec {
+    pub args: BackupListCmd,
     pub dir: Option<String>,
 }
 
-impl CommandSpec for BackupListCmd {
+impl CommandSpec for BackupListCmdSpec {
     fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
         backup_svc::list_backups(self.dir.as_deref(), self.args.json)
     }
 }
 
 /// backup verify
-pub struct BackupVerifyCmd {
-    pub args: BackupVerifyArgs,
+pub struct BackupVerifyCmdSpec {
+    pub args: BackupVerifyCmd,
     pub dir: Option<String>,
 }
 
-impl CommandSpec for BackupVerifyCmd {
+impl CommandSpec for BackupVerifyCmdSpec {
     fn validate(&self, _ctx: &CmdContext) -> Result<(), XunError> {
         if self.args.name.is_empty() {
             return Err(XunError::user("backup name is required"));
@@ -435,12 +485,12 @@ impl CommandSpec for BackupVerifyCmd {
 }
 
 /// backup find
-pub struct BackupFindCmd {
-    pub args: BackupFindArgs,
+pub struct BackupFindCmdSpec {
+    pub args: BackupFindCmd,
     pub dir: Option<String>,
 }
 
-impl CommandSpec for BackupFindCmd {
+impl CommandSpec for BackupFindCmdSpec {
     fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
         backup_svc::find_backup(
             self.args.tag.as_deref(),
@@ -453,11 +503,11 @@ impl CommandSpec for BackupFindCmd {
 }
 
 /// backup 默认（无子命令，走传统目录备份流程）
-pub struct BackupDefaultCmd {
+pub struct BackupDefaultCmdSpec {
     pub args: BackupCmd,
 }
 
-impl CommandSpec for BackupDefaultCmd {
+impl CommandSpec for BackupDefaultCmdSpec {
     fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
         backup_svc::create_backup(
             self.args.msg.as_deref(),

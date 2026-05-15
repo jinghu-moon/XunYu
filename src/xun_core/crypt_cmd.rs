@@ -56,3 +56,46 @@ pub struct DecryptCmd {
     #[arg(short = 'o', long)]
     pub out: Option<String>,
 }
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "crypt")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "crypt")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "crypt")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "crypt")]
+use crate::xun_core::value::Value;
+
+/// encrypt 命令。
+#[cfg(feature = "crypt")]
+pub struct EncryptCmdSpec {
+    pub args: EncryptCmd,
+}
+
+#[cfg(feature = "crypt")]
+impl CommandSpec for EncryptCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::crypt::cmd_encrypt(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}
+
+/// decrypt 命令。
+#[cfg(feature = "crypt")]
+pub struct DecryptCmdSpec {
+    pub args: DecryptCmd,
+}
+
+#[cfg(feature = "crypt")]
+impl CommandSpec for DecryptCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::crypt::cmd_decrypt(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}

@@ -1,7 +1,7 @@
 use super::context::AliasCtx;
 use super::*;
 
-pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
+pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsArgs) -> Result<()> {
     let cfg = ctx.load()?;
     let show_cmd = args.r#type.as_deref().map(|v| v == "cmd").unwrap_or(true);
     let show_app = args.r#type.as_deref().map(|v| v == "app").unwrap_or(true);
@@ -86,7 +86,7 @@ pub(super) fn cmd_ls(ctx: &AliasCtx, args: AliasLsCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_find(ctx: &AliasCtx, args: AliasFindCmd) -> Result<()> {
+pub(super) fn cmd_find(ctx: &AliasCtx, args: AliasFindArgs) -> Result<()> {
     let cfg = ctx.load()?;
     let kw = args.keyword;
     let mut rows: Vec<(i32, String, String, String)> = Vec::new();

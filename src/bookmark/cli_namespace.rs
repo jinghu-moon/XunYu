@@ -1,6 +1,12 @@
 use clap::{Args, Parser, Subcommand};
 
-use super::defaults::{default_io_format, default_output_format};
+fn default_output_format() -> String {
+    "auto".to_string()
+}
+
+fn default_io_format() -> String {
+    "json".to_string()
+}
 
 /// List all bookmarks.
 #[derive(Args, Debug, Clone)]

@@ -139,7 +139,7 @@ impl AliasCtx {
         )
     }
 
-    pub(super) fn sync_shells(&self, cfg: &Config, setup: Option<&AliasSetupCmd>) -> Result<()> {
+    pub(super) fn sync_shells(&self, cfg: &Config, setup: Option<&AliasSetupArgs>) -> Result<()> {
         let mut skip_cmd = false;
         let mut skip_ps = false;
         let mut skip_bash = false;

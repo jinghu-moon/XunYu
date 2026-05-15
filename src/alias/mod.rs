@@ -34,7 +34,7 @@ use context::AliasCtx;
 
 pub(crate) fn cmd_alias(args: AliasCmd) -> Result<()> {
     let ctx = AliasCtx::from_cli(&args);
-    match args.cmd {
+    match args.sub {
         AliasSubCommand::Setup(cmd) => shell_alias_cmd::cmd_setup(&ctx, cmd),
         AliasSubCommand::Add(cmd) => shell_alias_cmd::cmd_add(&ctx, cmd),
         AliasSubCommand::Rm(cmd) => shell_alias_cmd::cmd_rm(&ctx, cmd),
@@ -44,7 +44,7 @@ pub(crate) fn cmd_alias(args: AliasCmd) -> Result<()> {
         AliasSubCommand::Sync(_) => sync::cmd_sync(&ctx),
         AliasSubCommand::Export(cmd) => shell_alias_cmd::cmd_export(&ctx, cmd),
         AliasSubCommand::Import(cmd) => shell_alias_cmd::cmd_import(&ctx, cmd),
-        AliasSubCommand::App(cmd) => match cmd.cmd {
+        AliasSubCommand::App(cmd) => match cmd.sub {
             AliasAppSubCommand::Add(c) => app_alias_cmd::cmd_app_add(&ctx, c),
             AliasAppSubCommand::Rm(c) => app_alias_cmd::cmd_app_rm(&ctx, c),
             AliasAppSubCommand::List(c) => app_alias_cmd::cmd_app_ls(&ctx, c),

@@ -34,7 +34,7 @@ use crate::backup::artifact::source::read_artifact_entries;
 use crate::backup::artifact::verify::{verify_convert_source, verify_output};
 use crate::backup::artifact::zip::write_entries_to_zip;
 use crate::backup::common::cli::{path_display, path_strings};
-use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus};
+use crate::backup_formats::{BackupAction, BackupArtifactFormat, ExportStatus, OverwriteMode};
 use crate::cli::BackupConvertCmd;
 use crate::output::{CliError, CliResult};
 

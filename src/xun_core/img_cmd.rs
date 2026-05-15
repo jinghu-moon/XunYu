@@ -79,3 +79,31 @@ pub struct ImgCmd {
     #[arg(long)]
     pub overwrite: bool,
 }
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "img")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "img")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "img")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "img")]
+use crate::xun_core::value::Value;
+
+/// img 命令。
+#[cfg(feature = "img")]
+pub struct ImgCmdSpec {
+    pub args: ImgCmd,
+}
+
+#[cfg(feature = "img")]
+impl CommandSpec for ImgCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::img::cmd_img(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}

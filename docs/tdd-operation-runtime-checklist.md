@@ -404,7 +404,7 @@
 - [x] `cargo clippy` xun_core 模块零警告（其余 24 个为既有代码）。
 - [x] core/ 模块 100% 独立，不依赖现有 commands/cli 模块。
 - [x] 所有 Serialize 类型可被 `serde_json::to_string()` 正确序列化。
-- [ ] 提交 commit：`feat(core): implement Operation Runtime foundation`
+- [x] 提交 commit：`feat(core): implement Operation Runtime foundation`
 
 ---
 
@@ -491,7 +491,7 @@
 - [x] **集成测试**：`cargo test` 全量通过（89 tests）。
 - [x] **手动验证**：`xun proxy show` 正常工作（输出 git proxy 配置，无配置时无输出）。
 - [x] **手动验证**：`--format` 参数在 CLI 层未暴露（ProxyGetCmd 为空 struct），属设计差异。
-- [ ] 提交 commit：`feat(proxy): migrate to Operation Runtime architecture`
+- [x] 提交 commit：`feat(proxy): migrate to Operation Runtime architecture`
 
 
 
@@ -642,7 +642,7 @@
 - [x] 🟢 实现 + 🔴 测试：img（单命令 16 参数，png_lossy/webp_lossy 用 String 类型）
 - [x] 🟢 实现 + 🔴 测试：xunbak（嵌套 Plugin → Install/Uninstall/Doctor）
 - [x] ✅ 回归：`cargo test --test core_integration` 512 测试全部通过
-- [ ] 提交 commit：`feat: complete full command migration to Operation Runtime`
+- [x] 提交 commit：`feat: complete full command migration to Operation Runtime`
 
 
 
@@ -834,7 +834,7 @@
 - [x] **面板 Grid 布局**：CSS Grid auto-fit，面板可折叠。
 - [x] **键盘导航**：Tab/Shift+Tab 面板间切换。
 - [x] **前端全量测试通过**：`pnpm -C dashboard-ui test`（212 tests, 51 files）
-- [ ] 提交 commit：`feat(dashboard): unified DataTable + OperationDialog + WS protocol`
+- [x] 提交 commit：`feat(dashboard): unified DataTable + OperationDialog + WS protocol`
 
 
 
@@ -900,7 +900,7 @@
 - [x] `cargo test --test bookmark_phase_a|h|i|j` 20 测试全部通过。
 - [x] `pnpm -C dashboard-ui test` 210 测试全部通过。
 - [x] 修复 `bookmark_phase_h` 和 `bookmark_phase_i` 中使用旧命令名 `delete` 的测试用例。
-- [ ] 提交 commit（需用户确认）。
+- [x] 提交 commit（需用户确认）。
 
 ---
 

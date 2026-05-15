@@ -11,7 +11,7 @@ use std::io::{self, Write};
 
 use comfy_table::{Attribute, Cell, Color, Table};
 
-use crate::cli::FindCmd;
+use crate::xun_core::find_cmd::FindCmd;
 use crate::model::{ListFormat, parse_list_format};
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, format_age, prefer_table_output, print_table};

@@ -12,19 +12,19 @@ use clap::Parser;
 #[command(name = "lock", about = "File locking and unlocking")]
 pub struct LockCmd {
     #[command(subcommand)]
-    pub sub: LockSubCommand,
+    pub cmd: LockSubCommand,
 }
 
 /// Lock 子命令枚举。
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum LockSubCommand {
     /// Show processes locking a file
-    Who(LockWhoArgs),
+    Who(LockWhoCmd),
 }
 
 /// Show processes locking a file.
 #[derive(Parser, Debug, Clone)]
-pub struct LockWhoArgs {
+pub struct LockWhoCmd {
     /// target path
     pub path: String,
 
@@ -105,4 +105,62 @@ pub struct RenFileCmd {
     /// reason for bypass protection
     #[arg(long)]
     pub reason: Option<String>,
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "lock")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "lock")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "lock")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "lock")]
+use crate::xun_core::value::Value;
+
+/// lock 命令。
+#[cfg(feature = "lock")]
+pub struct LockCmdSpec {
+    pub args: LockCmd,
+}
+
+#[cfg(feature = "lock")]
+impl CommandSpec for LockCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::lock::cmd_lock(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}
+
+/// mv 命令。
+#[cfg(feature = "lock")]
+pub struct MvCmdSpec {
+    pub args: MvCmd,
+}
+
+#[cfg(feature = "lock")]
+impl CommandSpec for MvCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::lock::cmd_mv(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}
+
+/// renfile 命令。
+#[cfg(feature = "lock")]
+pub struct RenFileCmdSpec {
+    pub args: RenFileCmd,
+}
+
+#[cfg(feature = "lock")]
+impl CommandSpec for RenFileCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::lock::cmd_ren_file(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
 }

@@ -12,67 +12,67 @@ use clap::{Parser, Subcommand};
 #[command(name = "desktop", about = "Desktop control commands")]
 pub struct DesktopCmd {
     #[command(subcommand)]
-    pub sub: DesktopSubCommand,
+    pub cmd: DesktopSubCommand,
 }
 
 /// Desktop 子命令枚举（14 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopSubCommand {
     /// Manage desktop daemon
-    Daemon(DesktopDaemonArgs),
+    Daemon(DesktopDaemonCmd),
     /// Manage hotkey bindings
-    Hotkey(DesktopHotkeyArgs),
+    Hotkey(DesktopHotkeyCmd),
     /// Manage key remaps
-    Remap(DesktopRemapArgs),
+    Remap(DesktopRemapCmd),
     /// Manage snippets
-    Snippet(DesktopSnippetArgs),
+    Snippet(DesktopSnippetCmd),
     /// Manage layouts
-    Layout(DesktopLayoutArgs),
+    Layout(DesktopLayoutCmd),
     /// Manage workspaces
-    Workspace(DesktopWorkspaceArgs),
+    Workspace(DesktopWorkspaceCmd),
     /// Manage windows
-    Window(DesktopWindowArgs),
+    Window(DesktopWindowCmd),
     /// Manage theme
-    Theme(DesktopThemeArgs),
+    Theme(DesktopThemeCmd),
     /// Manage awake mode
-    Awake(DesktopAwakeArgs),
+    Awake(DesktopAwakeCmd),
     /// Pick a color
-    Color(DesktopColorArgs),
+    Color(DesktopColorCmd),
     /// Manage hosts file
-    Hosts(DesktopHostsArgs),
+    Hosts(DesktopHostsCmd),
     /// Manage installed apps
-    App(DesktopAppArgs),
+    App(DesktopAppCmd),
     /// Launch desktop TUI
-    Tui(DesktopTuiArgs),
+    Tui(DesktopTuiCmd),
     /// Run a command
-    Run(DesktopRunArgs),
+    Run(DesktopRunCmd),
 }
 
 // ── Daemon 嵌套子命令 ────────────────────────────────────────────
 
 /// Manage desktop daemon.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopDaemonArgs {
+pub struct DesktopDaemonCmd {
     #[command(subcommand)]
-    pub sub: DesktopDaemonSubCommand,
+    pub cmd: DesktopDaemonSubCommand,
 }
 
 /// Daemon 子命令枚举（4 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopDaemonSubCommand {
     /// Start desktop daemon
-    Start(DesktopDaemonStartArgs),
+    Start(DesktopDaemonStartCmd),
     /// Stop desktop daemon
-    Stop(DesktopDaemonStopArgs),
+    Stop(DesktopDaemonStopCmd),
     /// Show desktop daemon status
-    Status(DesktopDaemonStatusArgs),
+    Status(DesktopDaemonStatusCmd),
     /// Reload desktop daemon config
-    Reload(DesktopDaemonReloadArgs),
+    Reload(DesktopDaemonReloadCmd),
 }
 
 /// Start desktop daemon.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopDaemonStartArgs {
+pub struct DesktopDaemonStartCmd {
     /// suppress UI output
     #[arg(short = 'q', long)]
     pub quiet: bool,
@@ -88,39 +88,39 @@ pub struct DesktopDaemonStartArgs {
 
 /// Stop desktop daemon.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopDaemonStopArgs {}
+pub struct DesktopDaemonStopCmd {}
 
 /// Show desktop daemon status.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopDaemonStatusArgs {}
+pub struct DesktopDaemonStatusCmd {}
 
 /// Reload desktop daemon config.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopDaemonReloadArgs {}
+pub struct DesktopDaemonReloadCmd {}
 
 // ── Hotkey 嵌套子命令 ────────────────────────────────────────────
 
 /// Manage hotkey bindings.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHotkeyArgs {
+pub struct DesktopHotkeyCmd {
     #[command(subcommand)]
-    pub sub: DesktopHotkeySubCommand,
+    pub cmd: DesktopHotkeySubCommand,
 }
 
 /// Hotkey 子命令枚举（3 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopHotkeySubCommand {
     /// Bind a global hotkey to an action
-    Bind(DesktopHotkeyBindArgs),
+    Bind(DesktopHotkeyBindCmd),
     /// Unbind a hotkey
-    Unbind(DesktopHotkeyUnbindArgs),
+    Unbind(DesktopHotkeyUnbindCmd),
     /// List hotkey bindings
-    List(DesktopHotkeyListArgs),
+    List(DesktopHotkeyListCmd),
 }
 
 /// Bind a global hotkey to an action.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHotkeyBindArgs {
+pub struct DesktopHotkeyBindCmd {
     /// hotkey string, e.g. ctrl+alt+t
     pub hotkey: String,
 
@@ -134,41 +134,41 @@ pub struct DesktopHotkeyBindArgs {
 
 /// Unbind a hotkey.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHotkeyUnbindArgs {
+pub struct DesktopHotkeyUnbindCmd {
     /// hotkey string
     pub hotkey: String,
 }
 
 /// List hotkey bindings.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHotkeyListArgs {}
+pub struct DesktopHotkeyListCmd {}
 
 // ── Remap 嵌套子命令 ─────────────────────────────────────────────
 
 /// Manage key remaps.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopRemapArgs {
+pub struct DesktopRemapCmd {
     #[command(subcommand)]
-    pub sub: DesktopRemapSubCommand,
+    pub cmd: DesktopRemapSubCommand,
 }
 
 /// Remap 子命令枚举（4 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopRemapSubCommand {
     /// Add a remap rule
-    Add(DesktopRemapAddArgs),
+    Add(DesktopRemapAddCmd),
     /// Remove a remap rule
     #[command(name = "rm", alias = "remove")]
-    Rm(DesktopRemapRemoveArgs),
+    Rm(DesktopRemapRemoveCmd),
     /// List remap rules
-    List(DesktopRemapListArgs),
+    List(DesktopRemapListCmd),
     /// Clear remap rules
-    Clear(DesktopRemapClearArgs),
+    Clear(DesktopRemapClearCmd),
 }
 
 /// Add a remap rule.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopRemapAddArgs {
+pub struct DesktopRemapAddCmd {
     /// from hotkey
     pub from: String,
 
@@ -190,7 +190,7 @@ pub struct DesktopRemapAddArgs {
 
 /// Remove a remap rule.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopRemapRemoveArgs {
+pub struct DesktopRemapRemoveCmd {
     /// from hotkey
     pub from: String,
 
@@ -204,11 +204,11 @@ pub struct DesktopRemapRemoveArgs {
 
 /// List remap rules.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopRemapListArgs {}
+pub struct DesktopRemapListCmd {}
 
 /// Clear remap rules.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopRemapClearArgs {
+pub struct DesktopRemapClearCmd {
     /// dry run
     #[arg(long)]
     pub dry_run: bool,
@@ -218,28 +218,28 @@ pub struct DesktopRemapClearArgs {
 
 /// Manage snippets.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopSnippetArgs {
+pub struct DesktopSnippetCmd {
     #[command(subcommand)]
-    pub sub: DesktopSnippetSubCommand,
+    pub cmd: DesktopSnippetSubCommand,
 }
 
 /// Snippet 子命令枚举（4 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopSnippetSubCommand {
     /// Add a snippet
-    Add(DesktopSnippetAddArgs),
+    Add(DesktopSnippetAddCmd),
     /// Remove a snippet
     #[command(name = "rm", alias = "remove")]
-    Rm(DesktopSnippetRemoveArgs),
+    Rm(DesktopSnippetRemoveCmd),
     /// List snippets
-    List(DesktopSnippetListArgs),
+    List(DesktopSnippetListCmd),
     /// Clear snippets
-    Clear(DesktopSnippetClearArgs),
+    Clear(DesktopSnippetClearCmd),
 }
 
 /// Add a snippet.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopSnippetAddArgs {
+pub struct DesktopSnippetAddCmd {
     /// trigger text
     pub trigger: String,
 
@@ -261,26 +261,26 @@ pub struct DesktopSnippetAddArgs {
 
 /// Remove a snippet.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopSnippetRemoveArgs {
+pub struct DesktopSnippetRemoveCmd {
     /// trigger text
     pub trigger: String,
 }
 
 /// List snippets.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopSnippetListArgs {}
+pub struct DesktopSnippetListCmd {}
 
 /// Clear snippets.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopSnippetClearArgs {}
+pub struct DesktopSnippetClearCmd {}
 
 // ── Layout 嵌套子命令 ────────────────────────────────────────────
 
 /// Manage layouts.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopLayoutArgs {
+pub struct DesktopLayoutCmd {
     #[command(subcommand)]
-    pub sub: DesktopLayoutSubCommand,
+    pub cmd: DesktopLayoutSubCommand,
 }
 
 /// Layout 子命令枚举（5 个变体）。
@@ -288,21 +288,21 @@ pub struct DesktopLayoutArgs {
 pub enum DesktopLayoutSubCommand {
     /// Create a layout template
     #[command(name = "add", alias = "new")]
-    Add(DesktopLayoutNewArgs),
+    Add(DesktopLayoutNewCmd),
     /// Apply a layout
-    Apply(DesktopLayoutApplyArgs),
+    Apply(DesktopLayoutApplyCmd),
     /// Preview a layout
-    Preview(DesktopLayoutPreviewArgs),
+    Preview(DesktopLayoutPreviewCmd),
     /// List layouts
-    List(DesktopLayoutListArgs),
+    List(DesktopLayoutListCmd),
     /// Remove a layout
     #[command(name = "rm", alias = "remove")]
-    Rm(DesktopLayoutRemoveArgs),
+    Rm(DesktopLayoutRemoveCmd),
 }
 
 /// Create a layout template.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopLayoutNewArgs {
+pub struct DesktopLayoutNewCmd {
     /// layout name
     pub name: String,
 
@@ -325,7 +325,7 @@ pub struct DesktopLayoutNewArgs {
 
 /// Apply a layout.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopLayoutApplyArgs {
+pub struct DesktopLayoutApplyCmd {
     /// layout name
     pub name: String,
 
@@ -336,18 +336,18 @@ pub struct DesktopLayoutApplyArgs {
 
 /// Preview a layout.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopLayoutPreviewArgs {
+pub struct DesktopLayoutPreviewCmd {
     /// layout name
     pub name: String,
 }
 
 /// List layouts.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopLayoutListArgs {}
+pub struct DesktopLayoutListCmd {}
 
 /// Remove a layout.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopLayoutRemoveArgs {
+pub struct DesktopLayoutRemoveCmd {
     /// layout name
     pub name: String,
 }
@@ -356,28 +356,28 @@ pub struct DesktopLayoutRemoveArgs {
 
 /// Manage workspaces.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWorkspaceArgs {
+pub struct DesktopWorkspaceCmd {
     #[command(subcommand)]
-    pub sub: DesktopWorkspaceSubCommand,
+    pub cmd: DesktopWorkspaceSubCommand,
 }
 
 /// Workspace 子命令枚举（4 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopWorkspaceSubCommand {
     /// Save current workspace
-    Save(DesktopWorkspaceSaveArgs),
+    Save(DesktopWorkspaceSaveCmd),
     /// Launch a workspace
-    Launch(DesktopWorkspaceLaunchArgs),
+    Launch(DesktopWorkspaceLaunchCmd),
     /// List workspaces
-    List(DesktopWorkspaceListArgs),
+    List(DesktopWorkspaceListCmd),
     /// Remove a workspace
     #[command(name = "rm", alias = "remove")]
-    Rm(DesktopWorkspaceRemoveArgs),
+    Rm(DesktopWorkspaceRemoveCmd),
 }
 
 /// Save current workspace.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWorkspaceSaveArgs {
+pub struct DesktopWorkspaceSaveCmd {
     /// workspace name
     pub name: String,
 
@@ -388,7 +388,7 @@ pub struct DesktopWorkspaceSaveArgs {
 
 /// Launch a workspace.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWorkspaceLaunchArgs {
+pub struct DesktopWorkspaceLaunchCmd {
     /// workspace name
     pub name: String,
 
@@ -403,11 +403,11 @@ pub struct DesktopWorkspaceLaunchArgs {
 
 /// List workspaces.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWorkspaceListArgs {}
+pub struct DesktopWorkspaceListCmd {}
 
 /// Remove a workspace.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWorkspaceRemoveArgs {
+pub struct DesktopWorkspaceRemoveCmd {
     /// workspace name
     pub name: String,
 }
@@ -416,29 +416,29 @@ pub struct DesktopWorkspaceRemoveArgs {
 
 /// Manage windows.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWindowArgs {
+pub struct DesktopWindowCmd {
     #[command(subcommand)]
-    pub sub: DesktopWindowSubCommand,
+    pub cmd: DesktopWindowSubCommand,
 }
 
 /// Window 子命令枚举（5 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopWindowSubCommand {
     /// Focus a window
-    Focus(DesktopWindowFocusArgs),
+    Focus(DesktopWindowFocusCmd),
     /// Move a window
-    Move(DesktopWindowMoveArgs),
+    Move(DesktopWindowMoveCmd),
     /// Resize a window
-    Resize(DesktopWindowResizeArgs),
+    Resize(DesktopWindowResizeCmd),
     /// Set window transparency
-    Transparent(DesktopWindowTransparentArgs),
+    Transparent(DesktopWindowTransparentCmd),
     /// Toggle window always-on-top
-    Top(DesktopWindowTopArgs),
+    Top(DesktopWindowTopCmd),
 }
 
 /// Focus a window.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWindowFocusArgs {
+pub struct DesktopWindowFocusCmd {
     /// app name
     #[arg(long)]
     pub app: Option<String>,
@@ -450,7 +450,7 @@ pub struct DesktopWindowFocusArgs {
 
 /// Move a window.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWindowMoveArgs {
+pub struct DesktopWindowMoveCmd {
     /// x position
     #[arg(long)]
     pub x: i32,
@@ -466,7 +466,7 @@ pub struct DesktopWindowMoveArgs {
 
 /// Resize a window.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWindowResizeArgs {
+pub struct DesktopWindowResizeCmd {
     /// width
     #[arg(long)]
     pub width: i32,
@@ -482,7 +482,7 @@ pub struct DesktopWindowResizeArgs {
 
 /// Set window transparency.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWindowTransparentArgs {
+pub struct DesktopWindowTransparentCmd {
     /// alpha value
     #[arg(long)]
     pub alpha: u8,
@@ -494,7 +494,7 @@ pub struct DesktopWindowTransparentArgs {
 
 /// Toggle window always-on-top.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopWindowTopArgs {
+pub struct DesktopWindowTopCmd {
     /// enable topmost
     #[arg(long)]
     pub enable: bool,
@@ -512,38 +512,38 @@ pub struct DesktopWindowTopArgs {
 
 /// Manage theme.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopThemeArgs {
+pub struct DesktopThemeCmd {
     #[command(subcommand)]
-    pub sub: DesktopThemeSubCommand,
+    pub cmd: DesktopThemeSubCommand,
 }
 
 /// Theme 子命令枚举（4 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopThemeSubCommand {
     /// Set theme
-    Set(DesktopThemeSetArgs),
+    Set(DesktopThemeSetCmd),
     /// Toggle theme
-    Toggle(DesktopThemeToggleArgs),
+    Toggle(DesktopThemeToggleCmd),
     /// Schedule theme
-    Schedule(DesktopThemeScheduleArgs),
+    Schedule(DesktopThemeScheduleCmd),
     /// Show theme status
-    Status(DesktopThemeStatusArgs),
+    Status(DesktopThemeStatusCmd),
 }
 
 /// Set theme.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopThemeSetArgs {
+pub struct DesktopThemeSetCmd {
     /// theme mode: light|dark
     pub mode: String,
 }
 
 /// Toggle theme.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopThemeToggleArgs {}
+pub struct DesktopThemeToggleCmd {}
 
 /// Schedule theme.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopThemeScheduleArgs {
+pub struct DesktopThemeScheduleCmd {
     /// light time
     #[arg(long)]
     pub light: Option<String>,
@@ -555,31 +555,31 @@ pub struct DesktopThemeScheduleArgs {
 
 /// Show theme status.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopThemeStatusArgs {}
+pub struct DesktopThemeStatusCmd {}
 
 // ── Awake 嵌套子命令 ─────────────────────────────────────────────
 
 /// Manage awake mode.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopAwakeArgs {
+pub struct DesktopAwakeCmd {
     #[command(subcommand)]
-    pub sub: DesktopAwakeSubCommand,
+    pub cmd: DesktopAwakeSubCommand,
 }
 
 /// Awake 子命令枚举（3 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopAwakeSubCommand {
     /// Enable awake mode
-    On(DesktopAwakeOnArgs),
+    On(DesktopAwakeOnCmd),
     /// Disable awake mode
-    Off(DesktopAwakeOffArgs),
+    Off(DesktopAwakeOffCmd),
     /// Show awake status
-    Status(DesktopAwakeStatusArgs),
+    Status(DesktopAwakeStatusCmd),
 }
 
 /// Enable awake mode.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopAwakeOnArgs {
+pub struct DesktopAwakeOnCmd {
     /// duration string
     #[arg(long)]
     pub duration: Option<String>,
@@ -595,17 +595,17 @@ pub struct DesktopAwakeOnArgs {
 
 /// Disable awake mode.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopAwakeOffArgs {}
+pub struct DesktopAwakeOffCmd {}
 
 /// Show awake status.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopAwakeStatusArgs {}
+pub struct DesktopAwakeStatusCmd {}
 
 // ── Color 命令 ───────────────────────────────────────────────────
 
 /// Pick a color.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopColorArgs {
+pub struct DesktopColorCmd {
     /// copy to clipboard
     #[arg(long)]
     pub copy: bool,
@@ -615,26 +615,26 @@ pub struct DesktopColorArgs {
 
 /// Manage hosts file.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHostsArgs {
+pub struct DesktopHostsCmd {
     #[command(subcommand)]
-    pub sub: DesktopHostsSubCommand,
+    pub cmd: DesktopHostsSubCommand,
 }
 
 /// Hosts 子命令枚举（3 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopHostsSubCommand {
     /// Add a hosts entry
-    Add(DesktopHostsAddArgs),
+    Add(DesktopHostsAddCmd),
     /// Remove a hosts entry
     #[command(name = "rm", alias = "remove")]
-    Rm(DesktopHostsRemoveArgs),
+    Rm(DesktopHostsRemoveCmd),
     /// List hosts entries
-    List(DesktopHostsListArgs),
+    List(DesktopHostsListCmd),
 }
 
 /// Add a hosts entry.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHostsAddArgs {
+pub struct DesktopHostsAddCmd {
     /// hostname
     pub host: String,
 
@@ -648,7 +648,7 @@ pub struct DesktopHostsAddArgs {
 
 /// Remove a hosts entry.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHostsRemoveArgs {
+pub struct DesktopHostsRemoveCmd {
     /// hostname
     pub host: String,
 
@@ -659,39 +659,67 @@ pub struct DesktopHostsRemoveArgs {
 
 /// List hosts entries.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopHostsListArgs {}
+pub struct DesktopHostsListCmd {}
 
 // ── App 嵌套子命令 ───────────────────────────────────────────────
 
 /// Manage installed apps.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopAppArgs {
+pub struct DesktopAppCmd {
     #[command(subcommand)]
-    pub sub: DesktopAppSubCommand,
+    pub cmd: DesktopAppSubCommand,
 }
 
 /// App 子命令枚举（1 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum DesktopAppSubCommand {
     /// List installed apps
-    List(DesktopAppListArgs),
+    List(DesktopAppListCmd),
 }
 
 /// List installed apps.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopAppListArgs {}
+pub struct DesktopAppListCmd {}
 
 // ── Tui 命令 ─────────────────────────────────────────────────────
 
 /// Launch desktop TUI.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopTuiArgs {}
+pub struct DesktopTuiCmd {}
 
 // ── Run 命令 ─────────────────────────────────────────────────────
 
 /// Run a command.
 #[derive(Parser, Debug, Clone)]
-pub struct DesktopRunArgs {
+pub struct DesktopRunCmd {
     /// command line
     pub command: String,
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "desktop")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "desktop")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "desktop")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "desktop")]
+use crate::xun_core::value::Value;
+
+/// desktop 命令。
+#[cfg(feature = "desktop")]
+pub struct DesktopCmdSpec {
+    pub args: DesktopCmd,
+}
+
+#[cfg(feature = "desktop")]
+impl CommandSpec for DesktopCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::desktop::cmd_desktop(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
 }

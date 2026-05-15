@@ -90,3 +90,31 @@ pub struct RedirectCmd {
     #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "redirect")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "redirect")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "redirect")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "redirect")]
+use crate::xun_core::value::Value;
+
+/// redirect 命令。
+#[cfg(feature = "redirect")]
+pub struct RedirectCmdSpec {
+    pub args: RedirectCmd,
+}
+
+#[cfg(feature = "redirect")]
+impl CommandSpec for RedirectCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::redirect::cmd_redirect(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}

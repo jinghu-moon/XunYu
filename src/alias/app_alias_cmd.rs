@@ -1,7 +1,7 @@
 use super::context::{AliasCtx, split_csv_multi};
 use super::*;
 
-pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddCmd) -> Result<()> {
+pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddArgs) -> Result<()> {
     let mut cfg = ctx.load()?;
     config::validate_alias_name(&args.name)?;
     if cfg.name_exists(&args.name) && !args.force {
@@ -38,7 +38,7 @@ pub(super) fn cmd_app_add(ctx: &AliasCtx, args: AliasAppAddCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_app_rm(ctx: &AliasCtx, args: AliasAppRmCmd) -> Result<()> {
+pub(super) fn cmd_app_rm(ctx: &AliasCtx, args: AliasAppRmArgs) -> Result<()> {
     if args.names.is_empty() {
         bail!("No app alias names provided.");
     }
@@ -57,7 +57,7 @@ pub(super) fn cmd_app_rm(ctx: &AliasCtx, args: AliasAppRmCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_app_ls(ctx: &AliasCtx, args: AliasAppLsCmd) -> Result<()> {
+pub(super) fn cmd_app_ls(ctx: &AliasCtx, args: AliasAppLsArgs) -> Result<()> {
     let cfg = ctx.load()?;
     if args.json {
         out_println!("{}", serde_json::to_string_pretty(&cfg.app)?);
@@ -85,7 +85,7 @@ pub(super) fn cmd_app_ls(ctx: &AliasCtx, args: AliasAppLsCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_app_scan(ctx: &AliasCtx, args: AliasAppScanCmd) -> Result<()> {
+pub(super) fn cmd_app_scan(ctx: &AliasCtx, args: AliasAppScanArgs) -> Result<()> {
     let source = ScanSource::from_str(&args.source)
         .ok_or_else(|| anyhow::anyhow!("Invalid source: {}", args.source))?;
     let entries = scanner::scan(source, args.filter.as_deref(), args.no_cache);

@@ -1,8 +1,6 @@
-//! Ctx CLI 定义（clap derive）
-//!
-//! 新架构的 ctx 命令定义，替代 argh 版本。
+//! Ctx CLI 定义（clap derive）+ CtxProfile 输出类型
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
@@ -13,31 +11,31 @@ use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 #[command(name = "ctx", about = "Context switch profiles")]
 pub struct CtxCmd {
     #[command(subcommand)]
-    pub sub: CtxSubCommand,
+    pub cmd: CtxSubCommand,
 }
 
 /// Ctx 子命令枚举。
 #[derive(Subcommand, Debug, Clone)]
 pub enum CtxSubCommand {
     /// 定义或更新配置
-    Set(CtxSetArgs),
+    Set(CtxSetCmd),
     /// 激活配置
-    Use(CtxUseArgs),
+    Use(CtxUseCmd),
     /// 停用当前配置
-    Off(CtxOffArgs),
+    Off(CtxOffCmd),
     /// 列出所有配置
-    List(CtxListArgs),
+    List(CtxListCmd),
     /// 显示配置详情
-    Show(CtxShowArgs),
+    Show(CtxShowCmd),
     /// 删除配置
-    Del(CtxDelArgs),
+    Del(CtxDelCmd),
     /// 重命名配置
-    Rename(CtxRenameArgs),
+    Rename(CtxRenameCmd),
 }
 
 /// ctx set 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxSetArgs {
+#[derive(Args, Debug, Clone)]
+pub struct CtxSetCmd {
     /// 配置名称
     pub name: String,
     /// 工作目录
@@ -61,27 +59,27 @@ pub struct CtxSetArgs {
 }
 
 /// ctx use 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxUseArgs {
+#[derive(Args, Debug, Clone)]
+pub struct CtxUseCmd {
     /// 配置名称
     pub name: String,
 }
 
 /// ctx off 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxOffArgs {}
+#[derive(Args, Debug, Clone)]
+pub struct CtxOffCmd {}
 
 /// ctx list 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxListArgs {
+#[derive(Args, Debug, Clone)]
+pub struct CtxListCmd {
     /// 输出格式
     #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
 }
 
 /// ctx show 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxShowArgs {
+#[derive(Args, Debug, Clone)]
+pub struct CtxShowCmd {
     /// 配置名称（默认当前激活）
     pub name: Option<String>,
     /// 输出格式
@@ -90,15 +88,15 @@ pub struct CtxShowArgs {
 }
 
 /// ctx del 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxDelArgs {
+#[derive(Args, Debug, Clone)]
+pub struct CtxDelCmd {
     /// 配置名称
     pub name: String,
 }
 
 /// ctx rename 参数。
-#[derive(Parser, Debug, Clone)]
-pub struct CtxRenameArgs {
+#[derive(Args, Debug, Clone)]
+pub struct CtxRenameCmd {
     /// 旧名称
     pub old: String,
     /// 新名称
@@ -145,5 +143,25 @@ impl TableRow for CtxProfile {
             Value::String(self.path.clone()),
             Value::Bool(self.active),
         ]
+    }
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+use crate::xun_core::command::CommandSpec;
+use crate::xun_core::context::CmdContext;
+use crate::xun_core::error::XunError;
+
+/// ctx 命令。
+pub struct CtxCmdSpec {
+    pub args: CtxCmd,
+}
+
+impl CommandSpec for CtxCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::ctx::cmd_ctx(self.args.clone())?;
+        Ok(Value::Null)
     }
 }

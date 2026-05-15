@@ -12,23 +12,23 @@ use clap::{Parser, Subcommand};
 #[command(name = "protect", about = "Manage protection rules")]
 pub struct ProtectCmd {
     #[command(subcommand)]
-    pub sub: ProtectSubCommand,
+    pub cmd: ProtectSubCommand,
 }
 
 /// Protect 子命令枚举（3 个变体）。
 #[derive(Subcommand, Debug, Clone)]
 pub enum ProtectSubCommand {
     /// Set a protection rule
-    Set(ProtectSetArgs),
+    Set(ProtectSetCmd),
     /// Clear a protection rule
-    Clear(ProtectClearArgs),
+    Clear(ProtectClearCmd),
     /// Show protection status
-    Status(ProtectStatusArgs),
+    Status(ProtectStatusCmd),
 }
 
 /// Set a protection rule.
 #[derive(Parser, Debug, Clone)]
-pub struct ProtectSetArgs {
+pub struct ProtectSetCmd {
     /// path to protect
     pub path: String,
 
@@ -47,7 +47,7 @@ pub struct ProtectSetArgs {
 
 /// Clear a protection rule.
 #[derive(Parser, Debug, Clone)]
-pub struct ProtectClearArgs {
+pub struct ProtectClearCmd {
     /// path to clear protection
     pub path: String,
 
@@ -58,11 +58,39 @@ pub struct ProtectClearArgs {
 
 /// Show protection status.
 #[derive(Parser, Debug, Clone)]
-pub struct ProtectStatusArgs {
+pub struct ProtectStatusCmd {
     /// filter by path prefix
     pub path: Option<String>,
 
     /// output format: auto|table|tsv|json
     #[arg(short = 'f', long, default_value = "auto")]
     pub format: String,
+}
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "protect")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "protect")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "protect")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "protect")]
+use crate::xun_core::value::Value;
+
+/// protect 命令。
+#[cfg(feature = "protect")]
+pub struct ProtectCmdSpec {
+    pub args: ProtectCmd,
+}
+
+#[cfg(feature = "protect")]
+impl CommandSpec for ProtectCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::protect::cmd_protect(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
 }

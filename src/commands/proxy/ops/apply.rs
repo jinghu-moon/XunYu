@@ -1,18 +1,16 @@
 use std::process::Command;
 use std::time::Duration;
 
-use crate::cli::{ProxyCmd, ProxyExecCmd, ProxyOffCmd, ProxyOnCmd, ProxySubCommand};
+use crate::cli::{ProxyExecCmd, ProxyOffCmd, ProxyOnCmd, ProxyTestCmd};
 use crate::config;
 use crate::output::emit_warning;
 use crate::output::{CliError, CliResult};
-use crate::util::has_cmd;
 
 use super::super::config::{
-    del_proxy, load_proxy_state, parse_proxy_only, save_proxy_state, set_proxy,
+    del_proxy, load_proxy_state, set_proxy,
 };
 use super::super::env::{out_env_set, out_env_unset};
 use super::super::test::{parse_proxy_targets, run_proxy_tests_with};
-use super::detect::cmd_proxy_detect;
 use super::state::resolve_proxy_url_and_noproxy;
 
 pub(crate) fn cmd_proxy_on(args: ProxyOnCmd) -> CliResult {
@@ -126,46 +124,17 @@ pub(crate) fn cmd_proxy_exec(args: ProxyExecCmd) -> CliResult {
     }
 }
 
-pub(crate) fn cmd_proxy(args: ProxyCmd) -> CliResult {
-    match args.cmd {
-        ProxySubCommand::Set(a) => {
-            let only = parse_proxy_only(a.only.as_deref()).map_err(|e| CliError::new(2, e))?;
-            set_proxy(&a.url, &a.noproxy, a.msys2.as_deref(), only.as_ref());
-            save_proxy_state(&a.url, &a.noproxy);
-            Ok(())
-        }
-        ProxySubCommand::Rm(a) => {
-            let only = parse_proxy_only(a.only.as_deref()).map_err(|e| CliError::new(2, e))?;
-            del_proxy(a.msys2.as_deref(), only.as_ref());
-            Ok(())
-        }
-        ProxySubCommand::Show(_a) => {
-            if has_cmd("git") {
-                if let Ok(o) = Command::new("git")
-                    .args(["config", "--global", "--get", "http.proxy"])
-                    .output()
-                {
-                    out_println!("{}", String::from_utf8_lossy(&o.stdout).trim());
-                }
-            } else {
-                ui_println!("skip:git (not found)");
+pub(crate) fn cmd_proxy_test(a: ProxyTestCmd) -> CliResult {
+    let targets = parse_proxy_targets(a.targets.as_deref());
+    let timeout = Duration::from_secs(a.timeout.max(1));
+    let jobs = a.jobs.max(1);
+    for (label, result) in run_proxy_tests_with(&a.url, targets, timeout, jobs) {
+        match result {
+            Ok(ms) => out_println!("{}\t{}\tok", label, ms),
+            Err(e) => {
+                out_println!("{}\t-1\t{}", label, e);
             }
-            Ok(())
-        }
-        ProxySubCommand::Detect(a) => cmd_proxy_detect(a),
-        ProxySubCommand::Test(a) => {
-            let targets = parse_proxy_targets(a.targets.as_deref());
-            let timeout = Duration::from_secs(a.timeout.max(1));
-            let jobs = a.jobs.max(1);
-            for (label, result) in run_proxy_tests_with(&a.url, targets, timeout, jobs) {
-                match result {
-                    Ok(ms) => out_println!("{}\t{}\tok", label, ms),
-                    Err(e) => {
-                        out_println!("{}\t-1\t{}", label, e);
-                    }
-                }
-            }
-            Ok(())
         }
     }
+    Ok(())
 }

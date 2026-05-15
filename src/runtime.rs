@@ -13,24 +13,12 @@ pub(crate) struct RuntimeOptions {
 
 static RUNTIME: OnceLock<RuntimeOptions> = OnceLock::new();
 
-pub(crate) fn init(args: &Xun) {
-    let opts = compute_options_from_flags(
-        args.no_color,
-        args.quiet,
-        args.verbose,
-        args.non_interactive,
-        env_flag("XUN_QUIET"),
-        env_flag("XUN_VERBOSE"),
-        env_flag("XUN_NON_INTERACTIVE"),
-        env::var_os("NO_COLOR").is_some(),
-    );
-    let _ = RUNTIME.set(opts);
-    if opts.no_color {
-        console::set_colors_enabled(false);
-    }
+pub(crate) fn init_direct(no_color: bool, quiet: bool, verbose: bool, non_interactive: bool) {
+    init_from_flags(no_color, quiet, verbose, non_interactive);
 }
 
-pub(crate) fn init_direct(no_color: bool, quiet: bool, verbose: bool, non_interactive: bool) {
+/// 从布尔标志初始化运行时（xun_core dispatch 入口使用）。
+pub(crate) fn init_from_flags(no_color: bool, quiet: bool, verbose: bool, non_interactive: bool) {
     let opts = compute_options_from_flags(
         no_color,
         quiet,

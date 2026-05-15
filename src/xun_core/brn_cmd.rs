@@ -183,3 +183,31 @@ pub struct BrnCmd {
     #[arg(long)]
     pub redo: Option<usize>,
 }
+
+// ============================================================
+// CommandSpec 实现
+// ============================================================
+
+#[cfg(feature = "batch_rename")]
+use crate::xun_core::command::CommandSpec;
+#[cfg(feature = "batch_rename")]
+use crate::xun_core::context::CmdContext;
+#[cfg(feature = "batch_rename")]
+use crate::xun_core::error::XunError;
+#[cfg(feature = "batch_rename")]
+use crate::xun_core::value::Value;
+
+/// brn 命令。
+#[cfg(feature = "batch_rename")]
+pub struct BrnCmdSpec {
+    pub args: BrnCmd,
+}
+
+#[cfg(feature = "batch_rename")]
+impl CommandSpec for BrnCmdSpec {
+    fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
+        crate::commands::batch_rename::cmd_brn(self.args.clone())
+            ?;
+        Ok(Value::Null)
+    }
+}

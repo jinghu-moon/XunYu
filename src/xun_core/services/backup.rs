@@ -5,18 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::output::CliError;
 use crate::xun_core::error::XunError;
 use crate::xun_core::value::Value;
-
-// ── 错误桥接 ────────────────────────────────────────────────
-
-fn cli_err_to_xun(err: CliError) -> XunError {
-    XunError::User {
-        message: err.message,
-        hints: err.details,
-    }
-}
 
 // ── 辅助函数 ────────────────────────────────────────────────
 
@@ -71,7 +61,7 @@ pub fn create_backup(
         diff_mode: diff_mode.map(|s| s.to_string()),
         json,
     };
-    crate::commands::backup::cmd_backup(args).map_err(cli_err_to_xun)?;
+    crate::commands::backup::cmd_backup(args)?;
     Ok(Value::String("backup created".to_string()))
 }
 
@@ -121,7 +111,7 @@ pub fn create_backup_artifact(
         json,
         no_sidecar,
     };
-    crate::backup::app::create::cmd_backup_create(cmd).map_err(cli_err_to_xun)?;
+    crate::backup::app::create::cmd_backup_create(cmd)?;
     Ok(Value::String("backup artifact created".to_string()))
 }
 
@@ -152,7 +142,7 @@ pub fn restore_backup(
         yes,
         json,
     };
-    crate::backup::app::restore::cmd_restore(cmd).map_err(cli_err_to_xun)?;
+    crate::backup::app::restore::cmd_restore(cmd)?;
     Ok(Value::String("backup restored".to_string()))
 }
 
@@ -196,7 +186,7 @@ pub fn convert_backup(
         json,
         no_sidecar: false,
     };
-    crate::backup::app::convert::cmd_backup_convert(cmd).map_err(cli_err_to_xun)?;
+    crate::backup::app::convert::cmd_backup_convert(cmd)?;
     Ok(Value::String("backup converted".to_string()))
 }
 
@@ -208,7 +198,7 @@ pub fn convert_backup(
 pub fn list_backups(dir: Option<&str>, json: bool) -> Result<Value, XunError> {
     let root = resolve_root(dir)?;
     let cfg = load_backup_config(&root);
-    crate::backup::legacy::list::cmd_backup_list(&root, &cfg, json).map_err(cli_err_to_xun)?;
+    crate::backup::legacy::list::cmd_backup_list(&root, &cfg, json)?;
     Ok(Value::String("backup list".to_string()))
 }
 
@@ -221,7 +211,7 @@ pub fn verify_backup(name: &str, dir: Option<&str>, json: bool) -> Result<Value,
     let root = resolve_root(dir)?;
     let cfg = load_backup_config(&root);
     crate::backup::legacy::verify::cmd_backup_verify(&root, &cfg, name, json)
-        .map_err(cli_err_to_xun)?;
+        ?;
     Ok(Value::String("backup verified".to_string()))
 }
 
@@ -240,10 +230,10 @@ pub fn find_backup(
     let root = resolve_root(dir)?;
     let cfg = load_backup_config(&root);
     let since_bound = crate::backup::legacy::find::parse_time_filter_bound(since, false)
-        .map_err(cli_err_to_xun)?;
+        ?;
     let until_bound = crate::backup::legacy::find::parse_time_filter_bound(until, true)
-        .map_err(cli_err_to_xun)?;
+        ?;
     crate::backup::legacy::find::cmd_backup_find(&root, &cfg, tag, since_bound, until_bound, json)
-        .map_err(cli_err_to_xun)?;
+        ?;
     Ok(Value::String("backup find".to_string()))
 }

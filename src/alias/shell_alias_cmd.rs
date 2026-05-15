@@ -1,7 +1,7 @@
 use super::context::{AliasCtx, split_csv_multi};
 use super::*;
 
-pub(super) fn cmd_setup(ctx: &AliasCtx, args: AliasSetupCmd) -> Result<()> {
+pub(super) fn cmd_setup(ctx: &AliasCtx, args: AliasSetupArgs) -> Result<()> {
     fs::create_dir_all(&ctx.config_dir)
         .with_context(|| format!("Failed to create {}", ctx.config_dir.display()))?;
     fs::create_dir_all(&ctx.shims_dir)
@@ -22,7 +22,7 @@ pub(super) fn cmd_setup(ctx: &AliasCtx, args: AliasSetupCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
+pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddArgs) -> Result<()> {
     let t_total = std::time::Instant::now();
     let mut cfg = ctx.load()?;
     config::validate_alias_name(&args.name)?;
@@ -58,7 +58,7 @@ pub(super) fn cmd_add(ctx: &AliasCtx, args: AliasAddCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_rm(ctx: &AliasCtx, args: AliasRmCmd) -> Result<()> {
+pub(super) fn cmd_rm(ctx: &AliasCtx, args: AliasRmArgs) -> Result<()> {
     if args.names.is_empty() {
         bail!("No alias names provided.");
     }
@@ -84,7 +84,7 @@ pub(super) fn cmd_rm(ctx: &AliasCtx, args: AliasRmCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_export(ctx: &AliasCtx, args: AliasExportCmd) -> Result<()> {
+pub(super) fn cmd_export(ctx: &AliasCtx, args: AliasExportArgs) -> Result<()> {
     let cfg = ctx.load()?;
     let text = toml::to_string_pretty(&cfg)?;
     if let Some(path) = args.output {
@@ -96,7 +96,7 @@ pub(super) fn cmd_export(ctx: &AliasCtx, args: AliasExportCmd) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportCmd) -> Result<()> {
+pub(super) fn cmd_import(ctx: &AliasCtx, args: AliasImportArgs) -> Result<()> {
     let t_total = std::time::Instant::now();
     let text =
         fs::read_to_string(&args.file).with_context(|| format!("Failed to read {}", args.file))?;

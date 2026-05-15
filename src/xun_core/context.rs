@@ -19,8 +19,8 @@ pub struct CmdContext {
 }
 
 impl CmdContext {
-    /// 创建测试用上下文（所有默认值）。
-    pub fn for_test() -> Self {
+    /// 创建默认上下文。
+    pub fn new() -> Self {
         Self {
             format: OutputFormat::Auto,
             quiet: false,
@@ -29,6 +29,11 @@ impl CmdContext {
             config_loaded: false,
             config: None,
         }
+    }
+
+    /// 创建测试用上下文（所有默认值）。
+    pub fn for_test() -> Self {
+        Self::new()
     }
 
     // ---- Builder 方法 ----

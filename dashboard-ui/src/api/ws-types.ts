@@ -75,7 +75,7 @@ export interface WsErrorResponse {
   type: 'Error'
   payload: {
     message: string
-    code: string
+    code: WsErrorCode
   }
 }
 
