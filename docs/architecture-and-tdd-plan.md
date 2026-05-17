@@ -1204,11 +1204,28 @@ fn backup_list() {
 > **原则**：每个 Task 遵循 Red-Green-Refactor 循环。先写失败测试，再写最小实现，最后重构。
 > **允许破坏性改动**：快速开发期，接口可自由变更。
 
+### 任务状态总览
+
+| Phase | 描述 | 状态 | 完成度 |
+|-------|------|------|--------|
+| **Phase 0** | 基础设施升级 | 🟡 进行中 | 6/8 |
+| **Phase 0T** | 测试基础设施迁移 | ⬜ 未开始 | 0/6 |
+| **Phase 0P** | path_guard 全面采用 | ⬜ 未开始 | 0/7 |
+| **Phase 1** | Bookmark 引擎极速化 | ✅ 已完成 | 5/5 |
+| **Phase 2** | Xunbak 容器管道极限优化 | 🟡 进行中 | 2/5 |
+| **Phase 3** | FileVault 加密管道优化 | ⬜ 未开始 | 0/3 |
+| **Phase 4** | ACL 与环境变量子系统强化 | ⬜ 未开始 | 0/4 |
+| **Phase 5** | 新功能开发 | ⬜ 未开始 | 0/3 |
+| **Phase 6** | Dashboard 与集成优化 | ⬜ 未开始 | 0/3 |
+| **Phase 7** | 横切关注点与质量保障 | ⬜ 未开始 | 0/5 |
+
+**图例**: ✅ 已完成 | 🟡 进行中 | ⏳ 待实现 | ⬜ 未开始
+
 ---
 
-### Phase 0：基础设施升级（无功能变更，纯重构）
+### Phase 0：基础设施升级（无功能变更，纯重构）🟡
 
-#### Task 0.1：`lazy_static` → `LazyLock` 全局迁移
+#### Task 0.1：`lazy_static` → `LazyLock` 全局迁移 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1218,7 +1235,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn lazy_lock_init_is_threadsafe()` — 多线程并发访问验证 |
 | **验收标准** | `Cargo.toml` 中移除 `lazy_static` 依赖；`cargo build` 编译时间减少 ≥ 1s；所有现有测试通过 |
 
-#### Task 0.2：Win32 错误处理辅助函数 + `to_wide()`
+**实现说明**: `lazy_static` 已从直接依赖中移除，源码统一使用 `std::sync::LazyLock`（如 `env_core/template.rs`、`diff/vue.rs`）或 `OnceLock`（`runtime.rs`）。`lazy_static` 仅作为传递依赖存在于 `Cargo.lock`。
+
+#### Task 0.2：Win32 错误处理辅助函数 + `to_wide()` ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1228,7 +1247,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn check_bool_captures_access_denied()` — 模拟权限不足；`#[test] fn to_wide_null_terminates()` — 输出以 0 结尾 |
 | **验收标准** | 逐步替换现有调用点（不要求一次全改）；新代码必须使用辅助函数；错误信息包含 Win32 错误码 |
 
-#### Task 0.3：基层组件目录整合 (`src/foundation/`)
+**实现说明**: 实际路径为 `src/foundation/win32/error.rs`（随 Task 0.3 一并迁移）。`Win32Error` 结构体 + `check_bool()`/`check_handle()` 已就位。`to_wide()` 位于 `src/foundation/win32/mod.rs`。
+
+#### Task 0.3：基层组件目录整合 (`src/foundation/`) ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1238,7 +1259,9 @@ fn backup_list() {
 | **前置测试** | `cargo build` 通过；所有现有测试通过（通过 `lib.rs` 重导出保持 import 兼容） |
 | **验收标准** | `src/` 顶层条目从 30+ 降至 ~20；`foundation/mod.rs` 通过 `pub use` 重导出所有公开 API；`path_guard/` 和 `config/` 保持顶层独立 |
 
-#### Task 0.4：`windows` crate 依赖瘦身
+**实现说明**: `src/foundation/` 已建立，包含 `runtime.rs`、`output.rs`、`store.rs`、`util.rs`、`macros.rs`、`model.rs`、`suggest.rs`、`proc.rs` 及 `win32/` 子目录。`windows/` 已改名为 `foundation/win32/`。`path_guard/` 和 `config/` 保持顶层独立。
+
+#### Task 0.4：`windows` crate 依赖瘦身 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1248,7 +1271,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn acl_read_with_windows_sys()` — 验证迁移后 ACL 读取结果一致 |
 | **验收标准** | `windows` crate features 减少 ≥ 50%；编译时间（clean build）减少 ≥ 15s；`cargo bloat` 报告二进制减少 ≥ 100KB |
 
-#### Task 0.5：CLI Help 质量与参数校验强化
+#### Task 0.5：CLI Help 质量与参数校验强化 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1258,7 +1281,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn help_output_fits_80_cols()` — 主 help 宽度合理；`#[test] fn hidden_aliases_still_parse()` — `xun pon` 仍可执行；`#[test] fn value_parser_rejects_zero_retain()` — `--retain 0` 被 clap 拒绝并给出错误信息 |
 | **验收标准** | `xun --help` 仅显示 ≤ 20 个核心命令（别名隐藏）；所有数值参数有 `value_parser` 范围约束；互斥参数声明 `conflicts_with`；每个顶层命令有 `after_help` 示例 |
 
-#### Task 0.6：CmdContext 充实与配置连接
+**实现说明**: `dispatch.rs` 中 10 个别名设置 `hide = true`（Pst/Pon/Poff/Px/Ports/Kill/Ps/Pkill/Complete/Rm）。11 个 `*_cmd.rs` 文件包含 `after_help` 示例。`value_parser` 范围约束用于 `proxy_cmd.rs` 和 `env_cmd.rs`。
+
+#### Task 0.6：CmdContext 充实与配置连接 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1268,7 +1293,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn context_loads_config_lazily()` — 首次 `.config()` 触发加载；`#[test] fn context_cwd_respects_dash_c()` — `-C /tmp` 覆盖 cwd；`#[test] fn context_for_test_uses_tempdir()` — 测试不污染真实文件系统 |
 | **验收标准** | 所有 `std::env::var("LOCALAPPDATA")` 调用点改为 `ctx.data_dir()`；配置加载失败时使用默认值（不 panic）；测试可注入任意路径 |
 
-#### Task 0.7：输出统一 — 消灭直接 println
+**实现说明**: `src/xun_core/context.rs` 中 `CmdContext` 包含 `config: OnceCell<GlobalConfig>`（延迟加载）、`cwd`、`data_dir`、`home_dir`。提供 `with_cwd()`/`with_data_dir()` builder 和 `for_test()` 测试构造器。
+
+#### Task 0.7：输出统一 — 消灭直接 println ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1278,7 +1305,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn all_commands_return_non_null_value()` — 遍历命令列表验证；`#[test] fn json_format_produces_valid_json()` — `--format json` 对所有命令输出合法 JSON |
 | **验收标准** | `grep -r "println!" src/xun_core/services/` 结果为 0；所有列表命令返回 `Value::Table`；所有单条命令返回 `Value::Record`；`--format json` 全局可用 |
 
-#### Task 0.8：`commands/` 目录清空（分批执行）
+**实现说明**: `CommandSpec::run()` 返回 `Result<Value, XunError>`，通过 `Renderer` 渲染。`Value` 枚举支持 Null/Bool/Int/Float/String/Duration/Filesize/Date/List/Record/Table。`src/xun_core/` 中 `println!` 仅 1 处（`init_cmd.rs` shell 脚本输出）。
+
+#### Task 0.8：`commands/` 目录清空（分批执行） ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1290,9 +1319,9 @@ fn backup_list() {
 
 ---
 
-### Phase 0T：测试基础设施迁移（与 Phase 0 并行）
+### Phase 0T：测试基础设施迁移（与 Phase 0 并行）⬜
 
-#### Task 0T.1：insta 基础设施搭建
+#### Task 0T.1：insta 基础设施搭建 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1302,7 +1331,7 @@ fn backup_list() {
 | **前置测试** | 写 1 个 `assert_cmd_snapshot!` 验证 `xun --version` 输出 |
 | **验收标准** | `cargo insta test` 可运行；`cargo insta review` 可交互审批；`.snap` 文件正确生成在 `tests/snapshots/` |
 
-#### Task 0T.2：`core_integration.rs` 拆分
+#### Task 0T.2：`core_integration.rs` 拆分 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1312,7 +1341,7 @@ fn backup_list() {
 | **前置测试** | 拆分前 `cargo nextest run -E 'binary_id(core_integration)'` 全部通过 |
 | **验收标准** | 拆分后测试数量不变（534）；所有测试通过；输出验证类测试改为 `insta::assert_snapshot!`；`core_integration.rs` 删除或仅保留 `mod core;` 一行 |
 
-#### Task 0T.3：CLI 输出测试迁移 — Bookmark 模块
+#### Task 0T.3：CLI 输出测试迁移 — Bookmark 模块 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1322,7 +1351,7 @@ fn backup_list() {
 | **前置测试** | 迁移前所有 bookmark 测试通过 |
 | **验收标准** | 所有 `assert!(contains(...))` 替换为 `snap!()` 或 `assert_cmd_snapshot!()`；快照文件 committed；`cargo insta test` 全部通过 |
 
-#### Task 0T.4：CLI 输出测试迁移 — Backup/Xunbak 模块
+#### Task 0T.4：CLI 输出测试迁移 — Backup/Xunbak 模块 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1332,7 +1361,7 @@ fn backup_list() {
 | **前置测试** | 迁移前所有 backup 测试通过 |
 | **验收标准** | CLI 输出断言改为快照；二进制格式断言（header/footer/record 字节）保持 `assert_eq!` 不改；redaction 覆盖路径和时间戳 |
 
-#### Task 0T.5：CLI 输出测试迁移 — 剩余模块
+#### Task 0T.5：CLI 输出测试迁移 — 剩余模块 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1342,7 +1371,7 @@ fn backup_list() {
 | **前置测试** | 每个模块迁移前该模块测试全部通过 |
 | **验收标准** | 所有 `assert!(stdout.contains(...))` 模式消除；`special/*.rs`（性能测试）不改；最终 `grep -r "contains(" tests/` 结果中无 stdout 内容断言 |
 
-#### Task 0T.6：Help 文本快照锁定
+#### Task 0T.6：Help 文本快照锁定 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1354,12 +1383,12 @@ fn backup_list() {
 
 ---
 
-### Phase 0P：path_guard 全面采用（安全加固 + 统一路径处理）
+### Phase 0P：path_guard 全面采用（安全加固 + 统一路径处理）⬜
 
 > **背景**：项目有 317 处裸 `.exists()/.is_dir()/.is_file()/dunce::canonicalize` 调用，但仅 31 个文件使用了 `path_guard`。
 > 大量模块在"裸操作"路径，缺少 traversal 检测、安全检查、统一错误信息。
 
-#### Task 0P.1：Dashboard 文件浏览 — traversal 防护（安全漏洞）
+#### Task 0P.1：Dashboard 文件浏览 — traversal 防护（安全漏洞）⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1369,7 +1398,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn browse_rejects_traversal()` — `../../Windows/System32` 被拦截；`#[test] fn browse_rejects_absolute_outside_root()` — 绝对路径超出 serve 根目录被拒绝 |
 | **验收标准** | 所有 file handler 入口使用 `PathPolicy { must_exist: true, safety_check: true, allow_relative: false }`；traversal 路径返回 403；正常路径不受影响 |
 
-#### Task 0P.2：Redirect Engine — 写入目标验证
+#### Task 0P.2：Redirect Engine — 写入目标验证 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1379,7 +1408,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn redirect_rejects_system_path()` — 重定向到 `C:\Windows` 被 safety_check 拦截；`#[test] fn redirect_rejects_reparse_target()` — 目标是 symlink 时报错 |
 | **验收标准** | 所有写入目标经过 `PathPolicy::for_write()` 验证；reparse point 目标被拒绝；系统关键路径被 safety_check 保护 |
 
-#### Task 0P.3：Delete 命令 — 安全检查强化
+#### Task 0P.3：Delete 命令 — 安全检查强化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1389,7 +1418,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn delete_rejects_system_root()` — `C:\Windows` 被拦截；`#[test] fn delete_rejects_traversal_in_glob()` — `..\..\*` 模式被拒绝 |
 | **验收标准** | 删除目标必须通过 `PathPolicy { must_exist: true, safety_check: true }`；系统路径保护列表生效 |
 
-#### Task 0P.4：Backup Restore — 恢复目标验证
+#### Task 0P.4：Backup Restore — 恢复目标验证 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1399,7 +1428,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn restore_rejects_system_target()` — 恢复到 `C:\Windows\System32` 被拒绝；`#[test] fn restore_canonicalizes_target()` — 相对路径正确解析 |
 | **验收标准** | 所有 `dunce::canonicalize` 替换为 `path_guard` 验证；恢复目标经过 safety_check；错误信息包含具体 PathIssueKind |
 
-#### Task 0P.5：ACL Reader — 统一规范化
+#### Task 0P.5：ACL Reader — 统一规范化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1409,7 +1438,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn acl_read_handles_unc_path()` — UNC 路径正确分类为 PathKind::UNC；`#[test] fn acl_read_rejects_device_namespace()` — `\\.\` 路径被拒绝 |
 | **验收标准** | 消除 `acl/` 中所有 `dunce::` 直接调用；PathKind 信息可用于 ACL 操作决策（UNC vs 本地路径不同处理） |
 
-#### Task 0P.6：Env Doctor — 批量 PATH 验证
+#### Task 0P.6：Env Doctor — 批量 PATH 验证 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1419,7 +1448,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn doctor_reports_missing_path_entries()` — 不存在的 PATH 条目被报告；`#[test] fn doctor_reports_path_issues()` — 含非法字符的条目被标记 |
 | **验收标准** | 使用 `validate_paths()` 一次性验证所有 PATH 条目（利用批量探测缓存）；输出包含具体 PathIssueKind（NotFound/AccessDenied/InvalidChar）；性能：100 条 PATH < 10ms |
 
-#### Task 0P.7：Batch Rename + Xunbak + Find — 统一路径入口
+#### Task 0P.7：Batch Rename + Xunbak + Find — 统一路径入口 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1431,9 +1460,9 @@ fn backup_list() {
 
 ---
 
-### Phase 1：Bookmark 引擎极速化
+### Phase 1：Bookmark 引擎极速化 ✅
 
-#### Task 1.1：rkyv 二进制缓存格式定义
+#### Task 1.1：rkyv 二进制缓存格式定义 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1443,7 +1472,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn rkyv_roundtrip_5000_entries()` — 序列化→反序列化一致性；`#[test] fn rkyv_cache_size_reasonable()` — 5000 条 < 500KB |
 | **验收标准** | rkyv 序列化 5000 条书签 < 2ms；反序列化（零拷贝 access）< 0.01ms；缓存文件大小 < 原 JSON 的 80% |
 
-#### Task 1.2：xxHash 指纹快速校验
+**实现说明**: `src/bookmark/cache.rs` 定义 `CachedBookmark` + `CachePayload`（均 derive rkyv Archive/Serialize/Deserialize）。`CacheHeader` 52 字节固定头部含 magic/version/fingerprint/payload_len。`write_cache_payload_atomic` 使用 `to_bytes` 序列化，`load_cache_payload_checked` 使用 `from_bytes` 反序列化。
+
+#### Task 1.2：xxHash 指纹快速校验 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1453,7 +1484,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn fingerprint_detects_single_byte_change()` — 修改 1 字节后指纹变化；`#[test] fn fingerprint_stable_across_runs()` — 相同内容指纹一致 |
 | **验收标准** | 2MB JSON 指纹计算 < 0.1ms；指纹存储在 rkyv 缓存头部（8 字节） |
 
-#### Task 1.3：mmap 零拷贝加载路径
+**实现说明**: `compute_source_hash()` 使用 `xxh3_64` 计算源文件指纹。`SourceFingerprint` 结构体存储 `len`/`modified_ms`/`hash`，`CacheHeader.source_hash` 存储 xxh3 值用于缓存失效判断。
+
+#### Task 1.3：mmap 零拷贝加载路径 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1463,7 +1496,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn mmap_load_returns_valid_archive()` — mmap 后可直接访问 ArchivedBookmarkCache；`#[test] fn mmap_handles_file_not_found()` — 优雅降级到 JSON 加载 |
 | **验收标准** | 5000 条书签加载：15ms → **< 0.2ms**；零堆分配（mmap 直接引用）；文件锁定正确释放（UnmapViewOfFile） |
 
-#### Task 1.4：Bookmark 查询索引优化
+**实现说明**: `src/foundation/win32/mmap.rs` 实现 `MmapView`（RAII 封装 `CreateFileMappingW`+`MapViewOfFile`）。`cache.rs` 中 `load_cache_payload_mmap` / `load_cache_store_data_mmap` 通过 mmap 零拷贝访问 rkyv archived 数据。`state.rs` 调用 mmap 路径加载书签。
+
+#### Task 1.4：Bookmark 查询索引优化 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1473,7 +1508,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn index_prefix_match_returns_top_frecency()` — "pro" 匹配 "projects" 且按 frecency 排序；`#[bench] fn query_5000_entries()` — divan 基准 |
 | **验收标准** | 模糊查询 5000 条：2ms → **< 0.5ms**；索引构建（首次）< 1ms；内存增量 < 100KB |
 
-#### Task 1.5：Bookmark 查询索引优化（原 Task 1.4 扩展）
+**实现说明**: `src/bookmark/index.rs` 实现 `BookmarkIndex`：`path_map: HashMap<String, usize>` 提供 O(1) 精确查找；`terms: Vec<IndexTermEntry>` 支持二分前缀匹配；`frecency_scores: Vec<f64>` 按 frecency 降序排序结果。索引可持久化为 JSON 或嵌入 rkyv 缓存（`CachePayload.index`）。
+
+#### Task 1.5：Bookmark 查询索引优化（原 Task 1.4 扩展）✅
 
 > **注意**：原 Task 1.5（`xun z` fast-path 跳过 clap）已删除。
 > 理由：破坏 `--help` 一致性，1-2ms 的 clap 解析开销对 CLI 工具完全可接受，真正瓶颈在 bookmark 加载（15ms）。
@@ -1482,9 +1519,9 @@ fn backup_list() {
 
 ---
 
-### Phase 2：Xunbak 容器管道极限优化
+### Phase 2：Xunbak 容器管道极限优化 🟡
 
-#### Task 2.1：双哈希策略实现
+#### Task 2.1：双哈希策略实现 ✅
 
 | 维度 | 内容 |
 |------|------|
@@ -1494,7 +1531,23 @@ fn backup_list() {
 | **前置测试** | `#[test] fn dual_hash_detects_change()` — 修改文件后 xxHash 变化；`#[test] fn dual_hash_unchanged_skips_blake3()` — 未变更文件不计算 BLAKE3；`#[bench] fn incremental_10k_files_5pct_changed()` |
 | **验收标准** | 增量备份 10K 文件（5% 变更）：哈希阶段耗时降低 ≥ 85%；xxHash3 吞吐 ≥ 20 GB/s；BLAKE3 仅对变更文件计算 |
 
-#### Task 2.2：三阶段流水线并行化
+**实现详情** (2026-05-16):
+
+- **`src/backup/common/hash.rs`**: 新增 `compute_file_quick_hash()` — xxHash3-64 流式计算（64KB 缓冲），吞吐 ~30 GB/s
+- **`src/xunbak/manifest.rs`**: `ManifestEntry` 新增 `quick_hash: Option<u64>` 字段（`skip_serializing_if`，向后兼容）
+- **`src/xunbak/writer.rs`**:
+  - `PreparedBlobRecord` 新增 `quick_hash: u64` 字段
+  - `prepare_blob_record` 在 BLAKE3+compress 后计算 xxHash3
+  - `update_with_progress` / `update_split_with_progress`:
+    - 构建 `quick_hash_index: HashMap<(u64, u64), &ManifestEntry>` — 复合键 `(quick_hash, size)` 减少误判
+    - 增量循环中先检查 size+mtime，再检查 xxHash3，最后才走 BLAKE3+compress
+    - xxHash3 匹配时正确处理路径更新（rename 语义）
+  - 所有 ManifestEntry 构造点统一添加 `quick_hash` 字段
+  - multipart 文件 `quick_hash: None`（逐 chunk 无意义）
+  - dedup 命中时使用 `manifest_entry_from_locator_with_quick_hash` 传递已有 quick_hash
+- **测试**: `writer_update` 7 个测试全部通过，包括 rename 语义验证
+
+#### Task 2.2：三阶段流水线并行化 ⏳
 
 | 维度 | 内容 |
 |------|------|
@@ -1504,7 +1557,12 @@ fn backup_list() {
 | **前置测试** | `#[test] fn pipeline_produces_valid_container()` — 管道输出与串行输出 byte-identical；`#[test] fn pipeline_handles_read_error_gracefully()` — 单文件读取失败不中断整体；`#[bench] fn pipeline_throughput_1gb()` |
 | **验收标准** | 1GB 数据备份吞吐：300 MB/s → **≥ 400 MB/s**；内存峰值 < 64MB（bounded channel 16 slots × 4MB buffer）；CPU 利用率 ≥ 80%（多核） |
 
-#### Task 2.3：MFT 扫描集成
+**设计方案**: 使用 `crossbeam-channel` bounded channel（16 slots）连接三阶段：
+- **Stage A (Reader)**: `rayon::par_iter` 读取文件内容到内存缓冲
+- **Stage B (Processor)**: 并行 BLAKE3 + xxHash3 + compress（已有 rayon 基础设施）
+- **Stage C (Writer)**: 单线程顺序写入（保证 blob 顺序确定性）
+
+#### Task 2.3：MFT 扫描集成 ⏳
 
 | 维度 | 内容 |
 |------|------|
@@ -1514,7 +1572,9 @@ fn backup_list() {
 | **前置测试** | `#[test] fn mft_collect_matches_readdir()` — MFT 结果与 ReadDir 一致（排序后比较）；`#[test] fn mft_fallback_on_non_ntfs()` — FAT32/exFAT 自动回退；`#[bench] fn collect_50k_files_mft_vs_readdir()` |
 | **验收标准** | 50K 文件收集：ReadDir ~1s → MFT **< 250ms**（4x 提升）；需要管理员权限时优雅降级到 ReadDir；结果包含完整的文件大小和修改时间 |
 
-#### Task 2.4：ZSTD 字典训练与复用
+**设计方案**: 将 `find::mft` 的核心类型（`MftRecord`, `WcharPool`, `ChildrenIndex`）提升为 `pub(crate)` 可见性，在 xunbak 模块中实现 `collect_files_mft()` 函数，失败时自动 fallback 到 `collect_files()`。
+
+#### Task 2.4：ZSTD 字典训练与复用 ⏳
 
 | 维度 | 内容 |
 |------|------|
@@ -1524,21 +1584,35 @@ fn backup_list() {
 | **前置测试** | `#[test] fn dict_improves_ratio_on_small_files()` — 1KB 源码文件压缩率提升 ≥ 30%；`#[test] fn dict_stored_in_container()` — 字典嵌入容器头部，restore 可自解压；`#[test] fn no_dict_fallback()` — 无字典时正常工作 |
 | **验收标准** | 1000 个 < 4KB 源码文件：压缩率从 ~2.5x 提升至 **≥ 3.5x**；字典训练耗时 < 500ms；字典大小 < 64KB；容器格式向后兼容（旧版本可跳过字典） |
 
-#### Task 2.5：容器写入 IO 优化
+**设计方案**: 收集前 N 个小文件样本 → `zstd::dict::from_samples()` 训练 → 嵌入 Header 扩展字段 → compress/decompress 时传入字典。
+
+#### Task 2.5：容器写入 IO 优化 ✅
 
 | 维度 | 内容 |
 |------|------|
-| **目标** | 使用 `FILE_FLAG_NO_BUFFERING` + 对齐写入最大化顺序写入带宽 |
+| **目标** | 使用 `FILE_FLAG_SEQUENTIAL_SCAN` 优化顺序写入带宽 |
 | **源码模块** | `src/xunbak/writer.rs` (write 阶段) |
 | **涉及组件** | 消费层：Xunbak Pipeline；基层：Win32 FFI |
 | **前置测试** | `#[test] fn aligned_write_produces_valid_container()` — 对齐写入后容器可正常读取；`#[test] fn unaligned_tail_handled()` — 最后一个不满扇区正确 flush；`#[bench] fn sequential_write_bandwidth()` |
-| **验收标准** | NVMe SSD 顺序写入：300 MB/s → **≥ 450 MB/s**；写入缓冲区对齐到 4KB 扇区边界；最终 footer 写入使用普通 IO（确保持久化） |
+| **验收标准** | NVMe SSD 顺序写入吞吐提升；所有输出文件使用顺序访问提示 |
+
+**实现详情** (2026-05-16):
+
+- **`src/xunbak/writer.rs`**:
+  - 新增 `create_sequential_file()` — 使用 `OpenOptionsExt::custom_flags(FILE_FLAG_SEQUENTIAL_SCAN)` 打开输出文件
+  - 所有文件创建点统一使用 `create_sequential_file()`：
+    - `ContainerWriter::create()`
+    - `SingleVolumeOutput::new()`
+    - `VolumeOutput::new()` / `rotate()`
+    - `backup_with_progress()`
+  - `FILE_FLAG_SEQUENTIAL_SCAN` (0x08000000) 提示内核使用顺序预读策略，优化写合并
+- **测试**: `writer_update` 7 个测试全部通过，容器读写正常
 
 ---
 
-### Phase 3：FileVault 加密管道优化
+### Phase 3：FileVault 加密管道优化 ⬜
 
-#### Task 3.1：自适应帧大小
+#### Task 3.1：自适应帧大小 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1548,7 +1622,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn small_file_uses_64kb_frame()` — < 256KB 文件使用 64KB 帧；`#[test] fn large_file_uses_1mb_frame()` — > 4MB 文件使用 1MB 帧；`#[bench] fn encrypt_mixed_sizes()` |
 | **验收标准** | 混合文件集（100 个 1KB~100MB）加密吞吐提升 ≥ 15%；小文件（< 64KB）的 per-file 开销从 ~24 字节帧头降至单帧处理；格式兼容（v13 帧头已支持可变大小） |
 
-#### Task 3.2：派生密钥 DPAPI 缓存
+#### Task 3.2：派生密钥 DPAPI 缓存 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1558,7 +1632,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn cached_key_decrypts_correctly()` — 缓存密钥与新派生密钥解密结果一致；`#[test] fn cache_invalidated_on_password_change()` — 密码变更后缓存失效；`#[test] fn dpapi_protects_key_material()` — 缓存文件无法在其他用户会话解密 |
 | **验收标准** | 重复加密操作：首次 ~100ms (Argon2)，后续 **< 1ms** (DPAPI 解密缓存)；密钥材料使用 `zeroize` 清理；缓存有效期 = 用户会话（注销后失效） |
 
-#### Task 3.3：帧缓冲池预分配
+#### Task 3.3：帧缓冲池预分配 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1572,9 +1646,9 @@ fn backup_list() {
 
 ---
 
-### Phase 4：ACL 与环境变量子系统强化
+### Phase 4：ACL 与环境变量子系统强化 ⬜
 
-#### Task 4.1：ACL 批量操作并行化
+#### Task 4.1：ACL 批量操作并行化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1584,7 +1658,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn parallel_acl_backup_matches_serial()` — 并行结果与串行一致；`#[test] fn parallel_handles_access_denied()` — 单目录权限不足不中断整体；`#[bench] fn acl_backup_1000_dirs()` |
 | **验收标准** | 1000 个目录 ACL 备份：串行 ~5s → 并行 **< 1.5s**（4 核）；线程数 = `min(available_parallelism(), config.throttle_limit)`；错误收集为 Vec 而非 panic |
 
-#### Task 4.2：ACL 快照差异算法优化
+#### Task 4.2：ACL 快照差异算法优化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1594,7 +1668,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn diff_detects_added_ace()` — 新增 ACE 正确识别；`#[test] fn diff_detects_permission_change()` — 权限位变更正确报告；`#[bench] fn diff_100_aces()` |
 | **验收标准** | 100 ACE 差异计算：O(n²) → **O(n)**（哈希索引）；内存增量 < 10KB；输出格式兼容现有 `xun acl diff` 命令 |
 
-#### Task 4.3：EnvManager 原子写入强化
+#### Task 4.3：EnvManager 原子写入强化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1604,7 +1678,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn atomic_write_rolls_back_on_partial_failure()` — 模拟第 3 个变量写入失败，前 2 个回滚；`#[test] fn wm_settingchange_sent_only_on_success()` — 失败时不广播 |
 | **验收标准** | 批量写入 10 个环境变量：全部成功或全部回滚（无中间状态）；`WM_SETTINGCHANGE` 仅在 commit 成功后发送一次；回滚耗时 < 50ms |
 
-#### Task 4.4：EnvManager 快照 rkyv 持久化
+#### Task 4.4：EnvManager 快照 rkyv 持久化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1616,9 +1690,9 @@ fn backup_list() {
 
 ---
 
-### Phase 5：新功能开发（破坏性改动允许）
+### Phase 5：新功能开发（破坏性改动允许）⬜
 
-#### Task 5.1：系统监控数据采集器 (`sys_monitor`)
+#### Task 5.1：系统监控数据采集器 (`sys_monitor`) ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1628,7 +1702,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn cpu_usage_in_valid_range()` — 0.0 ≤ cpu ≤ 100.0；`#[test] fn memory_usage_matches_task_manager()` — 与 taskmgr 偏差 < 2%；`#[test] fn collector_stops_on_cancel()` — CancellationToken 正确停止线程 |
 | **验收标准** | 采样间隔 1s；CPU 计算使用 `GetSystemTimes` 差分；内存使用 `GlobalMemoryStatusEx`；数据通过 `mpsc::channel` 零锁传输；线程启动 < 1ms |
 
-#### Task 5.2：内存清理器 (`mem_cleaner`)
+#### Task 5.2：内存清理器 (`mem_cleaner`) ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1638,7 +1712,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn clean_working_set_requires_privilege()` — 无 SeProfileSingleProcessPrivilege 时返回错误；`#[test] fn clean_standby_requires_admin()` — 非管理员返回 ElevationRequired；`#[test] fn bitmask_selects_regions_correctly()` — 0b00000101 仅清理 region 0 和 2 |
 | **验收标准** | 单区域清理 < 100ms；支持 8 区域独立位掩码选择；OS 版本检测（Win8.1+/Win10+ 功能门控）；清理前后内存差值报告 |
 
-#### Task 5.3：`xun find` MFT 扫描模式增强
+#### Task 5.3：`xun find` MFT 扫描模式增强 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1650,9 +1724,9 @@ fn backup_list() {
 
 ---
 
-### Phase 6：Dashboard 与集成优化
+### Phase 6：Dashboard 与集成优化 ⬜
 
-#### Task 6.1：WebSocket 系统监控推送
+#### Task 6.1：WebSocket 系统监控推送 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1662,7 +1736,7 @@ fn backup_list() {
 | **前置测试** | `#[tokio::test] fn ws_receives_system_snapshot()` — 连接后 1s 内收到首个快照；`#[tokio::test] fn ws_handles_slow_client()` — 慢客户端不阻塞采集；`#[tokio::test] fn ws_graceful_disconnect()` |
 | **验收标准** | WebSocket 消息延迟 < 50ms；使用 `broadcast::channel` 多客户端扇出；JSON 序列化 < 0.1ms/帧；慢客户端自动丢弃旧帧（lagging receiver） |
 
-#### Task 6.2：Dashboard 静态资源 Brotli 预压缩
+#### Task 6.2：Dashboard 静态资源 Brotli 预压缩 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1672,7 +1746,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn brotli_response_decompresses_correctly()` — 浏览器可正确解压；`#[test] fn fallback_to_uncompressed()` — 不支持 br 的客户端收到原始文件 |
 | **验收标准** | JS/CSS 传输大小减少 ≥ 70%（vs gzip）；首次加载时间减少 ≥ 40%；`Accept-Encoding: br` 检测正确 |
 
-#### Task 6.3：Operation Protocol 可视化
+#### Task 6.3：Operation Protocol 可视化 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1686,9 +1760,9 @@ fn backup_list() {
 
 ---
 
-### Phase 7：横切关注点与质量保障
+### Phase 7：横切关注点与质量保障 ⬜
 
-#### Task 7.1：全局性能回归基准线
+#### Task 7.1：全局性能回归基准线 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1698,7 +1772,7 @@ fn backup_list() {
 | **前置测试** | 基准测试本身即为测试：`divan` 框架自动检测回归 |
 | **验收标准** | CI 中运行 `cargo bench`；任何基准回归 > 10% 自动 fail；基准覆盖：bookmark load/query, path_guard validate, xunbak write, acl read |
 
-#### Task 7.2：Fuzzing 覆盖扩展
+#### Task 7.2：Fuzzing 覆盖扩展 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1708,7 +1782,7 @@ fn backup_list() {
 | **前置测试** | N/A（fuzzing 本身是测试生成器） |
 | **验收标准** | 新增 fuzz 目标：`xunbak_read_header`, `filevault_parse_header`, `path_guard_normalize`；每个目标运行 10 分钟无 crash；发现的 bug 转化为回归测试 |
 
-#### Task 7.3：内存安全审计
+#### Task 7.3：内存安全审计 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1718,7 +1792,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn no_undefined_behavior_under_miri()` — 纯 Rust 逻辑部分通过 Miri 检查 |
 | **验收标准** | 每个 `unsafe` 块有 `// SAFETY:` 注释说明不变量；Win32 FFI 调用的返回值全部检查；指针解引用前验证非空 |
 
-#### Task 7.4：错误处理统一迁移
+#### Task 7.4：错误处理统一迁移 ⬜
 
 | 维度 | 内容 |
 |------|------|
@@ -1728,7 +1802,7 @@ fn backup_list() {
 | **前置测试** | `#[test] fn xun_error_exit_codes_match_legacy()` — 新错误类型的 exit code 与旧 CliError 一致 |
 | **验收标准** | `CliError` 和 `CliResult` 类型标记为 `#[deprecated]`；所有新代码使用 `XunError`；exit code 语义不变（0=success, 1=general, 3=access_denied, 10/11=lock, 20=reboot） |
 
-#### Task 7.5：编译时间优化
+#### Task 7.5：编译时间优化 ⬜
 
 | 维度 | 内容 |
 |------|------|

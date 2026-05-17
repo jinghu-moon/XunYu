@@ -12,7 +12,20 @@ use super::value::{ColumnDef, Value, ValueKind};
 
 /// Environment variable management.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "env", about = "Environment variable management")]
+#[command(
+    name = "env",
+    about = "Environment variable management",
+    after_help = "EXAMPLES:\n    \
+        xun env list                   # list user env vars\n    \
+        xun env show PATH              # show PATH value\n    \
+        xun env set MY_VAR hello       # set a variable\n    \
+        xun env rm MY_VAR              # delete a variable\n    \
+        xun env search python          # search by keyword\n    \
+        xun env path add C:\\tools      # add to PATH\n    \
+        xun env snapshot create        # create snapshot\n    \
+        xun env doctor --fix           # diagnose and fix issues\n    \
+        xun env export -f json -o env.json  # export to JSON"
+)]
 pub struct EnvCmd {
     #[command(subcommand)]
     pub sub: EnvSubCommand,
@@ -370,7 +383,7 @@ pub struct EnvGraphArgs {
     #[arg(long, default_value = "all")]
     pub scope: String,
 
-    /// max traversal depth (1-64)
+    /// max traversal depth (1..=64)
     #[arg(long, default_value_t = 8)]
     pub max_depth: usize,
 
@@ -414,8 +427,8 @@ pub struct EnvWatchArgs {
     #[arg(long, default_value = "all")]
     pub scope: String,
 
-    /// poll interval in milliseconds
-    #[arg(long, default_value_t = 2000)]
+    /// poll interval in milliseconds (100..60000)
+    #[arg(long, default_value_t = 2000, value_parser = clap::value_parser!(u64).range(100..60000))]
     pub interval_ms: u64,
 
     /// output format: text|json
@@ -510,11 +523,11 @@ pub struct EnvPathAddArgs {
     pub scope: String,
 
     /// insert at the front
-    #[arg(long)]
+    #[arg(long, conflicts_with = "tail")]
     pub head: bool,
 
     /// insert at the end
-    #[arg(long)]
+    #[arg(long, conflicts_with = "head")]
     pub tail: bool,
 }
 
@@ -590,7 +603,7 @@ pub struct EnvSnapshotRestoreArgs {
 /// Prune old snapshots, keep latest N.
 #[derive(Parser, Debug, Clone)]
 pub struct EnvSnapshotPruneArgs {
-    /// how many latest snapshots to keep
+    /// how many latest snapshots to keep (1..10000)
     #[arg(long, default_value_t = 50)]
     pub keep: usize,
 }

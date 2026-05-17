@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 // --- Config ---
 
@@ -334,3 +334,4 @@ pub(in crate::commands::dashboard) async fn delete_redirect_profile(
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
+

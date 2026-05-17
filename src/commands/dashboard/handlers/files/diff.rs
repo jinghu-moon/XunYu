@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 // --- Diff ---
 
@@ -28,8 +28,8 @@ pub(in crate::commands::dashboard) struct DiffApiRequest {
     pub force_text: Option<bool>,
 }
 
-// SECURITY: /api/diff 允许读取任意本地文件进行 diff。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/diff 鍏佽璇诲彇浠绘剰鏈湴鏂囦欢杩涜 diff銆傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn diff_handler(
     Json(req): Json<DiffApiRequest>,
@@ -37,7 +37,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
     use crate::diff;
     use crate::diff::types::*;
 
-    // 1. 路径验证
+    // 1. 璺緞楠岃瘉
     let old_path = std::path::PathBuf::from(&req.old_path);
     let new_path = std::path::PathBuf::from(&req.new_path);
 
@@ -56,7 +56,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
             .into_response();
     }
 
-    // 2. 大小检查
+    // 2. 澶у皬妫€鏌?
     for (p, label) in [(&old_path, "old_path"), (&new_path, "new_path")] {
         match std::fs::metadata(p) {
             Ok(m) if m.len() > DIFF_MAX_SIZE => {
@@ -77,7 +77,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
         }
     }
 
-    // 3. 读取文件
+    // 3. 璇诲彇鏂囦欢
     let old_bytes = match std::fs::read(&old_path) {
         Ok(b) => b,
         Err(e) => {
@@ -91,7 +91,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
         }
     };
 
-    // 3.5 提前解析算法（UTF-8 早退需要用到）
+    // 3.5 鎻愬墠瑙ｆ瀽绠楁硶锛圲TF-8 鏃╅€€闇€瑕佺敤鍒帮級
     let algorithm = match req.algorithm.as_deref().unwrap_or("histogram") {
         "histogram" => DiffAlgorithm::Histogram,
         "myers" => DiffAlgorithm::Myers,
@@ -106,7 +106,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
         }
     };
 
-    // 3.6 UTF-8 验证：非 force_text 模式下，非 UTF-8 文件视为 Binary
+    // 3.6 UTF-8 楠岃瘉锛氶潪 force_text 妯″紡涓嬶紝闈?UTF-8 鏂囦欢瑙嗕负 Binary
     let force_text = req.force_text.unwrap_or(false);
     if !force_text
         && (std::str::from_utf8(&old_bytes).is_err() || std::str::from_utf8(&new_bytes).is_err())
@@ -122,7 +122,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
         return Json(binary_result).into_response();
     }
 
-    // 4. 解析剩余参数
+    // 4. 瑙ｆ瀽鍓╀綑鍙傛暟
     let mode = match req.mode.as_deref().unwrap_or("auto") {
         "auto" => DiffMode::Auto,
         "line" => DiffMode::Line,
@@ -132,7 +132,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
         }
     };
 
-    // 扩展名推断：优先 new_path，fallback old_path
+    // 鎵╁睍鍚嶆帹鏂細浼樺厛 new_path锛宖allback old_path
     let ext = new_path
         .extension()
         .and_then(|e| e.to_str())
@@ -142,7 +142,7 @@ pub(in crate::commands::dashboard) async fn diff_handler(
         .to_lowercase();
     let context = req.context.unwrap_or(3);
 
-    // 5. spawn_blocking 执行 diff（CPU 密集型）
+    // 5. spawn_blocking 鎵ц diff锛圕PU 瀵嗛泦鍨嬶級
     let result = tokio::task::spawn_blocking(move || {
         let old_text = String::from_utf8_lossy(&old_bytes);
         let new_text = String::from_utf8_lossy(&new_bytes);
@@ -174,3 +174,4 @@ pub(in crate::commands::dashboard) async fn diff_handler(
             .into_response(),
     }
 }
+

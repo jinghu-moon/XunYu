@@ -1,4 +1,4 @@
-mod handlers;
+﻿mod handlers;
 mod handlers_env;
 
 use axum::Router;
@@ -487,3 +487,4 @@ fn emit_file_changed(event_tx: &tokio::sync::broadcast::Sender<String>, path: &P
     });
     let _ = event_tx.send(payload.to_string());
 }
+

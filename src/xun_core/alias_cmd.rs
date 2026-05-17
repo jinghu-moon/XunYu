@@ -12,7 +12,17 @@ use super::value::{ColumnDef, Value, ValueKind};
 
 /// Alias management for commands and applications.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "alias", about = "Alias management")]
+#[command(
+    name = "alias",
+    about = "Alias management",
+    after_help = "EXAMPLES:\n    \
+        xun alias setup                   # initialize alias runtime\n    \
+        xun alias add gs \"git status\"    # add shell alias\n    \
+        xun alias ls                      # list all aliases\n    \
+        xun alias rm gs                   # remove an alias\n    \
+        xun alias app add code \"C:\\VS Code\\Code.exe\"  # app alias\n    \
+        xun alias find git                # search aliases"
+)]
 pub struct AliasCmd {
     /// alias config file path (default: %APPDATA%/xun/aliases.toml)
     #[arg(long)]

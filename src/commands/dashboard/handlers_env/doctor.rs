@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn doctor_run(Json(body): Json<DoctorBody>) -> Response {
     let scope = match resolve_scope(body.scope, EnvScope::All) {
@@ -23,3 +23,4 @@ pub(in crate::commands::dashboard) async fn doctor_fix(Json(body): Json<DoctorBo
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

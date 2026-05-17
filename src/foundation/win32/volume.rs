@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Component, Path};
-use std::sync::RwLock;
+use std::sync::{LazyLock, RwLock};
 
 use windows_sys::Win32::Foundation::GetLastError;
 use windows_sys::Win32::Storage::FileSystem::GetVolumeInformationW;
 
-lazy_static::lazy_static! {
-    static ref VOLUME_CAPABILITY_CACHE: RwLock<HashMap<String, VolumeInfo>> = RwLock::new(HashMap::new());
-}
+static VOLUME_CAPABILITY_CACHE: LazyLock<RwLock<HashMap<String, VolumeInfo>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Clone, Copy)]
 pub(crate) struct VolumeInfo {

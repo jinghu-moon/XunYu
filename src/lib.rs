@@ -1,5 +1,5 @@
 #[macro_use]
-mod macros;
+mod foundation;
 
 use clap::Parser;
 
@@ -25,17 +25,16 @@ mod env_core;
 
 pub use env_core::types::EnvScope;
 mod find;
-mod model;
-mod output;
 pub mod path_guard;
 mod ports;
-mod proc;
-mod runtime;
 mod security;
-mod store;
-mod suggest;
-mod util;
-mod windows;
+pub(crate) use foundation::model;
+pub(crate) use foundation::output;
+pub(crate) use foundation::proc;
+pub(crate) use foundation::runtime;
+pub(crate) use foundation::store;
+pub(crate) use foundation::util;
+pub(crate) use foundation::win32 as windows;
 #[cfg(feature = "xunbak")]
 pub mod xunbak;
 

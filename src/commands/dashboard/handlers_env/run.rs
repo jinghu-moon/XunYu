@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn import_vars(Json(body): Json<ImportBody>) -> Response {
     let scope = match resolve_scope(body.scope, EnvScope::User) {
@@ -198,3 +198,4 @@ pub(in crate::commands::dashboard) async fn run_command(Json(body): Json<RunBody
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

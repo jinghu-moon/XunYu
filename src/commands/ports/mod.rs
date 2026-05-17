@@ -4,7 +4,8 @@ use comfy_table::{Attribute, Cell, Color, Table};
 use console::Term;
 use dialoguer::{Confirm, MultiSelect, theme::ColorfulTheme};
 
-use crate::cli::{KillCmd, PkillCmd, PortsCmd, PsCmd};
+use crate::xun_core::port_cmd::{KillCmd, PortsListArgs as PortsCmd};
+use crate::xun_core::proc_cmd::{PkillCmd, PsListArgs as PsCmd};
 use crate::model::{ListFormat, parse_list_format};
 use crate::output::{CliError, CliResult};
 use crate::output::{apply_pretty_table_style, can_interact, prefer_table_output, print_table};

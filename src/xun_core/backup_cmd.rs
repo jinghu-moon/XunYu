@@ -10,7 +10,17 @@ use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
 /// 增量项目备份。别名: `bak`。
 #[derive(Parser, Debug, Clone)]
-#[command(name = "backup", about = "Incremental project backup")]
+#[command(
+    name = "backup",
+    about = "Incremental project backup",
+    after_help = "EXAMPLES:\n    \
+        xun backup                     # backup current directory\n    \
+        xun backup -m \"before refactor\"  # backup with description\n    \
+        xun backup --include src,docs  # backup only src and docs\n    \
+        xun backup --dry-run           # preview without writing\n    \
+        xun backup list                # list existing backups\n    \
+        xun backup restore --latest    # restore the latest backup"
+)]
 pub struct BackupCmd {
     #[command(subcommand)]
     pub cmd: Option<BackupSubCommand>,
@@ -47,7 +57,7 @@ pub struct BackupCmd {
     #[arg(long)]
     pub no_compress: bool,
 
-    /// 覆盖最大备份数
+    /// 覆盖最大备份数 (1..1000)
     #[arg(long)]
     pub retain: Option<usize>,
 
@@ -133,7 +143,7 @@ pub struct BackupCreateCmd {
     /// 跳过压缩
     #[arg(long)]
     pub no_compress: bool,
-    /// 覆盖最大备份数
+    /// 覆盖最大备份数 (1..1000)
     #[arg(long)]
     pub retain: Option<usize>,
     /// 包含路径

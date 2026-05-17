@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn list_snapshots() -> Response {
     let manager = manager();
@@ -94,3 +94,4 @@ pub(in crate::commands::dashboard) async fn dependency_graph(
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

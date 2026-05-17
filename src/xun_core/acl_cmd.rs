@@ -12,7 +12,19 @@ use super::value::{ColumnDef, Value, ValueKind};
 
 /// Windows ACL management.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "acl", about = "Windows ACL management")]
+#[command(
+    name = "acl",
+    about = "Windows ACL management",
+    after_help = "EXAMPLES:\n    \
+        xun acl show C:\\MyFolder           # view ACL summary\n    \
+        xun acl add C:\\MyFolder Users RX   # grant Read+Execute\n    \
+        xun acl rm C:\\MyFolder Users       # remove ACE entries\n    \
+        xun acl effective C:\\MyFolder      # check effective access\n    \
+        xun acl diff C:\\A C:\\B             # compare two ACLs\n    \
+        xun acl copy C:\\Ref C:\\Target      # copy ACL from ref\n    \
+        xun acl backup C:\\MyFolder acl.json  # backup ACL to JSON\n    \
+        xun acl restore C:\\MyFolder acl.json # restore from backup"
+)]
 pub struct AclCmd {
     #[command(subcommand)]
     pub cmd: AclSubCommand,

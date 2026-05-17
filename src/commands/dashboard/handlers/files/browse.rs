@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 // --- Files (for diff file browser) ---
 
@@ -17,8 +17,8 @@ pub(in crate::commands::dashboard) struct FileEntry {
     size: Option<u64>,
 }
 
-// SECURITY: /api/files 允许读取任意本地目录。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/files 鍏佽璇诲彇浠绘剰鏈湴鐩綍銆傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn list_files(
     State(state): State<super::super::super::DashboardState>,
@@ -291,8 +291,8 @@ fn insert_response_header(headers: &mut axum::http::HeaderMap, key: &'static str
     }
 }
 
-// SECURITY: /api/files/search 允许递归扫描任意本地目录。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/files/search 鍏佽閫掑綊鎵弿浠绘剰鏈湴鐩綍銆傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn search_files(
     State(state): State<super::super::super::DashboardState>,
@@ -348,3 +348,4 @@ pub(in crate::commands::dashboard) async fn search_files(
             .into_response(),
     }
 }
+

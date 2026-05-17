@@ -2,14 +2,22 @@
 //!
 //! 新架构的 find 命令定义，替代 argh 版本。
 
-use clap::Args;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
 use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
 /// Find files and directories by pattern and metadata.
-#[derive(Args, Debug, Clone)]
+#[derive(Parser, Debug, Clone)]
+#[command(
+    after_help = "EXAMPLES:\n    \
+        xun find -i \"*.rs\"                # find all .rs files\n    \
+        xun find -i \"*.rs\" -e \"target\"   # exclude target dir\n    \
+        xun find --size +1M               # files larger than 1MB\n    \
+        xun find --modified 7d            # modified in last 7 days\n    \
+        xun find -i \"*.log\" --delete     # find and delete logs"
+)]
 pub struct FindCmd {
     /// base directories (default: cwd)
     pub paths: Vec<String>,

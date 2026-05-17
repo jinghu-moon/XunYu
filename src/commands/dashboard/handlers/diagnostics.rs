@@ -1,4 +1,4 @@
-use axum::Json;
+﻿use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -264,7 +264,7 @@ mod tests {
             "target": "D:/tmp/demo.txt",
             "preview_args": ["rm", "--dry-run", "D:/tmp/demo.txt"],
             "execute_args": ["rm", "-y", "D:/tmp/demo.txt"],
-            "preview_summary": "閸掔娀娅?D:/tmp/demo.txt"
+            "preview_summary": "闁告帞濞€濞?D:/tmp/demo.txt"
         });
         let preview_resp = app
             .clone()
@@ -352,3 +352,4 @@ mod tests {
         }
     }
 }
+

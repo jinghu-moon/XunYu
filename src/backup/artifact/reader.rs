@@ -867,12 +867,12 @@ fn entry_identity(entry: &SourceEntry) -> (String, String) {
     )
 }
 
-fn xunbak_entry_read_order(entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
+fn xunbak_entry_read_order(_entry: &SourceEntry) -> Result<ReadOrderKey, CliError> {
     #[cfg(feature = "xunbak")]
     {
-        if let Some(path) = entry.source_path.as_deref() {
+        if let Some(path) = _entry.source_path.as_deref() {
             let (_reader, manifest) = load_cached_xunbak_reader_and_manifest(path)?;
-            if let Some(manifest_entry) = manifest.get(&normalize_artifact_entry_key(&entry.path)) {
+            if let Some(manifest_entry) = manifest.get(&normalize_artifact_entry_key(&_entry.path)) {
                 return Ok(ReadOrderKey {
                     class_rank: 0,
                     primary: manifest_entry.volume_index as u64,

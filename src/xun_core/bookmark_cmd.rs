@@ -12,7 +12,19 @@ use super::value::{ColumnDef, Value, ValueKind};
 
 /// Bookmark management and navigation.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "bookmark", about = "Bookmark management and navigation")]
+#[command(
+    name = "bookmark",
+    about = "Bookmark management and navigation",
+    after_help = "EXAMPLES:\n    \
+        xun bookmark save                 # save current directory\n    \
+        xun bookmark set mypath C:\\work   # save a specific path\n    \
+        xun bookmark z my                 # fuzzy jump to bookmark\n    \
+        xun bookmark zi                   # interactive selection\n    \
+        xun bookmark o my                 # open in Explorer\n    \
+        xun bookmark ls                   # list all bookmarks\n    \
+        xun bookmark rm my                # delete a bookmark\n    \
+        xun bookmark tag add my work      # add tag to bookmark"
+)]
 pub struct BookmarkCmd {
     #[command(subcommand)]
     pub sub: BookmarkSubCommand,

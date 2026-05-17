@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -10,6 +10,10 @@ use crate::bookmark_state::Bookmark;
 #[derive(Debug, Clone)]
 pub(crate) struct BookmarkIndex {
     terms: Vec<IndexTermEntry>,
+    /// O(1) exact path lookup: normalized path → bookmark index.
+    path_map: HashMap<String, usize>,
+    /// Frecency scores for each bookmark index (parallel to bookmarks array).
+    frecency_scores: Vec<f64>,
 }
 
 #[derive(
@@ -51,13 +55,21 @@ const INDEX_FILE_VERSION: u32 = 1;
 impl BookmarkIndex {
     pub(crate) fn build(bookmarks: &[Bookmark]) -> Self {
         let mut terms: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        let mut path_map = HashMap::with_capacity(bookmarks.len());
+        let mut frecency_scores = Vec::with_capacity(bookmarks.len());
+
         for (idx, bookmark) in bookmarks.iter().enumerate() {
+            // Build term index.
             let mut seen = HashSet::new();
             for term in bookmark_terms(bookmark) {
                 if seen.insert(term.clone()) {
                     terms.entry(term).or_default().push(idx);
                 }
             }
+            // Build path map for O(1) exact lookup.
+            path_map.insert(bookmark.path_norm.clone(), idx);
+            // Store frecency score.
+            frecency_scores.push(bookmark.frecency_score);
         }
         for ids in terms.values_mut() {
             ids.sort_unstable();
@@ -68,6 +80,8 @@ impl BookmarkIndex {
                 .into_iter()
                 .map(|(term, ids)| IndexTermEntry { term, ids })
                 .collect(),
+            path_map,
+            frecency_scores,
         }
     }
 
@@ -110,15 +124,21 @@ impl BookmarkIndex {
             return None;
         }
         let terms = sanitize_terms(persisted.terms, persisted.bookmark_count);
-        Some(Self { terms })
+        let mut path_map = HashMap::with_capacity(bookmarks.len());
+        let mut frecency_scores = Vec::with_capacity(bookmarks.len());
+        for (idx, bookmark) in bookmarks.iter().enumerate() {
+            path_map.insert(bookmark.path_norm.clone(), idx);
+            frecency_scores.push(bookmark.frecency_score);
+        }
+        Some(Self { terms, path_map, frecency_scores })
     }
 
     pub(crate) fn from_archived_embedded_persisted(
         persisted: &rkyv::Archived<PersistedBookmarkIndex>,
-        bookmark_count: usize,
+        bookmarks: &[Bookmark],
     ) -> Option<Self> {
         if persisted.version.to_native() != INDEX_FILE_VERSION
-            || persisted.bookmark_count.to_native() as usize != bookmark_count
+            || persisted.bookmark_count.to_native() as usize != bookmarks.len()
         {
             return None;
         }
@@ -134,13 +154,27 @@ impl BookmarkIndex {
                     .as_slice()
                     .iter()
                     .map(|idx| idx.to_native() as usize)
-                    .filter(|idx| *idx < bookmark_count)
+                    .filter(|idx| *idx < bookmarks.len())
                     .collect(),
             })
             .collect();
-        Some(Self { terms })
+        let mut path_map = HashMap::with_capacity(bookmarks.len());
+        let mut frecency_scores = Vec::with_capacity(bookmarks.len());
+        for (idx, bookmark) in bookmarks.iter().enumerate() {
+            path_map.insert(bookmark.path_norm.clone(), idx);
+            frecency_scores.push(bookmark.frecency_score);
+        }
+        Some(Self { terms, path_map, frecency_scores })
     }
 
+    /// O(1) exact path lookup. Returns the bookmark index for the given normalized path.
+    pub(crate) fn lookup_exact_path(&self, path_norm: &str) -> Option<usize> {
+        self.path_map.get(path_norm).copied()
+    }
+
+    /// Prefix lookup with frecency-sorted results.
+    ///
+    /// Returns bookmark indices sorted by frecency score (descending).
     pub(crate) fn lookup_prefix(&self, token: &str) -> Vec<usize> {
         if token.is_empty() {
             return Vec::new();
@@ -158,6 +192,12 @@ impl BookmarkIndex {
         if hits.len() > 1 {
             hits.sort_unstable();
             hits.dedup();
+            // Sort by frecency score descending.
+            hits.sort_unstable_by(|&a, &b| {
+                let fa = self.frecency_scores.get(a).copied().unwrap_or(0.0);
+                let fb = self.frecency_scores.get(b).copied().unwrap_or(0.0);
+                fb.partial_cmp(&fa).unwrap_or(std::cmp::Ordering::Equal)
+            });
         }
         hits
     }
@@ -345,5 +385,43 @@ mod tests {
             BookmarkIndex::maybe_load_persisted_with_threshold(&db, &changed.bookmarks, 0)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn exact_path_lookup_returns_correct_index() {
+        let store = make_store();
+        let index = BookmarkIndex::build(&store.bookmarks);
+
+        assert_eq!(
+            index.lookup_exact_path("c:/work/projects/client-api"),
+            Some(0)
+        );
+        assert_eq!(
+            index.lookup_exact_path("c:/work/repos/docs-web"),
+            Some(1)
+        );
+        assert_eq!(
+            index.lookup_exact_path("c:/work/nonexistent"),
+            None
+        );
+    }
+
+    #[test]
+    fn prefix_lookup_returns_frecency_sorted() {
+        let mut store = Store::new();
+        let cwd = Path::new("C:/work");
+        store.set("alpha", "C:/work/alpha", cwd, None, 10).unwrap();
+        store.set("beta", "C:/work/beta", cwd, None, 10).unwrap();
+        store.set("gamma", "C:/work/gamma", cwd, None, 10).unwrap();
+        // Set different frecency scores.
+        store.bookmarks[0].frecency_score = 1.0;
+        store.bookmarks[1].frecency_score = 3.0;
+        store.bookmarks[2].frecency_score = 2.0;
+
+        let index = BookmarkIndex::build(&store.bookmarks);
+        // Use "work" as prefix - all three bookmarks have "work" in their path.
+        let hits = index.lookup_prefix("work");
+        // Should be sorted by frecency descending: beta(3.0), gamma(2.0), alpha(1.0)
+        assert_eq!(hits, vec![1, 2, 0]);
     }
 }

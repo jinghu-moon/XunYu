@@ -16,6 +16,7 @@ use crate::bookmark::index::{BookmarkIndex, PersistedBookmarkIndex};
 use crate::bookmark_core::{normalize_name, BookmarkSource};
 use crate::bookmark_state::Bookmark;
 use crate::bookmark::debug::BookmarkLoadTiming;
+use crate::windows::mmap::MmapView;
 
 /// Binary cache contract for bookmark fast-load layer.
 ///
@@ -379,7 +380,152 @@ pub(crate) fn load_cache_store_data_checked(
     let index = archived
         .index
         .as_ref()
-        .and_then(|persisted| BookmarkIndex::from_archived_embedded_persisted(persisted, bookmarks.len()));
+        .and_then(|persisted| BookmarkIndex::from_archived_embedded_persisted(persisted, &bookmarks));
+    if let Some(ref mut timing) = timing {
+        timing.mark("deserialize_cache_index");
+    }
+
+    Ok(Some(CacheStoreData { bookmarks, index }))
+}
+
+/// Load cache payload using memory-mapped I/O (zero-copy path).
+///
+/// Falls back to `None` if mmap is unavailable or the file doesn't exist.
+/// Returns `Err` only for unexpected I/O failures.
+pub(crate) fn load_cache_payload_mmap(
+    path: &Path,
+    current_schema_version: u32,
+    fingerprint: &SourceFingerprint,
+    mut timing: Option<&mut BookmarkLoadTiming>,
+) -> io::Result<Option<CachePayload>> {
+    if std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some() {
+        return Ok(None);
+    }
+    let mmap = match MmapView::open(path)? {
+        Some(mmap) => mmap,
+        None => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("mmap_open");
+    }
+
+    // Validate header directly from mmap'd data.
+    if mmap.len() < HEADER_SIZE {
+        return Ok(None);
+    }
+    let header = match decode_header(&mmap.as_slice()[..HEADER_SIZE]) {
+        Ok(h) => h,
+        Err(_) => return Ok(None),
+    };
+    if validate_cache_header(
+        &header,
+        current_schema_version,
+        fingerprint.len,
+        fingerprint.modified_ms,
+        fingerprint.hash,
+    )
+    .is_err()
+    {
+        return Ok(None);
+    }
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_header");
+    }
+
+    let payload_end = HEADER_SIZE.saturating_add(header.payload_len as usize);
+    if payload_end > mmap.len() {
+        return Ok(None);
+    }
+    let payload_bytes = &mmap.as_slice()[HEADER_SIZE..payload_end];
+    let mut aligned: AlignedVec<CACHE_PAYLOAD_ALIGNMENT> =
+        AlignedVec::with_capacity(payload_bytes.len());
+    aligned.extend_from_slice(payload_bytes);
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_body");
+    }
+    match from_bytes::<CachePayload, RkyvError>(&aligned) {
+        Ok(payload) => Ok(Some(payload)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Load cache store data using memory-mapped I/O (zero-copy path).
+///
+/// Materializes bookmarks from the archived representation.
+pub(crate) fn load_cache_store_data_mmap(
+    path: &Path,
+    current_schema_version: u32,
+    fingerprint: &SourceFingerprint,
+    mut timing: Option<&mut BookmarkLoadTiming>,
+) -> io::Result<Option<CacheStoreData>> {
+    if std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some() {
+        return Ok(None);
+    }
+    let mmap = match MmapView::open(path)? {
+        Some(mmap) => mmap,
+        None => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("mmap_open");
+    }
+
+    // Validate header directly from mmap'd data.
+    if mmap.len() < HEADER_SIZE {
+        return Ok(None);
+    }
+    let header = match decode_header(&mmap.as_slice()[..HEADER_SIZE]) {
+        Ok(h) => h,
+        Err(_) => return Ok(None),
+    };
+    if validate_cache_header(
+        &header,
+        current_schema_version,
+        fingerprint.len,
+        fingerprint.modified_ms,
+        fingerprint.hash,
+    )
+    .is_err()
+    {
+        return Ok(None);
+    }
+    if let Some(ref mut timing) = timing {
+        timing.mark("read_cache_header");
+    }
+
+    let payload_end = HEADER_SIZE.saturating_add(header.payload_len as usize);
+    if payload_end > mmap.len() {
+        return Ok(None);
+    }
+    let payload_bytes = &mmap.as_slice()[HEADER_SIZE..payload_end];
+    let mut aligned: AlignedVec<CACHE_PAYLOAD_ALIGNMENT> =
+        AlignedVec::with_capacity(payload_bytes.len());
+    aligned.extend_from_slice(payload_bytes);
+    if let Some(ref mut timing) = timing {
+        timing.mark("align_cache_payload");
+    }
+
+    let archived = match access::<rkyv::Archived<CachePayload>, RkyvError>(&aligned) {
+        Ok(archived) => archived,
+        Err(_) => return Ok(None),
+    };
+    if let Some(ref mut timing) = timing {
+        timing.mark("deserialize_cache_payload");
+    }
+
+    let bookmarks: Vec<Bookmark> = archived
+        .bookmarks
+        .as_slice()
+        .iter()
+        .map(materialize_archived_bookmark)
+        .collect();
+    if let Some(ref mut timing) = timing {
+        timing.mark("materialize_cache_payload");
+    }
+
+    let index = archived
+        .index
+        .as_ref()
+        .and_then(|persisted| BookmarkIndex::from_archived_embedded_persisted(persisted, &bookmarks));
     if let Some(ref mut timing) = timing {
         timing.mark("deserialize_cache_index");
     }
@@ -1092,5 +1238,77 @@ mod tests {
             flags: CacheFlags::CHECKED_LAYOUT,
             payload_len: 2,
         }
+    }
+
+    #[test]
+    fn mmap_load_returns_valid_archive() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+
+        let mut store = Store::new();
+        store
+            .set("client-api", "C:/work/projects/client-api", Path::new("C:/work"), None, 10)
+            .unwrap();
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let payload = CachePayload {
+            bookmarks: store
+                .bookmarks
+                .iter()
+                .map(CachedBookmark::from_bookmark)
+                .collect(),
+            index: Some(BookmarkIndex::to_persisted(&store.bookmarks)),
+        };
+
+        write_cache_payload_atomic(&cache, 1, &fingerprint, &payload).unwrap();
+        let loaded =
+            load_cache_payload_mmap(&cache, 1, &fingerprint, None).unwrap().unwrap();
+        assert_eq!(loaded.bookmarks, payload.bookmarks);
+        assert_eq!(loaded.index, payload.index);
+    }
+
+    #[test]
+    fn mmap_handles_file_not_found() {
+        let dir = tempdir().unwrap();
+        let cache = dir.path().join("nonexistent.cache");
+        let fingerprint = SourceFingerprint {
+            len: 0,
+            modified_ms: 0,
+            hash: 0,
+        };
+        let result = load_cache_payload_mmap(&cache, 1, &fingerprint, None).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn mmap_store_data_loads_bookmarks() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join(".xun.bookmark.json");
+        fs::write(&source, br#"{"schema_version":1,"bookmarks":[]}"#).unwrap();
+        let cache = store_cache_path(&source);
+
+        let mut store = Store::new();
+        store
+            .set("home", "C:/work/home", Path::new("C:/work"), None, 10)
+            .unwrap();
+        store.bookmarks[0].pinned = true;
+        let fingerprint = SourceFingerprint::from_path(&source).unwrap();
+        let payload = CachePayload {
+            bookmarks: store
+                .bookmarks
+                .iter()
+                .map(CachedBookmark::from_bookmark)
+                .collect(),
+            index: Some(BookmarkIndex::to_persisted(&store.bookmarks)),
+        };
+
+        write_cache_payload_atomic(&cache, 1, &fingerprint, &payload).unwrap();
+        let loaded =
+            load_cache_store_data_mmap(&cache, 1, &fingerprint, None).unwrap().unwrap();
+        assert_eq!(loaded.bookmarks.len(), 1);
+        assert_eq!(loaded.bookmarks[0].name.as_deref(), Some("home"));
+        assert!(loaded.bookmarks[0].pinned);
+        assert!(loaded.index.is_some());
     }
 }

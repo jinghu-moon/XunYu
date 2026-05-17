@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn list_profiles() -> Response {
     let manager = manager();
@@ -66,3 +66,4 @@ pub(in crate::commands::dashboard) async fn delete_profile(Path(name): Path<Stri
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

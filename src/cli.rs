@@ -28,8 +28,6 @@ pub use crate::xun_core::video_cmd::{
 };
 
 // Port / Proc
-pub use crate::xun_core::port_cmd::{KillCmd, PortsCmd};
-pub use crate::xun_core::proc_cmd::{PkillCmd, PsCmd};
 
 // Proxy
 pub use crate::xun_core::proxy_cmd::{

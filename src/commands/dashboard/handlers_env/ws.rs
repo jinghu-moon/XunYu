@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn env_ws(ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(move |socket| async move {
@@ -46,3 +46,4 @@ async fn handle_env_ws(mut socket: WebSocket) {
         }
     }
 }
+

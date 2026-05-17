@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
-use lazy_static::lazy_static;
 use regex::Regex;
 
 use super::io;
@@ -13,10 +13,8 @@ use super::types::{
 
 const MAX_EXPANSION_DEPTH: usize = 64;
 
-lazy_static! {
-    static ref TEMPLATE_TOKEN_RE: Regex =
-        Regex::new(r"%([A-Za-z0-9_]+)%").expect("template token regex must be valid");
-}
+static TEMPLATE_TOKEN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"%([A-Za-z0-9_]+)%").expect("template token regex must be valid"));
 
 pub fn template_expand(scope: EnvScope, input: &str) -> EnvResult<TemplateExpandResult> {
     let vars = scope_vars_map(scope)?;

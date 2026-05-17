@@ -32,7 +32,7 @@ impl TryFrom<String> for RedirectOnConflict {
                     "ask",
                 ];
                 let mut msg = format!("Unsupported on_conflict value: {raw}.");
-                if let Some(s) = crate::suggest::did_you_mean(raw, &opts) {
+                if let Some(s) = crate::foundation::suggest::did_you_mean(raw, &opts) {
                     msg.push_str(&format!(" Did you mean: \"{s}\"?"));
                 }
                 msg.push_str(" Valid options: rename_new | rename_date | rename_existing | hash_dedup | skip | overwrite | trash | ask");

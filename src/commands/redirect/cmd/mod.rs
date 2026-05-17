@@ -4,7 +4,7 @@ use crate::cli::RedirectCmd;
 use crate::config as global_config;
 use crate::config::RedirectOnConflict;
 use crate::output::{CliError, CliResult};
-use crate::suggest::did_you_mean;
+use crate::foundation::suggest::did_you_mean;
 
 use super::errors::err2;
 use super::{config, engine};

@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 #[cfg(feature = "diff")]
 const DIFF_PREVIEW_MAX_SIZE: u64 = 4 * 1024 * 1024; // 4MB
@@ -124,8 +124,8 @@ fn preview_text_lines(text: &str, offset: usize, limit: usize) -> (Vec<String>, 
     (out, total)
 }
 
-// SECURITY: /api/info 允许读取任意本地文件元信息。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/info 鍏佽璇诲彇浠绘剰鏈湴鏂囦欢鍏冧俊鎭€傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn get_file_info(
     State(state): State<super::super::super::DashboardState>,
@@ -185,8 +185,8 @@ pub(in crate::commands::dashboard) async fn get_file_info(
     .into_response()
 }
 
-// SECURITY: /api/content 允许读取任意本地文件内容。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/content 鍏佽璇诲彇浠绘剰鏈湴鏂囦欢鍐呭銆傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn get_file_content(
     State(state): State<super::super::super::DashboardState>,
@@ -257,3 +257,4 @@ pub(in crate::commands::dashboard) async fn get_file_content(
     })
     .into_response()
 }
+

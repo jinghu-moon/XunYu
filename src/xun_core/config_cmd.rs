@@ -8,6 +8,12 @@ use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
 /// Manage ~/.xun.config.json.
 #[derive(Parser, Debug, Clone)]
+#[command(
+    after_help = "EXAMPLES:\n    \
+        xun config get proxy.defaultUrl     # get a config value\n    \
+        xun config set tree.defaultDepth 3  # set a config value\n    \
+        xun config edit                     # open config in editor"
+)]
 pub struct ConfigCmd {
     #[command(subcommand)]
     pub cmd: ConfigSubCommand,

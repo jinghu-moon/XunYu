@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn env_ping() -> Json<ApiSuccess<serde_json::Value>> {
     ok(json!({
@@ -118,3 +118,4 @@ pub(in crate::commands::dashboard) async fn path_remove(
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn audit_list(Query(q): Query<AuditQuery>) -> Response {
     let limit = q.limit.unwrap_or(100).min(5000);
@@ -97,3 +97,4 @@ pub(in crate::commands::dashboard) async fn annotation_delete(
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

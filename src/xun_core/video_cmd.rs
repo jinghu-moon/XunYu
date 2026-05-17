@@ -65,7 +65,7 @@ pub struct VideoRemuxCmd {
     #[arg(short = 'o', long)]
     pub output: String,
     /// 严格模式：true 表示不兼容流直接失败
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     pub strict: bool,
     /// 覆盖已存在的输出文件
     #[arg(long)]

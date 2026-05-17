@@ -9,7 +9,18 @@ use clap::Parser;
 
 /// Batch file renamer — dry-run by default, --apply to execute.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "brn", about = "Batch file renamer")]
+#[command(
+    name = "brn",
+    about = "Batch file renamer",
+    after_help = "EXAMPLES:\n    \
+        xun brn --trim                    # trim whitespace\n    \
+        xun brn --lower                   # lowercase all names\n    \
+        xun brn --replace old,new         # replace substring\n    \
+        xun brn --prefix \"2026_\"         # add prefix\n    \
+        xun brn --ext jpg --new-ext jpeg  # change extension\n    \
+        xun brn --chain --lower --trim    # chain multiple steps\n    \
+        xun brn --apply                   # execute (dry-run default)"
+)]
 pub struct BrnCmd {
     /// directory to scan (default: current directory)
     #[arg(default_value = ".")]

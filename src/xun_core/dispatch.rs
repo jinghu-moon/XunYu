@@ -10,6 +10,16 @@ use crate::xun_core::context::CmdContext;
 use crate::xun_core::error::XunError;
 use crate::xun_core::value::Value;
 
+#[derive(clap::ValueEnum, Clone, Debug, Default, PartialEq, Eq)]
+pub enum OutputFormat {
+    #[default]
+    Auto,
+    Table,
+    Json,
+    Tsv,
+    Csv,
+}
+
 // ── 新 Xun 顶层 ─────────────────────────────────────────────
 
 /// xun CLI 顶层入口（新架构）。
@@ -32,6 +42,10 @@ pub struct Xun {
     #[arg(long)]
     pub non_interactive: bool,
 
+    /// Output format
+    #[arg(long, value_enum, default_value_t = OutputFormat::Auto)]
+    pub format: OutputFormat,
+
     #[command(subcommand)]
     pub cmd: SubCommand,
 }
@@ -52,6 +66,7 @@ pub enum SubCommand {
 
     // ── 已迁移命令的简写别名 ──────────────────────────────
     /// proxy show (shorthand)
+    #[command(hide = true)]
     Pst(crate::xun_core::proxy_cmd::ProxyShowCmd),
 
     // ── 未迁移（桥接到旧 cmd_* 函数）──────────────────────
@@ -63,18 +78,25 @@ pub enum SubCommand {
     Video(crate::xun_core::video_cmd::VideoCmd),
     Port(crate::xun_core::port_cmd::PortsCmd),
     Proc(crate::xun_core::proc_cmd::PsCmd),
-    #[command(name = "rm", alias = "delete", alias = "del")]
+    #[command(name = "rm", alias = "delete", alias = "del", hide = true)]
     Rm(crate::cli::DeleteCmd),
 
     // ── Proxy shorthand（未迁移）───────────────────────────
+    #[command(hide = true)]
     Pon(crate::xun_core::proxy_cmd::ProxyOnCmd),
+    #[command(hide = true)]
     Poff(crate::xun_core::proxy_cmd::ProxyOffCmd),
+    #[command(hide = true)]
     Px(crate::xun_core::proxy_cmd::ProxyExecCmd),
 
     // ── Port/Proc shorthand（未迁移）───────────────────────
+    #[command(hide = true)]
     Ports(crate::xun_core::port_cmd::PortsCmd),
+    #[command(hide = true)]
     Kill(crate::xun_core::port_cmd::KillCmd),
+    #[command(hide = true)]
     Ps(crate::xun_core::proc_cmd::PsCmd),
+    #[command(hide = true)]
     Pkill(crate::xun_core::proc_cmd::PkillCmd),
 
     // ── 文件系统命令（未迁移）──────────────────────────────
@@ -757,7 +779,7 @@ mod tests {
 
         // Use Init with unsupported shell to trigger an error
         let result = dispatch(
-            SubCommand::Init(crate::cli::InitCmd {
+            SubCommand::Init(crate::xun_core::init_cmd::InitCmd {
                 shell: "unsupported_shell".into(),
             }),
             &mut ctx,

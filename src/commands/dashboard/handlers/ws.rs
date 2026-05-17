@@ -1,9 +1,9 @@
-use super::*;
+﻿use super::*;
 use crate::xun_core::value::{ColumnDef, Record, Table, Value, ValueKind};
 use crate::xun_core::ws_protocol::{WsCommand, WsErrorCode, WsResponse};
 
-// SECURITY: /ws 支持双向命令分发 + 事件推送。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加鉴权与访问控制。
+// SECURITY: /ws 鏀寔鍙屽悜鍛戒护鍒嗗彂 + 浜嬩欢鎺ㄩ€併€傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞閴存潈涓庤闂帶鍒躲€?
 pub(in crate::commands::dashboard) async fn ws_handler(
     ws: axum::extract::ws::WebSocketUpgrade,
     State(state): State<super::super::DashboardState>,
@@ -68,7 +68,7 @@ async fn handle_ws(
     }
 }
 
-/// 处理 incoming 消息，返回 false 表示应断开连接。
+/// 澶勭悊 incoming 娑堟伅锛岃繑鍥?false 琛ㄧず搴旀柇寮€杩炴帴銆?
 async fn handle_incoming(
     socket: &mut axum::extract::ws::WebSocket,
     incoming: &Option<Result<axum::extract::ws::Message, axum::Error>>,
@@ -281,3 +281,4 @@ fn format_timestamp(ts: u64) -> String {
         None => ts.to_string(),
     }
 }
+

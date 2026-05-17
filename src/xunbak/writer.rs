@@ -2,7 +2,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
+
+/// Windows flag for sequential scan access pattern (hints OS read-ahead).
+const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rayon::prelude::*;
@@ -10,6 +14,7 @@ use serde::Serialize;
 use ulid::Ulid;
 
 use crate::backup::common::hash as common_hash;
+use crate::backup::common::hash::compute_file_quick_hash;
 use crate::xunbak::blob::{BlobWriteResult, write_blob_record_from_precompressed};
 use crate::xunbak::checkpoint::{
     CheckpointError, CheckpointPayload, compute_manifest_hash, write_checkpoint_record,
@@ -154,7 +159,7 @@ pub enum WriterError {
 
 impl ContainerWriter {
     pub fn create(path: &Path) -> Result<Self, WriterError> {
-        let mut file = File::create(path).map_err(|err| WriterError::Io(err.to_string()))?;
+        let mut file = create_sequential_file(path)?;
 
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
@@ -246,8 +251,7 @@ impl ContainerWriter {
         if options.split_size.is_some() {
             return backup_split_with_progress(container_path, source_dir, options, progress);
         }
-        let mut file =
-            File::create(container_path).map_err(|err| WriterError::Io(err.to_string()))?;
+        let mut file = create_sequential_file(container_path)?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
             min_reader_version: min_reader_version_for_options(options),
@@ -348,6 +352,7 @@ impl ContainerWriter {
                     blob_len: first.blob_len,
                     volume_index: first.volume_index,
                     parts: Some(parts.clone()),
+                    quick_hash: None, // multipart: xxHash3 not computed per-chunk
                     ext: None,
                 });
                 content_index.insert(
@@ -366,7 +371,12 @@ impl ContainerWriter {
                 let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
                 let content_hash = prepared.content_hash;
                 if let Some(locator) = content_index.get(&content_hash) {
-                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    entries.push(manifest_entry_from_locator_with_quick_hash(
+                        item,
+                        content_hash,
+                        prepared.quick_hash,
+                        locator,
+                    ));
                     processed_files += 1;
                     processed_bytes += item.size;
                     progress(ProgressEvent {
@@ -394,6 +404,7 @@ impl ContainerWriter {
                     blob_len,
                     volume_index: 0,
                     parts: None,
+                    quick_hash: Some(prepared.quick_hash),
                     ext: None,
                 });
                 content_index.insert(
@@ -559,6 +570,15 @@ impl ContainerWriter {
         let baseline = reader.load_manifest()?;
         let baseline_index = build_path_index(&baseline);
         let mut content_index = build_content_hash_index(&baseline);
+        // Task 2.1: Build quick_hash index for fast change detection.
+        // Key: (quick_hash, size) → baseline entry for content-unchanged detection.
+        let quick_hash_index: HashMap<(u64, u64), &ManifestEntry> = baseline
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                entry.quick_hash.map(|qh| ((qh, entry.size), entry))
+            })
+            .collect();
         let mut scanned = Vec::new();
         collect_files(source_dir, source_dir, &mut scanned, Some(container_path))?;
         scanned.sort_by(|a, b| a.rel.cmp(&b.rel));
@@ -605,10 +625,30 @@ impl ContainerWriter {
                 continue;
             }
 
+            // Task 2.1: Fast change detection via xxHash3 (~30 GB/s).
+            // If quick_hash + size match baseline, content is unchanged despite mtime change.
+            let quick_hash = compute_file_quick_hash(&item.path)
+                .map_err(|err| WriterError::Io(err.to_string()))?;
+            if let Some(old) = quick_hash_index.get(&(quick_hash, item.size)) {
+                let mut reused = (*old).clone();
+                reused.path = item.rel.clone(); // update path for renames
+                entries.push(reused);
+                processed_files += 1;
+                processed_bytes += item.size;
+                progress(ProgressEvent {
+                    processed_files,
+                    total_files,
+                    processed_bytes,
+                    total_bytes,
+                    elapsed_ms: started.elapsed().as_millis(),
+                });
+                continue;
+            }
+
             if multipart_enabled(item) {
                 let content_hash = compute_file_content_hash(&item.path)?;
                 if let Some(locator) = content_index.get(&content_hash) {
-                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    entries.push(manifest_entry_from_locator_with_quick_hash(item, content_hash, quick_hash, locator));
                     processed_files += 1;
                     processed_bytes += item.size;
                     progress(ProgressEvent {
@@ -680,6 +720,7 @@ impl ContainerWriter {
                     blob_len: first.blob_len,
                     volume_index: first.volume_index,
                     parts: Some(parts.clone()),
+                    quick_hash: None,
                     ext: None,
                 });
                 content_index.insert(
@@ -698,7 +739,7 @@ impl ContainerWriter {
                 let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
                 let content_hash = prepared.content_hash;
                 if let Some(locator) = content_index.get(&content_hash) {
-                    entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                    entries.push(manifest_entry_from_locator_with_quick_hash(item, content_hash, quick_hash, locator));
                     processed_files += 1;
                     processed_bytes += item.size;
                     progress(ProgressEvent {
@@ -727,6 +768,7 @@ impl ContainerWriter {
                     blob_len,
                     volume_index: 0,
                     parts: None,
+                    quick_hash: Some(prepared.quick_hash),
                     ext: None,
                 });
                 content_index.insert(
@@ -832,6 +874,7 @@ pub struct ScannedSourceFile {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreparedBlobRecord {
     content_hash: [u8; 32],
+    quick_hash: u64,
     write: BlobWriteResult,
     record_bytes: Vec<u8>,
 }
@@ -1123,6 +1166,32 @@ fn manifest_entry_from_locator(
         blob_len: locator.blob_len,
         volume_index: locator.volume_index,
         parts: locator.parts.clone(),
+        quick_hash: None,
+        ext: None,
+    }
+}
+
+/// Like manifest_entry_from_locator but with quick_hash for dual hash strategy.
+fn manifest_entry_from_locator_with_quick_hash(
+    item: &ScannedSourceFile,
+    content_hash: [u8; 32],
+    quick_hash: u64,
+    locator: &BlobLocator,
+) -> ManifestEntry {
+    ManifestEntry {
+        path: item.rel.clone(),
+        blob_id: locator.blob_id,
+        content_hash,
+        size: item.size,
+        mtime_ns: item.mtime_ns,
+        created_time_ns: item.created_time_ns,
+        win_attributes: item.win_attributes,
+        codec: locator.codec,
+        blob_offset: locator.blob_offset,
+        blob_len: locator.blob_len,
+        volume_index: locator.volume_index,
+        parts: locator.parts.clone(),
+        quick_hash: Some(quick_hash),
         ext: None,
     }
 }
@@ -1161,8 +1230,15 @@ fn prepare_blob_record(
     )
     .map_err(|err| WriterError::Io(err.to_string()))?;
 
+    // Compute xxHash3 for fast change detection (Task 2.1).
+    // BLAKE3 was already computed in stream_hash_and_compress.
+    // xxHash3 is ~7x faster, so reading the file again is acceptable.
+    let quick_hash = compute_file_quick_hash(&file.path)
+        .map_err(|err| WriterError::Io(err.to_string()))?;
+
     Ok(PreparedBlobRecord {
         content_hash: streamed.hash,
+        quick_hash,
         write,
         record_bytes,
     })
@@ -1199,6 +1275,7 @@ fn prepare_chunk_blob_record(
 
     Ok(PreparedBlobRecord {
         content_hash: *blake3::hash(chunk).as_bytes(),
+        quick_hash: 0, // per-file xxHash3 not applicable to individual chunks
         write,
         record_bytes,
     })
@@ -1276,6 +1353,7 @@ fn backup_virtual_entries_with_output<E: VirtualBackupEntry, O: BackupOutput>(
                 blob_len: first.blob_len,
                 volume_index: first.volume_index,
                 parts: Some(written.parts.clone()),
+                quick_hash: None,
                 ext: None,
             });
             content_index.insert(
@@ -1314,6 +1392,7 @@ fn backup_virtual_entries_with_output<E: VirtualBackupEntry, O: BackupOutput>(
                 blob_len,
                 volume_index,
                 parts: None,
+                quick_hash: None,
                 ext: None,
             });
             content_index.insert(
@@ -1436,6 +1515,7 @@ fn manifest_entry_from_virtual_locator<E: VirtualBackupEntry>(
         blob_len: locator.blob_len,
         volume_index: locator.volume_index,
         parts: locator.parts.clone(),
+        quick_hash: None,
         ext: None,
     }
 }
@@ -1701,6 +1781,19 @@ struct VolumeOutput {
     paths: Vec<PathBuf>,
 }
 
+/// Open a file for sequential write with OS-level optimization.
+/// Uses `FILE_FLAG_SEQUENTIAL_SCAN` to hint the kernel about access pattern,
+/// improving write coalescing and read-ahead for restore operations.
+fn create_sequential_file(path: &Path) -> Result<File, WriterError> {
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .custom_flags(FILE_FLAG_SEQUENTIAL_SCAN)
+        .open(path)
+        .map_err(|err| WriterError::Io(err.to_string()))
+}
+
 trait BackupOutput {
     fn write_record(
         &mut self,
@@ -1722,7 +1815,7 @@ struct SingleVolumeOutput {
 
 impl SingleVolumeOutput {
     fn new(path: &Path, min_reader_version: u32) -> Result<Self, WriterError> {
-        let mut file = File::create(path).map_err(|err| WriterError::Io(err.to_string()))?;
+        let mut file = create_sequential_file(path)?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
             min_reader_version,
@@ -1790,7 +1883,7 @@ impl VolumeOutput {
     ) -> Result<Self, WriterError> {
         let set_id = generate_set_id(base_path);
         let first_path = split_volume_path(base_path, 0);
-        let mut file = File::create(&first_path).map_err(|err| WriterError::Io(err.to_string()))?;
+        let mut file = create_sequential_file(&first_path)?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
             min_reader_version,
@@ -1873,7 +1966,7 @@ impl VolumeOutput {
         self.sync_current()?;
         self.current_index = self.current_index.saturating_add(1);
         let path = split_volume_path(&self.base_path, self.current_index);
-        let mut file = File::create(&path).map_err(|err| WriterError::Io(err.to_string()))?;
+        let mut file = create_sequential_file(&path)?;
         let header = Header {
             write_version: XUNBAK_WRITE_VERSION,
             min_reader_version: self.min_reader_version,
@@ -2075,6 +2168,7 @@ fn backup_split_with_progress(
                 blob_len: first.blob_len,
                 volume_index: first.volume_index,
                 parts: Some(parts.clone()),
+                quick_hash: None,
                 ext: None,
             });
             content_index.insert(
@@ -2120,6 +2214,7 @@ fn backup_split_with_progress(
                 blob_len,
                 volume_index,
                 parts: None,
+                quick_hash: Some(prepared.quick_hash),
                 ext: None,
             });
             content_index.insert(
@@ -2214,6 +2309,13 @@ fn update_split_with_progress(
 ) -> Result<UpdateResult, WriterError> {
     let baseline = reader.load_manifest()?;
     let baseline_index = build_path_index(&baseline);
+    let quick_hash_index: HashMap<(u64, u64), &ManifestEntry> = baseline
+        .entries
+        .iter()
+        .filter_map(|entry| {
+            entry.quick_hash.map(|qh| ((qh, entry.size), entry))
+        })
+        .collect();
     let mut content_index = build_content_hash_index(&baseline);
     let mut scanned = Vec::new();
     collect_files(source_dir, source_dir, &mut scanned, Some(container_path))?;
@@ -2271,10 +2373,29 @@ fn update_split_with_progress(
             continue;
         }
 
+        // Task 2.1: Fast change detection via xxHash3 (~30 GB/s).
+        let quick_hash = compute_file_quick_hash(&item.path)
+            .map_err(|err| WriterError::Io(err.to_string()))?;
+        if let Some(old) = quick_hash_index.get(&(quick_hash, item.size)) {
+            let mut reused = (*old).clone();
+            reused.path = item.rel.clone(); // update path for renames
+            entries.push(reused);
+            processed_files += 1;
+            processed_bytes += item.size;
+            progress(ProgressEvent {
+                processed_files,
+                total_files,
+                processed_bytes,
+                total_bytes,
+                elapsed_ms: started.elapsed().as_millis(),
+            });
+            continue;
+        }
+
         if multipart_enabled(item) {
             let content_hash = compute_file_content_hash(&item.path)?;
             if let Some(locator) = content_index.get(&content_hash) {
-                entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                entries.push(manifest_entry_from_locator_with_quick_hash(item, content_hash, quick_hash, locator));
                 processed_files += 1;
                 processed_bytes += item.size;
                 progress(ProgressEvent {
@@ -2341,6 +2462,7 @@ fn update_split_with_progress(
                 blob_len: first.blob_len,
                 volume_index: first.volume_index,
                 parts: Some(parts.clone()),
+                quick_hash: None,
                 ext: None,
             });
             content_index.insert(
@@ -2359,7 +2481,7 @@ fn update_split_with_progress(
             let prepared = prepare_blob_record(item, requested_codec, options.zstd_level)?;
             let content_hash = prepared.content_hash;
             if let Some(locator) = content_index.get(&content_hash) {
-                entries.push(manifest_entry_from_locator(item, content_hash, locator));
+                entries.push(manifest_entry_from_locator_with_quick_hash(item, content_hash, quick_hash, locator));
                 processed_files += 1;
                 processed_bytes += item.size;
                 progress(ProgressEvent {
@@ -2387,6 +2509,7 @@ fn update_split_with_progress(
                 blob_len,
                 volume_index,
                 parts: None,
+                quick_hash: Some(prepared.quick_hash),
                 ext: None,
             });
             content_index.insert(

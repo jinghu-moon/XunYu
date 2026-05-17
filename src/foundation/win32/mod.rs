@@ -1,4 +1,14 @@
+#![allow(dead_code)]
+use std::ffi::OsStr;
+use std::os::windows::ffi::OsStrExt;
+
 // Windows-specific FFI operations
+
+pub mod error;
+
+pub fn to_wide(s: &OsStr) -> Vec<u16> {
+    s.encode_wide().chain(std::iter::once(0)).collect()
+}
 
 #[cfg(any(feature = "lock", feature = "redirect"))]
 pub(crate) mod restart_manager;
@@ -13,6 +23,7 @@ pub(crate) mod safety;
 
 pub(crate) mod ctrlc;
 pub(crate) mod file_copy;
+pub(crate) mod mmap;
 
 #[cfg(feature = "redirect")]
 pub(crate) mod trash;

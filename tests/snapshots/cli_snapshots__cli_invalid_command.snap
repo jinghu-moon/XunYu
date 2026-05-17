@@ -1,0 +1,17 @@
+---
+source: tests/cli_snapshots.rs
+info:
+  program: xun
+  args:
+    - invalid-command-name
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: unrecognized subcommand 'invalid-command-name'
+
+Usage: xun.exe [OPTIONS] <COMMAND>
+
+For more information, try '--help'.

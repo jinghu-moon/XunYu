@@ -86,6 +86,7 @@ fn build_store_file(n: usize) -> (tempfile::TempDir, PathBuf) {
 fn build_ctx() -> QueryContext {
     QueryContext {
         cwd: PathBuf::from("C:/work/projects"),
+        cwd_key: "c:/work/projects".to_string(),
         workspace: None,
     }
 }
@@ -167,6 +168,7 @@ fn bookmark_query_workspace_scope(bencher: Bencher, size: usize) {
     let store = build_mixed_store(size);
     let ctx = QueryContext {
         cwd: PathBuf::from("C:/work/projects"),
+        cwd_key: "c:/work/projects".to_string(),
         workspace: Some("xunyu".to_string()),
     };
     let spec = BookmarkQuerySpec {

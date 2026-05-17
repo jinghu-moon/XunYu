@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::bookmark::cache::{CachePayload, CachedBookmark, SourceFingerprint, load_cache_store_data_checked, store_cache_path, write_cache_payload_atomic};
+use crate::bookmark::cache::{CachePayload, CachedBookmark, SourceFingerprint, load_cache_store_data_mmap, store_cache_path, write_cache_payload_atomic};
 use crate::bookmark::index::BookmarkIndex;
 use crate::bookmark::debug::BookmarkLoadTiming;
 use crate::bookmark::undo::{BookmarkUndoBatch, BookmarkUndoOp};
@@ -155,7 +155,7 @@ impl Store {
         let mut timing = BookmarkLoadTiming::new(path, fingerprint.len as usize);
         timing.mark("stat_file");
         let cache_disabled = std::env::var_os("XUN_BM_DISABLE_BINARY_CACHE").is_some();
-        if let Some(payload) = load_cache_store_data_checked(
+        if let Some(payload) = load_cache_store_data_mmap(
             &store_cache_path(path),
             CURRENT_SCHEMA_VERSION,
             &fingerprint,
@@ -960,7 +960,9 @@ mod tests {
 
     fn cache_env_guard() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     #[test]

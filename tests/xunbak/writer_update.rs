@@ -69,6 +69,7 @@ fn content_hash_index_maps_entries_to_blob_locators() {
             blob_len: 66,
             volume_index: 0,
             parts: None,
+            quick_hash: None,
             ext: None,
         }],
         removed: vec![],
@@ -104,6 +105,7 @@ fn diff_against_manifest_marks_new_modified_unchanged_deleted() {
                 blob_len: 66,
                 volume_index: 0,
                 parts: None,
+                quick_hash: None,
                 ext: None,
             },
             ManifestEntry {
@@ -119,6 +121,7 @@ fn diff_against_manifest_marks_new_modified_unchanged_deleted() {
                 blob_len: 66,
                 volume_index: 0,
                 parts: None,
+                quick_hash: None,
                 ext: None,
             },
             ManifestEntry {
@@ -134,6 +137,7 @@ fn diff_against_manifest_marks_new_modified_unchanged_deleted() {
                 blob_len: 66,
                 volume_index: 0,
                 parts: None,
+                quick_hash: None,
                 ext: None,
             },
         ],

@@ -24,6 +24,7 @@ fn sample_entry() -> ManifestEntry {
         blob_len: 77,
         volume_index: 0,
         parts: None,
+        quick_hash: None,
         ext: None,
     }
 }

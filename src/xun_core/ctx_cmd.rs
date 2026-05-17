@@ -8,7 +8,17 @@ use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
 /// Context 配置管理命令。
 #[derive(Parser, Debug, Clone)]
-#[command(name = "ctx", about = "Context switch profiles")]
+#[command(
+    name = "ctx",
+    about = "Context switch profiles",
+    after_help = "EXAMPLES:\n    \
+        xun ctx set work --path C:\\project --proxy http://proxy:8080\n    \
+        xun ctx use work                  # activate profile\n    \
+        xun ctx off                       # deactivate current\n    \
+        xun ctx ls                        # list all profiles\n    \
+        xun ctx show work                 # show profile details\n    \
+        xun ctx del work                  # delete a profile"
+)]
 pub struct CtxCmd {
     #[command(subcommand)]
     pub cmd: CtxSubCommand,

@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 // --- Proxy ---
 
@@ -158,3 +158,4 @@ pub(in crate::commands::dashboard) async fn proxy_test(
             .collect(),
     )
 }
+

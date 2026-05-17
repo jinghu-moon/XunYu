@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+use xxhash_rust::xxh3::Xxh3;
+
 #[cfg(test)]
 fn hash_bytes(bytes: &[u8]) -> [u8; 32] {
     *blake3::hash(bytes).as_bytes()
@@ -20,6 +22,23 @@ pub(crate) fn compute_file_content_hash(path: &Path) -> io::Result<[u8; 32]> {
         hasher.update(&buf[..n]);
     }
     Ok(*hasher.finalize().as_bytes())
+}
+
+/// Compute xxHash3-64 fingerprint of file content for fast change detection.
+/// Throughput: ~30 GB/s (vs BLAKE3 ~4 GB/s). Used as a quick pre-check
+/// before expensive BLAKE3 computation in incremental backup.
+pub(crate) fn compute_file_quick_hash(path: &Path) -> io::Result<u64> {
+    let mut input = File::open(path)?;
+    let mut hasher = Xxh3::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = input.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.digest())
 }
 
 pub(crate) fn encode_hash_hex(hash: &[u8; 32]) -> String {

@@ -104,7 +104,8 @@ fn compute_options_from_flags(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{InitCmd, SubCommand, Xun};
+    use crate::xun_core::dispatch::{OutputFormat, SubCommand, Xun};
+    use crate::xun_core::init_cmd::InitCmd;
 
     fn base_args() -> Xun {
         Xun {
@@ -112,6 +113,7 @@ mod tests {
             quiet: false,
             verbose: false,
             non_interactive: false,
+            format: OutputFormat::Auto,
             cmd: SubCommand::Init(InitCmd {
                 shell: "powershell".to_string(),
             }),

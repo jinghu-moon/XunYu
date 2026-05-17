@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 // --- Bookmarks ---
 
@@ -399,3 +399,4 @@ fn bookmark_db_error_response(err: std::io::Error) -> Response {
     }
     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
 }
+

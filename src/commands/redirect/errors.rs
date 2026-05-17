@@ -1,5 +1,5 @@
 use crate::output::CliError;
-use crate::suggest::did_you_mean;
+use crate::foundation::suggest::did_you_mean;
 
 pub(crate) fn err2(msg: impl Into<String>, hints: &[&str]) -> CliError {
     CliError::with_details(2, msg, hints)

@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+﻿#![allow(unused_imports)]
 
 mod audit;
 mod bookmarks;
@@ -52,3 +52,4 @@ use crate::model::{Entry, ImportMode, IoFormat, ListItem, parse_import_mode, par
 use crate::ports;
 use crate::store;
 use crate::util::{has_cmd, parse_tags};
+

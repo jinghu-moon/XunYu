@@ -97,6 +97,11 @@ pub struct ManifestEntry {
     pub volume_index: u16,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parts: Option<Vec<ManifestPart>>,
+    /// xxHash3-64 of file content for fast change detection (Task 2.1).
+    /// Used in incremental backup to quickly determine if file content changed,
+    /// avoiding expensive BLAKE3 computation for unchanged files.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quick_hash: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ext: Option<serde_json::Value>,
 }

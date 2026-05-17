@@ -1,14 +1,30 @@
 //! Port CLI 定义（clap derive）+ PortInfo 输出类型
 
-use clap::Args;
+use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
 use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
+/// Port management.
+#[derive(Parser, Debug, Clone)]
+#[command(name = "port", about = "Port management")]
+pub struct PortsCmd {
+    #[command(subcommand)]
+    pub cmd: PortsSubCommand,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum PortsSubCommand {
+    /// List listening ports.
+    List(PortsListArgs),
+    /// Kill processes occupying ports.
+    Kill(KillCmd),
+}
+
 /// List listening ports (TCP by default).
 #[derive(Args, Debug, Clone)]
-pub struct PortsCmd {
+pub struct PortsListArgs {
     /// show all TCP listening ports
     #[arg(long)]
     pub all: bool,
@@ -127,7 +143,14 @@ pub struct PortsCmdSpec {
 
 impl CommandSpec for PortsCmdSpec {
     fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
-        crate::commands::ports::cmd_ports(self.args.clone())?;
+        match &self.args.cmd {
+            PortsSubCommand::List(args) => {
+                crate::commands::ports::cmd_ports(args.clone())?;
+            }
+            PortsSubCommand::Kill(args) => {
+                crate::commands::ports::cmd_kill(args.clone())?;
+            }
+        }
         Ok(Value::Null)
     }
 }

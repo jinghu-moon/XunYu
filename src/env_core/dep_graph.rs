@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
-use lazy_static::lazy_static;
 use regex::Regex;
 
 use super::types::{EnvDepTree, EnvError, EnvResult, EnvScope, EnvVar};
@@ -10,10 +10,8 @@ type DepAdjacency = HashMap<String, Vec<String>>;
 type DepPresent = HashSet<String>;
 type DepMaps = (DepDisplayNames, DepAdjacency, DepPresent);
 
-lazy_static! {
-    static ref VAR_REF_RE: Regex =
-        Regex::new(r"%([A-Za-z0-9_]+)%").expect("dependency regex must be valid");
-}
+static VAR_REF_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"%([A-Za-z0-9_]+)%").expect("dependency regex must be valid"));
 
 pub fn build_tree(
     scope: EnvScope,

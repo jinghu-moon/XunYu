@@ -1,0 +1,13 @@
+---
+source: tests/cli_snapshots.rs
+info:
+  program: xun
+  args:
+    - "--version"
+---
+success: true
+exit_code: 0
+----- stdout -----
+xun [VERSION]
+
+----- stderr -----

@@ -10,7 +10,17 @@ use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
 /// Proxy 管理命令。
 #[derive(Parser, Debug, Clone)]
-#[command(name = "proxy", about = "Proxy management")]
+#[command(
+    name = "proxy",
+    about = "Proxy management",
+    after_help = "EXAMPLES:\n    \
+        xun proxy set http://127.0.0.1:7890   # set proxy URL\n    \
+        xun proxy show                         # show current proxy\n    \
+        xun proxy status                       # check proxy status\n    \
+        xun proxy test http://127.0.0.1:7890   # test connectivity\n    \
+        xun proxy detect                       # detect system proxy\n    \
+        xun proxy rm                           # remove proxy config"
+)]
 pub struct ProxyCmd {
     #[command(subcommand)]
     pub cmd: ProxySubCommand,
@@ -98,11 +108,11 @@ pub struct ProxyTestCmd {
     #[arg(short = 't', long)]
     pub targets: Option<String>,
 
-    /// timeout in seconds
-    #[arg(long, default_value = "10")]
+    /// timeout in seconds (1..300)
+    #[arg(long, default_value = "10", value_parser = clap::value_parser!(u64).range(1..300))]
     pub timeout: u64,
 
-    /// parallel jobs
+    /// parallel jobs (1..64)
     #[arg(short = 'j', long, default_value = "4")]
     pub jobs: usize,
 }

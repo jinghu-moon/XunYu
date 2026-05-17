@@ -186,7 +186,6 @@ windows = { version = "0.58", features = [
   "Win32_System_Diagnostics_Debug",
   "Win32_UI_Shell",
 ] }
-lazy_static = "1.5.0"
 regex = "1.11"
 sha2 = "0.10"
 rayon = "1"
@@ -249,6 +248,8 @@ codegen-units = 1
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
+insta = { version = "1.41", features = ["json", "yaml", "redactions", "filters"] }
+insta-cmd = "0.6"
 tempfile = "3.10"
 serial_test = "3.0"
 tower = "0.5"
@@ -484,3 +485,7 @@ path = "tests/bookmark_binary_cache_phase_a.rs"
 [[test]]
 name = "special_bookmark_performance"
 path = "tests/special/bookmark_performance.rs"
+
+[[test]]
+name = "cli_snapshots"
+path = "tests/cli_snapshots.rs"

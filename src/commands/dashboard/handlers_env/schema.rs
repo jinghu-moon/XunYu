@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 pub(in crate::commands::dashboard) async fn schema_show() -> Response {
     let manager = manager();
@@ -67,3 +67,4 @@ pub(in crate::commands::dashboard) async fn validate(Json(body): Json<ValidateBo
         Err(e) => map_env_error(e).into_response(),
     }
 }
+

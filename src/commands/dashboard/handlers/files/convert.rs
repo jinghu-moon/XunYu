@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 
 #[cfg(feature = "diff")]
 #[derive(Clone, Copy)]
@@ -214,8 +214,8 @@ fn convert_output_path(src: &std::path::Path, target: ConfigFormat) -> std::path
     out
 }
 
-// SECURITY: /api/validate 允许读取任意本地配置文件并返回语法错误。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/validate 鍏佽璇诲彇浠绘剰鏈湴閰嶇疆鏂囦欢骞惰繑鍥炶娉曢敊璇€傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn validate_file(
     Json(req): Json<ValidateFileRequest>,
@@ -308,8 +308,8 @@ pub(in crate::commands::dashboard) async fn validate_file(
     Json(response).into_response()
 }
 
-// SECURITY: /api/convert 允许读取并写入本地配置文件。当前 Dashboard 仅绑定 127.0.0.1，
-// 风险可控。若未来需要开放网络访问，必须增加路径白名单 / 沙箱机制。
+// SECURITY: /api/convert 鍏佽璇诲彇骞跺啓鍏ユ湰鍦伴厤缃枃浠躲€傚綋鍓?Dashboard 浠呯粦瀹?127.0.0.1锛?
+// 椋庨櫓鍙帶銆傝嫢鏈潵闇€瑕佸紑鏀剧綉缁滆闂紝蹇呴』澧炲姞璺緞鐧藉悕鍗?/ 娌欑鏈哄埗銆?
 #[cfg(feature = "diff")]
 pub(in crate::commands::dashboard) async fn convert_file(
     State(state): State<super::super::super::DashboardState>,
@@ -392,3 +392,4 @@ pub(in crate::commands::dashboard) async fn convert_file(
     })
     .into_response()
 }
+

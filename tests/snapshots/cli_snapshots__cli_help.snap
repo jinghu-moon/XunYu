@@ -1,0 +1,44 @@
+---
+source: tests/cli_snapshots.rs
+info:
+  program: xun
+  args:
+    - "--help"
+---
+success: true
+exit_code: 0
+----- stdout -----
+xun - bookmark + proxy CLI
+
+Usage: xun.exe [OPTIONS] <COMMAND>
+
+Commands:
+  bookmark    Bookmark management and navigation
+  proxy       Proxy management
+  backup      Incremental project backup
+  env         Environment variable management
+  acl         Windows ACL management
+  config      Manage ~/.xun.config.json
+  ctx         Context switch profiles
+  tree        Generate directory tree
+  find        Find files and directories by pattern and metadata
+  video       Video operations
+  port        Port management
+  proc        Process management
+  rm          Force delete files or delete bookmarks with --bookmark (-bm)
+  fs-rm       Delete a file or directory
+  init        Initialize shell integration (print wrapper function)
+  completion  Generate shell completion script
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+      --no-color         disable ANSI colors (or set NO_COLOR=1)
+  -q, --quiet            suppress UI output
+  -v, --verbose          verbose output
+      --non-interactive  force non-interactive mode
+      --format <FORMAT>  Output format [default: auto] [possible values: auto, table, json, tsv,
+                         csv]
+  -h, --help             Print help
+  -V, --version          Print version
+
+----- stderr -----

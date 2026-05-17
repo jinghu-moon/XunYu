@@ -1,14 +1,30 @@
 //! Proc CLI 定义（clap derive）+ ProcInfo 输出类型
 
-use clap::Args;
+use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use crate::xun_core::table_row::TableRow;
 use crate::xun_core::value::{ColumnDef, Value, ValueKind};
 
+/// Process management.
+#[derive(Parser, Debug, Clone)]
+#[command(name = "proc", about = "Process management")]
+pub struct PsCmd {
+    #[command(subcommand)]
+    pub cmd: PsSubCommand,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum PsSubCommand {
+    /// List running processes.
+    List(PsListArgs),
+    /// Kill processes by name, PID, or window title.
+    Kill(PkillCmd),
+}
+
 /// List running processes by name, PID, or window title.
 #[derive(Args, Debug, Clone)]
-pub struct PsCmd {
+pub struct PsListArgs {
     /// fuzzy match by process name
     pub pattern: Option<String>,
 
@@ -19,6 +35,10 @@ pub struct PsCmd {
     /// fuzzy match by window title
     #[arg(short = 'w', long)]
     pub win: Option<String>,
+
+    /// output format: auto|table|tsv|json
+    #[arg(short = 'f', long, default_value = "auto")]
+    pub format: String,
 }
 
 /// Kill processes by name, PID, or window title.
@@ -116,7 +136,14 @@ pub struct PsCmdSpec {
 
 impl CommandSpec for PsCmdSpec {
     fn run(&self, _ctx: &mut CmdContext) -> Result<Value, XunError> {
-        crate::commands::ports::cmd_ps(self.args.clone())?;
+        match &self.args.cmd {
+            PsSubCommand::List(args) => {
+                crate::commands::ports::cmd_ps(args.clone())?;
+            }
+            PsSubCommand::Kill(args) => {
+                crate::commands::ports::cmd_pkill(args.clone())?;
+            }
+        }
         Ok(Value::Null)
     }
 }

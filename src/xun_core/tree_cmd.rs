@@ -6,12 +6,21 @@ use clap::Parser;
 
 /// 生成目录树。
 #[derive(Parser, Debug, Clone)]
-#[command(name = "tree", about = "Generate directory tree")]
+#[command(
+    name = "tree",
+    about = "Generate directory tree",
+    after_help = "EXAMPLES:\n    \
+        xun tree                          # tree of current dir\n    \
+        xun tree C:\\project -d 3         # limit depth to 3\n    \
+        xun tree --hidden                 # include hidden files\n    \
+        xun tree -o tree.txt              # save to file\n    \
+        xun tree --plain                  # plain text output"
+)]
 pub struct TreeCmd {
     /// 目标路径（默认当前目录）
     pub path: Option<String>,
 
-    /// 最大深度，0=无限制
+    /// 最大深度，0=无限制 (0..=128)
     #[arg(short = 'd', long)]
     pub depth: Option<usize>,
 
